@@ -23,6 +23,7 @@ export default function LoginPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [recoveryMode, setRecoveryMode] = useState(() => readRecoveryMode());
   const [recoveryReady, setRecoveryReady] = useState(false);
+  const [requestResetMode, setRequestResetMode] = useState(false);
 
   useEffect(() => {
     if (!isSupabaseConfigured || typeof window === "undefined") return;
@@ -87,6 +88,18 @@ export default function LoginPage() {
 
     persistSession(result.session);
     router.push("/dashboard");
+  };
+
+  const openRequestReset = () => {
+    setRequestResetMode(true);
+    setError("");
+    setInfo("");
+  };
+
+  const closeRequestReset = () => {
+    setRequestResetMode(false);
+    setError("");
+    setInfo("");
   };
 
   const onRequestReset = async () => {
@@ -155,7 +168,7 @@ export default function LoginPage() {
               : "Платформа полностью закрыта. Для входа используйте выданные учетные данные."}
           </p>
 
-          {!recoveryMode ? (
+          {!recoveryMode && !requestResetMode ? (
             <form className="form" onSubmit={onSubmit}>
               <label className="label" htmlFor="login">
                 Логин или Email
@@ -186,8 +199,36 @@ export default function LoginPage() {
               <button className="btn btn-primary" type="submit">
                 Войти
               </button>
-              <button className="btn" type="button" onClick={onRequestReset}>
+              <button className="btn" type="button" onClick={openRequestReset}>
                 Забыли пароль?
+              </button>
+            </form>
+          ) : !recoveryMode && requestResetMode ? (
+            <form
+              className="form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void onRequestReset();
+              }}
+            >
+              <label className="label" htmlFor="reset-login">
+                Логин или Email
+              </label>
+              <input
+                id="reset-login"
+                className="input"
+                placeholder="например: simba или user@mail.ru"
+                value={login}
+                onChange={(e) => setLogin(e.target.value)}
+                required
+              />
+              {error && <p style={{ color: "#ff8d8d", fontSize: 13 }}>{error}</p>}
+              {info && <p className="page-subtitle">{info}</p>}
+              <button className="btn btn-primary" type="submit">
+                Отправить ссылку сброса
+              </button>
+              <button className="btn" type="button" onClick={closeRequestReset}>
+                Назад ко входу
               </button>
             </form>
           ) : (

@@ -141,12 +141,19 @@ export async function requestPasswordReset(loginOrEmail: string) {
   let lastError = "";
   const redirectTo = `${window.location.origin}/login`;
   const loginTrim = loginOrEmail.trim();
-  const emailsToTry = new Set<string>(candidateEmails(loginTrim));
-  if (!loginTrim.includes("@")) {
+  const emailsToTry = new Set<string>();
+  if (loginTrim.includes("@")) {
+    emailsToTry.add(loginTrim);
+  } else {
     const resolved = await resolveEmailByLogin(loginTrim);
-    if (resolved) {
-      emailsToTry.add(resolved);
+    if (!resolved) {
+      return {
+        ok: false as const,
+        error:
+          "Логин не найден в базе профилей. Проверьте логин или войдите по email.",
+      };
     }
+    emailsToTry.add(resolved);
   }
 
   for (const email of emailsToTry) {
