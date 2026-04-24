@@ -1,6 +1,7 @@
 "use client";
 
 import { clearSessionCookie, serializeSessionCookie } from "@/lib/auth";
+import { readClientSession } from "@/lib/client-auth";
 import { SESSION_COOKIE } from "@/lib/seed";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
 import {
@@ -236,6 +237,78 @@ export async function requestPasswordReset(loginOrEmail: string) {
   }
 
   return { ok: false as const, error: lastError || "Не удалось отправить ссылку для сброса." };
+}
+
+export async function fetchCurrentAuthEmail() {
+  if (!isSupabaseConfigured) {
+    return { ok: false as const, error: "Смена email доступна только в режиме Supabase." };
+  }
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user) {
+    return { ok: false as const, error: "Не удалось получить email текущего пользователя." };
+  }
+  return { ok: true as const, email: data.user.email ?? "" };
+}
+
+export async function updateCurrentUserEmail(nextEmail: string) {
+  if (!isSupabaseConfigured) {
+    return { ok: false as const, error: "Смена email доступна только в режиме Supabase." };
+  }
+  const supabase = getSupabaseBrowserClient();
+  const { error } = await supabase.auth.updateUser({ email: nextEmail.trim() });
+  if (error) {
+    return { ok: false as const, error: mapAuthErrorMessage(error.message) };
+  }
+  return {
+    ok: true as const,
+    message: "Запрос отправлен. Подтвердите новый email по письму и затем войдите снова.",
+  };
+}
+
+export async function updateCurrentUserPassword(nextPassword: string) {
+  if (!isSupabaseConfigured) {
+    return { ok: false as const, error: "Смена пароля доступна только в режиме Supabase." };
+  }
+  if (nextPassword.length < 6) {
+    return { ok: false as const, error: "Пароль должен быть не короче 6 символов." };
+  }
+  const supabase = getSupabaseBrowserClient();
+  const { error } = await supabase.auth.updateUser({ password: nextPassword });
+  if (error) {
+    return { ok: false as const, error: mapAuthErrorMessage(error.message) };
+  }
+  return { ok: true as const, message: "Пароль успешно обновлен." };
+}
+
+export async function updateCurrentUserProfile(payload: { name: string; callsign: string }) {
+  const name = payload.name.trim();
+  const callsign = payload.callsign.trim();
+  if (!name) {
+    return { ok: false as const, error: "Имя не может быть пустым." };
+  }
+  if (!callsign) {
+    return { ok: false as const, error: "Позывной не может быть пустым." };
+  }
+
+  if (!isSupabaseConfigured) {
+    const current = readClientSession();
+    if (!current) {
+      return { ok: false as const, error: "Сессия не найдена." };
+    }
+    updateUser(current.id, { name, callsign });
+    return { ok: true as const, name, callsign };
+  }
+
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase.rpc("update_my_profile", {
+    p_name: name,
+    p_callsign: callsign,
+  });
+  if (error || data !== true) {
+    return { ok: false as const, error: "Не удалось обновить профиль. Попробуйте позже." };
+  }
+  return { ok: true as const, name, callsign };
 }
 
 export async function registerUser(payload: {

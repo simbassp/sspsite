@@ -245,6 +245,35 @@ $$;
 revoke all on function public.admin_delete_user(uuid) from public;
 grant execute on function public.admin_delete_user(uuid) to authenticated;
 
+create or replace function public.update_my_profile(p_name text, p_callsign text)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_name text;
+  v_callsign text;
+begin
+  v_name := nullif(trim(coalesce(p_name, '')), '');
+  v_callsign := nullif(trim(coalesce(p_callsign, '')), '');
+  if v_name is null or v_callsign is null then
+    return false;
+  end if;
+
+  update public.app_users
+  set name = v_name,
+      callsign = v_callsign
+  where auth_user_id = auth.uid()
+    and status = 'active';
+
+  return found;
+end;
+$$;
+
+revoke all on function public.update_my_profile(text, text) from public;
+grant execute on function public.update_my_profile(text, text) to authenticated;
+
 create or replace function public.handle_new_auth_user()
 returns trigger
 language plpgsql
