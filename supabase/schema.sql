@@ -124,6 +124,55 @@ $$;
 revoke all on function public.resolve_login_email(text) from public;
 grant execute on function public.resolve_login_email(text) to anon, authenticated;
 
+create or replace function public.handle_new_auth_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_login text;
+  v_name text;
+  v_callsign text;
+  v_position text;
+begin
+  v_login := nullif(trim(coalesce(new.raw_user_meta_data->>'login', '')), '');
+  if v_login is null then
+    v_login := split_part(coalesce(new.email, 'user'), '@', 1) || '-' || left(new.id::text, 8);
+  end if;
+
+  v_name := nullif(trim(coalesce(new.raw_user_meta_data->>'name', '')), '');
+  if v_name is null then
+    v_name := 'Сотрудник';
+  end if;
+
+  v_callsign := nullif(trim(coalesce(new.raw_user_meta_data->>'callsign', '')), '');
+  if v_callsign is null then
+    v_callsign := 'Новичок';
+  end if;
+
+  v_position := nullif(trim(coalesce(new.raw_user_meta_data->>'position', '')), '');
+  if v_position is null then
+    v_position := 'Специалист';
+  end if;
+
+  insert into public.app_users (auth_user_id, login, name, callsign, position, role, status)
+  values (new.id, v_login, v_name, v_callsign, v_position, 'employee', 'active')
+  on conflict (auth_user_id) do update
+  set login = excluded.login,
+      name = excluded.name,
+      callsign = excluded.callsign,
+      position = excluded.position;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+after insert on auth.users
+for each row execute function public.handle_new_auth_user();
+
 alter table public.app_users enable row level security;
 alter table public.news enable row level security;
 alter table public.catalog_items enable row level security;

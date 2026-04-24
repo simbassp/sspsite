@@ -206,29 +206,22 @@ export async function registerUser(payload: {
   const { data, error } = await supabase.auth.signUp({
     email: payload.email,
     password: payload.password,
+    options: {
+      data: {
+        login: payload.login,
+        name: payload.name,
+        callsign: payload.callsign,
+        position: payload.position,
+      },
+    },
   });
 
   if (error) {
     return { ok: false as const, error: error.message };
   }
 
-  const authUserId = data.user?.id;
-  if (!authUserId) {
+  if (!data.user) {
     return { ok: false as const, error: "Не удалось создать пользователя auth." };
-  }
-
-  const { error: insertError } = await supabase.from("app_users").insert({
-    auth_user_id: authUserId,
-    login: payload.login,
-    name: payload.name,
-    callsign: payload.callsign,
-    position: payload.position,
-    role: "employee",
-    status: "active",
-  });
-
-  if (insertError) {
-    return { ok: false as const, error: insertError.message };
   }
 
   await supabase.auth.signOut();
