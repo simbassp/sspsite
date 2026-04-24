@@ -76,7 +76,11 @@ export async function fetchUavItems() {
   if (error || !data) {
     return listUav();
   }
-  return (data as CatalogRow[]).map(toCatalogItem);
+  const mapped = (data as CatalogRow[]).map(toCatalogItem);
+  if (mapped.length === 0) {
+    return listUav();
+  }
+  return mapped;
 }
 
 export async function fetchUavById(itemId: string) {
