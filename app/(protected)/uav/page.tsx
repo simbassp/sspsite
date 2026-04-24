@@ -2,17 +2,21 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useState } from "react";
-import { listUav } from "@/lib/storage";
+import { useEffect, useState } from "react";
+import { fetchUavItems } from "@/lib/uav-repository";
 import { CatalogItem } from "@/lib/types";
 
 export default function UavPage() {
-  const [items] = useState<CatalogItem[]>(() => listUav());
+  const [items, setItems] = useState<CatalogItem[]>([]);
+
+  useEffect(() => {
+    fetchUavItems().then(setItems);
+  }, []);
 
   return (
     <section>
       <h1 className="page-title">ТТХ БПЛА</h1>
-      <p className="page-subtitle">Быстрый обзор и детальная карточка с отдельными вкладками.</p>
+      <p className="page-subtitle">Быстрый обзор и полная карточка с подробными характеристиками.</p>
 
       <div className="grid grid-two">
         {items.map((item) => (
@@ -33,8 +37,9 @@ export default function UavPage() {
               <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 8 }}>
                 {item.summary}
               </p>
+              <p className="label">Ключевые характеристики</p>
               <div className="grid grid-two">
-                {item.specs.map((spec) => (
+                {item.specs.slice(0, 6).map((spec) => (
                   <div key={spec.key} className="card">
                     <div className="card-body">
                       <p className="label">{spec.key}</p>
@@ -44,7 +49,7 @@ export default function UavPage() {
                 ))}
               </div>
               <Link href={`/uav/${item.id}`} className="btn btn-primary" style={{ display: "inline-block", marginTop: 10 }}>
-                Открыть карточку
+                Полное ТТХ и описание
               </Link>
             </div>
           </article>

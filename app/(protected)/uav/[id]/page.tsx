@@ -1,13 +1,18 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useState } from "react";
-import { getUavById } from "@/lib/storage";
+import { useEffect, useState } from "react";
+import { fetchUavById } from "@/lib/uav-repository";
+import { CatalogItem } from "@/lib/types";
 
 export default function UavDetailPage() {
   const params = useParams<{ id: string }>();
   const [tab, setTab] = useState<"overview" | "tth" | "usage" | "materials">("overview");
-  const item = getUavById(params.id);
+  const [item, setItem] = useState<CatalogItem | null>(null);
+
+  useEffect(() => {
+    fetchUavById(params.id).then(setItem);
+  }, [params.id]);
 
   if (!item) {
     return <p className="page-subtitle">Карточка БПЛА не найдена.</p>;
@@ -25,12 +30,28 @@ export default function UavDetailPage() {
       <h1 className="page-title">{item.title}</h1>
       <p className="page-subtitle">{item.summary}</p>
 
+      <article className="card" style={{ marginBottom: 12 }}>
+        <div className="card-body">
+          <p className="label">Ключевые характеристики</p>
+          <div className="grid grid-two" style={{ marginTop: 8 }}>
+            {item.specs.slice(0, 6).map((spec, index) => (
+              <div className="card" key={`${spec.key}-${index}`}>
+                <div className="card-body">
+                  <p className="label">{spec.key}</p>
+                  <p style={{ marginTop: 6, fontWeight: 700 }}>{spec.value}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </article>
+
       <div className="tabs">
         <button className={`tab ${tab === "overview" ? "active" : ""}`} onClick={() => setTab("overview")} type="button">
-          Обзор
+          Описание
         </button>
         <button className={`tab ${tab === "tth" ? "active" : ""}`} onClick={() => setTab("tth")} type="button">
-          ТТХ
+          Полное ТТХ
         </button>
         <button className={`tab ${tab === "usage" ? "active" : ""}`} onClick={() => setTab("usage")} type="button">
           Уязвимости

@@ -19,7 +19,6 @@ type DraftQuestion = {
   options: string[];
   correctIndex: number;
   timeLimitSec: number;
-  order: number;
   isActive: boolean;
 };
 
@@ -29,7 +28,6 @@ const initialDraft: DraftQuestion = {
   options: ["", "", "", ""],
   correctIndex: 0,
   timeLimitSec: 45,
-  order: 1,
   isActive: true,
 };
 
@@ -51,8 +49,6 @@ export default function AdminTestsPage() {
       setResults(allResults);
       setQuestions(allQuestions);
       setConfig(testConfig);
-      const maxOrder = allQuestions.reduce((acc, item) => Math.max(acc, item.order), 0);
-      setDraft((prev) => ({ ...prev, order: maxOrder + 1 }));
     })();
   }, []);
 
@@ -73,8 +69,6 @@ export default function AdminTestsPage() {
   const refreshQuestions = async () => {
     const allQuestions = await fetchAdminQuestionBank();
     setQuestions(allQuestions);
-    const maxOrder = allQuestions.reduce((acc, item) => Math.max(acc, item.order), 0);
-    setDraft((prev) => ({ ...prev, order: prev.id ? prev.order : maxOrder + 1 }));
   };
 
   const onSaveQuestion = async () => {
@@ -95,6 +89,9 @@ export default function AdminTestsPage() {
       return;
     }
 
+    const maxOrder = questions.reduce((acc, item) => Math.max(acc, item.order), 0);
+    const currentOrder = draft.id ? (questions.find((item) => item.id === draft.id)?.order ?? maxOrder + 1) : maxOrder + 1;
+
     await saveAdminQuestion({
       id: draft.id,
       type: draft.type,
@@ -102,7 +99,7 @@ export default function AdminTestsPage() {
       options,
       correctIndex: draft.correctIndex,
       timeLimitSec: Math.max(5, draft.timeLimitSec),
-      order: Math.max(1, draft.order),
+      order: Math.max(1, currentOrder),
       isActive: draft.isActive,
     });
     setMessage(draft.id ? "Вопрос обновлен." : "Вопрос добавлен.");
@@ -121,7 +118,6 @@ export default function AdminTestsPage() {
       options,
       correctIndex: question.correctIndex,
       timeLimitSec: question.timeLimitSec,
-      order: question.order,
       isActive: question.isActive,
     });
   };
@@ -157,7 +153,6 @@ export default function AdminTestsPage() {
               <div className="card-body">
                 <div className="meta">
                   <span className="pill">{type === "final" ? "Итоговый" : "Пробный"}</span>
-                  <span>Порядок: {question.order}</span>
                   <span>Время: {question.timeLimitSec} сек</span>
                   <span>{question.isActive ? "Активен" : "Отключен"}</span>
                 </div>
@@ -337,18 +332,6 @@ export default function AdminTestsPage() {
               min={5}
               value={draft.timeLimitSec}
               onChange={(e) => setDraft((prev) => ({ ...prev, timeLimitSec: Number(e.target.value) || 5 }))}
-            />
-
-            <label className="label" htmlFor="order-index">
-              Порядок в тесте
-            </label>
-            <input
-              id="order-index"
-              className="input"
-              type="number"
-              min={1}
-              value={draft.order}
-              onChange={(e) => setDraft((prev) => ({ ...prev, order: Number(e.target.value) || 1 }))}
             />
 
             <label className="label" htmlFor="is-active">

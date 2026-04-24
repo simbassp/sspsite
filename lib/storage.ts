@@ -4,6 +4,7 @@ import { seedData, STORAGE_KEY } from "@/lib/seed";
 import { createDefaultQuestionBank } from "@/lib/test-question-bank";
 import {
   AppData,
+  CatalogItem,
   FinalAttemptState,
   Position,
   SessionUser,
@@ -161,6 +162,26 @@ export function getCounteractionById(id: string) {
 
 export function getUavById(id: string) {
   return readData().uav.find((item) => item.id === id) ?? null;
+}
+
+export function upsertUavItem(
+  input: Omit<CatalogItem, "id"> & { id?: string },
+) {
+  const data = readData();
+  const item: CatalogItem = {
+    ...input,
+    id: input.id ?? uid("uav"),
+  };
+  const exists = data.uav.some((entry) => entry.id === item.id);
+  data.uav = exists ? data.uav.map((entry) => (entry.id === item.id ? item : entry)) : [item, ...data.uav];
+  writeData(data);
+  return item;
+}
+
+export function removeUavItem(itemId: string) {
+  const data = readData();
+  data.uav = data.uav.filter((item) => item.id !== itemId);
+  writeData(data);
 }
 
 export function listTestResults() {
