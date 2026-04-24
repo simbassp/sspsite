@@ -1,6 +1,7 @@
 "use client";
 
 import { clearSessionCookie, serializeSessionCookie } from "@/lib/auth";
+import { SESSION_COOKIE } from "@/lib/seed";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
 import {
   authenticate,
@@ -62,6 +63,14 @@ function canUseLocalFallback() {
   if (typeof window === "undefined") return true;
   const host = window.location.hostname;
   return host === "localhost" || host === "127.0.0.1" || host === "::1";
+}
+
+function mapAuthErrorMessage(raw: string) {
+  const msg = raw.toLowerCase();
+  if (msg.includes("rate limit")) {
+    return "Слишком много запросов на сброс. Подождите 60 секунд и попробуйте снова.";
+  }
+  return raw;
 }
 
 export async function loginUser(login: string, password: string) {
@@ -139,7 +148,7 @@ export async function requestPasswordReset(loginOrEmail: string) {
 
   const supabase = getSupabaseBrowserClient();
   let lastError = "";
-  const redirectTo = `${window.location.origin}/login`;
+  const redirectTo = `${window.location.origin}/reset-password`;
   const loginTrim = loginOrEmail.trim();
   const emailsToTry = new Set<string>();
   if (loginTrim.includes("@")) {
@@ -161,7 +170,7 @@ export async function requestPasswordReset(loginOrEmail: string) {
     if (!error) {
       return { ok: true as const };
     }
-    lastError = error.message;
+    lastError = mapAuthErrorMessage(error.message);
   }
 
   return { ok: false as const, error: lastError || "Не удалось отправить ссылку для сброса." };
@@ -275,6 +284,18 @@ export async function removeUser(userId: string) {
 
 export async function logoutUser() {
   document.cookie = clearSessionCookie();
+  document.cookie = `${SESSION_COOKIE}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`;
+  if (typeof window !== "undefined") {
+    const keysToDelete: string[] = [];
+    for (let i = 0; i < window.localStorage.length; i += 1) {
+      const key = window.localStorage.key(i);
+      if (!key) continue;
+      if (key.includes("sb-") || key.includes("supabase") || key.includes("auth-token")) {
+        keysToDelete.push(key);
+      }
+    }
+    keysToDelete.forEach((key) => window.localStorage.removeItem(key));
+  }
   if (!isSupabaseConfigured) return;
   const supabase = getSupabaseBrowserClient();
   await supabase.auth.signOut();

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { forceFailFinalAttempt } from "@/lib/tests-repository";
 import { logoutUser } from "@/lib/users-repository";
@@ -33,13 +33,15 @@ const adminLinks = [
 
 export function AppShell({ session, children }: AppShellProps) {
   const pathname = usePathname();
-  const router = useRouter();
   const bottomLinks = mainLinks.slice(0, 5);
 
   const logout = async () => {
-    await forceFailFinalAttempt(session.id);
-    await logoutUser();
-    router.push("/login");
+    try {
+      await forceFailFinalAttempt(session.id);
+    } finally {
+      await logoutUser();
+      window.location.assign("/login");
+    }
   };
 
   return (

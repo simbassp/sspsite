@@ -61,11 +61,24 @@ create table if not exists public.final_attempts (
   answers jsonb not null default '{}'::jsonb
 );
 
+create table if not exists public.test_questions (
+  id uuid primary key default gen_random_uuid(),
+  type public.test_type not null,
+  text text not null,
+  options jsonb not null check (jsonb_typeof(options) = 'array'),
+  correct_index integer not null default 0,
+  time_limit_sec integer not null default 45 check (time_limit_sec >= 5),
+  order_index integer not null default 1,
+  is_active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
 create index if not exists idx_app_users_login on public.app_users(login);
 create index if not exists idx_app_users_role on public.app_users(role);
 create index if not exists idx_test_results_user_id on public.test_results(user_id);
 create index if not exists idx_test_results_type_status on public.test_results(type, status);
 create index if not exists idx_catalog_items_kind on public.catalog_items(kind);
+create index if not exists idx_test_questions_type_order on public.test_questions(type, order_index);
 
 create or replace function public.is_admin()
 returns boolean
@@ -104,6 +117,7 @@ alter table public.news enable row level security;
 alter table public.catalog_items enable row level security;
 alter table public.test_results enable row level security;
 alter table public.final_attempts enable row level security;
+alter table public.test_questions enable row level security;
 
 -- app_users
 create policy "users_self_read"
@@ -210,3 +224,17 @@ with check (
   public.is_admin()
   or user_id in (select id from public.app_users where auth_user_id = auth.uid())
 );
+
+-- test_questions
+create policy "test_questions_read"
+on public.test_questions
+for select
+to authenticated
+using (true);
+
+create policy "test_questions_admin_write"
+on public.test_questions
+for all
+to authenticated
+using (public.is_admin())
+with check (public.is_admin());

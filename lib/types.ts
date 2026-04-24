@@ -58,6 +58,18 @@ export interface TestResult {
   createdAt: string;
 }
 
+export interface TestQuestion {
+  id: string;
+  type: TestType;
+  text: string;
+  options: string[];
+  correctIndex: number;
+  timeLimitSec: number;
+  order: number;
+  isActive: boolean;
+  createdAt: string;
+}
+
 export interface FinalAttemptState {
   userId: string;
   startedAt: string;
@@ -70,6 +82,7 @@ export interface AppData {
   news: NewsItem[];
   counteraction: CatalogItem[];
   uav: CatalogItem[];
+  testQuestions: TestQuestion[];
   testResults: TestResult[];
   finalAttempt: FinalAttemptState | null;
 }

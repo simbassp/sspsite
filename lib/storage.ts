@@ -1,11 +1,13 @@
 "use client";
 
 import { seedData, STORAGE_KEY } from "@/lib/seed";
+import { createDefaultQuestionBank } from "@/lib/test-question-bank";
 import {
   AppData,
   FinalAttemptState,
   Position,
   SessionUser,
+  TestQuestion,
   TestResult,
   UserRecord,
 } from "@/lib/types";
@@ -38,7 +40,16 @@ export function readData(): AppData {
   }
 
   try {
-    return JSON.parse(raw) as AppData;
+    const parsed = JSON.parse(raw) as Partial<AppData>;
+    const normalized: AppData = {
+      ...seedData,
+      ...parsed,
+      testQuestions:
+        parsed.testQuestions && parsed.testQuestions.length > 0
+          ? parsed.testQuestions
+          : createDefaultQuestionBank(),
+    };
+    return normalized;
   } catch {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(seedData));
     return seedData;
@@ -153,6 +164,35 @@ export function getUavById(id: string) {
 
 export function listTestResults() {
   return readData().testResults;
+}
+
+export function listTestQuestions(type?: "trial" | "final") {
+  const all = readData().testQuestions ?? [];
+  const filtered = type ? all.filter((q) => q.type === type) : all;
+  return [...filtered].sort((a, b) => a.order - b.order);
+}
+
+export function upsertTestQuestion(
+  input: Omit<TestQuestion, "id" | "createdAt"> & { id?: string; createdAt?: string },
+) {
+  const data = readData();
+  const question: TestQuestion = {
+    id: input.id ?? uid("q"),
+    createdAt: input.createdAt ?? new Date().toISOString(),
+    ...input,
+  };
+  const exists = data.testQuestions.some((q) => q.id === question.id);
+  data.testQuestions = exists
+    ? data.testQuestions.map((q) => (q.id === question.id ? { ...q, ...question } : q))
+    : [...data.testQuestions, question];
+  writeData(data);
+  return question;
+}
+
+export function removeTestQuestion(questionId: string) {
+  const data = readData();
+  data.testQuestions = data.testQuestions.filter((q) => q.id !== questionId);
+  writeData(data);
 }
 
 export function startFinalAttempt(userId: string): FinalAttemptState {

@@ -1,4 +1,5 @@
 import { AppData, Position } from "@/lib/types";
+import { createDefaultQuestionBank } from "@/lib/test-question-bank";
 
 const defaultPosition: Position = "Специалист";
 
@@ -132,6 +133,7 @@ export const seedData: AppData = {
       },
     },
   ],
+  testQuestions: createDefaultQuestionBank(),
   testResults: [
     {
       id: "t-1",

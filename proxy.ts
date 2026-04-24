@@ -2,11 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { parseSessionCookie } from "@/lib/auth";
 import { SESSION_COOKIE } from "@/lib/seed";
 
-const publicPaths = ["/login", "/register"];
+const publicPaths = ["/login", "/register", "/reset-password"];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isPublic = publicPaths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+  const isRecoveryOnLogin =
+    pathname === "/login" &&
+    (request.nextUrl.searchParams.get("type") === "recovery" ||
+      Boolean(request.nextUrl.searchParams.get("code")) ||
+      Boolean(request.nextUrl.searchParams.get("token_hash")));
   const raw = request.cookies.get(SESSION_COOKIE)?.value;
   const session = parseSessionCookie(raw);
 
@@ -14,7 +19,7 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  if (session && isPublic) {
+  if (session && isPublic && !isRecoveryOnLogin && pathname !== "/reset-password") {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 

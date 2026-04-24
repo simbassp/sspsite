@@ -6,42 +6,27 @@ import { formatDate } from "@/lib/format";
 import {
   beginFinalAttempt,
   createTrialResult,
+  fetchTestQuestions,
   fetchUserResults,
   finishFinalAttempt,
   forceFailFinalAttempt,
   loadFinalAttempt,
   persistFinalAttempt,
+  seedDefaultQuestionsIfEmpty,
 } from "@/lib/tests-repository";
-import { TestResult } from "@/lib/types";
-
-type Question = {
-  id: number;
-  text: string;
-  options: string[];
-  correct: number;
-};
-
-const trialQuestions: Question[] = [
-  { id: 1, text: "Что делать при потере связи с БПЛА?", options: ["Продолжить полет", "Сообщить по протоколу", "Игнорировать"], correct: 1 },
-  { id: 2, text: "Первое действие при тревоге?", options: ["Ожидать", "Проверить оборудование", "Покинуть пост"], correct: 1 },
-  { id: 3, text: "Как фиксировать результат тренировки?", options: ["Устно", "В журнале", "Не фиксировать"], correct: 1 },
-];
-
-const finalQuestions: Question[] = [
-  { id: 1, text: "Ключевой канал обнаружения низколетящего БПЛА?", options: ["Визуальный пост", "Только метеосводка", "Архив новостей"], correct: 0 },
-  { id: 2, text: "Что критично при работе РЭБ?", options: ["Согласование диапазонов", "Случайная частота", "Отключенный журнал"], correct: 0 },
-  { id: 3, text: "Минимум для допуска к итоговому тесту?", options: ["Регистрация", "Изучение материала и пробный тест", "Только наличие позывного"], correct: 1 },
-  { id: 4, text: "При угрозе повторной атаки нужно:", options: ["Снять наблюдение", "Усилить мониторинг", "Отключить средства связи"], correct: 1 },
-  { id: 5, text: "После завершения операции сотрудник:", options: ["Игнорирует отчет", "Фиксирует действия и итоги", "Удаляет записи"], correct: 1 },
-];
+import { TestQuestion, TestResult } from "@/lib/types";
 
 export default function TestsPage() {
   const session = useMemo(() => readClientSession(), []);
   const [results, setResults] = useState<TestResult[]>([]);
+  const [trialQuestions, setTrialQuestions] = useState<TestQuestion[]>([]);
+  const [finalQuestions, setFinalQuestions] = useState<TestQuestion[]>([]);
   const [message, setMessage] = useState("");
-  const [finalActive, setFinalActive] = useState(false);
+  const [activeTest, setActiveTest] = useState<"trial" | "final" | null>(null);
   const [questionIndex, setQuestionIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<number, number>>({});
+  const [answers, setAnswers] = useState<Record<string, number>>({});
+  const [timeLeft, setTimeLeft] = useState(0);
+  const [isAnswering, setIsAnswering] = useState(false);
 
   const refresh = async () => {
     if (!session) return;
@@ -52,6 +37,11 @@ export default function TestsPage() {
   useEffect(() => {
     if (!session) return;
     (async () => {
+      await seedDefaultQuestionsIfEmpty();
+      const [trial, final] = await Promise.all([fetchTestQuestions("trial"), fetchTestQuestions("final")]);
+      setTrialQuestions(trial);
+      setFinalQuestions(final);
+
       const orphanAttempt = await loadFinalAttempt(session.id);
       if (orphanAttempt) {
         await forceFailFinalAttempt(session.id);
@@ -62,13 +52,12 @@ export default function TestsPage() {
     })();
   }, [session]);
 
-  useEffect(() => {
-    if (!session) return;
-    if (!finalActive) return;
+  const activeQuestions = activeTest === "trial" ? trialQuestions : activeTest === "final" ? finalQuestions : [];
+  const currentQuestion = activeQuestions[questionIndex];
 
-    const onExit = () => {
-      forceFailFinalAttempt(session.id);
-    };
+  useEffect(() => {
+    if (!session || activeTest !== "final") return;
+    const onExit = () => void forceFailFinalAttempt(session.id);
 
     window.addEventListener("beforeunload", onExit);
     window.addEventListener("pagehide", onExit);
@@ -76,55 +65,98 @@ export default function TestsPage() {
       window.removeEventListener("beforeunload", onExit);
       window.removeEventListener("pagehide", onExit);
     };
-  }, [finalActive, session]);
+  }, [activeTest, session]);
+
+  useEffect(() => {
+    if (!currentQuestion || !activeTest) return;
+    setTimeLeft(Math.max(1, currentQuestion.timeLimitSec));
+  }, [currentQuestion, activeTest]);
+
+  useEffect(() => {
+    if (!activeTest || !currentQuestion) return;
+    const timer = window.setInterval(() => {
+      setTimeLeft((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [activeTest, currentQuestion?.id]);
 
   if (!session) {
     return <p className="page-subtitle">Ошибка сессии. Перезайдите в систему.</p>;
   }
 
-  const onTrial = async () => {
-    let points = 0;
-    trialQuestions.forEach(() => {
-      if (Math.random() > 0.2) points += 1;
-    });
-    const score = Math.round((points / trialQuestions.length) * 100);
-    await createTrialResult(session.id, score);
-    setMessage(`Пробный тест завершен: ${score}%.`);
-    await refresh();
-  };
+  const finishAttempt = async (type: "trial" | "final", finalAnswers: Record<string, number>) => {
+    const questions = type === "trial" ? trialQuestions : finalQuestions;
+    const correct = questions.reduce((acc, q) => acc + (finalAnswers[q.id] === q.correctIndex ? 1 : 0), 0);
+    const score = Math.round((correct / Math.max(questions.length, 1)) * 100);
 
-  const startFinal = async () => {
-    await beginFinalAttempt(session.id);
-    setFinalActive(true);
+    if (type === "trial") {
+      await createTrialResult(session.id, score);
+      setMessage(`Пробный тест завершен: ${score}%.`);
+    } else {
+      const passed = score >= 80;
+      await finishFinalAttempt(session.id, score, passed);
+      setMessage(`Итоговый тест завершен: ${score}%. Статус: ${passed ? "СДАЛ" : "НЕ СДАЛ"}.`);
+    }
+
+    setActiveTest(null);
     setQuestionIndex(0);
     setAnswers({});
-    setMessage("Итоговый тест запущен. Режим строгий: прерывание = не сдал.");
+    setTimeLeft(0);
+    await refresh();
   };
 
   const answerCurrent = async (optionIndex: number) => {
-    const currentQuestion = finalQuestions[questionIndex];
+    if (!activeTest || !currentQuestion || isAnswering) return;
+    setIsAnswering(true);
     const nextAnswers = { ...answers, [currentQuestion.id]: optionIndex };
     setAnswers(nextAnswers);
 
-    if (questionIndex < finalQuestions.length - 1) {
+    if (questionIndex < activeQuestions.length - 1) {
       const nextIndex = questionIndex + 1;
       setQuestionIndex(nextIndex);
-      await persistFinalAttempt({
-        userId: session.id,
-        startedAt: new Date().toISOString(),
-        questionIndex: nextIndex,
-        answers: Object.fromEntries(Object.entries(nextAnswers).map(([k, v]) => [Number(k), String(v)])),
-      });
+      if (activeTest === "final") {
+        await persistFinalAttempt({
+          userId: session.id,
+          startedAt: new Date().toISOString(),
+          questionIndex: nextIndex,
+          answers: Object.fromEntries(Object.entries(nextAnswers).map(([k, v]) => [k, String(v)])),
+        });
+      }
+      setIsAnswering(false);
       return;
     }
 
-    const correct = finalQuestions.reduce((acc, q) => acc + (nextAnswers[q.id] === q.correct ? 1 : 0), 0);
-    const score = Math.round((correct / finalQuestions.length) * 100);
-    const passed = score >= 80;
-    await finishFinalAttempt(session.id, score, passed);
-    setFinalActive(false);
-    setMessage(`Итоговый тест завершен: ${score}%. Статус: ${passed ? "СДАЛ" : "НЕ СДАЛ"}.`);
-    await refresh();
+    await finishAttempt(activeTest, nextAnswers);
+    setIsAnswering(false);
+  };
+
+  useEffect(() => {
+    if (!activeTest || !currentQuestion) return;
+    if (timeLeft > 0) return;
+    void answerCurrent(-1);
+  }, [timeLeft, activeTest, currentQuestion]);
+
+  const onTrial = async () => {
+    if (trialQuestions.length === 0) {
+      setMessage("Пробный тест пока не настроен администратором.");
+      return;
+    }
+    setActiveTest("trial");
+    setQuestionIndex(0);
+    setAnswers({});
+    setMessage("Пробный тест запущен.");
+  };
+
+  const startFinal = async () => {
+    if (finalQuestions.length === 0) {
+      setMessage("Итоговый тест пока не настроен администратором.");
+      return;
+    }
+    await beginFinalAttempt(session.id);
+    setActiveTest("final");
+    setQuestionIndex(0);
+    setAnswers({});
+    setMessage("Итоговый тест запущен. Режим строгий: прерывание = не сдал.");
   };
 
   return (
@@ -137,7 +169,7 @@ export default function TestsPage() {
           <div className="card-body">
             <h3>Пробный тест</h3>
             <p className="page-subtitle" style={{ marginTop: 8 }}>
-              Без штрафов за выход. Можно проходить многократно.
+              Без штрафов за выход. Можно проходить многократно. Время задается администратором на каждый вопрос.
             </p>
             <button className="btn btn-primary" type="button" onClick={onTrial}>
               Начать пробный тест
@@ -150,7 +182,7 @@ export default function TestsPage() {
             <p className="page-subtitle" style={{ marginTop: 8 }}>
               При обновлении страницы, закрытии вкладки или выходе попытка засчитывается как не сдал.
             </p>
-            {!finalActive && (
+            {activeTest !== "final" && (
               <button className="btn btn-primary" type="button" onClick={startFinal}>
                 Начать итоговый тест
               </button>
@@ -159,16 +191,24 @@ export default function TestsPage() {
         </article>
       </div>
 
-      {finalActive && (
+      {activeTest && currentQuestion && (
         <article className="card" style={{ marginTop: 12 }}>
           <div className="card-body">
             <p className="label">
-              Вопрос {questionIndex + 1} / {finalQuestions.length}
+              {activeTest === "final" ? "Итоговый" : "Пробный"} вопрос {questionIndex + 1} / {activeQuestions.length}
             </p>
-            <h3 style={{ marginTop: 8 }}>{finalQuestions[questionIndex].text}</h3>
+            <p className="page-subtitle" style={{ marginTop: 8 }}>
+              Осталось времени: <strong>{timeLeft}</strong> сек
+            </p>
+            <h3 style={{ marginTop: 8 }}>{currentQuestion.text}</h3>
             <div className="form" style={{ marginTop: 10 }}>
-              {finalQuestions[questionIndex].options.map((option, index) => (
-                <button className="btn" type="button" key={option} onClick={() => answerCurrent(index)}>
+              {currentQuestion.options.map((option, index) => (
+                <button
+                  className="btn"
+                  type="button"
+                  key={`${currentQuestion.id}-${index}-${option}`}
+                  onClick={() => void answerCurrent(index)}
+                >
                   {option}
                 </button>
               ))}

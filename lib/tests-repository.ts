@@ -5,12 +5,16 @@ import {
   addTrialResult,
   completeFinalAttempt,
   getFinalAttempt,
+  listTestQuestions,
   listTestResults,
   markFinalAttemptAsFailed,
+  removeTestQuestion,
   saveFinalAttempt,
   startFinalAttempt,
+  upsertTestQuestion,
 } from "@/lib/storage";
-import { FinalAttemptState, TestResult } from "@/lib/types";
+import { createDefaultQuestionBank } from "@/lib/test-question-bank";
+import { FinalAttemptState, TestQuestion, TestResult, TestType } from "@/lib/types";
 
 type TestResultRow = {
   id: string;
@@ -26,6 +30,18 @@ type FinalAttemptRow = {
   started_at: string;
   question_index: number;
   answers: Record<string, string>;
+};
+
+type TestQuestionRow = {
+  id: string;
+  type: "trial" | "final";
+  text: string;
+  options: string[];
+  correct_index: number;
+  time_limit_sec: number;
+  order_index: number;
+  is_active: boolean;
+  created_at: string;
 };
 
 function mapResult(row: TestResultRow): TestResult {
@@ -45,6 +61,20 @@ function mapAttempt(row: FinalAttemptRow): FinalAttemptState {
     startedAt: row.started_at,
     questionIndex: row.question_index,
     answers: Object.fromEntries(Object.entries(row.answers || {}).map(([k, v]) => [Number(k), String(v)])),
+  };
+}
+
+function mapQuestion(row: TestQuestionRow): TestQuestion {
+  return {
+    id: row.id,
+    type: row.type,
+    text: row.text,
+    options: row.options,
+    correctIndex: row.correct_index,
+    timeLimitSec: row.time_limit_sec,
+    order: row.order_index,
+    isActive: row.is_active,
+    createdAt: row.created_at,
   };
 }
 
@@ -206,4 +236,117 @@ export async function forceFailFinalAttempt(userId: string) {
   }
 
   await supabase.from("final_attempts").delete().eq("user_id", userId);
+}
+
+export async function fetchTestQuestions(type: TestType) {
+  if (!isSupabaseConfigured) {
+    return listTestQuestions(type).filter((q) => q.isActive);
+  }
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("test_questions")
+    .select("id,type,text,options,correct_index,time_limit_sec,order_index,is_active,created_at")
+    .eq("type", type)
+    .eq("is_active", true)
+    .order("order_index", { ascending: true });
+
+  if (error || !data) {
+    return listTestQuestions(type).filter((q) => q.isActive);
+  }
+  return (data as TestQuestionRow[]).map(mapQuestion);
+}
+
+export async function fetchAdminQuestionBank() {
+  if (!isSupabaseConfigured) {
+    return listTestQuestions();
+  }
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("test_questions")
+    .select("id,type,text,options,correct_index,time_limit_sec,order_index,is_active,created_at")
+    .order("type", { ascending: true })
+    .order("order_index", { ascending: true });
+
+  if (error || !data) {
+    return listTestQuestions();
+  }
+  return (data as TestQuestionRow[]).map(mapQuestion);
+}
+
+export async function saveAdminQuestion(question: {
+  id?: string;
+  type: TestType;
+  text: string;
+  options: string[];
+  correctIndex: number;
+  timeLimitSec: number;
+  order: number;
+  isActive: boolean;
+}) {
+  if (!isSupabaseConfigured) {
+    return upsertTestQuestion({ ...question });
+  }
+  const supabase = getSupabaseBrowserClient();
+  const payload = {
+    type: question.type,
+    text: question.text,
+    options: question.options,
+    correct_index: question.correctIndex,
+    time_limit_sec: question.timeLimitSec,
+    order_index: question.order,
+    is_active: question.isActive,
+  };
+  const payloadWithId = question.id ? { ...payload, id: question.id } : payload;
+  const { data, error } = await supabase
+    .from("test_questions")
+    .upsert(payloadWithId, { onConflict: "id" })
+    .select("id,type,text,options,correct_index,time_limit_sec,order_index,is_active,created_at")
+    .single();
+
+  if (error || !data) {
+    return upsertTestQuestion({ ...question });
+  }
+  return mapQuestion(data as TestQuestionRow);
+}
+
+export async function deleteAdminQuestion(questionId: string) {
+  if (!isSupabaseConfigured) {
+    removeTestQuestion(questionId);
+    return;
+  }
+  const supabase = getSupabaseBrowserClient();
+  const { error } = await supabase.from("test_questions").delete().eq("id", questionId);
+  if (error) {
+    removeTestQuestion(questionId);
+  }
+}
+
+export async function seedDefaultQuestionsIfEmpty() {
+  const localDefault = createDefaultQuestionBank();
+  if (!isSupabaseConfigured) {
+    if (listTestQuestions().length > 0) return;
+    localDefault.forEach((question) => {
+      upsertTestQuestion(question);
+    });
+    return;
+  }
+
+  const supabase = getSupabaseBrowserClient();
+  const { count, error } = await supabase
+    .from("test_questions")
+    .select("id", { count: "exact", head: true });
+
+  if (error || (count ?? 0) > 0) return;
+
+  await supabase.from("test_questions").insert(
+    localDefault.map((q) => ({
+      type: q.type,
+      text: q.text,
+      options: q.options,
+      correct_index: q.correctIndex,
+      time_limit_sec: q.timeLimitSec,
+      order_index: q.order,
+      is_active: q.isActive,
+    })),
+  );
 }
