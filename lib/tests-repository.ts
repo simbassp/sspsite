@@ -5,16 +5,18 @@ import {
   addTrialResult,
   completeFinalAttempt,
   getFinalAttempt,
+  getTestConfig,
   listTestQuestions,
   listTestResults,
   markFinalAttemptAsFailed,
   removeTestQuestion,
   saveFinalAttempt,
   startFinalAttempt,
+  updateTestConfig,
   upsertTestQuestion,
 } from "@/lib/storage";
 import { createDefaultQuestionBank } from "@/lib/test-question-bank";
-import { FinalAttemptState, TestQuestion, TestResult, TestType } from "@/lib/types";
+import { FinalAttemptState, TestConfig, TestQuestion, TestResult, TestType } from "@/lib/types";
 
 type TestResultRow = {
   id: string;
@@ -42,6 +44,11 @@ type TestQuestionRow = {
   order_index: number;
   is_active: boolean;
   created_at: string;
+};
+
+type TestConfigRow = {
+  trial_question_count: number;
+  final_question_count: number;
 };
 
 function mapResult(row: TestResultRow): TestResult {
@@ -75,6 +82,13 @@ function mapQuestion(row: TestQuestionRow): TestQuestion {
     order: row.order_index,
     isActive: row.is_active,
     createdAt: row.created_at,
+  };
+}
+
+function mapConfig(row: TestConfigRow): TestConfig {
+  return {
+    trialQuestionCount: Math.max(1, row.trial_question_count),
+    finalQuestionCount: Math.max(1, row.final_question_count),
   };
 }
 
@@ -349,4 +363,46 @@ export async function seedDefaultQuestionsIfEmpty() {
       is_active: q.isActive,
     })),
   );
+}
+
+export async function fetchTestConfig() {
+  if (!isSupabaseConfigured) {
+    return getTestConfig();
+  }
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("test_settings")
+    .select("trial_question_count,final_question_count")
+    .eq("id", 1)
+    .maybeSingle();
+
+  if (error || !data) {
+    return getTestConfig();
+  }
+  return mapConfig(data as TestConfigRow);
+}
+
+export async function saveTestConfig(config: TestConfig) {
+  if (!isSupabaseConfigured) {
+    updateTestConfig(config);
+    return getTestConfig();
+  }
+  const supabase = getSupabaseBrowserClient();
+  const payload = {
+    id: 1,
+    trial_question_count: Math.max(1, Math.floor(config.trialQuestionCount)),
+    final_question_count: Math.max(1, Math.floor(config.finalQuestionCount)),
+    updated_at: new Date().toISOString(),
+  };
+  const { data, error } = await supabase
+    .from("test_settings")
+    .upsert(payload, { onConflict: "id" })
+    .select("trial_question_count,final_question_count")
+    .single();
+
+  if (error || !data) {
+    updateTestConfig(config);
+    return getTestConfig();
+  }
+  return mapConfig(data as TestConfigRow);
 }

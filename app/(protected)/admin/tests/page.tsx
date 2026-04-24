@@ -5,10 +5,12 @@ import {
   deleteAdminQuestion,
   fetchAdminQuestionBank,
   fetchAllResults,
+  fetchTestConfig,
   saveAdminQuestion,
+  saveTestConfig,
   seedDefaultQuestionsIfEmpty,
 } from "@/lib/tests-repository";
-import { TestQuestion, TestResult, TestType } from "@/lib/types";
+import { TestConfig, TestQuestion, TestResult, TestType } from "@/lib/types";
 
 type DraftQuestion = {
   id?: string;
@@ -34,27 +36,37 @@ const initialDraft: DraftQuestion = {
 export default function AdminTestsPage() {
   const [results, setResults] = useState<TestResult[]>([]);
   const [questions, setQuestions] = useState<TestQuestion[]>([]);
+  const [config, setConfig] = useState<TestConfig>({ trialQuestionCount: 3, finalQuestionCount: 5 });
   const [draft, setDraft] = useState<DraftQuestion>(initialDraft);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
     (async () => {
       await seedDefaultQuestionsIfEmpty();
-      const [allResults, allQuestions] = await Promise.all([fetchAllResults(), fetchAdminQuestionBank()]);
+      const [allResults, allQuestions, testConfig] = await Promise.all([
+        fetchAllResults(),
+        fetchAdminQuestionBank(),
+        fetchTestConfig(),
+      ]);
       setResults(allResults);
       setQuestions(allQuestions);
+      setConfig(testConfig);
       const maxOrder = allQuestions.reduce((acc, item) => Math.max(acc, item.order), 0);
       setDraft((prev) => ({ ...prev, order: maxOrder + 1 }));
     })();
   }, []);
 
-  const { trial, final, failedFinal, trialQuestions, finalQuestions } = useMemo(() => {
+  const { trial, final, failedFinal, trialQuestions, finalQuestions, trialList, finalList } = useMemo(() => {
+    const trialBank = questions.filter((q) => q.type === "trial");
+    const finalBank = questions.filter((q) => q.type === "final");
     return {
       trial: results.filter((item) => item.type === "trial").length,
       final: results.filter((item) => item.type === "final").length,
       failedFinal: results.filter((item) => item.type === "final" && item.status === "failed").length,
-      trialQuestions: questions.filter((q) => q.type === "trial").length,
-      finalQuestions: questions.filter((q) => q.type === "final").length,
+      trialQuestions: trialBank.length,
+      finalQuestions: finalBank.length,
+      trialList: trialBank,
+      finalList: finalBank,
     };
   }, [results, questions]);
 
@@ -124,6 +136,56 @@ export default function AdminTestsPage() {
     await refreshQuestions();
   };
 
+  const onSaveConfig = async () => {
+    setMessage("");
+    const nextConfig = await saveTestConfig({
+      trialQuestionCount: Math.max(1, config.trialQuestionCount),
+      finalQuestionCount: Math.max(1, config.finalQuestionCount),
+    });
+    setConfig(nextConfig);
+    setMessage("Настройки количества вопросов сохранены.");
+  };
+
+  const renderQuestionList = (list: TestQuestion[], type: TestType, title: string) => (
+    <article className="card">
+      <div className="card-body">
+        <h3>{title}</h3>
+        <p className="page-subtitle">Всего: {list.length}</p>
+        <div className="list" style={{ marginTop: 10 }}>
+          {list.map((question) => (
+            <article className="card" key={question.id}>
+              <div className="card-body">
+                <div className="meta">
+                  <span className="pill">{type === "final" ? "Итоговый" : "Пробный"}</span>
+                  <span>Порядок: {question.order}</span>
+                  <span>Время: {question.timeLimitSec} сек</span>
+                  <span>{question.isActive ? "Активен" : "Отключен"}</span>
+                </div>
+                <h3 style={{ marginTop: 8 }}>{question.text}</h3>
+                <div className="list" style={{ marginTop: 8 }}>
+                  {question.options.map((option, index) => (
+                    <p key={`${question.id}-opt-${index}`} style={{ margin: 0 }}>
+                      {index + 1}. {option} {index === question.correctIndex ? "(верный)" : ""}
+                    </p>
+                  ))}
+                </div>
+                <div className="form" style={{ marginTop: 10 }}>
+                  <button className="btn" type="button" onClick={() => onEdit(question)}>
+                    Редактировать
+                  </button>
+                  <button className="btn btn-danger" type="button" onClick={() => void onDelete(question.id)}>
+                    Удалить
+                  </button>
+                </div>
+              </div>
+            </article>
+          ))}
+          {!list.length && <p className="page-subtitle">Вопросов пока нет.</p>}
+        </div>
+      </div>
+    </article>
+  );
+
   return (
     <section>
       <h1 className="page-title">Админ / Тесты</h1>
@@ -162,6 +224,45 @@ export default function AdminTestsPage() {
           </div>
         </div>
       </div>
+
+      <article className="card" style={{ marginTop: 12 }}>
+        <div className="card-body">
+          <h3>Настройки выборки вопросов</h3>
+          <div className="form" style={{ marginTop: 10 }}>
+            <label className="label" htmlFor="trial-count">
+              Сколько вопросов в пробном тесте
+            </label>
+            <input
+              id="trial-count"
+              className="input"
+              type="number"
+              min={1}
+              value={config.trialQuestionCount}
+              onChange={(e) =>
+                setConfig((prev) => ({ ...prev, trialQuestionCount: Number(e.target.value) || 1 }))
+              }
+            />
+
+            <label className="label" htmlFor="final-count">
+              Сколько вопросов в итоговом тесте
+            </label>
+            <input
+              id="final-count"
+              className="input"
+              type="number"
+              min={1}
+              value={config.finalQuestionCount}
+              onChange={(e) =>
+                setConfig((prev) => ({ ...prev, finalQuestionCount: Number(e.target.value) || 1 }))
+              }
+            />
+
+            <button className="btn btn-primary" type="button" onClick={() => void onSaveConfig()}>
+              Сохранить настройки тестов
+            </button>
+          </div>
+        </div>
+      </article>
 
       <article className="card" style={{ marginTop: 12 }}>
         <div className="card-body">
@@ -277,36 +378,9 @@ export default function AdminTestsPage() {
         </div>
       </article>
 
-      <div className="list" style={{ marginTop: 12 }}>
-        {questions.map((question) => (
-          <article className="card" key={question.id}>
-            <div className="card-body">
-              <div className="meta">
-                <span className="pill">{question.type === "final" ? "Итоговый" : "Пробный"}</span>
-                <span>Порядок: {question.order}</span>
-                <span>Время: {question.timeLimitSec} сек</span>
-                <span>{question.isActive ? "Активен" : "Отключен"}</span>
-              </div>
-              <h3 style={{ marginTop: 8 }}>{question.text}</h3>
-              <div className="list" style={{ marginTop: 8 }}>
-                {question.options.map((option, index) => (
-                  <p key={`${question.id}-opt-${index}`} style={{ margin: 0 }}>
-                    {index + 1}. {option} {index === question.correctIndex ? "(верный)" : ""}
-                  </p>
-                ))}
-              </div>
-              <div className="form" style={{ marginTop: 10 }}>
-                <button className="btn" type="button" onClick={() => onEdit(question)}>
-                  Редактировать
-                </button>
-                <button className="btn btn-danger" type="button" onClick={() => void onDelete(question.id)}>
-                  Удалить
-                </button>
-              </div>
-            </div>
-          </article>
-        ))}
-        {!questions.length && <p className="page-subtitle">Вопросов пока нет.</p>}
+      <div className="grid grid-two" style={{ marginTop: 12 }}>
+        {renderQuestionList(trialList, "trial", "Банк пробного теста")}
+        {renderQuestionList(finalList, "final", "Банк итогового теста")}
       </div>
     </section>
   );

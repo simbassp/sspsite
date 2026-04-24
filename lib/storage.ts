@@ -7,6 +7,7 @@ import {
   FinalAttemptState,
   Position,
   SessionUser,
+  TestConfig,
   TestQuestion,
   TestResult,
   UserRecord,
@@ -170,6 +171,19 @@ export function listTestQuestions(type?: "trial" | "final") {
   const all = readData().testQuestions ?? [];
   const filtered = type ? all.filter((q) => q.type === type) : all;
   return [...filtered].sort((a, b) => a.order - b.order);
+}
+
+export function getTestConfig(): TestConfig {
+  return readData().testConfig;
+}
+
+export function updateTestConfig(config: TestConfig) {
+  const data = readData();
+  data.testConfig = {
+    trialQuestionCount: Math.max(1, Math.floor(config.trialQuestionCount)),
+    finalQuestionCount: Math.max(1, Math.floor(config.finalQuestionCount)),
+  };
+  writeData(data);
 }
 
 export function upsertTestQuestion(

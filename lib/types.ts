@@ -70,6 +70,11 @@ export interface TestQuestion {
   createdAt: string;
 }
 
+export interface TestConfig {
+  trialQuestionCount: number;
+  finalQuestionCount: number;
+}
+
 export interface FinalAttemptState {
   userId: string;
   startedAt: string;
@@ -83,6 +88,7 @@ export interface AppData {
   counteraction: CatalogItem[];
   uav: CatalogItem[];
   testQuestions: TestQuestion[];
+  testConfig: TestConfig;
   testResults: TestResult[];
   finalAttempt: FinalAttemptState | null;
 }

@@ -73,6 +73,18 @@ create table if not exists public.test_questions (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.test_settings (
+  id integer primary key default 1 check (id = 1),
+  trial_question_count integer not null default 3 check (trial_question_count >= 1),
+  final_question_count integer not null default 5 check (final_question_count >= 1),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+insert into public.test_settings (id, trial_question_count, final_question_count)
+values (1, 3, 5)
+on conflict (id) do nothing;
+
 create index if not exists idx_app_users_login on public.app_users(login);
 create index if not exists idx_app_users_role on public.app_users(role);
 create index if not exists idx_test_results_user_id on public.test_results(user_id);
@@ -118,6 +130,7 @@ alter table public.catalog_items enable row level security;
 alter table public.test_results enable row level security;
 alter table public.final_attempts enable row level security;
 alter table public.test_questions enable row level security;
+alter table public.test_settings enable row level security;
 
 -- app_users
 create policy "users_self_read"
@@ -234,6 +247,20 @@ using (true);
 
 create policy "test_questions_admin_write"
 on public.test_questions
+for all
+to authenticated
+using (public.is_admin())
+with check (public.is_admin());
+
+-- test_settings
+create policy "test_settings_read"
+on public.test_settings
+for select
+to authenticated
+using (true);
+
+create policy "test_settings_admin_write"
+on public.test_settings
 for all
 to authenticated
 using (public.is_admin())

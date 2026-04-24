@@ -134,6 +134,10 @@ export const seedData: AppData = {
     },
   ],
   testQuestions: createDefaultQuestionBank(),
+  testConfig: {
+    trialQuestionCount: 3,
+    finalQuestionCount: 5,
+  },
   testResults: [
     {
       id: "t-1",

@@ -6,6 +6,7 @@ import { formatDate } from "@/lib/format";
 import {
   beginFinalAttempt,
   createTrialResult,
+  fetchTestConfig,
   fetchTestQuestions,
   fetchUserResults,
   finishFinalAttempt,
@@ -14,13 +15,24 @@ import {
   persistFinalAttempt,
   seedDefaultQuestionsIfEmpty,
 } from "@/lib/tests-repository";
-import { TestQuestion, TestResult } from "@/lib/types";
+import { TestConfig, TestQuestion, TestResult } from "@/lib/types";
+
+function pickRandomQuestions(bank: TestQuestion[], count: number) {
+  const cloned = [...bank];
+  for (let i = cloned.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [cloned[i], cloned[j]] = [cloned[j], cloned[i]];
+  }
+  return cloned.slice(0, Math.max(1, Math.min(count, cloned.length)));
+}
 
 export default function TestsPage() {
   const session = useMemo(() => readClientSession(), []);
   const [results, setResults] = useState<TestResult[]>([]);
   const [trialQuestions, setTrialQuestions] = useState<TestQuestion[]>([]);
   const [finalQuestions, setFinalQuestions] = useState<TestQuestion[]>([]);
+  const [selectedQuestions, setSelectedQuestions] = useState<TestQuestion[]>([]);
+  const [testConfig, setTestConfig] = useState<TestConfig>({ trialQuestionCount: 3, finalQuestionCount: 5 });
   const [message, setMessage] = useState("");
   const [activeTest, setActiveTest] = useState<"trial" | "final" | null>(null);
   const [questionIndex, setQuestionIndex] = useState(0);
@@ -38,9 +50,14 @@ export default function TestsPage() {
     if (!session) return;
     (async () => {
       await seedDefaultQuestionsIfEmpty();
-      const [trial, final] = await Promise.all([fetchTestQuestions("trial"), fetchTestQuestions("final")]);
+      const [trial, final, config] = await Promise.all([
+        fetchTestQuestions("trial"),
+        fetchTestQuestions("final"),
+        fetchTestConfig(),
+      ]);
       setTrialQuestions(trial);
       setFinalQuestions(final);
+      setTestConfig(config);
 
       const orphanAttempt = await loadFinalAttempt(session.id);
       if (orphanAttempt) {
@@ -52,7 +69,7 @@ export default function TestsPage() {
     })();
   }, [session]);
 
-  const activeQuestions = activeTest === "trial" ? trialQuestions : activeTest === "final" ? finalQuestions : [];
+  const activeQuestions = selectedQuestions;
   const currentQuestion = activeQuestions[questionIndex];
 
   useEffect(() => {
@@ -85,7 +102,7 @@ export default function TestsPage() {
   }
 
   const finishAttempt = async (type: "trial" | "final", finalAnswers: Record<string, number>) => {
-    const questions = type === "trial" ? trialQuestions : finalQuestions;
+    const questions = activeQuestions;
     const correct = questions.reduce((acc, q) => acc + (finalAnswers[q.id] === q.correctIndex ? 1 : 0), 0);
     const score = Math.round((correct / Math.max(questions.length, 1)) * 100);
 
@@ -101,6 +118,7 @@ export default function TestsPage() {
     setActiveTest(null);
     setQuestionIndex(0);
     setAnswers({});
+    setSelectedQuestions([]);
     setTimeLeft(0);
     await refresh();
   };
@@ -141,10 +159,12 @@ export default function TestsPage() {
       setMessage("Пробный тест пока не настроен администратором.");
       return;
     }
+    const randomQuestions = pickRandomQuestions(trialQuestions, testConfig.trialQuestionCount);
     setActiveTest("trial");
+    setSelectedQuestions(randomQuestions);
     setQuestionIndex(0);
     setAnswers({});
-    setMessage("Пробный тест запущен.");
+    setMessage(`Пробный тест запущен: ${randomQuestions.length} случайных вопросов.`);
   };
 
   const startFinal = async () => {
@@ -152,11 +172,13 @@ export default function TestsPage() {
       setMessage("Итоговый тест пока не настроен администратором.");
       return;
     }
+    const randomQuestions = pickRandomQuestions(finalQuestions, testConfig.finalQuestionCount);
     await beginFinalAttempt(session.id);
     setActiveTest("final");
+    setSelectedQuestions(randomQuestions);
     setQuestionIndex(0);
     setAnswers({});
-    setMessage("Итоговый тест запущен. Режим строгий: прерывание = не сдал.");
+    setMessage(`Итоговый тест запущен: ${randomQuestions.length} случайных вопросов. Режим строгий.`);
   };
 
   return (
