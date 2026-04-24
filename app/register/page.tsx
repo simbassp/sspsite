@@ -10,6 +10,8 @@ export default function RegisterPage() {
   const router = useRouter();
   const positions = useMemo(() => getPositions(), []);
   const [form, setForm] = useState({
+    email: "",
+    confirmEmail: "",
     login: "",
     name: "",
     callsign: "",
@@ -20,7 +22,20 @@ export default function RegisterPage() {
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const result = await registerUser(form);
+    setError("");
+    if (form.email.trim().toLowerCase() !== form.confirmEmail.trim().toLowerCase()) {
+      setError("Email и подтверждение email не совпадают.");
+      return;
+    }
+
+    const result = await registerUser({
+      email: form.email.trim(),
+      login: form.login.trim(),
+      name: form.name.trim(),
+      callsign: form.callsign.trim(),
+      password: form.password,
+      position: form.position,
+    });
     if (!result.ok) {
       setError(result.error);
       return;
@@ -36,6 +51,24 @@ export default function RegisterPage() {
           <p className="page-subtitle">Создание учетной записи сотрудника (роль: employee).</p>
 
           <form className="form" onSubmit={onSubmit}>
+            <label className="label">Email</label>
+            <input
+              type="email"
+              className="input"
+              value={form.email}
+              onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
+              required
+            />
+
+            <label className="label">Подтверждение Email</label>
+            <input
+              type="email"
+              className="input"
+              value={form.confirmEmail}
+              onChange={(e) => setForm((p) => ({ ...p, confirmEmail: e.target.value }))}
+              required
+            />
+
             <label className="label">Логин</label>
             <input
               className="input"

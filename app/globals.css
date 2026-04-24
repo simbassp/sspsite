@@ -225,6 +225,16 @@ a {
   padding: 11px 12px;
 }
 
+html[data-theme="light"] .select option {
+  color: #121821;
+  background: #ffffff;
+}
+
+html[data-theme="dark"] .select option {
+  color: #eef3f8;
+  background: #121821;
+}
+
 .form {
   display: grid;
   gap: 10px;

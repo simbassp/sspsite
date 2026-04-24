@@ -93,7 +93,28 @@ export async function loginUser(login: string, password: string) {
   return { ok: true as const, session: toSessionUser(row) };
 }
 
+export async function requestPasswordReset(loginOrEmail: string) {
+  if (!isSupabaseConfigured) {
+    return { ok: false as const, error: "Сброс доступен только в режиме Supabase." };
+  }
+
+  const supabase = getSupabaseBrowserClient();
+  let lastError = "";
+  const redirectTo = `${window.location.origin}/login`;
+
+  for (const email of candidateEmails(loginOrEmail)) {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+    if (!error) {
+      return { ok: true as const };
+    }
+    lastError = error.message;
+  }
+
+  return { ok: false as const, error: lastError || "Не удалось отправить ссылку для сброса." };
+}
+
 export async function registerUser(payload: {
+  email: string;
   login: string;
   name: string;
   callsign: string;
@@ -101,14 +122,19 @@ export async function registerUser(payload: {
   position: Position;
 }) {
   if (!isSupabaseConfigured) {
-    return registerEmployee(payload);
+    return registerEmployee({
+      login: payload.login,
+      name: payload.name,
+      callsign: payload.callsign,
+      password: payload.password,
+      position: payload.position,
+    });
   }
 
   const supabase = getSupabaseBrowserClient();
-  const email = payload.login.includes("@") ? payload.login : `${payload.login}@ssp.local`;
 
   const { data, error } = await supabase.auth.signUp({
-    email,
+    email: payload.email,
     password: payload.password,
   });
 
