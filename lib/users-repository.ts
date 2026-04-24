@@ -48,8 +48,31 @@ function candidateEmails(login: string) {
   return [`${login}@ssp.local`, login];
 }
 
+async function resolveEmailByLogin(login: string) {
+  if (!isSupabaseConfigured) return null;
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase.rpc("resolve_login_email", {
+    p_login: login,
+  });
+  if (error || !data || typeof data !== "string") return null;
+  return data;
+}
+
+function canUseLocalFallback() {
+  if (typeof window === "undefined") return true;
+  const host = window.location.hostname;
+  return host === "localhost" || host === "127.0.0.1" || host === "::1";
+}
+
 export async function loginUser(login: string, password: string) {
   if (!isSupabaseConfigured) {
+    if (!canUseLocalFallback()) {
+      return {
+        ok: false as const,
+        error:
+          "Supabase не подключен в прод-среде. Проверьте NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY и пересоберите приложение.",
+      };
+    }
     const local = authenticate(login, password);
     return local
       ? { ok: true as const, session: local }
@@ -60,7 +83,16 @@ export async function loginUser(login: string, password: string) {
 
   let authUserId: string | null = null;
   let lastError = "";
-  for (const email of candidateEmails(login)) {
+  const loginTrim = login.trim();
+  const emailsToTry = new Set<string>(candidateEmails(loginTrim));
+  if (!loginTrim.includes("@")) {
+    const resolved = await resolveEmailByLogin(loginTrim);
+    if (resolved) {
+      emailsToTry.add(resolved);
+    }
+  }
+
+  for (const email of emailsToTry) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (!error && data.user) {
       authUserId = data.user.id;
@@ -95,14 +127,29 @@ export async function loginUser(login: string, password: string) {
 
 export async function requestPasswordReset(loginOrEmail: string) {
   if (!isSupabaseConfigured) {
+    if (!canUseLocalFallback()) {
+      return {
+        ok: false as const,
+        error:
+          "Supabase не подключен в прод-среде. Проверьте NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY и пересоберите приложение.",
+      };
+    }
     return { ok: false as const, error: "Сброс доступен только в режиме Supabase." };
   }
 
   const supabase = getSupabaseBrowserClient();
   let lastError = "";
   const redirectTo = `${window.location.origin}/login`;
+  const loginTrim = loginOrEmail.trim();
+  const emailsToTry = new Set<string>(candidateEmails(loginTrim));
+  if (!loginTrim.includes("@")) {
+    const resolved = await resolveEmailByLogin(loginTrim);
+    if (resolved) {
+      emailsToTry.add(resolved);
+    }
+  }
 
-  for (const email of candidateEmails(loginOrEmail)) {
+  for (const email of emailsToTry) {
     const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
     if (!error) {
       return { ok: true as const };
@@ -122,6 +169,13 @@ export async function registerUser(payload: {
   position: Position;
 }) {
   if (!isSupabaseConfigured) {
+    if (!canUseLocalFallback()) {
+      return {
+        ok: false as const,
+        error:
+          "Supabase не подключен в прод-среде. Регистрация отключена до настройки NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY.",
+      };
+    }
     return registerEmployee({
       login: payload.login,
       name: payload.name,

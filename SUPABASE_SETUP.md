@@ -34,6 +34,28 @@ with check (
 );
 ```
 
+And add login resolver function for "login or email" auth:
+
+```sql
+create or replace function public.resolve_login_email(p_login text)
+returns text
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select au.email
+  from auth.users au
+  join public.app_users p on p.auth_user_id = au.id
+  where lower(p.login) = lower(p_login)
+    and p.status = 'active'
+  limit 1;
+$$;
+
+revoke all on function public.resolve_login_email(text) from public;
+grant execute on function public.resolve_login_email(text) to anon, authenticated;
+```
+
 ## 3) Link existing admin
 
 If admin is already created in Supabase Auth:

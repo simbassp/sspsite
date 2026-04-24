@@ -6,6 +6,13 @@ import { FormEvent, useEffect, useState } from "react";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
 import { loginUser, persistSession, requestPasswordReset } from "@/lib/users-repository";
 
+function readRecoveryMode() {
+  if (typeof window === "undefined") return false;
+  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const search = new URLSearchParams(window.location.search);
+  return hash.get("type") === "recovery" || search.get("type") === "recovery";
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [login, setLogin] = useState("");
@@ -14,21 +21,16 @@ export default function LoginPage() {
   const [info, setInfo] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [recoveryMode, setRecoveryMode] = useState(false);
+  const [recoveryMode, setRecoveryMode] = useState(() => readRecoveryMode());
   const [recoveryReady, setRecoveryReady] = useState(false);
 
   useEffect(() => {
     if (!isSupabaseConfigured || typeof window === "undefined") return;
+    if (!recoveryMode) return;
 
     const supabase = getSupabaseBrowserClient();
     const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
     const search = new URLSearchParams(window.location.search);
-    const hashType = hash.get("type");
-    const searchType = search.get("type");
-    const isRecovery = hashType === "recovery" || searchType === "recovery";
-
-    if (!isRecovery) return;
-    setRecoveryMode(true);
 
     const setupRecovery = async () => {
       const accessToken = hash.get("access_token");
@@ -72,7 +74,7 @@ export default function LoginPage() {
     };
 
     setupRecovery();
-  }, []);
+  }, [recoveryMode]);
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -156,9 +158,16 @@ export default function LoginPage() {
           {!recoveryMode ? (
             <form className="form" onSubmit={onSubmit}>
               <label className="label" htmlFor="login">
-                Логин
+                Логин или Email
               </label>
-              <input id="login" className="input" value={login} onChange={(e) => setLogin(e.target.value)} required />
+              <input
+                id="login"
+                className="input"
+                placeholder="например: simba или user@mail.ru"
+                value={login}
+                onChange={(e) => setLogin(e.target.value)}
+                required
+              />
 
               <label className="label" htmlFor="password">
                 Пароль

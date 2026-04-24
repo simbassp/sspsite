@@ -81,6 +81,24 @@ as $$
   );
 $$;
 
+create or replace function public.resolve_login_email(p_login text)
+returns text
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select au.email
+  from auth.users au
+  join public.app_users p on p.auth_user_id = au.id
+  where lower(p.login) = lower(p_login)
+    and p.status = 'active'
+  limit 1;
+$$;
+
+revoke all on function public.resolve_login_email(text) from public;
+grant execute on function public.resolve_login_email(text) to anon, authenticated;
+
 alter table public.app_users enable row level security;
 alter table public.news enable row level security;
 alter table public.catalog_items enable row level security;
