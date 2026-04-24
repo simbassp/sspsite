@@ -19,6 +19,7 @@ type UserRow = {
   name: string;
   callsign: string;
   position: string;
+  can_manage_content?: boolean;
   role: "employee" | "admin";
   status: "active" | "inactive";
 };
@@ -48,6 +49,7 @@ function toSessionUser(row: UserRow): SessionUser {
     name: row.name,
     callsign: row.callsign,
     position: row.position as Position,
+    canManageContent: row.can_manage_content === true,
   };
 }
 
@@ -176,7 +178,7 @@ export async function loginUser(login: string, password: string) {
 
   const { data: profile, error: profileError } = await supabase
     .from("app_users")
-    .select("id,auth_user_id,login,name,callsign,position,role,status")
+    .select("*")
     .eq("auth_user_id", authUserId)
     .maybeSingle();
 
@@ -382,7 +384,7 @@ export async function fetchUsers() {
   const supabase = getSupabaseBrowserClient();
   const { data, error } = await supabase
     .from("app_users")
-    .select("id,auth_user_id,login,name,callsign,position,role,status")
+    .select("*")
     .order("created_at", { ascending: false });
 
   if (error || !data) {
@@ -394,7 +396,7 @@ export async function fetchUsers() {
 
 export async function patchUser(
   userId: string,
-  patch: Partial<Pick<UserRecord, "name" | "callsign" | "position" | "status">>,
+  patch: Partial<Pick<UserRecord, "name" | "callsign" | "position" | "status" | "canManageContent">>,
 ) {
   if (!isSupabaseConfigured) {
     updateUser(userId, patch);
@@ -402,7 +404,14 @@ export async function patchUser(
   }
 
   const supabase = getSupabaseBrowserClient();
-  const { error } = await supabase.from("app_users").update(patch).eq("id", userId);
+  const payload = {
+    ...(patch.name !== undefined ? { name: patch.name } : {}),
+    ...(patch.callsign !== undefined ? { callsign: patch.callsign } : {}),
+    ...(patch.position !== undefined ? { position: patch.position } : {}),
+    ...(patch.status !== undefined ? { status: patch.status } : {}),
+    ...(patch.canManageContent !== undefined ? { can_manage_content: patch.canManageContent } : {}),
+  };
+  const { error } = await supabase.from("app_users").update(payload).eq("id", userId);
   if (error) {
     updateUser(userId, patch);
   }
@@ -415,9 +424,12 @@ export async function removeUser(userId: string) {
   }
 
   const supabase = getSupabaseBrowserClient();
-  const { error } = await supabase.from("app_users").delete().eq("id", userId);
+  const { error } = await supabase.rpc("admin_delete_user", { p_user_id: userId });
   if (error) {
-    deleteUser(userId);
+    const { error: fallbackError } = await supabase.from("app_users").delete().eq("id", userId);
+    if (fallbackError) {
+      deleteUser(userId);
+    }
   }
 }
 

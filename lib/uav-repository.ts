@@ -1,7 +1,16 @@
 "use client";
 
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
-import { getUavById, listUav, removeUavItem, upsertUavItem } from "@/lib/storage";
+import {
+  getCounteractionById,
+  getUavById,
+  listCounteraction,
+  listUav,
+  removeCounteractionItem,
+  removeUavItem,
+  upsertCounteractionItem,
+  upsertUavItem,
+} from "@/lib/storage";
 import { CatalogItem } from "@/lib/types";
 
 type CatalogRow = {
@@ -62,53 +71,55 @@ function slugify(value: string) {
     .slice(0, 60);
 }
 
-export async function fetchUavItems() {
-  if (!isSupabaseConfigured) {
-    return listUav();
-  }
+async function fetchCatalogItems(kind: "counteraction" | "uav", fallback: () => CatalogItem[]) {
+  if (!isSupabaseConfigured) return fallback();
   const supabase = getSupabaseBrowserClient();
   const { data, error } = await supabase
     .from("catalog_items")
     .select("id,slug,kind,title,category,summary,image,specs,details")
-    .eq("kind", "uav")
+    .eq("kind", kind)
     .order("created_at", { ascending: false });
 
   if (error || !data) {
-    return listUav();
+    return fallback();
   }
   const mapped = (data as CatalogRow[]).map(toCatalogItem);
   if (mapped.length === 0) {
-    return listUav();
+    return fallback();
   }
   return mapped;
 }
 
-export async function fetchUavById(itemId: string) {
-  if (!isSupabaseConfigured) {
-    return getUavById(itemId);
-  }
+async function fetchCatalogById(
+  kind: "counteraction" | "uav",
+  itemId: string,
+  fallback: (id: string) => CatalogItem | null,
+) {
+  if (!isSupabaseConfigured) return fallback(itemId);
   const supabase = getSupabaseBrowserClient();
   const { data, error } = await supabase
     .from("catalog_items")
     .select("id,slug,kind,title,category,summary,image,specs,details")
-    .eq("kind", "uav")
+    .eq("kind", kind)
     .eq("id", itemId)
     .maybeSingle();
 
   if (error || !data) {
-    return getUavById(itemId);
+    return fallback(itemId);
   }
   return toCatalogItem(data as CatalogRow);
 }
 
-export async function saveUavItem(input: Omit<CatalogItem, "id"> & { id?: string }) {
-  if (!isSupabaseConfigured) {
-    return upsertUavItem(input);
-  }
+async function saveCatalogItem(
+  kind: "counteraction" | "uav",
+  input: Omit<CatalogItem, "id"> & { id?: string },
+  fallback: (row: Omit<CatalogItem, "id"> & { id?: string }) => CatalogItem,
+) {
+  if (!isSupabaseConfigured) return fallback(input);
   const supabase = getSupabaseBrowserClient();
-  const baseSlug = slugify(input.title) || "uav-item";
+  const baseSlug = slugify(input.title) || `${kind}-item`;
   const payload = {
-    kind: "uav" as const,
+    kind,
     slug: input.id ? `${baseSlug}-${input.id.slice(0, 6)}` : `${baseSlug}-${Date.now().toString(36)}`,
     title: input.title,
     category: input.category,
@@ -126,19 +137,52 @@ export async function saveUavItem(input: Omit<CatalogItem, "id"> & { id?: string
     .single();
 
   if (error || !data) {
-    return upsertUavItem(input);
+    return fallback(input);
   }
   return toCatalogItem(data as CatalogRow);
 }
 
-export async function deleteUavItem(itemId: string) {
-  if (!isSupabaseConfigured) {
-    removeUavItem(itemId);
-    return;
-  }
+async function deleteCatalogItem(
+  kind: "counteraction" | "uav",
+  itemId: string,
+  fallback: (id: string) => void,
+) {
+  if (!isSupabaseConfigured) return fallback(itemId);
   const supabase = getSupabaseBrowserClient();
-  const { error } = await supabase.from("catalog_items").delete().eq("id", itemId).eq("kind", "uav");
+  const { error } = await supabase.from("catalog_items").delete().eq("id", itemId).eq("kind", kind);
   if (error) {
-    removeUavItem(itemId);
+    fallback(itemId);
   }
+}
+
+export async function fetchUavItems() {
+  return fetchCatalogItems("uav", listUav);
+}
+
+export async function fetchUavById(itemId: string) {
+  return fetchCatalogById("uav", itemId, getUavById);
+}
+
+export async function saveUavItem(input: Omit<CatalogItem, "id"> & { id?: string }) {
+  return saveCatalogItem("uav", input, upsertUavItem);
+}
+
+export async function deleteUavItem(itemId: string) {
+  return deleteCatalogItem("uav", itemId, removeUavItem);
+}
+
+export async function fetchCounteractionItems() {
+  return fetchCatalogItems("counteraction", listCounteraction);
+}
+
+export async function fetchCounteractionById(itemId: string) {
+  return fetchCatalogById("counteraction", itemId, getCounteractionById);
+}
+
+export async function saveCounteractionItem(input: Omit<CatalogItem, "id"> & { id?: string }) {
+  return saveCatalogItem("counteraction", input, upsertCounteractionItem);
+}
+
+export async function deleteCounteractionItem(itemId: string) {
+  return deleteCatalogItem("counteraction", itemId, removeCounteractionItem);
 }

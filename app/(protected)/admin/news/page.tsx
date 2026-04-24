@@ -1,10 +1,12 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { readClientSession } from "@/lib/client-auth";
 import { createNews, fetchNews } from "@/lib/news-repository";
 import { NewsItem } from "@/lib/types";
 
 export default function AdminNewsPage() {
+  const session = readClientSession();
   const [news, setNews] = useState<NewsItem[]>([]);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -22,7 +24,12 @@ export default function AdminNewsPage() {
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    const result = await createNews({ title, body, priority, author: "Администратор" });
+    const result = await createNews({
+      title,
+      body,
+      priority,
+      author: session?.name || session?.callsign || "Редактор",
+    });
     if (!result.ok) {
       setInfo(`Supabase недоступен, сохранено локально. Причина: ${result.error}`);
     } else {

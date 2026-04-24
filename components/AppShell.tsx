@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { canManageContent, canManageUsers } from "@/lib/permissions";
 import { forceFailFinalAttempt } from "@/lib/tests-repository";
 import { logoutUser } from "@/lib/users-repository";
 import { SessionUser } from "@/lib/types";
@@ -22,9 +23,7 @@ const mainLinks = [
 ];
 
 const adminLinks = [
-  { href: "/admin", label: "Админка" },
-  { href: "/admin/users", label: "Пользователи" },
-  { href: "/admin/results", label: "Результаты" },
+  { href: "/admin", label: "Управление" },
   { href: "/admin/news", label: "Новости" },
   { href: "/admin/counteraction", label: "Противодействие" },
   { href: "/admin/uav", label: "БПЛА" },
@@ -34,6 +33,11 @@ const adminLinks = [
 export function AppShell({ session, children }: AppShellProps) {
   const pathname = usePathname();
   const bottomLinks = mainLinks.slice(0, 5);
+  const isAdmin = canManageUsers(session);
+  const hasContentAccess = canManageContent(session);
+  const visibleAdminLinks = isAdmin
+    ? [{ href: "/admin/users", label: "Пользователи" }, { href: "/admin/results", label: "Результаты" }, ...adminLinks]
+    : adminLinks;
 
   const logout = async () => {
     try {
@@ -73,12 +77,12 @@ export function AppShell({ session, children }: AppShellProps) {
           })}
         </div>
 
-        {session.role === "admin" && (
+        {hasContentAccess && (
           <div style={{ marginTop: 20 }}>
             <p className="label" style={{ marginBottom: 8 }}>
-              Админ-раздел
+              Раздел управления
             </p>
-            {adminLinks.map((link) => {
+            {visibleAdminLinks.map((link) => {
               const active = pathname === link.href || pathname.startsWith(`${link.href}/`);
               return (
                 <Link className={`desktop-nav-link ${active ? "active" : ""}`} key={link.href} href={link.href}>
@@ -97,7 +101,7 @@ export function AppShell({ session, children }: AppShellProps) {
             <div>
               <h1>ССП ПВО</h1>
               <p>
-                {session.callsign} • {session.role === "admin" ? "Админ" : "Сотрудник"}
+                {session.callsign} • {isAdmin ? "Админ" : hasContentAccess ? "Редактор" : "Сотрудник"}
               </p>
             </div>
           </div>

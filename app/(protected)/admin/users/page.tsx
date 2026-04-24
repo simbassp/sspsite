@@ -21,7 +21,10 @@ export default function AdminUsersPage() {
     setUsers(next);
   };
 
-  const patchLocal = (userId: string, patch: Partial<Pick<UserRecord, "name" | "callsign" | "position" | "status">>) => {
+  const patchLocal = (
+    userId: string,
+    patch: Partial<Pick<UserRecord, "name" | "callsign" | "position" | "status" | "canManageContent">>,
+  ) => {
     setUsers((prev) => prev.map((item) => (item.id === userId ? { ...item, ...patch } : item)));
     patchUser(userId, patch).catch(() => setInfo("Не удалось синхронизировать изменения."));
   };
@@ -62,6 +65,7 @@ export default function AdminUsersPage() {
                   {user.status === "active" ? "Активен" : "Деактивирован"}
                 </span>
                 <span>{user.role}</span>
+                {user.canManageContent && <span className="pill pill-green">Редактор контента</span>}
                 <span>@{user.login}</span>
               </div>
 
@@ -83,6 +87,15 @@ export default function AdminUsersPage() {
                     </option>
                   ))}
                 </select>
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => {
+                    patchLocal(user.id, { canManageContent: !user.canManageContent });
+                  }}
+                >
+                  {user.canManageContent ? "Снять права редактора" : "Выдать права редактора"}
+                </button>
                 <div style={{ display: "flex", gap: 8 }}>
                   <button
                     className="btn"

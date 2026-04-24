@@ -1,13 +1,25 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useState } from "react";
-import { getCounteractionById } from "@/lib/storage";
+import { useEffect, useState } from "react";
+import { fetchCounteractionById } from "@/lib/uav-repository";
+import { CatalogItem } from "@/lib/types";
 
 export default function CounteractionDetailPage() {
   const params = useParams<{ id: string }>();
   const [tab, setTab] = useState<"overview" | "tth" | "usage" | "materials">("overview");
-  const item = getCounteractionById(params.id);
+  const [item, setItem] = useState<CatalogItem | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchCounteractionById(params.id)
+      .then(setItem)
+      .finally(() => setLoading(false));
+  }, [params.id]);
+
+  if (loading) {
+    return <p className="page-subtitle">Загрузка карточки...</p>;
+  }
 
   if (!item) {
     return <p className="page-subtitle">Карточка не найдена.</p>;

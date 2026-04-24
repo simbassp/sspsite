@@ -2,12 +2,16 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useState } from "react";
-import { listCounteraction } from "@/lib/storage";
+import { useEffect, useState } from "react";
+import { fetchCounteractionItems } from "@/lib/uav-repository";
 import { CatalogItem } from "@/lib/types";
 
 export default function CounteractionPage() {
-  const [items] = useState<CatalogItem[]>(() => listCounteraction());
+  const [items, setItems] = useState<CatalogItem[]>([]);
+
+  useEffect(() => {
+    fetchCounteractionItems().then(setItems);
+  }, []);
 
   return (
     <section>

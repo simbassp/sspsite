@@ -16,6 +16,7 @@ export const seedData: AppData = {
       name: "Администратор ССП",
       callsign: "Центр-01",
       position: "Главный специалист",
+      canManageContent: true,
       status: "active",
     },
     {
@@ -26,6 +27,7 @@ export const seedData: AppData = {
       name: "Иван Петров",
       callsign: "Бастион-12",
       position: defaultPosition,
+      canManageContent: false,
       status: "active",
     },
     {
@@ -36,6 +38,7 @@ export const seedData: AppData = {
       name: "Алексей Сидоров",
       callsign: "Шторм-07",
       position: "Ведущий специалист",
+      canManageContent: false,
       status: "active",
     },
   ],

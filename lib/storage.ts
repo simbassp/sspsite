@@ -43,9 +43,14 @@ export function readData(): AppData {
 
   try {
     const parsed = JSON.parse(raw) as Partial<AppData>;
+    const normalizedUsers = (parsed.users ?? seedData.users).map((user) => ({
+      ...user,
+      canManageContent: user.canManageContent ?? false,
+    }));
     const normalized: AppData = {
       ...seedData,
       ...parsed,
+      users: normalizedUsers,
       testQuestions:
         parsed.testQuestions && parsed.testQuestions.length > 0
           ? parsed.testQuestions
@@ -76,6 +81,7 @@ export function authenticate(login: string, password: string): SessionUser | nul
     name: user.name,
     callsign: user.callsign,
     position: user.position,
+    canManageContent: user.canManageContent,
   };
 }
 
@@ -100,6 +106,7 @@ export function registerEmployee(payload: {
     callsign: payload.callsign,
     password: payload.password,
     position: payload.position,
+    canManageContent: false,
     status: "active",
   };
 
@@ -114,7 +121,7 @@ export function listUsers() {
 
 export function updateUser(
   userId: string,
-  patch: Partial<Pick<UserRecord, "name" | "callsign" | "position" | "status">>,
+  patch: Partial<Pick<UserRecord, "name" | "callsign" | "position" | "status" | "canManageContent">>,
 ) {
   const data = readData();
   data.users = data.users.map((user) => (user.id === userId ? { ...user, ...patch } : user));
@@ -158,6 +165,28 @@ export function listUav() {
 
 export function getCounteractionById(id: string) {
   return readData().counteraction.find((item) => item.id === id) ?? null;
+}
+
+export function upsertCounteractionItem(
+  input: Omit<CatalogItem, "id"> & { id?: string },
+) {
+  const data = readData();
+  const item: CatalogItem = {
+    ...input,
+    id: input.id ?? uid("cnt"),
+  };
+  const exists = data.counteraction.some((entry) => entry.id === item.id);
+  data.counteraction = exists
+    ? data.counteraction.map((entry) => (entry.id === item.id ? item : entry))
+    : [item, ...data.counteraction];
+  writeData(data);
+  return item;
+}
+
+export function removeCounteractionItem(itemId: string) {
+  const data = readData();
+  data.counteraction = data.counteraction.filter((item) => item.id !== itemId);
+  writeData(data);
 }
 
 export function getUavById(id: string) {

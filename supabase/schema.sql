@@ -12,11 +12,12 @@ create type public.catalog_kind as enum ('counteraction', 'uav');
 
 create table if not exists public.app_users (
   id uuid primary key default gen_random_uuid(),
-  auth_user_id uuid unique,
+  auth_user_id uuid unique references auth.users(id) on delete cascade,
   login text not null unique,
   name text not null,
   callsign text not null,
   position text not null,
+  can_manage_content boolean not null default false,
   role public.user_role not null default 'employee',
   status public.user_status not null default 'active',
   created_at timestamptz not null default now()
@@ -105,6 +106,8 @@ create index if not exists idx_test_questions_type_order on public.test_question
 create or replace function public.is_admin()
 returns boolean
 language sql
+security definer
+set search_path = public
 stable
 as $$
   select exists (
@@ -115,6 +118,32 @@ as $$
       and u.status = 'active'
   );
 $$;
+
+revoke all on function public.is_admin() from public;
+grant execute on function public.is_admin() to authenticated;
+
+create or replace function public.can_manage_content()
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1
+    from public.app_users u
+    where u.auth_user_id = auth.uid()
+      and u.status = 'active'
+      and (
+        u.role = 'admin'
+        or u.can_manage_content = true
+        or u.position in ('Ведущий специалист', 'Главный специалист', 'Командир взвода')
+      )
+  );
+$$;
+
+revoke all on function public.can_manage_content() from public;
+grant execute on function public.can_manage_content() to authenticated;
 
 create or replace function public.resolve_login_email(p_login text)
 returns text
@@ -172,6 +201,49 @@ begin
   return v_updated > 0;
 end;
 $$;
+
+create or replace function public.admin_delete_user(p_user_id uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_is_admin boolean;
+  v_auth_user_id uuid;
+begin
+  select exists (
+    select 1
+    from public.app_users u
+    where u.auth_user_id = auth.uid()
+      and u.role = 'admin'
+      and u.status = 'active'
+  )
+  into v_is_admin;
+
+  if not coalesce(v_is_admin, false) then
+    raise exception 'Недостаточно прав для удаления пользователя';
+  end if;
+
+  select auth_user_id
+  into v_auth_user_id
+  from public.app_users
+  where id = p_user_id;
+
+  if v_auth_user_id is not null then
+    delete from auth.users
+    where id = v_auth_user_id;
+  else
+    delete from public.app_users
+    where id = p_user_id;
+  end if;
+
+  return true;
+end;
+$$;
+
+revoke all on function public.admin_delete_user(uuid) from public;
+grant execute on function public.admin_delete_user(uuid) to authenticated;
 
 create or replace function public.handle_new_auth_user()
 returns trigger
@@ -284,8 +356,8 @@ create policy "news_admin_write"
 on public.news
 for all
 to authenticated
-using (public.is_admin())
-with check (public.is_admin());
+using (public.can_manage_content())
+with check (public.can_manage_content());
 
 -- catalog
 create policy "catalog_authenticated_read"
@@ -298,8 +370,8 @@ create policy "catalog_admin_write"
 on public.catalog_items
 for all
 to authenticated
-using (public.is_admin())
-with check (public.is_admin());
+using (public.can_manage_content())
+with check (public.can_manage_content());
 
 -- test_results
 create policy "results_self_or_admin_read"
@@ -354,8 +426,8 @@ create policy "test_questions_admin_write"
 on public.test_questions
 for all
 to authenticated
-using (public.is_admin())
-with check (public.is_admin());
+using (public.can_manage_content())
+with check (public.can_manage_content());
 
 -- test_settings
 create policy "test_settings_read"
@@ -368,8 +440,8 @@ create policy "test_settings_admin_write"
 on public.test_settings
 for all
 to authenticated
-using (public.is_admin())
-with check (public.is_admin());
+using (public.can_manage_content())
+with check (public.can_manage_content());
 
 -- registration_invites
 create policy "registration_invites_admin_read"

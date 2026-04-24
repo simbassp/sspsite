@@ -17,6 +17,7 @@ export interface SessionUser {
   name: string;
   callsign: string;
   position: Position;
+  canManageContent: boolean;
 }
 
 export interface UserRecord extends SessionUser {
