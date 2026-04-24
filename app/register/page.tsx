@@ -11,20 +11,28 @@ export default function RegisterPage() {
   const positions = useMemo(() => getPositions(), []);
   const [form, setForm] = useState({
     email: "",
-    confirmEmail: "",
+    inviteCode: "",
     login: "",
     name: "",
     callsign: "",
     password: "",
+    repeatPassword: "",
     position: positions[0],
   });
   const [error, setError] = useState("");
+  const [passwordMismatch, setPasswordMismatch] = useState(false);
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
-    if (form.email.trim().toLowerCase() !== form.confirmEmail.trim().toLowerCase()) {
-      setError("Email и подтверждение email не совпадают.");
+    setPasswordMismatch(false);
+    if (form.password.length < 6) {
+      setError("Пароль должен быть не короче 6 символов.");
+      return;
+    }
+    if (form.password !== form.repeatPassword) {
+      setPasswordMismatch(true);
+      setError("В строках пароля есть ошибка: пароли не совпадают.");
       return;
     }
 
@@ -35,6 +43,7 @@ export default function RegisterPage() {
       callsign: form.callsign.trim(),
       password: form.password,
       position: form.position,
+      inviteCode: form.inviteCode,
     });
     if (!result.ok) {
       setError(result.error);
@@ -56,16 +65,18 @@ export default function RegisterPage() {
               type="email"
               className="input"
               value={form.email}
-              onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
+              onChange={(e) => {
+                setForm((p) => ({ ...p, email: e.target.value }));
+                if (emailMismatch) setEmailMismatch(false);
+              }}
               required
             />
 
-            <label className="label">Подтверждение Email</label>
+            <label className="label">Персональный код приглашения</label>
             <input
-              type="email"
               className="input"
-              value={form.confirmEmail}
-              onChange={(e) => setForm((p) => ({ ...p, confirmEmail: e.target.value }))}
+              value={form.inviteCode}
+              onChange={(e) => setForm((p) => ({ ...p, inviteCode: e.target.value }))}
               required
             />
 
@@ -98,9 +109,25 @@ export default function RegisterPage() {
               type="password"
               className="input"
               value={form.password}
-              onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))}
+              onChange={(e) => {
+                setForm((p) => ({ ...p, password: e.target.value }));
+                if (passwordMismatch) setPasswordMismatch(false);
+              }}
               required
             />
+
+            <label className="label">Повторите пароль</label>
+            <input
+              type="password"
+              className="input"
+              value={form.repeatPassword}
+              onChange={(e) => {
+                setForm((p) => ({ ...p, repeatPassword: e.target.value }));
+                if (passwordMismatch) setPasswordMismatch(false);
+              }}
+              required
+            />
+            {passwordMismatch && <p style={{ color: "#ff8d8d", fontSize: 13 }}>Пароль в этих двух строках должен совпадать.</p>}
 
             <label className="label">Должность</label>
             <select

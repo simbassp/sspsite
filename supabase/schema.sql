@@ -81,6 +81,16 @@ create table if not exists public.test_settings (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.registration_invites (
+  code text primary key,
+  is_active boolean not null default true,
+  max_uses integer,
+  used_count integer not null default 0,
+  created_at timestamptz not null default now(),
+  check (max_uses is null or max_uses > 0),
+  check (used_count >= 0)
+);
+
 insert into public.test_settings (id, trial_question_count, final_question_count)
 values (1, 3, 5)
 on conflict (id) do nothing;
@@ -124,6 +134,45 @@ $$;
 revoke all on function public.resolve_login_email(text) from public;
 grant execute on function public.resolve_login_email(text) to anon, authenticated;
 
+create or replace function public.validate_invite_code(p_code text)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1
+    from public.registration_invites i
+    where i.code = trim(p_code)
+      and i.is_active = true
+      and (i.max_uses is null or i.used_count < i.max_uses)
+  );
+$$;
+
+revoke all on function public.validate_invite_code(text) from public;
+grant execute on function public.validate_invite_code(text) to anon, authenticated;
+
+create or replace function public.consume_invite_code(p_code text)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_updated integer;
+begin
+  update public.registration_invites
+  set used_count = used_count + 1
+  where code = trim(p_code)
+    and is_active = true
+    and (max_uses is null or used_count < max_uses);
+
+  get diagnostics v_updated = row_count;
+  return v_updated > 0;
+end;
+$$;
+
 create or replace function public.handle_new_auth_user()
 returns trigger
 language plpgsql
@@ -135,7 +184,13 @@ declare
   v_name text;
   v_callsign text;
   v_position text;
+  v_invite_code text;
 begin
+  v_invite_code := nullif(trim(coalesce(new.raw_user_meta_data->>'invite_code', '')), '');
+  if v_invite_code is null or public.consume_invite_code(v_invite_code) = false then
+    raise exception 'У вас нет приглашения';
+  end if;
+
   v_login := nullif(trim(coalesce(new.raw_user_meta_data->>'login', '')), '');
   if v_login is null then
     v_login := split_part(coalesce(new.email, 'user'), '@', 1) || '-' || left(new.id::text, 8);
@@ -180,6 +235,7 @@ alter table public.test_results enable row level security;
 alter table public.final_attempts enable row level security;
 alter table public.test_questions enable row level security;
 alter table public.test_settings enable row level security;
+alter table public.registration_invites enable row level security;
 
 -- app_users
 create policy "users_self_read"
@@ -310,6 +366,20 @@ using (true);
 
 create policy "test_settings_admin_write"
 on public.test_settings
+for all
+to authenticated
+using (public.is_admin())
+with check (public.is_admin());
+
+-- registration_invites
+create policy "registration_invites_admin_read"
+on public.registration_invites
+for select
+to authenticated
+using (public.is_admin());
+
+create policy "registration_invites_admin_write"
+on public.registration_invites
 for all
 to authenticated
 using (public.is_admin())

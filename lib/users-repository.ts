@@ -23,6 +23,24 @@ type UserRow = {
   status: "active" | "inactive";
 };
 
+type InviteCodeRow = {
+  code: string;
+  is_active: boolean;
+  max_uses: number | null;
+  used_count: number;
+  created_at: string;
+};
+
+export type InviteCodeRecord = {
+  code: string;
+  isActive: boolean;
+  maxUses: number | null;
+  usedCount: number;
+  createdAt: string;
+};
+
+const LOCAL_INVITES_KEY = "ssp_local_invites_v1";
+
 function toSessionUser(row: UserRow): SessionUser {
   return {
     id: row.id,
@@ -42,6 +60,32 @@ function toUserRecord(row: UserRow): UserRecord {
   };
 }
 
+function mapInvite(row: InviteCodeRow): InviteCodeRecord {
+  return {
+    code: row.code,
+    isActive: row.is_active,
+    maxUses: row.max_uses,
+    usedCount: row.used_count,
+    createdAt: row.created_at,
+  };
+}
+
+function readLocalInvites(): InviteCodeRecord[] {
+  if (typeof window === "undefined") return [];
+  const raw = window.localStorage.getItem(LOCAL_INVITES_KEY);
+  if (!raw) return [];
+  try {
+    return JSON.parse(raw) as InviteCodeRecord[];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalInvites(rows: InviteCodeRecord[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(LOCAL_INVITES_KEY, JSON.stringify(rows));
+}
+
 function candidateEmails(login: string) {
   if (login.includes("@")) {
     return [login];
@@ -59,6 +103,16 @@ async function resolveEmailByLogin(login: string) {
   return data;
 }
 
+async function validateInviteCode(code: string) {
+  if (!isSupabaseConfigured) return true;
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase.rpc("validate_invite_code", {
+    p_code: code,
+  });
+  if (error) return false;
+  return data === true;
+}
+
 function canUseLocalFallback() {
   if (typeof window === "undefined") return true;
   const host = window.location.hostname;
@@ -69,6 +123,12 @@ function mapAuthErrorMessage(raw: string) {
   const msg = raw.toLowerCase();
   if (msg.includes("rate limit")) {
     return "Слишком много запросов на сброс. Подождите 60 секунд и попробуйте снова.";
+  }
+  if (msg.includes("invite") || msg.includes("приглаш")) {
+    return "У вас нет приглашения. Проверьте персональный код регистрации.";
+  }
+  if (msg.includes("database error saving new user")) {
+    return "Регистрация отклонена. Проверьте персональный код приглашения.";
   }
   return raw;
 }
@@ -183,6 +243,7 @@ export async function registerUser(payload: {
   callsign: string;
   password: string;
   position: Position;
+  inviteCode: string;
 }) {
   if (!isSupabaseConfigured) {
     if (!canUseLocalFallback()) {
@@ -202,6 +263,15 @@ export async function registerUser(payload: {
   }
 
   const supabase = getSupabaseBrowserClient();
+  const inviteCode = payload.inviteCode.trim();
+  if (!inviteCode) {
+    return { ok: false as const, error: "Введите персональный код приглашения." };
+  }
+
+  const inviteValid = await validateInviteCode(inviteCode);
+  if (!inviteValid) {
+    return { ok: false as const, error: "У вас нет приглашения. Неверный персональный код." };
+  }
 
   const { data, error } = await supabase.auth.signUp({
     email: payload.email,
@@ -212,12 +282,13 @@ export async function registerUser(payload: {
         name: payload.name,
         callsign: payload.callsign,
         position: payload.position,
+        invite_code: inviteCode,
       },
     },
   });
 
   if (error) {
-    return { ok: false as const, error: error.message };
+    return { ok: false as const, error: mapAuthErrorMessage(error.message) };
   }
 
   if (!data.user) {
@@ -226,6 +297,81 @@ export async function registerUser(payload: {
 
   await supabase.auth.signOut();
   return { ok: true as const };
+}
+
+export async function fetchInviteCodes() {
+  if (!isSupabaseConfigured) {
+    return readLocalInvites();
+  }
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("registration_invites")
+    .select("code,is_active,max_uses,used_count,created_at")
+    .order("created_at", { ascending: false });
+  if (error || !data) {
+    return readLocalInvites();
+  }
+  return (data as InviteCodeRow[]).map(mapInvite);
+}
+
+export async function createInviteCode(input: { code: string; maxUses: number | null }) {
+  const normalizedCode = input.code.trim();
+  const maxUses = input.maxUses && input.maxUses > 0 ? Math.floor(input.maxUses) : null;
+  if (!normalizedCode) {
+    return { ok: false as const, error: "Введите код приглашения." };
+  }
+
+  if (!isSupabaseConfigured) {
+    const current = readLocalInvites();
+    const exists = current.some((row) => row.code.toLowerCase() === normalizedCode.toLowerCase());
+    const nextRow: InviteCodeRecord = {
+      code: normalizedCode,
+      isActive: true,
+      maxUses,
+      usedCount: 0,
+      createdAt: new Date().toISOString(),
+    };
+    const next = exists
+      ? current.map((row) => (row.code.toLowerCase() === normalizedCode.toLowerCase() ? nextRow : row))
+      : [nextRow, ...current];
+    writeLocalInvites(next);
+    return { ok: true as const };
+  }
+
+  const supabase = getSupabaseBrowserClient();
+  const { error } = await supabase.from("registration_invites").upsert(
+    {
+      code: normalizedCode,
+      is_active: true,
+      max_uses: maxUses,
+      used_count: 0,
+    },
+    { onConflict: "code" },
+  );
+  if (error) {
+    return { ok: false as const, error: error.message };
+  }
+  return { ok: true as const };
+}
+
+export async function disableInviteCode(code: string) {
+  if (!isSupabaseConfigured) {
+    const next = readLocalInvites().map((row) => (row.code === code ? { ...row, isActive: false } : row));
+    writeLocalInvites(next);
+    return;
+  }
+  const supabase = getSupabaseBrowserClient();
+  await supabase.from("registration_invites").update({ is_active: false }).eq("code", code);
+}
+
+export async function removeInviteCode(code: string) {
+  if (!isSupabaseConfigured) {
+    const next = readLocalInvites().filter((row) => row.code !== code);
+    writeLocalInvites(next);
+    return;
+  }
+  const supabase = getSupabaseBrowserClient();
+  await supabase.from("registration_invites").delete().eq("code", code);
 }
 
 export async function fetchUsers() {
