@@ -65,10 +65,7 @@ export default function RegisterPage() {
               type="email"
               className="input"
               value={form.email}
-              onChange={(e) => {
-                setForm((p) => ({ ...p, email: e.target.value }));
-                if (emailMismatch) setEmailMismatch(false);
-              }}
+              onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
               required
             />
 
