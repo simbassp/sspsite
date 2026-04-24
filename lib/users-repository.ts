@@ -281,6 +281,43 @@ export async function updateCurrentUserPassword(nextPassword: string) {
   return { ok: true as const, message: "Пароль успешно обновлен." };
 }
 
+export async function updateCurrentUserPasswordWithOldPassword(input: {
+  oldPassword: string;
+  nextPassword: string;
+}) {
+  const oldPassword = input.oldPassword.trim();
+  const nextPassword = input.nextPassword;
+  if (!oldPassword) {
+    return { ok: false as const, error: "Введите текущий пароль." };
+  }
+  if (nextPassword.length < 6) {
+    return { ok: false as const, error: "Пароль должен быть не короче 6 символов." };
+  }
+  if (!isSupabaseConfigured) {
+    return { ok: false as const, error: "Смена пароля доступна только в режиме Supabase." };
+  }
+  const supabase = getSupabaseBrowserClient();
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  const currentEmail = userData.user?.email?.trim() ?? "";
+  if (userError || !currentEmail) {
+    return { ok: false as const, error: "Не удалось получить текущий email пользователя." };
+  }
+
+  const { error: authError } = await supabase.auth.signInWithPassword({
+    email: currentEmail,
+    password: oldPassword,
+  });
+  if (authError) {
+    return { ok: false as const, error: "Текущий пароль введен неверно." };
+  }
+
+  const { error: updateError } = await supabase.auth.updateUser({ password: nextPassword });
+  if (updateError) {
+    return { ok: false as const, error: mapAuthErrorMessage(updateError.message) };
+  }
+  return { ok: true as const, message: "Пароль успешно изменен." };
+}
+
 export async function updateCurrentUserProfile(payload: { name: string; callsign: string }) {
   const name = payload.name.trim();
   const callsign = payload.callsign.trim();
