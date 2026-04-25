@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { fetchUavItems } from "@/lib/uav-repository";
 import { CatalogItem } from "@/lib/types";
 
@@ -9,6 +9,7 @@ export default function UavPage() {
   const [items, setItems] = useState<CatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [zoomedSrc, setZoomedSrc] = useState<string | null>(null);
+  const cardRefs = useRef<Record<string, HTMLElement | null>>({});
 
   useEffect(() => {
     let active = true;
@@ -37,6 +38,10 @@ export default function UavPage() {
     };
   }, [zoomedSrc]);
 
+  const scrollToCard = (id: string) => {
+    cardRefs.current[id]?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   return (
     <section>
       <h1 className="page-title">ТТХ БПЛА</h1>
@@ -49,9 +54,28 @@ export default function UavPage() {
         </p>
       )}
 
+      {items.length > 1 && (
+        <div className="chips" style={{ marginBottom: 12 }}>
+          {items.map((item) => (
+            <button
+              key={item.id}
+              className="chip"
+              type="button"
+              onClick={() => scrollToCard(item.id)}
+            >
+              {item.title}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="grid grid-two">
         {items.map((item) => (
-          <article className="card" key={item.id}>
+          <article
+            className="card"
+            key={item.id}
+            ref={(el) => { cardRefs.current[item.id] = el; }}
+          >
             <div
               style={{ position: "relative", cursor: "zoom-in", overflow: "hidden" }}
               onClick={() => setZoomedSrc(item.image)}
@@ -88,21 +112,24 @@ export default function UavPage() {
                 <span className="pill">{item.category}</span>
               </div>
               <h3 style={{ marginTop: 8 }}>{item.title}</h3>
-              <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 8 }}>
+              <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 8, fontSize: 13 }}>
                 {item.summary}
               </p>
-              <p className="label">Ключевые характеристики</p>
-              <div className="grid grid-two">
+              <p className="label" style={{ marginBottom: 6 }}>Ключевые характеристики</p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
                 {item.specs.slice(0, 7).map((spec, index) => (
                   <div
                     key={spec.key}
-                    className="card"
-                    style={index === 6 ? { gridColumn: "1 / -1" } : undefined}
+                    style={{
+                      gridColumn: index === 6 ? "1 / -1" : undefined,
+                      padding: "7px 10px",
+                      background: "var(--glass)",
+                      borderRadius: 10,
+                      border: "1px solid var(--line)",
+                    }}
                   >
-                    <div className="card-body">
-                      <p className="label">{spec.key}</p>
-                      <p style={{ marginTop: 6, fontWeight: 700 }}>{spec.value}</p>
-                    </div>
+                    <p style={{ fontSize: 11, color: "var(--muted)", lineHeight: 1.3 }}>{spec.key}</p>
+                    <p style={{ marginTop: 2, fontWeight: 700, fontSize: 13 }}>{spec.value}</p>
                   </div>
                 ))}
               </div>
