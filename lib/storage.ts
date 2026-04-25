@@ -167,10 +167,10 @@ export function updateUser(
       permissions: mergedPermissions,
       canManageContent:
         patch.canManageContent ??
-        mergedPermissions.news ||
+        (mergedPermissions.news ||
           mergedPermissions.tests ||
           mergedPermissions.uav ||
-          mergedPermissions.counteraction,
+          mergedPermissions.counteraction),
     });
   });
   writeData(data);
