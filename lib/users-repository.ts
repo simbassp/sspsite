@@ -798,8 +798,11 @@ export async function removeUser(userId: string) {
     const { error: fallbackError } = await supabase.from("app_users").delete().eq("id", userId);
     if (fallbackError) {
       deleteUser(userId);
+      return;
     }
   }
+  // Keep local fallback storage in sync with remote deletes.
+  deleteUser(userId);
 }
 
 export async function logoutUser() {

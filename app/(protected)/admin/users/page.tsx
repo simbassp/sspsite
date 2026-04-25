@@ -122,19 +122,13 @@ export default function AdminUsersPage() {
                 </button>
                 <div style={{ display: "flex", gap: 8 }}>
                   <button
-                    className="btn"
-                    type="button"
-                    onClick={() => {
-                      patchLocal(user.id, { status: user.status === "active" ? "inactive" : "active" });
-                    }}
-                  >
-                    {user.status === "active" ? "Деактивировать" : "Активировать"}
-                  </button>
-                  <button
                     className="btn btn-danger"
                     type="button"
                     onClick={async () => {
+                      const confirmed = window.confirm(`Удалить пользователя ${user.name} (@${user.login})?`);
+                      if (!confirmed) return;
                       await removeUser(user.id);
+                      setUsers((prev) => prev.filter((item) => item.id !== user.id));
                       await refresh();
                     }}
                   >
