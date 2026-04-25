@@ -4,7 +4,7 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
-let browserClient: ReturnType<typeof createClient> | null = null;
+let browserClient: any = null;
 
 export function getSupabaseBrowserClient() {
   if (!supabaseUrl || !supabaseAnonKey) {
