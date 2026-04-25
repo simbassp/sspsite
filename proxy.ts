@@ -26,7 +26,18 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
-  if (session && pathname.startsWith("/admin") && session.role !== "admin") {
+  const hasAdminAccess = Boolean(
+    session &&
+      (session.role === "admin" ||
+        session.canManageContent === true ||
+        session.permissions?.users === true ||
+        session.permissions?.news === true ||
+        session.permissions?.tests === true ||
+        session.permissions?.uav === true ||
+        session.permissions?.counteraction === true),
+  );
+
+  if (session && pathname.startsWith("/admin") && !hasAdminAccess) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
