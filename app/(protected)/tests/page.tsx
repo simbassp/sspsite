@@ -56,7 +56,8 @@ export default function TestsPage() {
   const isAnsweringRef = useRef(false);
   isAnsweringRef.current = isAnswering;
 
-  const ignoreZeroTimeLeftOnceRef = useRef(false);
+  /** Один раз на вопрос срабатывает истечение таймера (без «ложного» нуля из старого состояния). */
+  const expireHandledForQuestionIdRef = useRef<string | null>(null);
   const answersRef = useRef<Record<string, number>>({});
   const questionIndexRef = useRef(0);
   const activeQuestionsRef = useRef<TestQuestion[]>([]);
@@ -137,7 +138,7 @@ export default function TestsPage() {
 
   useEffect(() => {
     if (!currentQuestion || !activeTest) return;
-    ignoreZeroTimeLeftOnceRef.current = true;
+    expireHandledForQuestionIdRef.current = null;
     setTimeLeft(Math.max(1, currentQuestion.timeLimitSec));
   }, [currentQuestion?.id, activeTest]);
 
@@ -145,20 +146,22 @@ export default function TestsPage() {
     if (!activeTest || !currentQuestion || trialFeedback) return;
     const id = window.setInterval(() => {
       setTimeLeft((prev) => {
+        const qNow = currentQuestionRef.current;
+        if (!qNow) return prev;
+        const qid = qNow.id;
+
         if (prev <= 0) return 0;
         if (prev <= 1) {
+          if (expireHandledForQuestionIdRef.current === qid) return 0;
+          expireHandledForQuestionIdRef.current = qid;
           queueMicrotask(() => {
-            if (ignoreZeroTimeLeftOnceRef.current) {
-              ignoreZeroTimeLeftOnceRef.current = false;
-              return;
-            }
             const at = activeTestRef.current;
             const q = currentQuestionRef.current;
-            if (!q || !at) return;
+            if (!q || q.id !== qid || !at) return;
             if (at === "trial") {
               setTrialFeedback({ chosen: null, correct: q.correctIndex });
-              setAnswers((prev) => {
-                const next = { ...prev, [q.id]: -1 };
+              setAnswers((prevA) => {
+                const next = { ...prevA, [q.id]: -1 };
                 answersRef.current = next;
                 return next;
               });
@@ -289,7 +292,7 @@ export default function TestsPage() {
       testConfig.timePerQuestionSec,
     );
     const first = randomQuestions[0];
-    ignoreZeroTimeLeftOnceRef.current = true;
+    expireHandledForQuestionIdRef.current = null;
     setTrialFeedback(null);
     setActiveTest("trial");
     setSelectedQuestions(randomQuestions);
@@ -315,7 +318,7 @@ export default function TestsPage() {
     );
     const first = randomQuestions[0];
     await beginFinalAttempt(session.id);
-    ignoreZeroTimeLeftOnceRef.current = true;
+    expireHandledForQuestionIdRef.current = null;
     setTrialFeedback(null);
     setActiveTest("final");
     setSelectedQuestions(randomQuestions);
@@ -333,15 +336,19 @@ export default function TestsPage() {
       return {
         border: "2px solid #198754",
         backgroundColor: "#d1e7dd",
+        color: "#0a3622",
+        WebkitTextFillColor: "#0a3622",
       };
     }
     if (chosen !== null && index === chosen && chosen !== correct) {
       return {
         border: "2px solid #dc3545",
         backgroundColor: "#f8d7da",
+        color: "#58151c",
+        WebkitTextFillColor: "#58151c",
       };
     }
-    return { opacity: 0.75 };
+    return { opacity: 0.75, color: "var(--text)", WebkitTextFillColor: "var(--text)" };
   };
 
   return (
