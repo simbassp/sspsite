@@ -338,14 +338,17 @@ export default function TestsPage() {
 
   return (
     <section className="tests-page">
-      <h1 className="page-title">Тестирование</h1>
-      <p className="page-subtitle">
-        {testConfig.uavAutoGeneration
-          ? "В тест попадают вопросы из ТТХ карточек БПЛА (обновляются при каждом заходе на страницу) и активные вопросы из банка администратора."
-          : "Используются только вопросы из банка в «Админ / Тесты»."}{" "}
-        Случайная выборка. На каждый вопрос — <strong>{testConfig.timePerQuestionSec}</strong> сек (задаётся в админке).
-      </p>
+      <div className="tests-page-head">
+        <h1 className="page-title">Тестирование</h1>
+        <p className="page-subtitle">
+          {testConfig.uavAutoGeneration
+            ? "В тест попадают вопросы из ТТХ карточек БПЛА (обновляются при каждом заходе на страницу) и активные вопросы из банка администратора."
+            : "Используются только вопросы из банка в «Админ / Тесты»."}{" "}
+          Случайная выборка. На каждый вопрос — <strong>{testConfig.timePerQuestionSec}</strong> сек (задаётся в админке).
+        </p>
+      </div>
 
+      <div className="tests-page-main">
       <div className="grid grid-two">
         <article className="card">
           <div className="card-body">
@@ -424,26 +427,29 @@ export default function TestsPage() {
           </div>
         </article>
       )}
+      </div>
 
-      <h2 className="page-title tests-history" style={{ marginTop: 16, fontSize: 18 }}>
-        История попыток
-      </h2>
-      <div className="list tests-history">
-        {results.map((result) => (
-          <article className="card" key={result.id}>
-            <div className="card-body">
-              <h3>{result.type === "final" ? "Итоговый" : "Пробный"} тест</h3>
-              <div className="meta" style={{ marginTop: 8 }}>
-                <span className={`pill ${result.status === "passed" ? "pill-green" : "pill-red"}`}>
-                  {result.status === "passed" ? "Сдал" : "Не сдал"}
-                </span>
-                <span>Результат: {result.score}%</span>
-                <span>{formatDate(result.createdAt)}</span>
+      <div className="tests-history-section" id="tests-history">
+        <h2 className="page-title tests-history tests-history-title">
+          История попыток
+        </h2>
+        <div className="list tests-history">
+          {results.map((result) => (
+            <article className="card" key={result.id}>
+              <div className="card-body">
+                <h3>{result.type === "final" ? "Итоговый" : "Пробный"} тест</h3>
+                <div className="meta" style={{ marginTop: 8 }}>
+                  <span className={`pill ${result.status === "passed" ? "pill-green" : "pill-red"}`}>
+                    {result.status === "passed" ? "Сдал" : "Не сдал"}
+                  </span>
+                  <span>Результат: {result.score}%</span>
+                  <span>{formatDate(result.createdAt)}</span>
+                </div>
               </div>
-            </div>
-          </article>
-        ))}
-        {!results.length && <p className="page-subtitle">Попыток пока нет.</p>}
+            </article>
+          ))}
+          {!results.length && <p className="page-subtitle">Попыток пока нет.</p>}
+        </div>
       </div>
     </section>
   );

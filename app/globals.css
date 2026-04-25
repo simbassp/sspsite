@@ -186,6 +186,17 @@ a {
   justify-content: flex-end;
 }
 
+.offline-banner {
+  margin: 0 16px 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--line));
+  background: color-mix(in srgb, var(--warn) 14%, var(--panel));
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .screen {
   padding: 16px;
 }
@@ -452,13 +463,41 @@ html[data-theme="dark"] .select option {
   }
 }
 
+.tests-page .tests-history-title {
+  margin-top: 16px;
+  font-size: 18px;
+}
+
 @media (max-width: 819px) {
+  .app-shell {
+    padding-bottom: calc(132px + env(safe-area-inset-bottom, 0px));
+  }
+
   .theme-toggle-text {
     display: none;
   }
   .theme-toggle-btn {
     min-width: 42px;
     justify-content: center;
+  }
+
+  /* На узком экране история сразу под описанием (не внизу за длинной формой вопроса). */
+  .tests-page {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .tests-page-head {
+    order: 1;
+  }
+
+  .tests-history-section {
+    order: 2;
+  }
+
+  .tests-page-main {
+    order: 3;
   }
 
   .tests-page .page-title {
@@ -483,6 +522,11 @@ html[data-theme="dark"] .select option {
 
   .tests-page .tests-history {
     scroll-margin-bottom: calc(100px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .tests-page .tests-history-title {
+    margin-top: 0;
+    font-size: 18px;
   }
 }
 

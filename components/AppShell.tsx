@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   canAccessAdminPanel,
@@ -37,6 +37,18 @@ export function AppShell({ session, children }: AppShellProps) {
   const canEditUsers = canManageUsers(session);
   const hasAdminAccess = canAccessAdminPanel(session);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
+
+  useEffect(() => {
+    const sync = () => setIsOnline(typeof navigator !== "undefined" ? navigator.onLine : true);
+    sync();
+    window.addEventListener("online", sync);
+    window.addEventListener("offline", sync);
+    return () => {
+      window.removeEventListener("online", sync);
+      window.removeEventListener("offline", sync);
+    };
+  }, []);
   const visibleAdminLinks = [
     ...(canEditUsers ? [{ href: "/admin/users", label: "Пользователи" }] : []),
     ...(canManageResults(session) ? [{ href: "/admin/results", label: "Результаты" }] : []),
@@ -133,6 +145,13 @@ export function AppShell({ session, children }: AppShellProps) {
             </button>
           </div>
         </header>
+
+        {!isOnline && (
+          <div className="offline-banner" role="status">
+            Нет соединения с сетью. Данные не обновятся, навигация может открывать сохранённую копию страницы. Проверьте
+            Wi‑Fi или мобильный интернет и обновите вкладку.
+          </div>
+        )}
 
         <div className="screen">{children}</div>
       </main>
