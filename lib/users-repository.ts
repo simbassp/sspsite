@@ -57,10 +57,10 @@ export type InviteCodeRecord = {
 
 const LOCAL_INVITES_KEY = "ssp_local_invites_v1";
 const LOGIN_EMAIL_CACHE_KEY = "ssp_login_email_cache_v1";
-const LOGIN_SERVER_TIMEOUT_MS = 4500;
-const LOGIN_RESOLVE_TIMEOUT_MS = 2500;
-const LOGIN_AUTH_TIMEOUT_MS = 7000;
-const LOGIN_PROFILE_TIMEOUT_MS = 4500;
+const LOGIN_SERVER_TIMEOUT_MS = 12000;
+const LOGIN_RESOLVE_TIMEOUT_MS = 5000;
+const LOGIN_AUTH_TIMEOUT_MS = 12000;
+const LOGIN_PROFILE_TIMEOUT_MS = 8000;
 
 function toSessionUser(row: UserRow): SessionUser {
   return {

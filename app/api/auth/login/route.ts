@@ -20,7 +20,7 @@ type ProfileRow = {
   status: "active" | "inactive";
 };
 
-const SUPABASE_REQUEST_TIMEOUT_MS = 4500;
+const SUPABASE_REQUEST_TIMEOUT_MS = 10000;
 
 function normalizeSupabaseUrl(url: string) {
   return url.endsWith("/") ? url.slice(0, -1) : url;
