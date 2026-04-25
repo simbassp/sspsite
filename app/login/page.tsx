@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useState, useEffect } from "react";
 import { loginUser, persistSession, requestPasswordReset } from "@/lib/users-repository";
 
 const AUTH_REQUEST_TIMEOUT_MS = 45000;
@@ -31,6 +31,19 @@ export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [requestResetMode, setRequestResetMode] = useState(false);
   const [isSendingReset, setIsSendingReset] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
+
+  useEffect(() => {
+    if (showDebug && typeof window !== "undefined") {
+      const script = document.createElement("script");
+      script.src = "https://cdn.jsdelivr.net/npm/eruda";
+      script.onload = () => {
+        // @ts-ignore
+        if (window.eruda) window.eruda.init();
+      };
+      document.body.appendChild(script);
+    }
+  }, [showDebug]);
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -184,6 +197,24 @@ export default function LoginPage() {
           <p className="page-subtitle" style={{ marginTop: 12, marginBottom: 0 }}>
             Нет аккаунта? <Link href="/register">Регистрация сотрудника</Link>
           </p>
+          {!showDebug && (
+            <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
+              <button
+                type="button"
+                onClick={() => setShowDebug(true)}
+                style={{ 
+                  background: "none", 
+                  border: "none", 
+                  color: "#888", 
+                  cursor: "pointer",
+                  textDecoration: "underline",
+                  fontSize: 12
+                }}
+              >
+                Показать консоль (для отладки)
+              </button>
+            </p>
+          )}
         </div>
       </div>
     </div>
