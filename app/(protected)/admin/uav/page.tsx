@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { deleteUavItem, fetchUavItems, saveUavItem } from "@/lib/uav-repository";
 import { CatalogItem } from "@/lib/types";
 
@@ -24,6 +24,10 @@ const emptyDraft: DraftUav = {
   fullTth: "",
   description: "",
 };
+
+const categoryOptions = ["Ударный", "Разведывательный"] as const;
+const otherCategoryValue = "__other__";
+const maxUploadSizeMb = 8;
 
 function normalizeSpecs(lines: string[]) {
   return lines
@@ -50,8 +54,12 @@ export default function AdminUavPage() {
   const [items, setItems] = useState<CatalogItem[]>([]);
   const [draft, setDraft] = useState<DraftUav>(emptyDraft);
   const [message, setMessage] = useState("");
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const sortedItems = useMemo(() => [...items].sort((a, b) => a.title.localeCompare(b.title)), [items]);
+  const isPresetCategory = categoryOptions.some((option) => option === draft.category.trim());
+  const categorySelectValue = isPresetCategory ? draft.category.trim() : otherCategoryValue;
 
   const refresh = async () => {
     const list = await fetchUavItems();
@@ -65,7 +73,8 @@ export default function AdminUavPage() {
   const onSave = async () => {
     setMessage("");
     if (!draft.title.trim()) return setMessage("Введите название БПЛА.");
-    if (!draft.image.trim()) return setMessage("Добавьте ссылку на изображение.");
+    if (!draft.category.trim()) return setMessage("Выберите категорию БПЛА.");
+    if (!draft.image.trim()) return setMessage("Добавьте изображение (ссылка или загрузка файла).");
 
     const specs = normalizeSpecs(draft.specsText);
     if (specs.length < 6) return setMessage("Заполните 6 строк ТТХ.");
@@ -87,6 +96,42 @@ export default function AdminUavPage() {
     setMessage(draft.id ? "Карточка БПЛА обновлена." : "Карточка БПЛА добавлена.");
     setDraft(emptyDraft);
     await refresh();
+  };
+
+  const onUploadImage = async (file: File | null) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setMessage("Можно загружать только изображения.");
+      return;
+    }
+    if (file.size > maxUploadSizeMb * 1024 * 1024) {
+      setMessage(`Файл слишком большой. Максимум ${maxUploadSizeMb} МБ.`);
+      return;
+    }
+    setIsUploadingImage(true);
+    setMessage("");
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      const response = await fetch("/api/upload-image", {
+        method: "POST",
+        body,
+      });
+      const payload = (await response.json()) as { ok?: boolean; url?: string; error?: string };
+      if (!response.ok || payload.ok !== true || !payload.url) {
+        setMessage(payload.error || "Не удалось загрузить изображение.");
+        return;
+      }
+      setDraft((prev) => ({ ...prev, image: payload.url ?? prev.image }));
+      setMessage("Изображение загружено.");
+    } catch {
+      setMessage("Ошибка загрузки изображения.");
+    } finally {
+      setIsUploadingImage(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
   };
 
   const onEdit = (item: CatalogItem) => {
@@ -128,17 +173,58 @@ export default function AdminUavPage() {
             />
 
             <label className="label">Категория</label>
-            <input
-              className="input"
-              value={draft.category}
-              onChange={(e) => setDraft((prev) => ({ ...prev, category: e.target.value }))}
-            />
+            <select
+              className="select"
+              value={categorySelectValue}
+              onChange={(e) => {
+                const nextValue = e.target.value;
+                if (nextValue === otherCategoryValue) {
+                  setDraft((prev) => ({
+                    ...prev,
+                    category: categoryOptions.some((option) => option === prev.category.trim()) ? "" : prev.category,
+                  }));
+                  return;
+                }
+                setDraft((prev) => ({ ...prev, category: nextValue }));
+              }}
+            >
+              <option value="Ударный">Ударный</option>
+              <option value="Разведывательный">Разведывательный</option>
+              <option value={otherCategoryValue}>Другое</option>
+            </select>
+            {categorySelectValue === otherCategoryValue && (
+              <input
+                className="input"
+                placeholder="Укажите свою категорию"
+                value={draft.category}
+                onChange={(e) => setDraft((prev) => ({ ...prev, category: e.target.value }))}
+              />
+            )}
 
-            <label className="label">Ссылка на картинку</label>
+            <label className="label">Изображение</label>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button
+                className="btn"
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploadingImage}
+              >
+                {isUploadingImage ? "Загрузка..." : "Загрузить с устройства"}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: "none" }}
+                onChange={(e) => void onUploadImage(e.target.files?.[0] ?? null)}
+              />
+            </div>
+            <label className="label">Ссылка на картинку (или вставьте вручную)</label>
             <input
               className="input"
               value={draft.image}
               onChange={(e) => setDraft((prev) => ({ ...prev, image: e.target.value }))}
+              placeholder="https://... или /uploads/uav/..."
             />
 
             <label className="label">Краткое описание</label>
