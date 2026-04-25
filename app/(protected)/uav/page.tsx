@@ -76,8 +76,9 @@ export default function UavPage() {
                   bottom: 0,
                   left: 0,
                   right: 0,
-                  height: 72,
-                  background: "linear-gradient(to top, rgba(7,9,13,0.82) 0%, transparent 100%)",
+                  height: 90,
+                  zIndex: 1,
+                  background: "linear-gradient(to top, rgba(7,9,13,0.95) 0%, rgba(7,9,13,0.4) 50%, transparent 100%)",
                   pointerEvents: "none",
                 }}
               />
