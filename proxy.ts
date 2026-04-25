@@ -6,6 +6,9 @@ const publicPaths = ["/login", "/register", "/reset-password"];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  if (pathname.startsWith("/api/")) {
+    return NextResponse.next();
+  }
   const isPublic = publicPaths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
   const isRecoveryOnLogin =
     pathname === "/login" &&
@@ -31,5 +34,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
 };
