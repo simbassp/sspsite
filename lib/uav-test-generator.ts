@@ -2,6 +2,9 @@ import { CatalogItem, TestQuestion, TestType } from "@/lib/types";
 
 const DEFAULT_TYPE: TestType = "trial";
 
+const LABEL_ENGINE_DVS = "ДВС";
+const LABEL_ENGINE_ELEC = "Электрический";
+
 const FALLBACK_DISTRACTORS = [
   "В справочнике БПЛА не указано",
   "Значение относится к другому классу ВС",
@@ -51,6 +54,47 @@ function sameMeasurementClass(correct: string, candidate: string): boolean {
   return false;
 }
 
+/** Допуск по отношению кандидата к правильному числу (чтобы не было «40 кг» против «1400 кг»). */
+function numericRatioOk(correctNum: number, candNum: number, relaxed: boolean): boolean {
+  if (!Number.isFinite(correctNum) || !Number.isFinite(candNum) || correctNum === 0) return false;
+  const r = candNum / correctNum;
+  const lo = relaxed ? 0.82 : Math.abs(correctNum) >= 800 ? 0.9 : Math.abs(correctNum) >= 200 ? 0.88 : 0.8;
+  const hi = relaxed ? 1.18 : Math.abs(correctNum) >= 800 ? 1.1 : Math.abs(correctNum) >= 200 ? 1.12 : 1.22;
+  return r >= lo && r <= hi;
+}
+
+function plausibleNumericNeighbor(correct: string, candidate: string, relaxed: boolean): boolean {
+  const a = parseValueParts(correct);
+  const b = parseValueParts(candidate);
+  if (!a.isNumeric || !b.isNumeric || a.num === null || b.num === null) return true;
+  if (!sameMeasurementClass(correct, candidate)) return false;
+  return numericRatioOk(a.num, b.num, relaxed);
+}
+
+function isEngineSpecKey(keyNorm: string) {
+  return keyNorm.includes("двигат");
+}
+
+/** Значение из карточки: двс / электрический / гибридный. */
+function parseEngineKind(raw: string): "двс" | "электрический" | "гибридный" | null {
+  const v = raw.trim().toLowerCase();
+  if (v.includes("гибрид")) return "гибридный";
+  if (v.includes("электр")) return "электрический";
+  if (v.includes("двс") || v.includes("дыс")) return "двс";
+  return null;
+}
+
+/** Два варианта: ДВС / Электрический (кроме гибрида — там обычный MCQ из пула). */
+function tryBuildEngineTwoOptions(correctRaw: string): { options: string[]; correctIndex: number } | null {
+  const kind = parseEngineKind(correctRaw);
+  if (kind === "гибридный" || kind === null) return null;
+
+  const correctLabel = kind === "двс" ? LABEL_ENGINE_DVS : LABEL_ENGINE_ELEC;
+  const options = [LABEL_ENGINE_DVS, LABEL_ENGINE_ELEC];
+  shuffleInPlace(options);
+  return { options, correctIndex: options.indexOf(correctLabel) };
+}
+
 function shuffleInPlace<T>(arr: T[]) {
   for (let i = arr.length - 1; i > 0; i -= 1) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -66,25 +110,32 @@ function formatNumberForWrong(correct: string, n: number): string {
   return s;
 }
 
-/** Похожие числовые значения с той же единицей, что у правильного ответа. */
-function syntheticNumericWrongs(correct: string, need: number, seen: Set<string>): string[] {
+/** Похожие числа в той же единице, в узком диапазоне от правильного значения. */
+function syntheticNumericWrongs(
+  correct: string,
+  need: number,
+  seen: Set<string>,
+  relaxed: boolean,
+): string[] {
   const p = parseValueParts(correct);
   if (!p.isNumeric || p.num === null) return [];
   const unitPart = correct.trim().replace(/^-?[\d]+[.,\d]*\s*/u, "").trim();
   if (!unitPart) return [];
 
   const n = p.num;
-  const factors = [0.82, 1.18, 0.91, 1.09, 0.75, 1.25, 0.95, 1.05];
+  const factors = relaxed
+    ? [0.93, 1.07, 0.87, 1.13, 0.95, 1.05, 0.9, 1.1]
+    : [0.96, 1.04, 0.93, 1.07, 0.91, 1.09, 0.94, 1.06, 0.98, 1.02];
+
   const out: string[] = [];
 
   for (const f of factors) {
     let cand = n * f;
-    if (Math.abs(cand - n) < 1e-9) continue;
-    if (Math.abs(n) >= 200) cand = Math.round(cand / 10) * 10;
-    else if (Math.abs(n) >= 50) cand = Math.round(cand / 5) * 5;
-    else if (Math.abs(n) >= 10) cand = Math.round(cand);
-    else cand = Math.round(cand * 10) / 10;
+    const step =
+      Math.abs(n) >= 2000 ? 20 : Math.abs(n) >= 800 ? 10 : Math.abs(n) >= 200 ? 5 : Math.abs(n) >= 50 ? 2 : 1;
+    cand = Math.round(cand / step) * step;
     if (Math.abs(cand - n) < 1e-6) continue;
+    if (!numericRatioOk(n, cand, relaxed)) continue;
 
     const numStr = formatNumberForWrong(correct, cand);
     const formatted = `${numStr} ${unitPart}`.trim();
@@ -103,7 +154,9 @@ function buildFourOptions(correct: string, wrongPool: string[]): { options: stri
   const seen = new Set<string>([correctTrim.toLowerCase()]);
   const wrongs: string[] = [];
 
-  const filteredPool = wrongPool.filter((w) => sameMeasurementClass(correctTrim, w.trim()));
+  const filteredPool = wrongPool.filter(
+    (w) => sameMeasurementClass(correctTrim, w.trim()) && plausibleNumericNeighbor(correctTrim, w.trim(), false),
+  );
 
   for (const w of filteredPool) {
     const t = w.trim();
@@ -115,7 +168,28 @@ function buildFourOptions(correct: string, wrongPool: string[]): { options: stri
     if (wrongs.length >= 12) break;
   }
 
-  for (const syn of syntheticNumericWrongs(correctTrim, 12, seen)) {
+  for (const syn of syntheticNumericWrongs(correctTrim, 12, seen, false)) {
+    if (wrongs.length >= 12) break;
+    wrongs.push(syn);
+  }
+
+  if (wrongs.length < 3) {
+    const relaxedPool = wrongPool.filter(
+      (w) =>
+        sameMeasurementClass(correctTrim, w.trim()) && plausibleNumericNeighbor(correctTrim, w.trim(), true),
+    );
+    for (const w of relaxedPool) {
+      const t = w.trim();
+      if (!t) continue;
+      const lk = t.toLowerCase();
+      if (seen.has(lk)) continue;
+      seen.add(lk);
+      wrongs.push(t);
+      if (wrongs.length >= 12) break;
+    }
+  }
+
+  for (const syn of syntheticNumericWrongs(correctTrim, 12, seen, true)) {
     if (wrongs.length >= 12) break;
     wrongs.push(syn);
   }
@@ -181,8 +255,8 @@ function stableQuestionId(itemId: string, specIndex: number, keyNorm: string) {
 }
 
 /**
- * Банк вопросов по ТТХ из карточек БПЛА: для каждой пары (модель, параметр) — один MCQ, 4 варианта, 10 сек.
- * Неверные варианты подбираются в той же единице измерения, что и правильный ответ; при нехватке — близкие числа.
+ * Банк вопросов по ТТХ из карточек БПЛА: MCQ; для типа двигателя — два варианта (ДВС / Электрический).
+ * Числовые неверные варианты близки по величине к правильному ответу (та же единица).
  */
 export function generateUavTtxQuestionBank(items: CatalogItem[], timeLimitSec = 10): TestQuestion[] {
   const list = items.filter((it) => it.specs?.length);
@@ -201,7 +275,21 @@ export function generateUavTtxQuestionBank(items: CatalogItem[], timeLimitSec = 
 
       const keyNorm = normKey(key);
       const wrongPool = collectWrongValuePool(value, keyNorm, item.id, list);
-      const { options, correctIndex } = buildFourOptions(value, wrongPool);
+
+      let options: string[];
+      let correctIndex: number;
+
+      if (isEngineSpecKey(keyNorm)) {
+        const two = tryBuildEngineTwoOptions(value);
+        if (two) {
+          options = two.options;
+          correctIndex = two.correctIndex;
+        } else {
+          ({ options, correctIndex } = buildFourOptions(value, wrongPool));
+        }
+      } else {
+        ({ options, correctIndex } = buildFourOptions(value, wrongPool));
+      }
 
       order += 1;
       out.push({
