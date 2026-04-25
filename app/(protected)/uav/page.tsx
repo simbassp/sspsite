@@ -1,9 +1,50 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { readClientSession } from "@/lib/client-auth";
+import { canManageUav } from "@/lib/permissions";
 import { publicUploadDisplayUrl } from "@/lib/public-asset-url";
-import { fetchUavItems } from "@/lib/uav-repository";
+import { deleteUavItem, fetchUavItems, saveUavItem } from "@/lib/uav-repository";
 import { CatalogItem } from "@/lib/types";
+
+function specsToText(specs: CatalogItem["specs"]) {
+  const lines = specs
+    .filter((item) => item.key.trim().toLowerCase() !== "тип двигателя")
+    .slice(0, 6)
+    .map((item) => `${item.key}: ${item.value}`);
+  while (lines.length < 6) lines.push("");
+  return lines;
+}
+
+function normalizeSpecs(lines: string[]) {
+  return lines
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line, index) => {
+      if (line.includes(":")) {
+        const [left, ...rest] = line.split(":");
+        return { key: left.trim() || `Параметр ${index + 1}`, value: rest.join(":").trim() };
+      }
+      return { key: `Параметр ${index + 1}`, value: line };
+    });
+}
+
+function detectEngineType(specs: CatalogItem["specs"]): "электрический" | "двс" | "гибридный" {
+  const candidate = specs.find((item) => item.key.trim().toLowerCase() === "тип двигателя")?.value.trim().toLowerCase();
+  if (candidate === "двс") return "двс";
+  if (candidate === "гибридный") return "гибридный";
+  return "электрический";
+}
+
+type InlineDraft = {
+  id: string;
+  title: string;
+  category: string;
+  image: string;
+  summary: string;
+  specsText: string[];
+  engineType: "электрический" | "двс" | "гибридный";
+};
 
 export default function UavPage() {
   const [items, setItems] = useState<CatalogItem[]>([]);
@@ -11,20 +52,26 @@ export default function UavPage() {
   const [zoomedSrc, setZoomedSrc] = useState<string | null>(null);
   const [imgErrors, setImgErrors] = useState<Record<string, boolean>>({});
   const cardRefs = useRef<Record<string, HTMLElement | null>>({});
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<InlineDraft | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [message, setMessage] = useState("");
+  const canInlineEdit = canManageUav(readClientSession());
 
   useEffect(() => {
-    let active = true;
-    fetchUavItems()
-      .then((rows) => {
-        if (active) setItems(rows);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
+    const load = async () => {
+      setLoading(true);
+      const rows = await fetchUavItems();
+      setItems(rows);
+      setLoading(false);
     };
+    void load();
   }, []);
+
+  const refresh = async () => {
+    const rows = await fetchUavItems();
+    setItems(rows);
+  };
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -69,6 +116,68 @@ export default function UavPage() {
     cardRefs.current[id]?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  const onEdit = (item: CatalogItem) => {
+    setEditingId(item.id);
+    setMessage("");
+    setDraft({
+      id: item.id,
+      title: item.title,
+      category: item.category,
+      image: item.image,
+      summary: item.summary,
+      specsText: specsToText(item.specs),
+      engineType: detectEngineType(item.specs),
+    });
+  };
+
+  const onSave = async () => {
+    if (!draft) return;
+    if (!draft.title.trim()) return setMessage("Введите название.");
+    if (!draft.image.trim()) return setMessage("Добавьте изображение.");
+    const specs = normalizeSpecs(draft.specsText);
+    if (specs.length < 6) return setMessage("Заполните 6 строк ТТХ.");
+
+    setBusyId(draft.id);
+    setMessage("");
+    try {
+      await saveUavItem({
+        id: draft.id,
+        title: draft.title.trim(),
+        category: draft.category.trim() || "Без категории",
+        image: draft.image.trim(),
+        summary: draft.summary.trim(),
+        specs: [...specs.slice(0, 6), { key: "Тип двигателя", value: draft.engineType }],
+        details: { overview: "", tth: "", usage: "", materials: "" },
+      });
+      setEditingId(null);
+      setDraft(null);
+      setMessage("Изменения сохранены.");
+      await refresh();
+    } catch {
+      setMessage("Не удалось сохранить изменения.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const onDelete = async (itemId: string) => {
+    setBusyId(itemId);
+    setMessage("");
+    try {
+      await deleteUavItem(itemId);
+      if (editingId === itemId) {
+        setEditingId(null);
+        setDraft(null);
+      }
+      setMessage("Карточка удалена.");
+      await refresh();
+    } catch {
+      setMessage("Не удалось удалить карточку.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   return (
     <section>
       <h1 className="page-title">ТТХ БПЛА</h1>
@@ -80,6 +189,7 @@ export default function UavPage() {
           Пока нет доступных карточек БПЛА. Проверьте подключение к сети и обновите страницу.
         </p>
       )}
+      {message && <p className="page-subtitle">{message}</p>}
 
       {items.length > 1 && (
         <div className="uav-model-nav">
@@ -173,28 +283,99 @@ export default function UavPage() {
               <div className="meta">
                 <span className="pill">{item.category}</span>
               </div>
-              <h3 style={{ marginTop: 8 }}>{item.title}</h3>
-              <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 8, fontSize: 13 }}>
-                {item.summary}
-              </p>
-              <p className="label" style={{ marginBottom: 6 }}>Ключевые характеристики</p>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-                {item.specs.slice(0, 7).map((spec, index) => (
-                  <div
-                    key={spec.key}
-                    style={{
-                      gridColumn: index === 6 ? "1 / -1" : undefined,
-                      padding: "7px 10px",
-                      background: "var(--glass)",
-                      borderRadius: 10,
-                      border: "1px solid var(--line)",
-                    }}
+              {editingId === item.id && draft ? (
+                <div className="form" style={{ marginTop: 8 }}>
+                  <input className="input" value={draft.title} onChange={(e) => setDraft((prev) => (prev ? { ...prev, title: e.target.value } : prev))} />
+                  <input className="input" value={draft.category} onChange={(e) => setDraft((prev) => (prev ? { ...prev, category: e.target.value } : prev))} />
+                  <textarea className="input" rows={2} value={draft.summary} onChange={(e) => setDraft((prev) => (prev ? { ...prev, summary: e.target.value } : prev))} />
+                  <input className="input" value={draft.image} onChange={(e) => setDraft((prev) => (prev ? { ...prev, image: e.target.value } : prev))} />
+                  {draft.specsText.map((line, index) => (
+                    <input
+                      key={`uav-inline-spec-${item.id}-${index}`}
+                      className="input"
+                      placeholder={`ТТХ ${index + 1}: ...`}
+                      value={line}
+                      onChange={(e) =>
+                        setDraft((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                specsText: prev.specsText.map((oldLine, idx) => (idx === index ? e.target.value : oldLine)),
+                              }
+                            : prev,
+                        )
+                      }
+                    />
+                  ))}
+                  <select
+                    className="select"
+                    value={draft.engineType}
+                    onChange={(e) =>
+                      setDraft((prev) => (prev ? { ...prev, engineType: e.target.value as InlineDraft["engineType"] } : prev))
+                    }
                   >
-                    <p style={{ fontSize: 11, color: "var(--muted)", lineHeight: 1.3 }}>{spec.key}</p>
-                    <p style={{ marginTop: 2, fontWeight: 700, fontSize: 13 }}>{spec.value}</p>
+                    <option value="электрический">электрический</option>
+                    <option value="двс">двс</option>
+                    <option value="гибридный">гибридный</option>
+                  </select>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button className="btn btn-primary" type="button" onClick={() => void onSave()} disabled={busyId === item.id}>
+                      Сохранить
+                    </button>
+                    <button className="btn" type="button" onClick={() => { setEditingId(null); setDraft(null); }}>
+                      Отмена
+                    </button>
                   </div>
-                ))}
-              </div>
+                </div>
+              ) : (
+                <>
+                  <h3 style={{ marginTop: 8 }}>{item.title}</h3>
+                  <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 8, fontSize: 13 }}>
+                    {item.summary}
+                  </p>
+                  <p className="label" style={{ marginBottom: 6 }}>Ключевые характеристики</p>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                    {item.specs.slice(0, 7).map((spec, index) => (
+                      <div
+                        key={spec.key}
+                        style={{
+                          gridColumn: index === 6 ? "1 / -1" : undefined,
+                          padding: "7px 10px",
+                          background: "var(--glass)",
+                          borderRadius: 10,
+                          border: "1px solid var(--line)",
+                        }}
+                      >
+                        <p style={{ fontSize: 11, color: "var(--muted)", lineHeight: 1.3 }}>{spec.key}</p>
+                        <p style={{ marginTop: 2, fontWeight: 700, fontSize: 13 }}>{spec.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+              {canInlineEdit && (
+                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                  <button
+                    className="btn"
+                    style={{ width: 38, height: 34, padding: 0, fontSize: 16, lineHeight: 1 }}
+                    type="button"
+                    title="Редактировать"
+                    onClick={() => onEdit(item)}
+                  >
+                    ✏
+                  </button>
+                  <button
+                    className="btn btn-danger"
+                    style={{ width: 38, height: 34, padding: 0, fontSize: 16, lineHeight: 1 }}
+                    type="button"
+                    title="Удалить"
+                    onClick={() => void onDelete(item.id)}
+                    disabled={busyId === item.id}
+                  >
+                    🗑
+                  </button>
+                </div>
+              )}
             </div>
           </article>
         );
