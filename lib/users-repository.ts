@@ -42,6 +42,7 @@ export type InviteCodeRecord = {
 };
 
 const LOCAL_INVITES_KEY = "ssp_local_invites_v1";
+const LOGIN_EMAIL_CACHE_KEY = "ssp_login_email_cache_v1";
 
 function toSessionUser(row: UserRow): SessionUser {
   return {
@@ -87,6 +88,35 @@ function readLocalInvites(): InviteCodeRecord[] {
 function writeLocalInvites(rows: InviteCodeRecord[]) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(LOCAL_INVITES_KEY, JSON.stringify(rows));
+}
+
+type LoginEmailCache = Record<string, string>;
+
+function readLoginEmailCache(): LoginEmailCache {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(LOGIN_EMAIL_CACHE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as LoginEmailCache;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function getCachedEmailForLogin(login: string) {
+  const key = login.trim().toLowerCase();
+  if (!key) return "";
+  return readLoginEmailCache()[key] ?? "";
+}
+
+function cacheEmailForLogin(login: string, email: string) {
+  if (typeof window === "undefined") return;
+  const key = login.trim().toLowerCase();
+  const value = email.trim().toLowerCase();
+  if (!key || !value) return;
+  const next = { ...readLoginEmailCache(), [key]: value };
+  window.localStorage.setItem(LOGIN_EMAIL_CACHE_KEY, JSON.stringify(next));
 }
 
 async function resolveEmailByLogin(login: string) {
@@ -149,26 +179,40 @@ export async function loginUser(login: string, password: string) {
   let authUserId: string | null = null;
   let lastError = "";
   const loginTrim = login.trim();
-  const emailsToTry: string[] = [];
+  let successfulEmail = "";
+  const emailsToTry = new Set<string>();
   if (loginTrim.includes("@")) {
-    emailsToTry.push(loginTrim);
+    emailsToTry.add(loginTrim);
   } else {
-    const resolved = await resolveEmailByLogin(loginTrim);
-    if (resolved) {
-      // Fast path for mobile: try the resolved profile email first.
-      emailsToTry.push(resolved);
+    const cachedEmail = getCachedEmailForLogin(loginTrim);
+    if (cachedEmail) {
+      emailsToTry.add(cachedEmail);
     }
-    // Fallback for legacy local-style accounts.
-    emailsToTry.push(`${loginTrim}@ssp.local`);
+    // Fast local-style fallback, avoids blocking on RPC lookup first.
+    emailsToTry.add(`${loginTrim}@ssp.local`);
   }
 
   for (const email of emailsToTry) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (!error && data.user) {
       authUserId = data.user.id;
+      successfulEmail = email;
       break;
     }
     lastError = error?.message ?? lastError;
+  }
+
+  if (!authUserId && !loginTrim.includes("@")) {
+    const resolved = await resolveEmailByLogin(loginTrim);
+    if (resolved && !emailsToTry.has(resolved)) {
+      const { data, error } = await supabase.auth.signInWithPassword({ email: resolved, password });
+      if (!error && data.user) {
+        authUserId = data.user.id;
+        successfulEmail = resolved;
+      } else {
+        lastError = error?.message ?? lastError;
+      }
+    }
   }
 
   if (!authUserId) {
@@ -190,6 +234,10 @@ export async function loginUser(login: string, password: string) {
   if (row.status !== "active") {
     await supabase.auth.signOut();
     return { ok: false as const, error: "Пользователь деактивирован администратором." };
+  }
+
+  if (!loginTrim.includes("@") && successfulEmail) {
+    cacheEmailForLogin(loginTrim, successfulEmail);
   }
 
   return { ok: true as const, session: toSessionUser(row) };

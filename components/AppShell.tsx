@@ -50,11 +50,9 @@ export function AppShell({ session, children }: AppShellProps) {
   const logout = async () => {
     if (isLoggingOut) return;
     setIsLoggingOut(true);
+    void withTimeout(forceFailFinalAttempt(session.id), 1200).catch(() => {});
     try {
-      await withTimeout(forceFailFinalAttempt(session.id), 5000);
-    } catch {}
-    try {
-      await withTimeout(logoutUser(), 5000);
+      await withTimeout(logoutUser(), 1200);
     } catch {}
     window.location.assign("/login");
   };
@@ -72,8 +70,8 @@ export function AppShell({ session, children }: AppShellProps) {
 
         <div style={{ marginTop: 14, display: "grid", gap: 8 }}>
           <ThemeToggle />
-          <button className="btn btn-danger" type="button" onClick={logout}>
-            Выход
+          <button className="btn btn-danger" type="button" onClick={logout} disabled={isLoggingOut}>
+            {isLoggingOut ? "Выходим..." : "Выход"}
           </button>
         </div>
 
