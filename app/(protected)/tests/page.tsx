@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { readClientSession } from "@/lib/client-auth";
 import { formatDate } from "@/lib/format";
 import {
@@ -40,6 +40,8 @@ export default function TestsPage() {
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [timeLeft, setTimeLeft] = useState(0);
   const [isAnswering, setIsAnswering] = useState(false);
+  /** Пока таймер не успел сброситься после смены вопроса, timeLeft может быть 0 — не считать это таймаутом. */
+  const ignoreZeroTimeLeftOnceRef = useRef(false);
 
   const refresh = async () => {
     if (!session) return;
@@ -92,8 +94,9 @@ export default function TestsPage() {
 
   useEffect(() => {
     if (!currentQuestion || !activeTest) return;
+    ignoreZeroTimeLeftOnceRef.current = true;
     setTimeLeft(Math.max(1, currentQuestion.timeLimitSec));
-  }, [currentQuestion, activeTest]);
+  }, [currentQuestion?.id, activeTest]);
 
   useEffect(() => {
     if (!activeTest || !currentQuestion) return;
@@ -157,8 +160,12 @@ export default function TestsPage() {
   useEffect(() => {
     if (!activeTest || !currentQuestion) return;
     if (timeLeft > 0) return;
+    if (ignoreZeroTimeLeftOnceRef.current) {
+      ignoreZeroTimeLeftOnceRef.current = false;
+      return;
+    }
     void answerCurrent(-1);
-  }, [timeLeft, activeTest, currentQuestion]);
+  }, [timeLeft, activeTest, currentQuestion?.id]);
 
   const onTrial = async () => {
     if (questionPool.length === 0) {
@@ -166,10 +173,13 @@ export default function TestsPage() {
       return;
     }
     const randomQuestions = pickRandomQuestions(questionPool, testConfig.trialQuestionCount);
+    const first = randomQuestions[0];
+    ignoreZeroTimeLeftOnceRef.current = true;
     setActiveTest("trial");
     setSelectedQuestions(randomQuestions);
     setQuestionIndex(0);
     setAnswers({});
+    if (first) setTimeLeft(Math.max(1, first.timeLimitSec));
     setMessage(`Пробный тест запущен: ${randomQuestions.length} случайных вопросов.`);
   };
 
@@ -179,11 +189,14 @@ export default function TestsPage() {
       return;
     }
     const randomQuestions = pickRandomQuestions(questionPool, testConfig.finalQuestionCount);
+    const first = randomQuestions[0];
     await beginFinalAttempt(session.id);
+    ignoreZeroTimeLeftOnceRef.current = true;
     setActiveTest("final");
     setSelectedQuestions(randomQuestions);
     setQuestionIndex(0);
     setAnswers({});
+    if (first) setTimeLeft(Math.max(1, first.timeLimitSec));
     setMessage(`Итоговый тест запущен: ${randomQuestions.length} случайных вопросов. Режим строгий.`);
   };
 
@@ -199,7 +212,7 @@ export default function TestsPage() {
           <div className="card-body">
             <h3>Пробный тест</h3>
             <p className="page-subtitle" style={{ marginTop: 8 }}>
-              Без штрафов за выход. Можно проходить многократно. Количество вопросов задаётся в админке (по умолчанию 10).
+              Без штрафов за выход. Можно проходить многократно.
             </p>
             <button className="btn btn-primary" type="button" onClick={onTrial}>
               Начать пробный тест
