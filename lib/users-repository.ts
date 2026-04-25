@@ -33,6 +33,20 @@ type InviteCodeRow = {
   created_at: string;
 };
 
+type ServerLoginSuccess = {
+  ok: true;
+  session: SessionUser;
+  auth: {
+    accessToken: string;
+    refreshToken: string;
+  };
+};
+
+type ServerLoginError = {
+  ok: false;
+  error: string;
+};
+
 export type InviteCodeRecord = {
   code: string;
   isActive: boolean;
@@ -72,6 +86,27 @@ function mapInvite(row: InviteCodeRow): InviteCodeRecord {
     usedCount: row.used_count,
     createdAt: row.created_at,
   };
+}
+
+async function loginViaServer(login: string, password: string): Promise<ServerLoginSuccess | ServerLoginError | null> {
+  if (typeof window === "undefined") return null;
+  try {
+    const response = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ login, password }),
+    });
+    const payload = (await response.json()) as ServerLoginSuccess | ServerLoginError;
+    if (!response.ok) {
+      return {
+        ok: false,
+        error: "error" in payload && payload.error ? payload.error : "Не удалось выполнить вход через сервер.",
+      };
+    }
+    return payload;
+  } catch {
+    return null;
+  }
 }
 
 function readLocalInvites(): InviteCodeRecord[] {
@@ -174,11 +209,26 @@ export async function loginUser(login: string, password: string) {
       : { ok: false as const, error: "Неверный логин/пароль или пользователь деактивирован." };
   }
 
+  const loginTrim = login.trim();
+  const serverResult = await loginViaServer(loginTrim, password);
+  if (serverResult?.ok) {
+    const supabase = getSupabaseBrowserClient();
+    await supabase.auth
+      .setSession({
+        access_token: serverResult.auth.accessToken,
+        refresh_token: serverResult.auth.refreshToken,
+      })
+      .catch(() => undefined);
+    return { ok: true as const, session: serverResult.session };
+  }
+  if (serverResult && !serverResult.ok) {
+    return { ok: false as const, error: serverResult.error };
+  }
+
   const supabase = getSupabaseBrowserClient();
 
   let authUserId: string | null = null;
   let lastError = "";
-  const loginTrim = login.trim();
   let successfulEmail = "";
   const emailsToTry = new Set<string>();
   if (loginTrim.includes("@")) {
