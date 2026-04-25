@@ -3,7 +3,7 @@ import { CatalogItem, TestQuestion, TestType } from "@/lib/types";
 const DEFAULT_TYPE: TestType = "trial";
 
 const LABEL_ENGINE_DVS = "ДВС";
-const LABEL_ENGINE_ELEC = "Электрический";
+const LABEL_ENGINE_ELEC = "электрический";
 
 const FALLBACK_DISTRACTORS = [
   "В справочнике БПЛА не указано",
@@ -75,7 +75,7 @@ function isEngineSpecKey(keyNorm: string) {
   return keyNorm.includes("двигат");
 }
 
-/** Значение из карточки: двс / электрический / гибридный. */
+/** Значение из карточки: двс / электрический / гибридный / не распознано. */
 function parseEngineKind(raw: string): "двс" | "электрический" | "гибридный" | null {
   const v = raw.trim().toLowerCase();
   if (v.includes("гибрид")) return "гибридный";
@@ -84,11 +84,8 @@ function parseEngineKind(raw: string): "двс" | "электрический" |
   return null;
 }
 
-/** Два варианта: ДВС / Электрический (кроме гибрида — там обычный MCQ из пула). */
-function tryBuildEngineTwoOptions(correctRaw: string): { options: string[]; correctIndex: number } | null {
-  const kind = parseEngineKind(correctRaw);
-  if (kind === "гибридный" || kind === null) return null;
-
+/** Ровно два варианта ответа: ДВС и электрический. */
+function buildEngineTwoOptions(kind: "двс" | "электрический"): { options: string[]; correctIndex: number } {
   const correctLabel = kind === "двс" ? LABEL_ENGINE_DVS : LABEL_ENGINE_ELEC;
   const options = [LABEL_ENGINE_DVS, LABEL_ENGINE_ELEC];
   shuffleInPlace(options);
@@ -255,7 +252,7 @@ function stableQuestionId(itemId: string, specIndex: number, keyNorm: string) {
 }
 
 /**
- * Банк вопросов по ТТХ из карточек БПЛА: MCQ; для типа двигателя — два варианта (ДВС / Электрический).
+ * Банк вопросов по ТТХ из карточек БПЛА: MCQ; для типа двигателя — только ДВС / электрический (гибрид не спрашиваем).
  * Числовые неверные варианты близки по величине к правильному ответу (та же единица).
  */
 export function generateUavTtxQuestionBank(items: CatalogItem[], timeLimitSec = 10): TestQuestion[] {
@@ -274,28 +271,29 @@ export function generateUavTtxQuestionBank(items: CatalogItem[], timeLimitSec = 
       if (!key || !value) return;
 
       const keyNorm = normKey(key);
-      const wrongPool = collectWrongValuePool(value, keyNorm, item.id, list);
 
       let options: string[];
       let correctIndex: number;
+      let text: string;
 
       if (isEngineSpecKey(keyNorm)) {
-        const two = tryBuildEngineTwoOptions(value);
-        if (two) {
-          options = two.options;
-          correctIndex = two.correctIndex;
-        } else {
-          ({ options, correctIndex } = buildFourOptions(value, wrongPool));
-        }
+        const engineKind = parseEngineKind(value);
+        if (engineKind !== "двс" && engineKind !== "электрический") return;
+        const two = buildEngineTwoOptions(engineKind);
+        options = two.options;
+        correctIndex = two.correctIndex;
+        text = `Какой тип двигателя стоит у БПЛА «${item.title}»?`;
       } else {
+        const wrongPool = collectWrongValuePool(value, keyNorm, item.id, list);
         ({ options, correctIndex } = buildFourOptions(value, wrongPool));
+        text = `У БПЛА «${item.title}» в ТТХ указано значение параметра «${key}». Какое?`;
       }
 
       order += 1;
       out.push({
         id: stableQuestionId(item.id, specIndex, keyNorm),
         type: DEFAULT_TYPE,
-        text: `У БПЛА «${item.title}» в ТТХ указано значение параметра «${key}». Какое?`,
+        text,
         options,
         correctIndex,
         timeLimitSec: lim,
