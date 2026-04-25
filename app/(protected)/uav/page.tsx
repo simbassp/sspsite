@@ -56,19 +56,7 @@ export default function UavPage() {
       )}
 
       {items.length > 1 && (
-        <div
-          style={{
-            position: "sticky",
-            top: 70,
-            zIndex: 15,
-            backdropFilter: "blur(12px)",
-            background: "color-mix(in srgb, var(--bg) 88%, transparent)",
-            margin: "0 -16px",
-            padding: "8px 16px",
-            borderBottom: "1px solid var(--line)",
-            marginBottom: 12,
-          }}
-        >
+        <div className="uav-model-nav">
           <div className="chips">
             {items.map((item) => (
               <button

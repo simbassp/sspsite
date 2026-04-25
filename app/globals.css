@@ -115,9 +115,35 @@ a {
   justify-content: space-between;
   gap: 12px;
   padding: 14px 16px;
+  padding-top: calc(14px + env(safe-area-inset-top, 0px));
   background: color-mix(in srgb, var(--bg) 84%, transparent);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--line);
+}
+
+/* Sticky subnav on /uav: sits flush under mobile header (header can be >70px when actions wrap) */
+.uav-model-nav {
+  position: sticky;
+  z-index: 15;
+  backdrop-filter: blur(12px);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  margin: 0 -16px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 12px;
+}
+
+@media (max-width: 819px) {
+  .uav-model-nav {
+    top: calc(88px + env(safe-area-inset-top, 0px));
+  }
+}
+
+@media (min-width: 820px) {
+  .uav-model-nav {
+    top: 0;
+    margin: 0;
+  }
 }
 
 .brand {
