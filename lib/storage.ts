@@ -33,6 +33,7 @@ function defaultPermissions(user: Partial<UserRecord>): UserPermissions {
   return {
     news: isAdmin || legacyContent,
     tests: isAdmin || legacyContent,
+    results: isAdmin || legacyContent,
     uav: isAdmin || legacyContent,
     counteraction: isAdmin || legacyContent,
     users: isAdmin,
@@ -40,7 +41,10 @@ function defaultPermissions(user: Partial<UserRecord>): UserPermissions {
 }
 
 function withNormalizedPermissions(user: UserRecord): UserRecord {
-  const normalized = user.permissions ?? defaultPermissions(user);
+  const normalized = {
+    ...defaultPermissions(user),
+    ...(user.permissions ?? {}),
+  };
   return {
     ...user,
     permissions: normalized,
@@ -135,6 +139,7 @@ export function registerEmployee(payload: {
     permissions: {
       news: false,
       tests: false,
+      results: false,
       uav: false,
       counteraction: false,
       users: false,

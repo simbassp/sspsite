@@ -23,6 +23,7 @@ type UserRow = {
   can_manage_content?: boolean;
   can_manage_news?: boolean;
   can_manage_tests?: boolean;
+  can_manage_results?: boolean;
   can_manage_uav?: boolean;
   can_manage_counteraction?: boolean;
   can_manage_users?: boolean;
@@ -78,6 +79,7 @@ function defaultPermissionsFromLegacy(row: {
   return {
     news: isAdmin || legacyContent,
     tests: isAdmin || legacyContent,
+    results: isAdmin || legacyContent,
     uav: isAdmin || legacyContent,
     counteraction: isAdmin || legacyContent,
     users: isAdmin,
@@ -89,6 +91,7 @@ function normalizePermissions(input: {
   can_manage_content?: boolean;
   can_manage_news?: boolean;
   can_manage_tests?: boolean;
+  can_manage_results?: boolean;
   can_manage_uav?: boolean;
   can_manage_counteraction?: boolean;
   can_manage_users?: boolean;
@@ -100,6 +103,7 @@ function normalizePermissions(input: {
     ...(input.permissions ?? {}),
     ...(input.can_manage_news !== undefined ? { news: input.can_manage_news === true } : {}),
     ...(input.can_manage_tests !== undefined ? { tests: input.can_manage_tests === true } : {}),
+    ...(input.can_manage_results !== undefined ? { results: input.can_manage_results === true } : {}),
     ...(input.can_manage_uav !== undefined ? { uav: input.can_manage_uav === true } : {}),
     ...(input.can_manage_counteraction !== undefined ? { counteraction: input.can_manage_counteraction === true } : {}),
     ...(input.can_manage_users !== undefined ? { users: input.can_manage_users === true } : {}),
@@ -108,6 +112,7 @@ function normalizePermissions(input: {
     return {
       news: true,
       tests: true,
+      results: true,
       uav: true,
       counteraction: true,
       users: true,
@@ -800,12 +805,30 @@ export async function patchUser(
     ...(nextCanManageContent !== undefined ? { can_manage_content: nextCanManageContent } : {}),
     ...(nextPermissions !== undefined ? { can_manage_news: nextPermissions.news } : {}),
     ...(nextPermissions !== undefined ? { can_manage_tests: nextPermissions.tests } : {}),
+    ...(nextPermissions !== undefined ? { can_manage_results: nextPermissions.results } : {}),
     ...(nextPermissions !== undefined ? { can_manage_uav: nextPermissions.uav } : {}),
     ...(nextPermissions !== undefined ? { can_manage_counteraction: nextPermissions.counteraction } : {}),
     ...(nextPermissions !== undefined ? { can_manage_users: nextPermissions.users } : {}),
   };
   const { error } = await supabase.from("app_users").update(payload).eq("id", userId);
   if (error) {
+    const granularWithoutResultsPayload = {
+      ...(patch.name !== undefined ? { name: patch.name } : {}),
+      ...(patch.callsign !== undefined ? { callsign: patch.callsign } : {}),
+      ...(patch.position !== undefined ? { position: patch.position } : {}),
+      ...(patch.status !== undefined ? { status: patch.status } : {}),
+      ...(nextCanManageContent !== undefined ? { can_manage_content: nextCanManageContent } : {}),
+      ...(nextPermissions !== undefined ? { can_manage_news: nextPermissions.news } : {}),
+      ...(nextPermissions !== undefined ? { can_manage_tests: nextPermissions.tests } : {}),
+      ...(nextPermissions !== undefined ? { can_manage_uav: nextPermissions.uav } : {}),
+      ...(nextPermissions !== undefined ? { can_manage_counteraction: nextPermissions.counteraction } : {}),
+      ...(nextPermissions !== undefined ? { can_manage_users: nextPermissions.users } : {}),
+    };
+    const withoutResults = await supabase.from("app_users").update(granularWithoutResultsPayload).eq("id", userId);
+    if (!withoutResults.error) {
+      updateUser(userId, patch);
+      return;
+    }
     // Backward-compatible fallback for older schemas without granular permission columns.
     const legacyPayload = {
       ...(patch.name !== undefined ? { name: patch.name } : {}),

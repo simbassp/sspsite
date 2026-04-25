@@ -14,6 +14,7 @@ export type TestStatus = "passed" | "failed";
 export interface UserPermissions {
   news: boolean;
   tests: boolean;
+  results: boolean;
   uav: boolean;
   counteraction: boolean;
   users: boolean;

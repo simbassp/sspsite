@@ -8,6 +8,7 @@ import { UserRecord } from "@/lib/types";
 const permissionOptions = [
   { key: "news", label: "Новости" },
   { key: "tests", label: "Тесты" },
+  { key: "results", label: "Проверка результатов" },
   { key: "uav", label: "БПЛА" },
   { key: "counteraction", label: "Противодействие" },
   { key: "users", label: "Редактирование и удаление пользователей" },
@@ -182,6 +183,7 @@ export default function AdminUsersPage() {
                             setInfo(
                               "Права сохранены. Чтобы у пользователя появилась кнопка \"Управление\", ему нужно выйти и войти снова.",
                             );
+                            window.alert("Права сохранены.");
                           }}
                         >
                           Сохранить права

@@ -20,6 +20,7 @@ create table if not exists public.app_users (
   can_manage_content boolean not null default false,
   can_manage_news boolean not null default false,
   can_manage_tests boolean not null default false,
+  can_manage_results boolean not null default false,
   can_manage_uav boolean not null default false,
   can_manage_counteraction boolean not null default false,
   can_manage_users boolean not null default false,
@@ -30,6 +31,7 @@ create table if not exists public.app_users (
 
 alter table if exists public.app_users add column if not exists can_manage_news boolean not null default false;
 alter table if exists public.app_users add column if not exists can_manage_tests boolean not null default false;
+alter table if exists public.app_users add column if not exists can_manage_results boolean not null default false;
 alter table if exists public.app_users add column if not exists can_manage_uav boolean not null default false;
 alter table if exists public.app_users add column if not exists can_manage_counteraction boolean not null default false;
 alter table if exists public.app_users add column if not exists can_manage_users boolean not null default false;
@@ -177,6 +179,25 @@ $$;
 
 revoke all on function public.can_manage_users() from public;
 grant execute on function public.can_manage_users() to authenticated;
+
+create or replace function public.can_manage_results()
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1
+    from public.app_users u
+    where u.auth_user_id = auth.uid()
+      and u.status = 'active'
+      and (u.role = 'admin' or u.can_manage_results = true)
+  );
+$$;
+
+revoke all on function public.can_manage_results() from public;
+grant execute on function public.can_manage_results() to authenticated;
 
 create or replace function public.resolve_login_email(p_login text)
 returns text
@@ -442,6 +463,7 @@ for select
 to authenticated
 using (
   public.is_admin()
+  or public.can_manage_results()
   or user_id in (select id from public.app_users where auth_user_id = auth.uid())
 );
 

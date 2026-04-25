@@ -5,6 +5,7 @@ type SessionLike = Pick<SessionUser, "role" | "canManageContent" | "permissions"
 const emptyPermissions: UserPermissions = {
   news: false,
   tests: false,
+  results: false,
   uav: false,
   counteraction: false,
   users: false,
@@ -14,6 +15,7 @@ function allPermissions(): UserPermissions {
   return {
     news: true,
     tests: true,
+    results: true,
     uav: true,
     counteraction: true,
     users: true,
@@ -23,13 +25,14 @@ function allPermissions(): UserPermissions {
 export function resolvePermissions(session: SessionLike): UserPermissions {
   if (!session) return emptyPermissions;
   if (session.role === "admin") return allPermissions();
-  const next = session.permissions ?? emptyPermissions;
+  const next = { ...emptyPermissions, ...(session.permissions ?? {}) };
   const hasGranularPermissions = Boolean(session.permissions);
   if (!hasGranularPermissions && session.canManageContent) {
     return {
       ...next,
       news: true,
       tests: true,
+      results: true,
       uav: true,
       counteraction: true,
     };
@@ -50,6 +53,10 @@ export function canManageTests(session: SessionLike) {
   return resolvePermissions(session).tests;
 }
 
+export function canManageResults(session: SessionLike) {
+  return resolvePermissions(session).results;
+}
+
 export function canManageUav(session: SessionLike) {
   return resolvePermissions(session).uav;
 }
@@ -64,5 +71,5 @@ export function canManageContent(session: SessionLike) {
 }
 
 export function canAccessAdminPanel(session: SessionLike) {
-  return canManageContent(session) || canManageUsers(session);
+  return canManageContent(session) || canManageUsers(session) || canManageResults(session);
 }

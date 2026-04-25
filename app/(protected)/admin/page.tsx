@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { canManageCounteraction, canManageNews, canManageTests, canManageUav, canManageUsers } from "@/lib/permissions";
+import { canManageCounteraction, canManageNews, canManageResults, canManageTests, canManageUav, canManageUsers } from "@/lib/permissions";
 import { getServerSession } from "@/lib/server-auth";
 
 const contentLinks = [
@@ -7,7 +7,7 @@ const contentLinks = [
   { href: "/admin/counteraction", title: "Защита", text: "Добавление и редактирование карточек противодействия.", access: canManageCounteraction },
   { href: "/admin/uav", title: "БПЛА", text: "Управление каталогом БПЛА и ТТХ-страницами.", access: canManageUav },
   { href: "/admin/tests", title: "Тесты", text: "Контур контроля пробного и итогового тестов.", access: canManageTests },
-  { href: "/admin/results", title: "Результаты", text: "Мониторинг прохождения и статусов тестирования.", access: canManageTests },
+  { href: "/admin/results", title: "Результаты", text: "Мониторинг прохождения и статусов тестирования.", access: canManageResults },
 ];
 
 const adminOnlyLinks = [

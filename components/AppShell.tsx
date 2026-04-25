@@ -4,7 +4,15 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { canAccessAdminPanel, canManageContent, canManageCounteraction, canManageTests, canManageUav, canManageUsers, canManageNews } from "@/lib/permissions";
+import {
+  canAccessAdminPanel,
+  canManageCounteraction,
+  canManageNews,
+  canManageResults,
+  canManageTests,
+  canManageUav,
+  canManageUsers,
+} from "@/lib/permissions";
 import { forceFailFinalAttempt } from "@/lib/tests-repository";
 import { logoutUser } from "@/lib/users-repository";
 import { SessionUser } from "@/lib/types";
@@ -27,12 +35,12 @@ export function AppShell({ session, children }: AppShellProps) {
   const pathname = usePathname();
   const bottomLinks = mainLinks.slice(0, 5);
   const canEditUsers = canManageUsers(session);
-  const hasContentAccess = canManageContent(session);
   const hasAdminAccess = canAccessAdminPanel(session);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const visibleAdminLinks = [
     ...(canEditUsers ? [{ href: "/admin/users", label: "Пользователи" }] : []),
-    ...(canManageTests(session) ? [{ href: "/admin/results", label: "Результаты" }, { href: "/admin/tests", label: "Тесты" }] : []),
+    ...(canManageResults(session) ? [{ href: "/admin/results", label: "Результаты" }] : []),
+    ...(canManageTests(session) ? [{ href: "/admin/tests", label: "Тесты" }] : []),
     ...(canManageNews(session) ? [{ href: "/admin/news", label: "Новости" }] : []),
     ...(canManageCounteraction(session) ? [{ href: "/admin/counteraction", label: "Противодействие" }] : []),
     ...(canManageUav(session) ? [{ href: "/admin/uav", label: "БПЛА" }] : []),
@@ -83,7 +91,7 @@ export function AppShell({ session, children }: AppShellProps) {
           })}
         </div>
 
-        {hasContentAccess && (
+        {hasAdminAccess && (
           <div style={{ marginTop: 20 }}>
             <p className="label" style={{ marginBottom: 8 }}>
               Раздел управления
@@ -107,7 +115,7 @@ export function AppShell({ session, children }: AppShellProps) {
             <div>
               <h1>ССП ПВО</h1>
               <p>
-                {session.callsign} • {canEditUsers ? "Админ" : hasContentAccess ? "Редактор" : "Сотрудник"}
+                {session.callsign} • {canEditUsers ? "Админ" : hasAdminAccess ? "Редактор" : "Сотрудник"}
               </p>
             </div>
           </div>

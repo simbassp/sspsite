@@ -20,6 +20,7 @@ export const seedData: AppData = {
       permissions: {
         news: true,
         tests: true,
+        results: true,
         uav: true,
         counteraction: true,
         users: true,
@@ -38,6 +39,7 @@ export const seedData: AppData = {
       permissions: {
         news: false,
         tests: false,
+        results: false,
         uav: false,
         counteraction: false,
         users: false,
@@ -56,6 +58,7 @@ export const seedData: AppData = {
       permissions: {
         news: false,
         tests: false,
+        results: false,
         uav: false,
         counteraction: false,
         users: false,

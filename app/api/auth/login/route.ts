@@ -19,6 +19,7 @@ type ProfileRow = {
   can_manage_content?: boolean;
   can_manage_news?: boolean;
   can_manage_tests?: boolean;
+  can_manage_results?: boolean;
   can_manage_uav?: boolean;
   can_manage_counteraction?: boolean;
   can_manage_users?: boolean;
@@ -192,6 +193,7 @@ export async function POST(request: Request) {
   const hasGranularContentPermissions = [
     profile.can_manage_news,
     profile.can_manage_tests,
+    profile.can_manage_results,
     profile.can_manage_uav,
     profile.can_manage_counteraction,
   ].some((value) => typeof value === "boolean");
@@ -201,6 +203,7 @@ export async function POST(request: Request) {
       ? {
           news: true,
           tests: true,
+          results: true,
           uav: true,
           counteraction: true,
           users: true,
@@ -209,6 +212,7 @@ export async function POST(request: Request) {
         ? {
             news: profile.can_manage_news === true,
             tests: profile.can_manage_tests === true,
+          results: profile.can_manage_results === true,
             uav: profile.can_manage_uav === true,
             counteraction: profile.can_manage_counteraction === true,
             users: profile.can_manage_users === true,
@@ -216,6 +220,7 @@ export async function POST(request: Request) {
         : {
             news: profile.can_manage_content === true,
             tests: profile.can_manage_content === true,
+            results: profile.can_manage_content === true,
             uav: profile.can_manage_content === true,
             counteraction: profile.can_manage_content === true,
             users: profile.can_manage_users === true,
