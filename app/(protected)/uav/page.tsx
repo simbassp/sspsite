@@ -161,6 +161,9 @@ export default function UavPage() {
   };
 
   const onDelete = async (itemId: string) => {
+    const target = items.find((entry) => entry.id === itemId);
+    const approved = typeof window === "undefined" ? true : window.confirm(`Удалить карточку "${target?.title ?? "БПЛА"}"?`);
+    if (!approved) return;
     setBusyId(itemId);
     setMessage("");
     try {

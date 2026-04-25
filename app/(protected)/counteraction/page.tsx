@@ -154,6 +154,10 @@ export default function CounteractionPage() {
   };
 
   const onDelete = async (itemId: string) => {
+    const target = items.find((entry) => entry.id === itemId);
+    const approved =
+      typeof window === "undefined" ? true : window.confirm(`Удалить карточку "${target?.title ?? "Противодействие"}"?`);
+    if (!approved) return;
     setBusyId(itemId);
     setMessage("");
     try {
