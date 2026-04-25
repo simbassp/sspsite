@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { useEffect, useState } from "react";
+import { publicUploadDisplayUrl } from "@/lib/public-asset-url";
 import { fetchCounteractionItems } from "@/lib/uav-repository";
 import { CatalogItem } from "@/lib/types";
 
@@ -19,16 +19,33 @@ export default function CounteractionPage() {
       <p className="page-subtitle">Каталог со сжатыми параметрами и переходом в детальные вкладки.</p>
 
       <div className="grid grid-two">
-        {items.map((item) => (
+        {items.map((item) => {
+          const imageSrc = publicUploadDisplayUrl(item.image);
+          return (
           <article className="card" key={item.id}>
-            <Image
-              src={item.image}
-              alt={item.title}
-              width={640}
-              height={360}
-              unoptimized
-              style={{ width: "100%", height: 180, objectFit: "cover" }}
-            />
+            {imageSrc ? (
+              <img
+                src={imageSrc}
+                alt={item.title}
+                decoding="async"
+                style={{ width: "100%", height: 180, objectFit: "cover" }}
+              />
+            ) : (
+              <div
+                style={{
+                  width: "100%",
+                  height: 180,
+                  background: "var(--panel2)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "var(--muted)",
+                  fontSize: 13,
+                }}
+              >
+                Нет изображения
+              </div>
+            )}
             <div className="card-body">
               <div className="meta">
                 <span className="pill">{item.category}</span>
@@ -52,7 +69,8 @@ export default function CounteractionPage() {
               </Link>
             </div>
           </article>
-        ))}
+        );
+        })}
       </div>
     </section>
   );

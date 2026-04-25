@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { publicUploadDisplayUrl } from "@/lib/public-asset-url";
 import { deleteUavItem, fetchUavItems, saveUavItem } from "@/lib/uav-repository";
 import { CatalogItem } from "@/lib/types";
 
@@ -243,6 +244,19 @@ export default function AdminUavPage() {
               onChange={(e) => setDraft((prev) => ({ ...prev, image: e.target.value }))}
               placeholder="https://... или /uploads/uav/..."
             />
+            {draft.image.trim() && (
+              <div style={{ marginTop: 8 }}>
+                <p className="label" style={{ marginBottom: 6 }}>
+                  Предпросмотр
+                </p>
+                <img
+                  src={publicUploadDisplayUrl(draft.image)}
+                  alt=""
+                  decoding="async"
+                  style={{ width: "100%", maxWidth: 360, height: 160, objectFit: "cover", borderRadius: 12, border: "1px solid var(--line)" }}
+                />
+              </div>
+            )}
 
             <label className="label">Краткое описание</label>
             <textarea

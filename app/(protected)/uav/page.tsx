@@ -1,7 +1,7 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
+import { publicUploadDisplayUrl } from "@/lib/public-asset-url";
 import { fetchUavItems } from "@/lib/uav-repository";
 import { CatalogItem } from "@/lib/types";
 
@@ -109,17 +109,22 @@ export default function UavPage() {
       )}
 
       <div className="grid grid-two">
-        {items.map((item) => (
+        {items.map((item) => {
+          const imageSrc = publicUploadDisplayUrl(item.image);
+          return (
           <article
             className="card"
             key={item.id}
             ref={(el) => { cardRefs.current[item.id] = el; }}
           >
             <div
-              style={{ position: "relative", cursor: "zoom-in", overflow: "hidden" }}
-              onClick={() => !imgErrors[item.id] && setZoomedSrc(item.image)}
+              style={{ position: "relative", cursor: imageSrc && !imgErrors[item.id] ? "zoom-in" : "default", overflow: "hidden" }}
+              onClick={() => {
+                if (!imageSrc || imgErrors[item.id]) return;
+                setZoomedSrc(imageSrc);
+              }}
             >
-              {imgErrors[item.id] ? (
+              {imgErrors[item.id] || !imageSrc ? (
                 <div
                   style={{
                     width: "100%",
@@ -136,12 +141,10 @@ export default function UavPage() {
                 </div>
               ) : (
                 <>
-                  <Image
-                    src={item.image}
+                  <img
+                    src={imageSrc}
                     alt={item.title}
-                    width={640}
-                    height={360}
-                    unoptimized
+                    decoding="async"
                     onError={() => setImgErrors((prev) => ({ ...prev, [item.id]: true }))}
                     style={{
                       width: "100%",
@@ -194,7 +197,8 @@ export default function UavPage() {
               </div>
             </div>
           </article>
-        ))}
+        );
+        })}
       </div>
 
       {zoomedSrc && (

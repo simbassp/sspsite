@@ -1,26 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import sharp from "sharp";
 import { canManageUav } from "@/lib/permissions";
 import { getServerSession } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
 
 const maxUploadBytes = 8 * 1024 * 1024;
-const allowedMimeToExt: Record<string, string> = {
-  "image/jpeg": ".jpg",
-  "image/png": ".png",
-  "image/webp": ".webp",
-  "image/gif": ".gif",
-};
-
-function getExtension(file: File) {
-  const byMime = allowedMimeToExt[file.type.toLowerCase()];
-  if (byMime) return byMime;
-  const dotIndex = file.name.lastIndexOf(".");
-  if (dotIndex < 0) return "";
-  return file.name.slice(dotIndex).toLowerCase();
-}
 
 export async function POST(request: Request) {
   const session = await getServerSession();
@@ -44,17 +31,31 @@ export async function POST(request: Request) {
       return Response.json({ ok: false, error: "Файл слишком большой (максимум 8 МБ)." }, { status: 400 });
     }
 
-    const extension = getExtension(uploaded);
-    if (!extension) {
-      return Response.json({ ok: false, error: "Неподдерживаемый формат файла." }, { status: 400 });
+    const bytes = Buffer.from(await uploaded.arrayBuffer());
+
+    let jpeg: Buffer;
+    try {
+      jpeg = await sharp(bytes)
+        .rotate()
+        .resize({ width: 1920, height: 1920, fit: "inside", withoutEnlargement: true })
+        .jpeg({ quality: 88, mozjpeg: true })
+        .toBuffer();
+    } catch {
+      return Response.json(
+        {
+          ok: false,
+          error:
+            "Не удалось обработать файл. Сохраните фото как JPEG или PNG и загрузите снова (iPhone: «Совместимый формат» в настройках камеры).",
+        },
+        { status: 400 },
+      );
     }
 
-    const bytes = Buffer.from(await uploaded.arrayBuffer());
     const uploadDir = path.join(process.cwd(), "public", "uploads", "uav");
     await mkdir(uploadDir, { recursive: true });
 
-    const fileName = `${Date.now()}-${randomUUID()}${extension}`;
-    await writeFile(path.join(uploadDir, fileName), bytes);
+    const fileName = `${Date.now()}-${randomUUID()}.jpg`;
+    await writeFile(path.join(uploadDir, fileName), jpeg);
 
     return Response.json({
       ok: true,
