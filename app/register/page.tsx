@@ -37,7 +37,6 @@ export default function RegisterPage() {
     position: positions[0],
   });
   const [error, setError] = useState("");
-  const [info, setInfo] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [passwordMismatch, setPasswordMismatch] = useState(false);
 
@@ -45,7 +44,6 @@ export default function RegisterPage() {
     event.preventDefault();
     if (isSubmitting) return;
     setError("");
-    setInfo("");
     setPasswordMismatch(false);
     if (form.password.length < 6) {
       setError("Пароль должен быть не короче 6 символов.");
@@ -58,7 +56,6 @@ export default function RegisterPage() {
     }
 
     setIsSubmitting(true);
-    setInfo("Создаем аккаунт...");
     try {
       const result = await withTimeout(
         registerUser({
@@ -74,14 +71,11 @@ export default function RegisterPage() {
         "request_timeout",
       );
       if (!result.ok) {
-        setInfo("");
         setError(result.error);
         return;
       }
-      setInfo("");
       router.push("/login");
     } catch (err) {
-      setInfo("");
       const message = err instanceof Error ? err.message : "";
       if (message === "request_timeout") {
         setError("Сервер отвечает слишком долго. Проверьте интернет и попробуйте снова.");
@@ -181,7 +175,6 @@ export default function RegisterPage() {
             </select>
 
             {error && <p style={{ color: "#ff8d8d", fontSize: 13 }}>{error}</p>}
-            {info && <p className="page-subtitle">{info}</p>}
 
             <button className="btn btn-primary" type="submit" disabled={isSubmitting}>
               {isSubmitting ? "Создаем аккаунт..." : "Создать аккаунт"}

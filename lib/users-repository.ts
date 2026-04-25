@@ -291,6 +291,17 @@ async function validateInviteCode(code: string) {
   }
 }
 
+async function resolveInviteCodeForRegistration(inputCode: string) {
+  const trimmed = inputCode.trim();
+  if (!trimmed) return "";
+  const variants = Array.from(new Set([trimmed, trimmed.toUpperCase(), trimmed.toLowerCase()]));
+  for (const variant of variants) {
+    const valid = await validateInviteCode(variant);
+    if (valid) return variant;
+  }
+  return "";
+}
+
 function canUseLocalFallback() {
   if (typeof window === "undefined") return true;
   const host = window.location.hostname;
@@ -604,7 +615,7 @@ export async function registerUser(payload: {
   position: Position;
   inviteCode: string;
 }) {
-  const inviteCode = payload.inviteCode.trim().toUpperCase();
+  const inviteCodeRaw = payload.inviteCode.trim();
   if (!isSupabaseConfigured) {
     if (!canUseLocalFallback()) {
       return {
@@ -623,13 +634,15 @@ export async function registerUser(payload: {
   }
 
   const supabase = getSupabaseBrowserClient();
-  if (!inviteCode) {
+  if (!inviteCodeRaw) {
     return { ok: false as const, error: "Введите персональный код приглашения." };
   }
-
-  const inviteValid = await validateInviteCode(inviteCode);
-  if (!inviteValid) {
-    return { ok: false as const, error: "У вас нет приглашения. Неверный персональный код." };
+  const inviteCode = await resolveInviteCodeForRegistration(inviteCodeRaw);
+  if (!inviteCode) {
+    return {
+      ok: false as const,
+      error: "У вас нет приглашения. Неверный персональный код (проверьте регистр и пробелы).",
+    };
   }
 
   let data: { user?: unknown } | null = null;
