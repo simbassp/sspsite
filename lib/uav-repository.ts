@@ -203,7 +203,14 @@ async function deleteCatalogItem(
 }
 
 export async function fetchUavItems() {
-  return fetchCatalogItems("uav", listUav, false);
+  try {
+    const response = await fetch("/api/uav", { cache: "no-store" });
+    if (!response.ok) return [];
+    const payload = (await response.json()) as { ok?: boolean; items?: CatalogItem[] };
+    return Array.isArray(payload.items) ? payload.items : [];
+  } catch {
+    return [];
+  }
 }
 
 export async function fetchUavById(itemId: string) {

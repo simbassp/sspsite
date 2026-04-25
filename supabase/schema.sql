@@ -455,6 +455,12 @@ for select
 to authenticated
 using (true);
 
+create policy "catalog_anon_read"
+on public.catalog_items
+for select
+to anon
+using (true);
+
 create policy "catalog_admin_write"
 on public.catalog_items
 for all
