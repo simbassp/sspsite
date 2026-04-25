@@ -8,6 +8,7 @@ import { CatalogItem } from "@/lib/types";
 export default function UavPage() {
   const [items, setItems] = useState<CatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [zoomedSrc, setZoomedSrc] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -22,6 +23,19 @@ export default function UavPage() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!zoomedSrc) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setZoomedSrc(null);
+    };
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [zoomedSrc]);
 
   return (
     <section>
@@ -38,14 +52,36 @@ export default function UavPage() {
       <div className="grid grid-two">
         {items.map((item) => (
           <article className="card" key={item.id}>
-            <Image
-              src={item.image}
-              alt={item.title}
-              width={640}
-              height={360}
-              unoptimized
-              style={{ width: "100%", height: 180, objectFit: "cover" }}
-            />
+            <div
+              style={{ position: "relative", cursor: "zoom-in", overflow: "hidden" }}
+              onClick={() => setZoomedSrc(item.image)}
+            >
+              <Image
+                src={item.image}
+                alt={item.title}
+                width={640}
+                height={360}
+                unoptimized
+                style={{
+                  width: "100%",
+                  height: 200,
+                  objectFit: "cover",
+                  objectPosition: "top center",
+                  display: "block",
+                }}
+              />
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  height: 72,
+                  background: "linear-gradient(to top, rgba(7,9,13,0.82) 0%, transparent 100%)",
+                  pointerEvents: "none",
+                }}
+              />
+            </div>
             <div className="card-body">
               <div className="meta">
                 <span className="pill">{item.category}</span>
@@ -73,6 +109,57 @@ export default function UavPage() {
           </article>
         ))}
       </div>
+
+      {zoomedSrc && (
+        <div
+          onClick={() => setZoomedSrc(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1000,
+            background: "rgba(0,0,0,0.92)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+            cursor: "zoom-out",
+          }}
+        >
+          <img
+            src={zoomedSrc}
+            alt=""
+            style={{
+              maxWidth: "100%",
+              maxHeight: "90vh",
+              borderRadius: 16,
+              boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
+              objectFit: "contain",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            onClick={() => setZoomedSrc(null)}
+            style={{
+              position: "absolute",
+              top: 16,
+              right: 16,
+              background: "rgba(255,255,255,0.12)",
+              border: "none",
+              color: "#fff",
+              borderRadius: "50%",
+              width: 40,
+              height: 40,
+              fontSize: 20,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
     </section>
   );
 }
