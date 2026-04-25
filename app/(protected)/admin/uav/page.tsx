@@ -315,7 +315,7 @@ export default function AdminUavPage() {
         </div>
       </article>
 
-      <div className="list grid-two" style={{ marginTop: 12 }}>
+      <div className="list" style={{ marginTop: 12, gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
         {sortedItems.map((item) => (
           <article className="card" key={item.id}>
             <div className="card-body" style={{ padding: 12 }}>
