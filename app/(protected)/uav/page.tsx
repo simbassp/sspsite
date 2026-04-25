@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { fetchUavItems } from "@/lib/uav-repository";
@@ -70,9 +69,6 @@ export default function UavPage() {
                   </div>
                 ))}
               </div>
-              <Link href={`/uav/${item.id}`} className="btn btn-primary" style={{ display: "inline-block", marginTop: 10 }}>
-                Полное ТТХ и описание
-              </Link>
             </div>
           </article>
         ))}

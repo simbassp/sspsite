@@ -399,6 +399,12 @@ for select
 to authenticated
 using (auth_user_id = auth.uid() or public.can_manage_users());
 
+create policy "users_results_read"
+on public.app_users
+for select
+to authenticated
+using (public.can_manage_results());
+
 create policy "users_admin_update"
 on public.app_users
 for update
