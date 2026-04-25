@@ -486,43 +486,42 @@ html[data-theme="dark"] .select option {
   }
 }
 
-/* Пробный тест: подсветка ответов — в светлой теме пастель, в тёмной только контур/текст без «мыльных» заливок */
+/* Пробный тест: целиком залитая «плашка» (светлая — как мятная/розовая подложка на макете) */
 .trial-feedback-btn--correct {
-  border-width: 2px !important;
-  border-style: solid !important;
-  border-color: #198754 !important;
-  background-color: #d1e7dd !important;
-  color: #0a3622 !important;
-  -webkit-text-fill-color: #0a3622 !important;
+  border: 2px solid #157347 !important;
+  background-color: #c5e8d4 !important;
+  background-image: none !important;
+  color: #063d22 !important;
+  -webkit-text-fill-color: #063d22 !important;
 }
 
 .trial-feedback-btn--wrong {
-  border-width: 2px !important;
-  border-style: solid !important;
-  border-color: #dc3545 !important;
-  background-color: #f8d7da !important;
-  color: #58151c !important;
-  -webkit-text-fill-color: #58151c !important;
+  border: 2px solid #c53030 !important;
+  background-color: #f5ccd0 !important;
+  background-image: none !important;
+  color: #4a1518 !important;
+  -webkit-text-fill-color: #4a1518 !important;
 }
 
 .trial-feedback-btn--dim {
   opacity: 0.72;
 }
 
+/* Тёмная тема: та же логика — сплошная заливка, верный — зелёная плашка (не белая рамка) */
 html[data-theme="dark"] .trial-feedback-btn--correct {
-  background-color: transparent !important;
-  background: transparent !important;
-  border-color: rgba(255, 255, 255, 0.92) !important;
-  color: #ffffff !important;
-  -webkit-text-fill-color: #ffffff !important;
+  border: 2px solid color-mix(in srgb, var(--ok) 90%, #000) !important;
+  background-color: color-mix(in srgb, var(--ok) 52%, var(--panel)) !important;
+  background-image: none !important;
+  color: #e6fff1 !important;
+  -webkit-text-fill-color: #e6fff1 !important;
 }
 
 html[data-theme="dark"] .trial-feedback-btn--wrong {
-  background-color: transparent !important;
-  background: transparent !important;
-  border-color: rgba(255, 140, 140, 0.95) !important;
-  color: #ffe0e0 !important;
-  -webkit-text-fill-color: #ffe0e0 !important;
+  border: 2px solid color-mix(in srgb, var(--bad) 85%, #000) !important;
+  background-color: color-mix(in srgb, var(--bad) 48%, var(--panel)) !important;
+  background-image: none !important;
+  color: #ffecec !important;
+  -webkit-text-fill-color: #ffecec !important;
 }
 
 html[data-theme="dark"] .trial-feedback-btn--dim {
