@@ -15,6 +15,7 @@ import {
   persistFinalAttempt,
   seedDefaultQuestionsIfEmpty,
 } from "@/lib/tests-repository";
+import { DEFAULT_TEST_CONFIG } from "@/lib/test-config";
 import { generateUavTtxQuestionBank } from "@/lib/uav-test-generator";
 import { fetchUavItems } from "@/lib/uav-repository";
 import { TestConfig, TestQuestion, TestResult } from "@/lib/types";
@@ -28,12 +29,18 @@ function pickRandomQuestions(bank: TestQuestion[], count: number) {
   return cloned.slice(0, Math.max(1, Math.min(count, cloned.length)));
 }
 
+/** Единое время на вопрос из настроек админки на время попытки. */
+function applySessionTimeLimits(questions: TestQuestion[], sec: number): TestQuestion[] {
+  const t = Math.max(5, Math.floor(sec));
+  return questions.map((q) => ({ ...q, timeLimitSec: t }));
+}
+
 export default function TestsPage() {
   const session = useMemo(() => readClientSession(), []);
   const [results, setResults] = useState<TestResult[]>([]);
   const [questionPool, setQuestionPool] = useState<TestQuestion[]>([]);
   const [selectedQuestions, setSelectedQuestions] = useState<TestQuestion[]>([]);
-  const [testConfig, setTestConfig] = useState<TestConfig>({ trialQuestionCount: 10, finalQuestionCount: 15 });
+  const [testConfig, setTestConfig] = useState<TestConfig>(DEFAULT_TEST_CONFIG);
   const [message, setMessage] = useState("");
   const [activeTest, setActiveTest] = useState<"trial" | "final" | null>(null);
   const [questionIndex, setQuestionIndex] = useState(0);
@@ -58,7 +65,9 @@ export default function TestsPage() {
         fetchActiveQuestionPool(),
         fetchTestConfig(),
       ]);
-      const fromUav = generateUavTtxQuestionBank(uavItems);
+      const fromUav = config.uavAutoGeneration
+        ? generateUavTtxQuestionBank(uavItems, config.timePerQuestionSec)
+        : [];
       if (fromUav.length > 0) {
         const ids = new Set(fromUav.map((q) => q.id));
         setQuestionPool([...fromUav, ...dbPool.filter((q) => !ids.has(q.id))]);
@@ -169,10 +178,17 @@ export default function TestsPage() {
 
   const onTrial = async () => {
     if (questionPool.length === 0) {
-      setMessage("Нет карточек БПЛА с ТТХ или банка вопросов. Добавьте модели в справочник БПЛА.");
+      setMessage(
+        testConfig.uavAutoGeneration
+          ? "Нет карточек БПЛА с ТТХ и нет активных вопросов в банке. Заполните справочник БПЛА или добавьте вопросы в админке."
+          : "Нет активных вопросов в банке. Добавьте их в разделе «Админ / Тесты».",
+      );
       return;
     }
-    const randomQuestions = pickRandomQuestions(questionPool, testConfig.trialQuestionCount);
+    const randomQuestions = applySessionTimeLimits(
+      pickRandomQuestions(questionPool, testConfig.trialQuestionCount),
+      testConfig.timePerQuestionSec,
+    );
     const first = randomQuestions[0];
     ignoreZeroTimeLeftOnceRef.current = true;
     setActiveTest("trial");
@@ -185,10 +201,17 @@ export default function TestsPage() {
 
   const startFinal = async () => {
     if (questionPool.length === 0) {
-      setMessage("Нет карточек БПЛА с ТТХ или банка вопросов. Добавьте модели в справочник БПЛА.");
+      setMessage(
+        testConfig.uavAutoGeneration
+          ? "Нет карточек БПЛА с ТТХ и нет активных вопросов в банке. Заполните справочник БПЛА или добавьте вопросы в админке."
+          : "Нет активных вопросов в банке. Добавьте их в разделе «Админ / Тесты».",
+      );
       return;
     }
-    const randomQuestions = pickRandomQuestions(questionPool, testConfig.finalQuestionCount);
+    const randomQuestions = applySessionTimeLimits(
+      pickRandomQuestions(questionPool, testConfig.finalQuestionCount),
+      testConfig.timePerQuestionSec,
+    );
     const first = randomQuestions[0];
     await beginFinalAttempt(session.id);
     ignoreZeroTimeLeftOnceRef.current = true;
@@ -204,7 +227,10 @@ export default function TestsPage() {
     <section>
       <h1 className="page-title">Тестирование</h1>
       <p className="page-subtitle">
-        Вопросы формируются из ТТХ карточек БПЛА (случайная выборка). На каждый вопрос — 10 секунд.
+        {testConfig.uavAutoGeneration
+          ? "В тест попадают вопросы из ТТХ карточек БПЛА (обновляются при каждом заходе на страницу) и активные вопросы из банка администратора."
+          : "Используются только вопросы из банка в «Админ / Тесты»."}{" "}
+        Случайная выборка. На каждый вопрос — <strong>{testConfig.timePerQuestionSec}</strong> сек (задаётся в админке).
       </p>
 
       <div className="grid grid-two">

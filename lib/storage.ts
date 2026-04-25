@@ -1,6 +1,7 @@
 "use client";
 
 import { seedData, STORAGE_KEY } from "@/lib/seed";
+import { normalizeTestConfig } from "@/lib/test-config";
 import { createDefaultQuestionBank } from "@/lib/test-question-bank";
 import {
   AppData,
@@ -277,15 +278,12 @@ export function listTestQuestions(type?: "trial" | "final") {
 }
 
 export function getTestConfig(): TestConfig {
-  return readData().testConfig;
+  return normalizeTestConfig(readData().testConfig);
 }
 
 export function updateTestConfig(config: TestConfig) {
   const data = readData();
-  data.testConfig = {
-    trialQuestionCount: Math.max(1, Math.floor(config.trialQuestionCount)),
-    finalQuestionCount: Math.max(1, Math.floor(config.finalQuestionCount)),
-  };
+  data.testConfig = normalizeTestConfig(config);
   writeData(data);
 }
 

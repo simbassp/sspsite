@@ -10,6 +10,7 @@ import {
   saveTestConfig,
   seedDefaultQuestionsIfEmpty,
 } from "@/lib/tests-repository";
+import { DEFAULT_TEST_CONFIG, normalizeTestConfig } from "@/lib/test-config";
 import { TestConfig, TestQuestion, TestResult, TestType } from "@/lib/types";
 
 type DraftQuestion = {
@@ -34,7 +35,7 @@ const initialDraft: DraftQuestion = {
 export default function AdminTestsPage() {
   const [results, setResults] = useState<TestResult[]>([]);
   const [questions, setQuestions] = useState<TestQuestion[]>([]);
-  const [config, setConfig] = useState<TestConfig>({ trialQuestionCount: 10, finalQuestionCount: 15 });
+  const [config, setConfig] = useState<TestConfig>(DEFAULT_TEST_CONFIG);
   const [draft, setDraft] = useState<DraftQuestion>(initialDraft);
   const [message, setMessage] = useState("");
   const [isEditingTimeLimit, setIsEditingTimeLimit] = useState(false);
@@ -135,10 +136,7 @@ export default function AdminTestsPage() {
 
   const onSaveConfig = async () => {
     setMessage("");
-    const nextConfig = await saveTestConfig({
-      trialQuestionCount: Math.max(1, config.trialQuestionCount),
-      finalQuestionCount: Math.max(1, config.finalQuestionCount),
-    });
+    const nextConfig = await saveTestConfig(normalizeTestConfig(config));
     setConfig(nextConfig);
     setMessage("Настройки количества вопросов сохранены.");
   };
@@ -147,8 +145,9 @@ export default function AdminTestsPage() {
     <section>
       <h1 className="page-title">Админ / Тесты</h1>
       <p className="page-subtitle">
-        Основной банк для сотрудников строится автоматически из ТТХ карточек БПЛА (10 сек на вопрос). Ниже —
-        дополнительные ручные вопросы в БД и настройки числа вопросов в пробном и итоговом тесте.
+        Ниже — настройки тестов (время на вопрос, генерация из БПЛА, число вопросов) и ручной банк вопросов в БД.
+        При включённой генерации вопросы по ТТХ пересобираются при каждом заходе сотрудника на «Тестирование» и
+        объединяются с активными вопросами из банка. Если генерация выключена — в тесте только ваш банк.
       </p>
       <div className="grid grid-two">
         <div className="card">
@@ -215,7 +214,48 @@ export default function AdminTestsPage() {
               }
             />
 
-            <button className="btn btn-primary" type="button" onClick={() => void onSaveConfig()}>
+            <label className="label" htmlFor="time-per-q">
+              Секунд на один вопрос (пробный и итоговый тест)
+            </label>
+            <input
+              id="time-per-q"
+              className="input"
+              type="number"
+              min={5}
+              max={600}
+              value={config.timePerQuestionSec}
+              onChange={(e) =>
+                setConfig((prev) => ({
+                  ...prev,
+                  timePerQuestionSec: Math.max(5, Number(e.target.value) || 5),
+                }))
+              }
+            />
+
+            <p className="label" style={{ marginTop: 12 }}>
+              Генерация вопросов из ТТХ БПЛА
+            </p>
+            <p className="page-subtitle" style={{ marginTop: 4 }}>
+              Выключите, если хотите использовать только свой банк вопросов ниже.
+            </p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+              <button
+                className={`btn${config.uavAutoGeneration ? " btn-primary" : ""}`}
+                type="button"
+                onClick={() => setConfig((prev) => ({ ...prev, uavAutoGeneration: true }))}
+              >
+                Включить
+              </button>
+              <button
+                className={`btn${!config.uavAutoGeneration ? " btn-primary" : ""}`}
+                type="button"
+                onClick={() => setConfig((prev) => ({ ...prev, uavAutoGeneration: false }))}
+              >
+                Выключить
+              </button>
+            </div>
+
+            <button className="btn btn-primary" type="button" onClick={() => void onSaveConfig()} style={{ marginTop: 14 }}>
               Сохранить настройки тестов
             </button>
           </div>

@@ -1,6 +1,5 @@
 import { CatalogItem, TestQuestion, TestType } from "@/lib/types";
 
-const TIME_PER_QUESTION_SEC = 10;
 const DEFAULT_TYPE: TestType = "trial";
 
 const FALLBACK_DISTRACTORS = [
@@ -185,10 +184,11 @@ function stableQuestionId(itemId: string, specIndex: number, keyNorm: string) {
  * Банк вопросов по ТТХ из карточек БПЛА: для каждой пары (модель, параметр) — один MCQ, 4 варианта, 10 сек.
  * Неверные варианты подбираются в той же единице измерения, что и правильный ответ; при нехватке — близкие числа.
  */
-export function generateUavTtxQuestionBank(items: CatalogItem[]): TestQuestion[] {
+export function generateUavTtxQuestionBank(items: CatalogItem[], timeLimitSec = 10): TestQuestion[] {
   const list = items.filter((it) => it.specs?.length);
   if (!list.length) return [];
 
+  const lim = Math.max(5, Math.floor(Number(timeLimitSec) || 10));
   const out: TestQuestion[] = [];
   let order = 0;
   const createdAt = new Date().toISOString();
@@ -210,7 +210,7 @@ export function generateUavTtxQuestionBank(items: CatalogItem[]): TestQuestion[]
         text: `У БПЛА «${item.title}» в ТТХ указано значение параметра «${key}». Какое?`,
         options,
         correctIndex,
-        timeLimitSec: TIME_PER_QUESTION_SEC,
+        timeLimitSec: lim,
         order,
         isActive: true,
         createdAt,

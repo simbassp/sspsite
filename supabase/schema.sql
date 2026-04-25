@@ -91,6 +91,8 @@ create table if not exists public.test_settings (
   id integer primary key default 1 check (id = 1),
   trial_question_count integer not null default 10 check (trial_question_count >= 1),
   final_question_count integer not null default 15 check (final_question_count >= 1),
+  time_per_question_sec integer not null default 10 check (time_per_question_sec >= 5),
+  uav_auto_generation boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -105,9 +107,21 @@ create table if not exists public.registration_invites (
   check (used_count >= 0)
 );
 
-insert into public.test_settings (id, trial_question_count, final_question_count)
-values (1, 10, 15)
+insert into public.test_settings (id, trial_question_count, final_question_count, time_per_question_sec, uav_auto_generation)
+values (1, 10, 15, 10, true)
 on conflict (id) do nothing;
+
+alter table public.test_settings add column if not exists time_per_question_sec integer;
+alter table public.test_settings add column if not exists uav_auto_generation boolean;
+update public.test_settings
+set
+  time_per_question_sec = coalesce(time_per_question_sec, 10),
+  uav_auto_generation = coalesce(uav_auto_generation, true)
+where id = 1;
+alter table public.test_settings alter column time_per_question_sec set default 10;
+alter table public.test_settings alter column uav_auto_generation set default true;
+alter table public.test_settings alter column time_per_question_sec set not null;
+alter table public.test_settings alter column uav_auto_generation set not null;
 
 create index if not exists idx_app_users_login on public.app_users(login);
 create index if not exists idx_app_users_role on public.app_users(role);

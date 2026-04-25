@@ -16,6 +16,7 @@ import {
   upsertTestQuestion,
 } from "@/lib/storage";
 import { createDefaultQuestionBank } from "@/lib/test-question-bank";
+import { normalizeTestConfig } from "@/lib/test-config";
 import { FinalAttemptState, TestConfig, TestQuestion, TestResult, TestType } from "@/lib/types";
 
 type TestResultRow = {
@@ -49,6 +50,8 @@ type TestQuestionRow = {
 type TestConfigRow = {
   trial_question_count: number;
   final_question_count: number;
+  time_per_question_sec?: number | null;
+  uav_auto_generation?: boolean | null;
 };
 
 function mapResult(row: TestResultRow): TestResult {
@@ -86,10 +89,14 @@ function mapQuestion(row: TestQuestionRow): TestQuestion {
 }
 
 function mapConfig(row: TestConfigRow): TestConfig {
-  return {
-    trialQuestionCount: Math.max(1, row.trial_question_count),
-    finalQuestionCount: Math.max(1, row.final_question_count),
-  };
+  const uav =
+    typeof row.uav_auto_generation === "boolean" ? row.uav_auto_generation : undefined;
+  return normalizeTestConfig({
+    trialQuestionCount: row.trial_question_count,
+    finalQuestionCount: row.final_question_count,
+    timePerQuestionSec: row.time_per_question_sec ?? undefined,
+    uavAutoGeneration: uav,
+  });
 }
 
 export async function fetchUserResults(userId: string) {
@@ -389,7 +396,7 @@ export async function fetchTestConfig() {
   const supabase = getSupabaseBrowserClient();
   const { data, error } = await supabase
     .from("test_settings")
-    .select("trial_question_count,final_question_count")
+    .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
     .eq("id", 1)
     .maybeSingle();
 
@@ -405,16 +412,19 @@ export async function saveTestConfig(config: TestConfig) {
     return getTestConfig();
   }
   const supabase = getSupabaseBrowserClient();
+  const normalized = normalizeTestConfig(config);
   const payload = {
     id: 1,
-    trial_question_count: Math.max(1, Math.floor(config.trialQuestionCount)),
-    final_question_count: Math.max(1, Math.floor(config.finalQuestionCount)),
+    trial_question_count: normalized.trialQuestionCount,
+    final_question_count: normalized.finalQuestionCount,
+    time_per_question_sec: normalized.timePerQuestionSec,
+    uav_auto_generation: normalized.uavAutoGeneration,
     updated_at: new Date().toISOString(),
   };
   const { data, error } = await supabase
     .from("test_settings")
     .upsert(payload, { onConflict: "id" })
-    .select("trial_question_count,final_question_count")
+    .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
     .single();
 
   if (error || !data) {

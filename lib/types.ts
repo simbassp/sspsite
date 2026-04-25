@@ -84,6 +84,10 @@ export interface TestQuestion {
 export interface TestConfig {
   trialQuestionCount: number;
   finalQuestionCount: number;
+  /** Общее время на один вопрос в пробном и итоговом тесте (сек). */
+  timePerQuestionSec: number;
+  /** Вопросы из ТТХ карточек БПЛА; при выключении — только банк из БД. */
+  uavAutoGeneration: boolean;
 }
 
 export interface FinalAttemptState {

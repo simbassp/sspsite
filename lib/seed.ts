@@ -164,6 +164,8 @@ export const seedData: AppData = {
   testConfig: {
     trialQuestionCount: 10,
     finalQuestionCount: 15,
+    timePerQuestionSec: 10,
+    uavAutoGeneration: true,
   },
   testResults: [
     {
