@@ -152,7 +152,18 @@ a {
 
 .header-actions {
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
+  justify-content: flex-end;
+}
+
+.mobile-admin-shortcut {
+  padding: 8px 16px 0;
+}
+
+.mobile-admin-shortcut .btn {
+  width: 100%;
 }
 
 .screen {
@@ -403,6 +414,10 @@ html[data-theme="dark"] .select option {
 
   .mobile-header,
   .bottom-nav {
+    display: none;
+  }
+
+  .mobile-admin-shortcut {
     display: none;
   }
 

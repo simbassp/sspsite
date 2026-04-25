@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { canManageContent, canManageUsers } from "@/lib/permissions";
 import { forceFailFinalAttempt } from "@/lib/tests-repository";
@@ -35,17 +36,27 @@ export function AppShell({ session, children }: AppShellProps) {
   const bottomLinks = mainLinks.slice(0, 5);
   const isAdmin = canManageUsers(session);
   const hasContentAccess = canManageContent(session);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const visibleAdminLinks = isAdmin
     ? [{ href: "/admin/users", label: "Пользователи" }, { href: "/admin/results", label: "Результаты" }, ...adminLinks]
     : adminLinks;
 
+  const withTimeout = (promise: Promise<unknown>, timeoutMs: number) =>
+    Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), timeoutMs)),
+    ]);
+
   const logout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
     try {
-      await forceFailFinalAttempt(session.id);
-    } finally {
-      await logoutUser();
-      window.location.assign("/login");
-    }
+      await withTimeout(forceFailFinalAttempt(session.id), 5000);
+    } catch {}
+    try {
+      await withTimeout(logoutUser(), 5000);
+    } catch {}
+    window.location.assign("/login");
   };
 
   return (
@@ -106,17 +117,20 @@ export function AppShell({ session, children }: AppShellProps) {
             </div>
           </div>
           <div className="header-actions">
-            {hasContentAccess && (
-              <Link className="btn" href="/admin">
-                Управление
-              </Link>
-            )}
             <ThemeToggle />
-            <button className="btn btn-danger" type="button" onClick={logout}>
-              Выход
+            <button className="btn btn-danger" type="button" onClick={logout} disabled={isLoggingOut}>
+              {isLoggingOut ? "Выход..." : "Выход"}
             </button>
           </div>
         </header>
+
+        {hasContentAccess && (
+          <div className="mobile-admin-shortcut">
+            <Link className="btn" href="/admin">
+              Управление
+            </Link>
+          </div>
+        )}
 
         <div className="screen">{children}</div>
       </main>
