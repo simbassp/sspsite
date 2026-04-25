@@ -27,6 +27,32 @@ export default function UavPage() {
   }, []);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 819px)");
+    const apply = () => {
+      const header = document.getElementById("mobile-app-header");
+      if (!mq.matches || !header) {
+        document.documentElement.style.removeProperty("--uav-sticky-below-header");
+        return;
+      }
+      const h = Math.ceil(header.getBoundingClientRect().height);
+      document.documentElement.style.setProperty("--uav-sticky-below-header", `${h}px`);
+    };
+    apply();
+    const header = document.getElementById("mobile-app-header");
+    const ro = header ? new ResizeObserver(apply) : null;
+    if (header && ro) ro.observe(header);
+    mq.addEventListener("change", apply);
+    window.addEventListener("resize", apply);
+    return () => {
+      mq.removeEventListener("change", apply);
+      window.removeEventListener("resize", apply);
+      ro?.disconnect();
+      document.documentElement.style.removeProperty("--uav-sticky-below-header");
+    };
+  }, []);
+
+  useEffect(() => {
     if (!zoomedSrc) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setZoomedSrc(null);

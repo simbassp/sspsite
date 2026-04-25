@@ -109,7 +109,7 @@ export function AppShell({ session, children }: AppShellProps) {
       </aside>
 
       <main>
-        <header className="mobile-header">
+        <header className="mobile-header" id="mobile-app-header">
           <div className="brand">
             <Link href="/dashboard" style={{ display: "contents" }}>
               <div className="brand-mark">ПВО</div>

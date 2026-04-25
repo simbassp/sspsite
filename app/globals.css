@@ -135,7 +135,8 @@ a {
 
 @media (max-width: 819px) {
   .uav-model-nav {
-    top: calc(88px + env(safe-area-inset-top, 0px));
+    /* Set dynamically from #mobile-app-header height in uav/page.tsx */
+    top: var(--uav-sticky-below-header, calc(128px + env(safe-area-inset-top, 0px)));
   }
 }
 
