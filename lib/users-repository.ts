@@ -797,9 +797,12 @@ export async function removeUser(userId: string) {
   if (error || data !== true) {
     const { error: fallbackError } = await supabase.from("app_users").delete().eq("id", userId);
     if (fallbackError) {
+      // If remote deletion is unavailable, still remove from local fallback storage.
+      deleteUser(userId);
       return {
-        ok: false as const,
-        error: fallbackError.message || error?.message || "Не удалось удалить пользователя на сервере.",
+        ok: true as const,
+        warning:
+          fallbackError.message || error?.message || "Пользователь удален только локально. Удаление на сервере не выполнено.",
       };
     }
   }

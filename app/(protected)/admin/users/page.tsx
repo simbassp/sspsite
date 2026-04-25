@@ -20,6 +20,7 @@ export default function AdminUsersPage() {
   const [status, setStatus] = useState<"all" | "active" | "inactive">("all");
   const [info, setInfo] = useState("");
   const [permissionsTargetId, setPermissionsTargetId] = useState<string | null>(null);
+  const [permissionDrafts, setPermissionDrafts] = useState<Record<string, UserRecord["permissions"]>>({});
   useState(() => {
     fetchUsers().then((next) => setUsers(next));
     return true;
@@ -29,6 +30,8 @@ export default function AdminUsersPage() {
     const next = await fetchUsers();
     setUsers(next);
   };
+
+  const getDraftPermissions = (user: UserRecord) => permissionDrafts[user.id] ?? user.permissions;
 
   const patchLocal = (
     userId: string,
@@ -115,6 +118,9 @@ export default function AdminUsersPage() {
                   className="btn"
                   type="button"
                   onClick={() => {
+                    setPermissionDrafts((prev) =>
+                      prev[user.id] ? prev : { ...prev, [user.id]: { ...user.permissions } },
+                    );
                     setPermissionsTargetId((prev) => (prev === user.id ? null : user.id));
                   }}
                 >
@@ -128,13 +134,8 @@ export default function AdminUsersPage() {
                       const confirmed = window.confirm(`Удалить пользователя ${user.name} (@${user.login})?`);
                       if (!confirmed) return;
                       const result = await removeUser(user.id);
-                      if (!result.ok) {
-                        setInfo(result.error);
-                        return;
-                      }
                       setUsers((prev) => prev.filter((item) => item.id !== user.id));
-                      setInfo("Пользователь удален.");
-                      await refresh();
+                      setInfo("warning" in result && result.warning ? result.warning : "Пользователь удален.");
                     }}
                   >
                     Удалить
@@ -150,27 +151,42 @@ export default function AdminUsersPage() {
                         <label key={`${user.id}-${item.key}`} style={{ display: "flex", gap: 8, alignItems: "center" }}>
                           <input
                             type="checkbox"
-                            checked={user.permissions[item.key]}
+                            checked={getDraftPermissions(user)[item.key]}
                             onChange={(event) => {
                               if (user.role === "admin") return;
                               const nextPermissions = {
-                                ...user.permissions,
+                                ...getDraftPermissions(user),
                                 [item.key]: event.target.checked,
                               };
-                              patchLocal(user.id, {
-                                permissions: nextPermissions,
-                                canManageContent:
-                                  nextPermissions.news ||
-                                  nextPermissions.tests ||
-                                  nextPermissions.uav ||
-                                  nextPermissions.counteraction,
-                              });
+                              setPermissionDrafts((prev) => ({ ...prev, [user.id]: nextPermissions }));
                             }}
                             disabled={user.role === "admin"}
                           />
                           <span>{item.label}</span>
                         </label>
                       ))}
+                      {user.role !== "admin" && (
+                        <button
+                          className="btn btn-primary"
+                          type="button"
+                          onClick={() => {
+                            const nextPermissions = getDraftPermissions(user);
+                            patchLocal(user.id, {
+                              permissions: nextPermissions,
+                              canManageContent:
+                                nextPermissions.news ||
+                                nextPermissions.tests ||
+                                nextPermissions.uav ||
+                                nextPermissions.counteraction,
+                            });
+                            setInfo(
+                              "Права сохранены. Чтобы у пользователя появилась кнопка \"Управление\", ему нужно выйти и войти снова.",
+                            );
+                          }}
+                        >
+                          Сохранить права
+                        </button>
+                      )}
                       {user.role === "admin" && (
                         <p className="page-subtitle" style={{ marginBottom: 0 }}>
                           У администратора полный доступ по всем разделам.
