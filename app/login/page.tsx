@@ -5,20 +5,45 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { loginUser, persistSession, requestPasswordReset } from "@/lib/users-repository";
 
+const AUTH_REQUEST_TIMEOUT_MS = 15000;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeoutId = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+    promise
+      .then((value) => {
+        clearTimeout(timeoutId);
+        resolve(value);
+      })
+      .catch((error) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      });
+  });
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [requestResetMode, setRequestResetMode] = useState(false);
   const [isSendingReset, setIsSendingReset] = useState(false);
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (isSubmitting) return;
     setError("");
+    setInfo("");
+    setIsSubmitting(true);
     try {
-      const result = await loginUser(login.trim(), password);
+      const result = await withTimeout(
+        loginUser(login.trim(), password),
+        AUTH_REQUEST_TIMEOUT_MS,
+        "request_timeout",
+      );
       if (!result.ok) {
         setError(result.error);
         return;
@@ -26,8 +51,15 @@ export default function LoginPage() {
 
       persistSession(result.session);
       router.push("/dashboard");
-    } catch {
-      setError("Ошибка сети: не удалось связаться с сервером авторизации. Проверьте интернет и попробуйте снова.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (message === "request_timeout") {
+        setError("Сервер отвечает слишком долго. Проверьте интернет и попробуйте снова.");
+      } else {
+        setError("Ошибка сети: не удалось связаться с сервером авторизации. Проверьте интернет и попробуйте снова.");
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -53,16 +85,25 @@ export default function LoginPage() {
     }
     setIsSendingReset(true);
     try {
-      const result = await requestPasswordReset(login.trim());
+      const result = await withTimeout(
+        requestPasswordReset(login.trim()),
+        AUTH_REQUEST_TIMEOUT_MS,
+        "request_timeout",
+      );
       setIsSendingReset(false);
       if (!result.ok) {
         setError(result.error);
         return;
       }
       setInfo("Ссылка на сброс отправлена на почту.");
-    } catch {
+    } catch (error) {
       setIsSendingReset(false);
-      setError("Ошибка сети: не удалось отправить запрос на сброс. Проверьте интернет и попробуйте снова.");
+      const message = error instanceof Error ? error.message : "";
+      if (message === "request_timeout") {
+        setError("Сервер отвечает слишком долго. Повторите попытку через несколько секунд.");
+      } else {
+        setError("Ошибка сети: не удалось отправить запрос на сброс. Проверьте интернет и попробуйте снова.");
+      }
     }
   };
 
@@ -103,8 +144,8 @@ export default function LoginPage() {
 
               {error && <p style={{ color: "#ff8d8d", fontSize: 13 }}>{error}</p>}
               {info && <p className="page-subtitle">{info}</p>}
-              <button className="btn btn-primary" type="submit">
-                Войти
+              <button className="btn btn-primary" type="submit" disabled={isSubmitting}>
+                {isSubmitting ? "Входим..." : "Войти"}
               </button>
               <button className="btn" type="button" onClick={openRequestReset}>
                 Забыли пароль?
