@@ -90,27 +90,50 @@ function mapInvite(row: InviteCodeRow): InviteCodeRecord {
 
 async function loginViaServer(login: string, password: string): Promise<ServerLoginSuccess | ServerLoginError | null> {
   if (typeof window === "undefined") return null;
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 6500);
   try {
-    const response = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ login, password }),
-      signal: controller.signal,
-    });
-    const payload = (await response.json()) as ServerLoginSuccess | ServerLoginError;
+    const response = (await Promise.race([
+      fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ login, password }),
+      }),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("request_timeout")), 6500);
+      }),
+    ])) as Response;
+
+    let payload: ServerLoginSuccess | ServerLoginError | null = null;
+    try {
+      payload = (await response.json()) as ServerLoginSuccess | ServerLoginError;
+    } catch {
+      payload = null;
+    }
+
     if (!response.ok) {
       return {
         ok: false,
-        error: "error" in payload && payload.error ? payload.error : "Не удалось выполнить вход через сервер.",
+        error:
+          payload && "error" in payload && payload.error
+            ? payload.error
+            : `Сервер авторизации вернул ошибку (${response.status}).`,
+      };
+    }
+    if (!payload || !("ok" in payload) || payload.ok !== true) {
+      return {
+        ok: false,
+        error: "Некорректный ответ сервера авторизации. Повторите попытку.",
       };
     }
     return payload;
-  } catch {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message === "request_timeout") {
+      return {
+        ok: false,
+        error: "Сервер авторизации отвечает слишком долго. Попробуйте снова.",
+      };
+    }
     return null;
-  } finally {
-    clearTimeout(timeoutId);
   }
 }
 
