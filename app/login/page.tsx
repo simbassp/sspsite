@@ -6,6 +6,7 @@ import { FormEvent, useState } from "react";
 import { loginUser, persistSession, requestPasswordReset } from "@/lib/users-repository";
 
 const AUTH_REQUEST_TIMEOUT_MS = 15000;
+const AUTH_RETRY_DELAY_MS = 700;
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -20,6 +21,21 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: 
         reject(error);
       });
   });
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isTransientAuthError(message: string) {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("request_timeout") ||
+    normalized.includes("failed to fetch") ||
+    normalized.includes("network") ||
+    normalized.includes("timeout") ||
+    normalized.includes("не удалось связаться")
+  );
 }
 
 export default function LoginPage() {
@@ -39,25 +55,39 @@ export default function LoginPage() {
     setInfo("");
     setIsSubmitting(true);
     try {
-      const result = await withTimeout(
-        loginUser(login.trim(), password),
-        AUTH_REQUEST_TIMEOUT_MS,
-        "request_timeout",
-      );
-      if (!result.ok) {
-        setError(result.error);
-        return;
+      const loginTrim = login.trim();
+      let finalError = "";
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          const result = await withTimeout(loginUser(loginTrim, password), AUTH_REQUEST_TIMEOUT_MS, "request_timeout");
+          if (result.ok) {
+            persistSession(result.session);
+            router.push("/dashboard");
+            return;
+          }
+          finalError = result.error;
+          if (attempt === 0 && isTransientAuthError(result.error)) {
+            setInfo("Связь нестабильна, повторяем вход...");
+            await sleep(AUTH_RETRY_DELAY_MS);
+            continue;
+          }
+          break;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "";
+          finalError =
+            message === "request_timeout"
+              ? "Сервер отвечает слишком долго. Проверьте интернет и попробуйте снова."
+              : "Ошибка сети: не удалось связаться с сервером авторизации. Проверьте интернет и попробуйте снова.";
+          if (attempt === 0 && isTransientAuthError(message)) {
+            setInfo("Связь нестабильна, повторяем вход...");
+            await sleep(AUTH_RETRY_DELAY_MS);
+            continue;
+          }
+          break;
+        }
       }
-
-      persistSession(result.session);
-      router.push("/dashboard");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "";
-      if (message === "request_timeout") {
-        setError("Сервер отвечает слишком долго. Проверьте интернет и попробуйте снова.");
-      } else {
-        setError("Ошибка сети: не удалось связаться с сервером авторизации. Проверьте интернет и попробуйте снова.");
-      }
+      setInfo("");
+      setError(finalError || "Не удалось выполнить вход. Попробуйте снова.");
     } finally {
       setIsSubmitting(false);
     }
