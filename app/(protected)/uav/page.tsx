@@ -9,6 +9,7 @@ export default function UavPage() {
   const [items, setItems] = useState<CatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [zoomedSrc, setZoomedSrc] = useState<string | null>(null);
+  const [imgErrors, setImgErrors] = useState<Record<string, boolean>>({});
   const cardRefs = useRef<Record<string, HTMLElement | null>>({});
 
   useEffect(() => {
@@ -55,17 +56,41 @@ export default function UavPage() {
       )}
 
       {items.length > 1 && (
-        <div className="chips" style={{ marginBottom: 12 }}>
-          {items.map((item) => (
-            <button
-              key={item.id}
-              className="chip"
-              type="button"
-              onClick={() => scrollToCard(item.id)}
-            >
-              {item.title}
-            </button>
-          ))}
+        <div
+          style={{
+            position: "sticky",
+            top: 0,
+            zIndex: 20,
+            backdropFilter: "blur(12px)",
+            background: "color-mix(in srgb, var(--bg) 88%, transparent)",
+            margin: "0 -16px",
+            padding: "8px 16px",
+            borderBottom: "1px solid var(--line)",
+            marginBottom: 12,
+          }}
+        >
+          <div className="chips">
+            {items.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => scrollToCard(item.id)}
+                style={{
+                  whiteSpace: "nowrap",
+                  padding: "7px 14px",
+                  borderRadius: 999,
+                  border: "1px solid var(--line-strong)",
+                  background: "var(--panel)",
+                  color: "var(--text)",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                {item.title}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -78,34 +103,54 @@ export default function UavPage() {
           >
             <div
               style={{ position: "relative", cursor: "zoom-in", overflow: "hidden" }}
-              onClick={() => setZoomedSrc(item.image)}
+              onClick={() => !imgErrors[item.id] && setZoomedSrc(item.image)}
             >
-              <Image
-                src={item.image}
-                alt={item.title}
-                width={640}
-                height={360}
-                unoptimized
-                style={{
-                  width: "100%",
-                  height: 200,
-                  objectFit: "cover",
-                  objectPosition: "top center",
-                  display: "block",
-                }}
-              />
-              <div
-                style={{
-                  position: "absolute",
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  height: 90,
-                  zIndex: 1,
-                  background: "linear-gradient(to top, rgba(7,9,13,0.95) 0%, rgba(7,9,13,0.4) 50%, transparent 100%)",
-                  pointerEvents: "none",
-                }}
-              />
+              {imgErrors[item.id] ? (
+                <div
+                  style={{
+                    width: "100%",
+                    height: 200,
+                    background: "var(--panel2)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "var(--muted)",
+                    fontSize: 13,
+                  }}
+                >
+                  Нет изображения
+                </div>
+              ) : (
+                <>
+                  <Image
+                    src={item.image}
+                    alt={item.title}
+                    width={640}
+                    height={360}
+                    unoptimized
+                    onError={() => setImgErrors((prev) => ({ ...prev, [item.id]: true }))}
+                    style={{
+                      width: "100%",
+                      height: 200,
+                      objectFit: "cover",
+                      objectPosition: "top center",
+                      display: "block",
+                    }}
+                  />
+                  <div
+                    style={{
+                      position: "absolute",
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      height: 90,
+                      zIndex: 1,
+                      background: "linear-gradient(to top, rgba(7,9,13,0.95) 0%, rgba(7,9,13,0.4) 50%, transparent 100%)",
+                      pointerEvents: "none",
+                    }}
+                  />
+                </>
+              )}
             </div>
             <div className="card-body">
               <div className="meta">
