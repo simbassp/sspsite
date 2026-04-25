@@ -44,10 +44,10 @@ export default function AdminUsersPage() {
           permissions: nextPermissions,
           canManageContent:
             patch.canManageContent ??
-            nextPermissions.news ||
-              nextPermissions.tests ||
-              nextPermissions.uav ||
-              nextPermissions.counteraction,
+              (nextPermissions.news ||
+                nextPermissions.tests ||
+                nextPermissions.uav ||
+                nextPermissions.counteraction),
         };
       }),
     );
