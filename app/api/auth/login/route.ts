@@ -189,6 +189,38 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "Пользователь деактивирован администратором." }, { status: 403 });
   }
 
+  const hasGranularContentPermissions = [
+    profile.can_manage_news,
+    profile.can_manage_tests,
+    profile.can_manage_uav,
+    profile.can_manage_counteraction,
+  ].some((value) => typeof value === "boolean");
+
+  const permissions =
+    profile.role === "admin"
+      ? {
+          news: true,
+          tests: true,
+          uav: true,
+          counteraction: true,
+          users: true,
+        }
+      : hasGranularContentPermissions
+        ? {
+            news: profile.can_manage_news === true,
+            tests: profile.can_manage_tests === true,
+            uav: profile.can_manage_uav === true,
+            counteraction: profile.can_manage_counteraction === true,
+            users: profile.can_manage_users === true,
+          }
+        : {
+            news: profile.can_manage_content === true,
+            tests: profile.can_manage_content === true,
+            uav: profile.can_manage_content === true,
+            counteraction: profile.can_manage_content === true,
+            users: profile.can_manage_users === true,
+          };
+
   return NextResponse.json({
     ok: true,
     session: {
@@ -197,23 +229,8 @@ export async function POST(request: Request) {
       name: profile.name,
       callsign: profile.callsign,
       position: profile.position,
-      canManageContent:
-        profile.role === "admin" ||
-        profile.can_manage_news === true ||
-        profile.can_manage_tests === true ||
-        profile.can_manage_uav === true ||
-        profile.can_manage_counteraction === true ||
-        profile.can_manage_content === true,
-      permissions: {
-        news: profile.role === "admin" || profile.can_manage_news === true || profile.can_manage_content === true,
-        tests: profile.role === "admin" || profile.can_manage_tests === true || profile.can_manage_content === true,
-        uav: profile.role === "admin" || profile.can_manage_uav === true || profile.can_manage_content === true,
-        counteraction:
-          profile.role === "admin" ||
-          profile.can_manage_counteraction === true ||
-          profile.can_manage_content === true,
-        users: profile.role === "admin" || profile.can_manage_users === true,
-      },
+      canManageContent: permissions.news || permissions.tests || permissions.uav || permissions.counteraction,
+      permissions,
     },
     auth: {
       accessToken,
