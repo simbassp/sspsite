@@ -6,6 +6,23 @@ import { FormEvent, useMemo, useState } from "react";
 import { getPositions } from "@/lib/storage";
 import { registerUser } from "@/lib/users-repository";
 
+const REGISTER_REQUEST_TIMEOUT_MS = 45000;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeoutId = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+    promise
+      .then((value) => {
+        clearTimeout(timeoutId);
+        resolve(value);
+      })
+      .catch((error) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      });
+  });
+}
+
 export default function RegisterPage() {
   const router = useRouter();
   const positions = useMemo(() => getPositions(), []);
@@ -20,11 +37,15 @@ export default function RegisterPage() {
     position: positions[0],
   });
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [passwordMismatch, setPasswordMismatch] = useState(false);
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (isSubmitting) return;
     setError("");
+    setInfo("");
     setPasswordMismatch(false);
     if (form.password.length < 6) {
       setError("Пароль должен быть не короче 6 символов.");
@@ -36,20 +57,40 @@ export default function RegisterPage() {
       return;
     }
 
-    const result = await registerUser({
-      email: form.email.trim(),
-      login: form.login.trim(),
-      name: form.name.trim(),
-      callsign: form.callsign.trim(),
-      password: form.password,
-      position: form.position,
-      inviteCode: form.inviteCode,
-    });
-    if (!result.ok) {
-      setError(result.error);
-      return;
+    setIsSubmitting(true);
+    setInfo("Создаем аккаунт...");
+    try {
+      const result = await withTimeout(
+        registerUser({
+          email: form.email.trim(),
+          login: form.login.trim(),
+          name: form.name.trim(),
+          callsign: form.callsign.trim(),
+          password: form.password,
+          position: form.position,
+          inviteCode: form.inviteCode,
+        }),
+        REGISTER_REQUEST_TIMEOUT_MS,
+        "request_timeout",
+      );
+      if (!result.ok) {
+        setInfo("");
+        setError(result.error);
+        return;
+      }
+      setInfo("");
+      router.push("/login");
+    } catch (err) {
+      setInfo("");
+      const message = err instanceof Error ? err.message : "";
+      if (message === "request_timeout") {
+        setError("Сервер отвечает слишком долго. Проверьте интернет и попробуйте снова.");
+      } else {
+        setError("Ошибка сети: не удалось создать аккаунт. Проверьте интернет и попробуйте снова.");
+      }
+    } finally {
+      setIsSubmitting(false);
     }
-    router.push("/login");
   };
 
   return (
@@ -140,9 +181,10 @@ export default function RegisterPage() {
             </select>
 
             {error && <p style={{ color: "#ff8d8d", fontSize: 13 }}>{error}</p>}
+            {info && <p className="page-subtitle">{info}</p>}
 
-            <button className="btn btn-primary" type="submit">
-              Создать аккаунт
+            <button className="btn btn-primary" type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "Создаем аккаунт..." : "Создать аккаунт"}
             </button>
           </form>
 

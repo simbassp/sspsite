@@ -66,6 +66,8 @@ const LOGIN_SERVER_TIMEOUT_MS = 12000;
 const LOGIN_RESOLVE_TIMEOUT_MS = 5000;
 const LOGIN_AUTH_TIMEOUT_MS = 12000;
 const LOGIN_PROFILE_TIMEOUT_MS = 8000;
+const REGISTER_VALIDATE_TIMEOUT_MS = 7000;
+const REGISTER_AUTH_TIMEOUT_MS = 15000;
 
 function defaultPermissionsFromLegacy(row: {
   role: "employee" | "admin";
@@ -272,11 +274,21 @@ async function resolveEmailByLogin(login: string) {
 async function validateInviteCode(code: string) {
   if (!isSupabaseConfigured) return true;
   const supabase = getSupabaseBrowserClient();
-  const { data, error } = await supabase.rpc("validate_invite_code", {
-    p_code: code,
-  });
-  if (error) return false;
-  return data === true;
+  try {
+    const result = (await Promise.race([
+      supabase.rpc("validate_invite_code", {
+        p_code: code,
+      }),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("validate_invite_timeout")), REGISTER_VALIDATE_TIMEOUT_MS);
+      }),
+    ])) as Awaited<ReturnType<typeof supabase.rpc>>;
+    const { data, error } = result;
+    if (error) return false;
+    return data === true;
+  } catch {
+    return false;
+  }
 }
 
 function canUseLocalFallback() {
@@ -592,6 +604,7 @@ export async function registerUser(payload: {
   position: Position;
   inviteCode: string;
 }) {
+  const inviteCode = payload.inviteCode.trim().toUpperCase();
   if (!isSupabaseConfigured) {
     if (!canUseLocalFallback()) {
       return {
@@ -610,7 +623,6 @@ export async function registerUser(payload: {
   }
 
   const supabase = getSupabaseBrowserClient();
-  const inviteCode = payload.inviteCode.trim();
   if (!inviteCode) {
     return { ok: false as const, error: "Введите персональный код приглашения." };
   }
@@ -620,19 +632,32 @@ export async function registerUser(payload: {
     return { ok: false as const, error: "У вас нет приглашения. Неверный персональный код." };
   }
 
-  const { data, error } = await supabase.auth.signUp({
-    email: payload.email,
-    password: payload.password,
-    options: {
-      data: {
-        login: payload.login,
-        name: payload.name,
-        callsign: payload.callsign,
-        position: payload.position,
-        invite_code: inviteCode,
-      },
-    },
-  });
+  let data: { user?: unknown } | null = null;
+  let error: { message: string } | null = null;
+  try {
+    const result = (await Promise.race([
+      supabase.auth.signUp({
+        email: payload.email,
+        password: payload.password,
+        options: {
+          data: {
+            login: payload.login,
+            name: payload.name,
+            callsign: payload.callsign,
+            position: payload.position,
+            invite_code: inviteCode,
+          },
+        },
+      }),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("register_auth_timeout")), REGISTER_AUTH_TIMEOUT_MS);
+      }),
+    ])) as Awaited<ReturnType<typeof supabase.auth.signUp>>;
+    data = result.data as { user?: unknown };
+    error = result.error as { message: string } | null;
+  } catch {
+    return { ok: false as const, error: "Сервер регистрации отвечает слишком долго. Повторите попытку." };
+  }
 
   if (error) {
     return { ok: false as const, error: mapAuthErrorMessage(error.message) };
@@ -662,7 +687,7 @@ export async function fetchInviteCodes() {
 }
 
 export async function createInviteCode(input: { code: string; maxUses: number | null }) {
-  const normalizedCode = input.code.trim();
+  const normalizedCode = input.code.trim().toUpperCase();
   const maxUses = input.maxUses && input.maxUses > 0 ? Math.floor(input.maxUses) : null;
   if (!normalizedCode) {
     return { ok: false as const, error: "Введите код приглашения." };
@@ -691,7 +716,6 @@ export async function createInviteCode(input: { code: string; maxUses: number | 
       code: normalizedCode,
       is_active: true,
       max_uses: maxUses,
-      used_count: 0,
     },
     { onConflict: "code" },
   );
@@ -708,7 +732,7 @@ export async function disableInviteCode(code: string) {
     return;
   }
   const supabase = getSupabaseBrowserClient();
-  await supabase.from("registration_invites").update({ is_active: false }).eq("code", code);
+  await supabase.from("registration_invites").update({ is_active: false }).eq("code", code.trim().toUpperCase());
 }
 
 export async function removeInviteCode(code: string) {
@@ -718,7 +742,7 @@ export async function removeInviteCode(code: string) {
     return;
   }
   const supabase = getSupabaseBrowserClient();
-  await supabase.from("registration_invites").delete().eq("code", code);
+  await supabase.from("registration_invites").delete().eq("code", code.trim().toUpperCase());
 }
 
 export async function fetchUsers() {

@@ -451,16 +451,21 @@ export default function ProfilePage() {
                 <article className="card" key={invite.code}>
                   <div className="card-body">
                     <h3>{invite.code}</h3>
-                    <div className="meta" style={{ marginTop: 8 }}>
-                      <span className={`pill ${invite.isActive ? "pill-green" : "pill-red"}`}>
-                        {invite.isActive ? "Активен" : "Отключен"}
-                      </span>
-                      <span>
-                        Использовано: {invite.usedCount}
-                        {invite.maxUses ? ` / ${invite.maxUses}` : ""}
-                      </span>
-                      <span>{formatDate(invite.createdAt)}</span>
-                    </div>
+                    {(() => {
+                      const exhausted = invite.maxUses !== null && invite.usedCount >= invite.maxUses;
+                      return (
+                        <div className="meta" style={{ marginTop: 8 }}>
+                          <span className={`pill ${invite.isActive && !exhausted ? "pill-green" : "pill-red"}`}>
+                            {invite.isActive ? (exhausted ? "Лимит исчерпан" : "Активен") : "Отключен"}
+                          </span>
+                          <span style={exhausted ? { color: "#ff8d8d", fontWeight: 700 } : undefined}>
+                            Использовано: {invite.usedCount}
+                            {invite.maxUses ? ` / ${invite.maxUses}` : ""}
+                          </span>
+                          <span>{formatDate(invite.createdAt)}</span>
+                        </div>
+                      );
+                    })()}
                     <div className="form" style={{ marginTop: 10 }}>
                       {invite.isActive && (
                         <button className="btn" type="button" onClick={() => void onDisableInvite(invite.code)}>
