@@ -11,8 +11,7 @@ type DraftUav = {
   image: string;
   summary: string;
   specsText: string[];
-  fullTth: string;
-  description: string;
+  engineType: "электрический" | "двс" | "гибридный";
 };
 
 const emptyDraft: DraftUav = {
@@ -20,9 +19,8 @@ const emptyDraft: DraftUav = {
   category: "",
   image: "",
   summary: "",
-  specsText: ["", "", "", "", "", ""],
-  fullTth: "",
-  description: "",
+  specsText: ["", "", "", "", ""],
+  engineType: "электрический",
 };
 
 const categoryOptions = ["Ударный", "Разведывательный"] as const;
@@ -45,9 +43,21 @@ function normalizeSpecs(lines: string[]) {
 }
 
 function specsToText(specs: CatalogItem["specs"]) {
-  const lines = specs.slice(0, 6).map((item) => `${item.key}: ${item.value}`);
-  while (lines.length < 6) lines.push("");
+  const lines = specs
+    .filter((item) => item.key.trim().toLowerCase() !== "тип двигателя")
+    .slice(0, 5)
+    .map((item) => `${item.key}: ${item.value}`);
+  while (lines.length < 5) lines.push("");
   return lines;
+}
+
+function detectEngineType(
+  specs: CatalogItem["specs"],
+): "электрический" | "двс" | "гибридный" {
+  const candidate = specs.find((item) => item.key.trim().toLowerCase() === "тип двигателя")?.value.trim().toLowerCase();
+  if (candidate === "двс") return "двс";
+  if (candidate === "гибридный") return "гибридный";
+  return "электрический";
 }
 
 export default function AdminUavPage() {
@@ -77,25 +87,29 @@ export default function AdminUavPage() {
     if (!draft.image.trim()) return setMessage("Добавьте изображение (ссылка или загрузка файла).");
 
     const specs = normalizeSpecs(draft.specsText);
-    if (specs.length < 6) return setMessage("Заполните 6 строк ТТХ.");
+    if (specs.length < 5) return setMessage("Заполните 5 строк ТТХ.");
 
-    await saveUavItem({
-      id: draft.id,
-      title: draft.title.trim(),
-      category: draft.category.trim() || "Без категории",
-      image: draft.image.trim(),
-      summary: draft.summary.trim() || draft.description.trim(),
-      specs: specs.slice(0, 6),
-      details: {
-        overview: draft.description.trim(),
-        tth: draft.fullTth.trim(),
-        usage: "",
-        materials: "",
-      },
-    });
-    setMessage(draft.id ? "Карточка БПЛА обновлена." : "Карточка БПЛА добавлена.");
-    setDraft(emptyDraft);
-    await refresh();
+    try {
+      await saveUavItem({
+        id: draft.id,
+        title: draft.title.trim(),
+        category: draft.category.trim() || "Без категории",
+        image: draft.image.trim(),
+        summary: draft.summary.trim(),
+        specs: [...specs.slice(0, 5), { key: "Тип двигателя", value: draft.engineType }],
+        details: {
+          overview: "",
+          tth: "",
+          usage: "",
+          materials: "",
+        },
+      });
+      setMessage(draft.id ? "Карточка БПЛА обновлена." : "Карточка БПЛА добавлена.");
+      setDraft(emptyDraft);
+      await refresh();
+    } catch {
+      setMessage("Не удалось сохранить карточку в основной базе. Проверьте права/подключение и повторите.");
+    }
   };
 
   const onUploadImage = async (file: File | null) => {
@@ -143,23 +157,26 @@ export default function AdminUavPage() {
       image: item.image,
       summary: item.summary,
       specsText: specsToText(item.specs),
-      fullTth: item.details.tth,
-      description: item.details.overview,
+      engineType: detectEngineType(item.specs),
     });
   };
 
   const onDelete = async (itemId: string) => {
     setMessage("");
-    await deleteUavItem(itemId);
-    setMessage("Карточка удалена.");
-    if (draft.id === itemId) setDraft(emptyDraft);
-    await refresh();
+    try {
+      await deleteUavItem(itemId);
+      setMessage("Карточка удалена.");
+      if (draft.id === itemId) setDraft(emptyDraft);
+      await refresh();
+    } catch {
+      setMessage("Не удалось удалить карточку из основной базы. Проверьте подключение и права.");
+    }
   };
 
   return (
     <section>
       <h1 className="page-title">Админ / БПЛА</h1>
-      <p className="page-subtitle">Добавление и редактирование БПЛА: изображение, 6 ТТХ, описание и полное ТТХ.</p>
+      <p className="page-subtitle">Добавление и редактирование БПЛА: изображение, 5 ТТХ и тип двигателя.</p>
 
       <article className="card">
         <div className="card-body">
@@ -235,7 +252,7 @@ export default function AdminUavPage() {
               onChange={(e) => setDraft((prev) => ({ ...prev, summary: e.target.value }))}
             />
 
-            <h3 style={{ marginTop: 4 }}>6 строк характеристик</h3>
+            <h3 style={{ marginTop: 4 }}>5 строк характеристик</h3>
             {draft.specsText.map((line, index) => (
               <div key={`spec-${index}`}>
                 <label className="label">ТТХ {index + 1}</label>
@@ -252,22 +269,21 @@ export default function AdminUavPage() {
                 />
               </div>
             ))}
-
-            <label className="label">Полное ТТХ</label>
-            <textarea
-              className="input"
-              rows={4}
-              value={draft.fullTth}
-              onChange={(e) => setDraft((prev) => ({ ...prev, fullTth: e.target.value }))}
-            />
-
-            <label className="label">Полное описание</label>
-            <textarea
-              className="input"
-              rows={4}
-              value={draft.description}
-              onChange={(e) => setDraft((prev) => ({ ...prev, description: e.target.value }))}
-            />
+            <label className="label">Тип двигателя</label>
+            <select
+              className="select"
+              value={draft.engineType}
+              onChange={(e) =>
+                setDraft((prev) => ({
+                  ...prev,
+                  engineType: e.target.value as DraftUav["engineType"],
+                }))
+              }
+            >
+              <option value="электрический">электрический</option>
+              <option value="двс">двс</option>
+              <option value="гибридный">гибридный</option>
+            </select>
 
             {message && <p className="page-subtitle">{message}</p>}
             <button className="btn btn-primary" type="button" onClick={() => void onSave()}>

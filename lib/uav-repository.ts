@@ -79,8 +79,20 @@ function slugify(value: string) {
     .slice(0, 60);
 }
 
-async function fetchCatalogItems(kind: "counteraction" | "uav", fallback: () => CatalogItem[]) {
+function shouldUseLocalFallback(allowLocalFallback: boolean) {
+  if (!allowLocalFallback) return false;
+  if (typeof window === "undefined") return true;
+  const host = window.location.hostname;
+  return host === "localhost" || host === "127.0.0.1" || host === "::1";
+}
+
+async function fetchCatalogItems(
+  kind: "counteraction" | "uav",
+  fallback: () => CatalogItem[],
+  allowLocalFallback = true,
+) {
   if (!isSupabaseConfigured) return fallback();
+  const useFallback = shouldUseLocalFallback(allowLocalFallback);
   const supabase = getSupabaseBrowserClient();
   const response = await Promise.race([
     supabase
@@ -92,16 +104,16 @@ async function fetchCatalogItems(kind: "counteraction" | "uav", fallback: () => 
   ]);
 
   if ("__timeout" in response) {
-    return fallback();
+    return useFallback ? fallback() : [];
   }
   const { data, error } = response;
 
   if (error || !data) {
-    return fallback();
+    return useFallback ? fallback() : [];
   }
   const mapped = (data as CatalogRow[]).map(toCatalogItem);
   if (mapped.length === 0) {
-    return fallback();
+    return useFallback ? fallback() : [];
   }
   return mapped;
 }
@@ -110,8 +122,10 @@ async function fetchCatalogById(
   kind: "counteraction" | "uav",
   itemId: string,
   fallback: (id: string) => CatalogItem | null,
+  allowLocalFallback = true,
 ) {
   if (!isSupabaseConfigured) return fallback(itemId);
+  const useFallback = shouldUseLocalFallback(allowLocalFallback);
   const supabase = getSupabaseBrowserClient();
   const response = await Promise.race([
     supabase
@@ -124,12 +138,12 @@ async function fetchCatalogById(
   ]);
 
   if ("__timeout" in response) {
-    return fallback(itemId);
+    return useFallback ? fallback(itemId) : null;
   }
   const { data, error } = response;
 
   if (error || !data) {
-    return fallback(itemId);
+    return useFallback ? fallback(itemId) : null;
   }
   return toCatalogItem(data as CatalogRow);
 }
@@ -138,8 +152,10 @@ async function saveCatalogItem(
   kind: "counteraction" | "uav",
   input: Omit<CatalogItem, "id"> & { id?: string },
   fallback: (row: Omit<CatalogItem, "id"> & { id?: string }) => CatalogItem,
+  allowLocalFallback = true,
 ) {
   if (!isSupabaseConfigured) return fallback(input);
+  const useFallback = shouldUseLocalFallback(allowLocalFallback);
   const supabase = getSupabaseBrowserClient();
   const baseSlug = slugify(input.title) || `${kind}-item`;
   const payload = {
@@ -161,7 +177,8 @@ async function saveCatalogItem(
     .single();
 
   if (error || !data) {
-    return fallback(input);
+    if (useFallback) return fallback(input);
+    throw new Error(error?.message || "remote_save_failed");
   }
   return toCatalogItem(data as CatalogRow);
 }
@@ -170,29 +187,35 @@ async function deleteCatalogItem(
   kind: "counteraction" | "uav",
   itemId: string,
   fallback: (id: string) => void,
+  allowLocalFallback = true,
 ) {
   if (!isSupabaseConfigured) return fallback(itemId);
+  const useFallback = shouldUseLocalFallback(allowLocalFallback);
   const supabase = getSupabaseBrowserClient();
   const { error } = await supabase.from("catalog_items").delete().eq("id", itemId).eq("kind", kind);
   if (error) {
-    fallback(itemId);
+    if (useFallback) {
+      fallback(itemId);
+      return;
+    }
+    throw new Error(error.message || "remote_delete_failed");
   }
 }
 
 export async function fetchUavItems() {
-  return fetchCatalogItems("uav", listUav);
+  return fetchCatalogItems("uav", listUav, false);
 }
 
 export async function fetchUavById(itemId: string) {
-  return fetchCatalogById("uav", itemId, getUavById);
+  return fetchCatalogById("uav", itemId, getUavById, false);
 }
 
 export async function saveUavItem(input: Omit<CatalogItem, "id"> & { id?: string }) {
-  return saveCatalogItem("uav", input, upsertUavItem);
+  return saveCatalogItem("uav", input, upsertUavItem, false);
 }
 
 export async function deleteUavItem(itemId: string) {
-  return deleteCatalogItem("uav", itemId, removeUavItem);
+  return deleteCatalogItem("uav", itemId, removeUavItem, false);
 }
 
 export async function fetchCounteractionItems() {
