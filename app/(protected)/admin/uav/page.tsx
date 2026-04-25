@@ -160,6 +160,9 @@ export default function AdminUavPage() {
       specsText: specsToText(item.specs),
       engineType: detectEngineType(item.specs),
     });
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
   };
 
   const onDelete = async (itemId: string) => {
@@ -315,21 +318,32 @@ export default function AdminUavPage() {
       <div className="list" style={{ marginTop: 12 }}>
         {sortedItems.map((item) => (
           <article className="card" key={item.id}>
-            <div className="card-body">
-              <h3>{item.title}</h3>
-              <div className="meta" style={{ marginTop: 8 }}>
+            <div className="card-body" style={{ padding: 12 }}>
+              <h3 style={{ marginBottom: 6 }}>{item.title}</h3>
+              <div className="meta" style={{ marginTop: 0 }}>
                 <span className="pill">{item.category}</span>
                 <span>{item.specs.length} характеристик</span>
               </div>
-              <p className="page-subtitle" style={{ marginTop: 8 }}>
-                {item.summary}
-              </p>
-              <div className="form" style={{ marginTop: 10 }}>
-                <button className="btn" type="button" onClick={() => onEdit(item)}>
-                  Редактировать
+              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <button
+                  className="btn"
+                  style={{ width: 38, height: 34, padding: 0, fontSize: 16, lineHeight: 1 }}
+                  type="button"
+                  title="Редактировать"
+                  aria-label={`Редактировать ${item.title}`}
+                  onClick={() => onEdit(item)}
+                >
+                  ✏
                 </button>
-                <button className="btn btn-danger" type="button" onClick={() => void onDelete(item.id)}>
-                  Удалить
+                <button
+                  className="btn btn-danger"
+                  style={{ width: 38, height: 34, padding: 0, fontSize: 16, lineHeight: 1 }}
+                  type="button"
+                  title="Удалить"
+                  aria-label={`Удалить ${item.title}`}
+                  onClick={() => void onDelete(item.id)}
+                >
+                  🗑
                 </button>
               </div>
             </div>
