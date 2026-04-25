@@ -17,6 +17,13 @@ export const seedData: AppData = {
       callsign: "Центр-01",
       position: "Главный специалист",
       canManageContent: true,
+      permissions: {
+        news: true,
+        tests: true,
+        uav: true,
+        counteraction: true,
+        users: true,
+      },
       status: "active",
     },
     {
@@ -28,6 +35,13 @@ export const seedData: AppData = {
       callsign: "Бастион-12",
       position: defaultPosition,
       canManageContent: false,
+      permissions: {
+        news: false,
+        tests: false,
+        uav: false,
+        counteraction: false,
+        users: false,
+      },
       status: "active",
     },
     {
@@ -39,6 +53,13 @@ export const seedData: AppData = {
       callsign: "Шторм-07",
       position: "Ведущий специалист",
       canManageContent: false,
+      permissions: {
+        news: false,
+        tests: false,
+        uav: false,
+        counteraction: false,
+        users: false,
+      },
       status: "active",
     },
   ],

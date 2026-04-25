@@ -1,10 +1,10 @@
-import { canManageTests } from "@/lib/permissions";
+import { canManageNews } from "@/lib/permissions";
 import { getServerSession } from "@/lib/server-auth";
 import { redirect } from "next/navigation";
 
-export default async function AdminResultsLayout({ children }: { children: React.ReactNode }) {
+export default async function AdminNewsLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession();
-  if (!canManageTests(session)) {
+  if (!canManageNews(session)) {
     redirect("/admin");
   }
   return <>{children}</>;

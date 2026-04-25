@@ -11,6 +11,7 @@ import {
   TestConfig,
   TestQuestion,
   TestResult,
+  UserPermissions,
   UserRecord,
 } from "@/lib/types";
 
@@ -24,6 +25,27 @@ const positions: Position[] = [
 
 function uid(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function defaultPermissions(user: Partial<UserRecord>): UserPermissions {
+  const isAdmin = user.role === "admin";
+  const legacyContent = user.canManageContent === true;
+  return {
+    news: isAdmin || legacyContent,
+    tests: isAdmin || legacyContent,
+    uav: isAdmin || legacyContent,
+    counteraction: isAdmin || legacyContent,
+    users: isAdmin,
+  };
+}
+
+function withNormalizedPermissions(user: UserRecord): UserRecord {
+  const normalized = user.permissions ?? defaultPermissions(user);
+  return {
+    ...user,
+    permissions: normalized,
+    canManageContent: normalized.news || normalized.tests || normalized.uav || normalized.counteraction,
+  };
 }
 
 export function getPositions() {
@@ -43,10 +65,12 @@ export function readData(): AppData {
 
   try {
     const parsed = JSON.parse(raw) as Partial<AppData>;
-    const normalizedUsers = (parsed.users ?? seedData.users).map((user) => ({
-      ...user,
-      canManageContent: user.canManageContent ?? false,
-    }));
+    const normalizedUsers = (parsed.users ?? seedData.users).map((user) =>
+      withNormalizedPermissions({
+        ...user,
+        canManageContent: user.canManageContent ?? false,
+      } as UserRecord),
+    );
     const normalized: AppData = {
       ...seedData,
       ...parsed,
@@ -82,6 +106,7 @@ export function authenticate(login: string, password: string): SessionUser | nul
     callsign: user.callsign,
     position: user.position,
     canManageContent: user.canManageContent,
+    permissions: user.permissions,
   };
 }
 
@@ -107,6 +132,13 @@ export function registerEmployee(payload: {
     password: payload.password,
     position: payload.position,
     canManageContent: false,
+    permissions: {
+      news: false,
+      tests: false,
+      uav: false,
+      counteraction: false,
+      users: false,
+    },
     status: "active",
   };
 
@@ -121,10 +153,26 @@ export function listUsers() {
 
 export function updateUser(
   userId: string,
-  patch: Partial<Pick<UserRecord, "name" | "callsign" | "position" | "status" | "canManageContent">>,
+  patch: Partial<Pick<UserRecord, "name" | "callsign" | "position" | "status" | "canManageContent" | "permissions">>,
 ) {
   const data = readData();
-  data.users = data.users.map((user) => (user.id === userId ? { ...user, ...patch } : user));
+  data.users = data.users.map((user) => {
+    if (user.id !== userId) return user;
+    const mergedPermissions = patch.permissions
+      ? { ...withNormalizedPermissions(user).permissions, ...patch.permissions }
+      : withNormalizedPermissions(user).permissions;
+    return withNormalizedPermissions({
+      ...user,
+      ...patch,
+      permissions: mergedPermissions,
+      canManageContent:
+        patch.canManageContent ??
+        mergedPermissions.news ||
+          mergedPermissions.tests ||
+          mergedPermissions.uav ||
+          mergedPermissions.counteraction,
+    });
+  });
   writeData(data);
 }
 

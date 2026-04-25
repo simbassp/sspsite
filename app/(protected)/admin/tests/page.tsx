@@ -27,7 +27,7 @@ const initialDraft: DraftQuestion = {
   text: "",
   options: ["", "", "", ""],
   correctIndex: 0,
-  timeLimitSec: 45,
+  timeLimitSec: 10,
   isActive: true,
 };
 
@@ -37,6 +37,7 @@ export default function AdminTestsPage() {
   const [config, setConfig] = useState<TestConfig>({ trialQuestionCount: 3, finalQuestionCount: 5 });
   const [draft, setDraft] = useState<DraftQuestion>(initialDraft);
   const [message, setMessage] = useState("");
+  const [isEditingTimeLimit, setIsEditingTimeLimit] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -52,17 +53,13 @@ export default function AdminTestsPage() {
     })();
   }, []);
 
-  const { trial, final, failedFinal, trialQuestions, finalQuestions, trialList, finalList } = useMemo(() => {
-    const trialBank = questions.filter((q) => q.type === "trial");
-    const finalBank = questions.filter((q) => q.type === "final");
+  const { trial, final, failedFinal, totalQuestions, activeQuestions } = useMemo(() => {
     return {
       trial: results.filter((item) => item.type === "trial").length,
       final: results.filter((item) => item.type === "final").length,
       failedFinal: results.filter((item) => item.type === "final" && item.status === "failed").length,
-      trialQuestions: trialBank.length,
-      finalQuestions: finalBank.length,
-      trialList: trialBank,
-      finalList: finalBank,
+      totalQuestions: questions.length,
+      activeQuestions: questions.filter((item) => item.isActive).length,
     };
   }, [results, questions]);
 
@@ -91,6 +88,7 @@ export default function AdminTestsPage() {
 
     const maxOrder = questions.reduce((acc, item) => Math.max(acc, item.order), 0);
     const currentOrder = draft.id ? (questions.find((item) => item.id === draft.id)?.order ?? maxOrder + 1) : maxOrder + 1;
+    const timeLimitSec = isEditingTimeLimit ? Math.max(5, draft.timeLimitSec) : 10;
 
     await saveAdminQuestion({
       id: draft.id,
@@ -98,12 +96,13 @@ export default function AdminTestsPage() {
       text,
       options,
       correctIndex: draft.correctIndex,
-      timeLimitSec: Math.max(5, draft.timeLimitSec),
+      timeLimitSec,
       order: Math.max(1, currentOrder),
       isActive: draft.isActive,
     });
     setMessage(draft.id ? "Вопрос обновлен." : "Вопрос добавлен.");
     setDraft(initialDraft);
+    setIsEditingTimeLimit(false);
     await refreshQuestions();
   };
 
@@ -120,6 +119,7 @@ export default function AdminTestsPage() {
       timeLimitSec: question.timeLimitSec,
       isActive: question.isActive,
     });
+    setIsEditingTimeLimit(question.timeLimitSec !== 10);
   };
 
   const onDelete = async (questionId: string) => {
@@ -128,6 +128,7 @@ export default function AdminTestsPage() {
     setMessage("Вопрос удален.");
     if (draft.id === questionId) {
       setDraft(initialDraft);
+      setIsEditingTimeLimit(false);
     }
     await refreshQuestions();
   };
@@ -142,51 +143,10 @@ export default function AdminTestsPage() {
     setMessage("Настройки количества вопросов сохранены.");
   };
 
-  const renderQuestionList = (list: TestQuestion[], type: TestType, title: string) => (
-    <article className="card">
-      <div className="card-body">
-        <h3>{title}</h3>
-        <p className="page-subtitle">Всего: {list.length}</p>
-        <div className="list" style={{ marginTop: 10 }}>
-          {list.map((question) => (
-            <article className="card" key={question.id}>
-              <div className="card-body">
-                <div className="meta">
-                  <span className="pill">{type === "final" ? "Итоговый" : "Пробный"}</span>
-                  <span>Время: {question.timeLimitSec} сек</span>
-                  <span>{question.isActive ? "Активен" : "Отключен"}</span>
-                </div>
-                <h3 style={{ marginTop: 8 }}>{question.text}</h3>
-                <div className="list" style={{ marginTop: 8 }}>
-                  {question.options.map((option, index) => (
-                    <p key={`${question.id}-opt-${index}`} style={{ margin: 0 }}>
-                      {index + 1}. {option} {index === question.correctIndex ? "(верный)" : ""}
-                    </p>
-                  ))}
-                </div>
-                <div className="form" style={{ marginTop: 10 }}>
-                  <button className="btn" type="button" onClick={() => onEdit(question)}>
-                    Редактировать
-                  </button>
-                  <button className="btn btn-danger" type="button" onClick={() => void onDelete(question.id)}>
-                    Удалить
-                  </button>
-                </div>
-              </div>
-            </article>
-          ))}
-          {!list.length && <p className="page-subtitle">Вопросов пока нет.</p>}
-        </div>
-      </div>
-    </article>
-  );
-
   return (
     <section>
       <h1 className="page-title">Админ / Тесты</h1>
-      <p className="page-subtitle">
-        Управление банком вопросов (текст, варианты, правильный ответ, время) и мониторинг тестовой активности.
-      </p>
+      <p className="page-subtitle">Единый банк вопросов для тестирования и мониторинг результатов.</p>
       <div className="grid grid-two">
         <div className="card">
           <div className="card-body">
@@ -208,14 +168,14 @@ export default function AdminTestsPage() {
         </div>
         <div className="card">
           <div className="card-body">
-            <p className="label">Вопросы пробного теста</p>
-            <p className="stat-value">{trialQuestions}</p>
+            <p className="label">Всего вопросов в банке</p>
+            <p className="stat-value">{totalQuestions}</p>
           </div>
         </div>
         <div className="card">
           <div className="card-body">
-            <p className="label">Вопросы итогового теста</p>
-            <p className="stat-value">{finalQuestions}</p>
+            <p className="label">Активных вопросов</p>
+            <p className="stat-value">{activeQuestions}</p>
           </div>
         </div>
       </div>
@@ -263,19 +223,6 @@ export default function AdminTestsPage() {
         <div className="card-body">
           <h3>{draft.id ? "Редактирование вопроса" : "Добавить вопрос"}</h3>
           <div className="form" style={{ marginTop: 10 }}>
-            <label className="label" htmlFor="question-type">
-              Тип теста
-            </label>
-            <select
-              id="question-type"
-              className="input"
-              value={draft.type}
-              onChange={(e) => setDraft((prev) => ({ ...prev, type: e.target.value as TestType }))}
-            >
-              <option value="trial">Пробный</option>
-              <option value="final">Итоговый</option>
-            </select>
-
             <label className="label" htmlFor="question-text">
               Текст вопроса
             </label>
@@ -323,16 +270,21 @@ export default function AdminTestsPage() {
             </select>
 
             <label className="label" htmlFor="time-limit">
-              Время на ответ (сек)
+              Время на ответ: 10 сек по умолчанию
             </label>
-            <input
-              id="time-limit"
-              className="input"
-              type="number"
-              min={5}
-              value={draft.timeLimitSec}
-              onChange={(e) => setDraft((prev) => ({ ...prev, timeLimitSec: Number(e.target.value) || 5 }))}
-            />
+            <button className="btn" type="button" onClick={() => setIsEditingTimeLimit((prev) => !prev)}>
+              {isEditingTimeLimit ? "Скрыть изменение времени" : "Изменить время"}
+            </button>
+            {isEditingTimeLimit && (
+              <input
+                id="time-limit"
+                className="input"
+                type="number"
+                min={5}
+                value={draft.timeLimitSec}
+                onChange={(e) => setDraft((prev) => ({ ...prev, timeLimitSec: Number(e.target.value) || 5 }))}
+              />
+            )}
 
             <label className="label" htmlFor="is-active">
               Статус
@@ -353,7 +305,14 @@ export default function AdminTestsPage() {
               {draft.id ? "Сохранить изменения" : "Добавить вопрос"}
             </button>
             {draft.id && (
-              <button className="btn" type="button" onClick={() => setDraft(initialDraft)}>
+              <button
+                className="btn"
+                type="button"
+                onClick={() => {
+                  setDraft(initialDraft);
+                  setIsEditingTimeLimit(false);
+                }}
+              >
                 Отменить редактирование
               </button>
             )}
@@ -361,10 +320,41 @@ export default function AdminTestsPage() {
         </div>
       </article>
 
-      <div className="grid grid-two" style={{ marginTop: 12 }}>
-        {renderQuestionList(trialList, "trial", "Банк пробного теста")}
-        {renderQuestionList(finalList, "final", "Банк итогового теста")}
-      </div>
+      <article className="card" style={{ marginTop: 12 }}>
+        <div className="card-body">
+          <h3>Банк вопросов</h3>
+          <p className="page-subtitle">Всего: {questions.length}</p>
+          <div className="list" style={{ marginTop: 10 }}>
+            {questions.map((question) => (
+              <article className="card" key={question.id}>
+                <div className="card-body">
+                  <div className="meta">
+                    <span>Время: {question.timeLimitSec} сек</span>
+                    <span>{question.isActive ? "Активен" : "Отключен"}</span>
+                  </div>
+                  <h3 style={{ marginTop: 8 }}>{question.text}</h3>
+                  <div className="list" style={{ marginTop: 8 }}>
+                    {question.options.map((option, index) => (
+                      <p key={`${question.id}-opt-${index}`} style={{ margin: 0 }}>
+                        {index + 1}. {option} {index === question.correctIndex ? "(верный)" : ""}
+                      </p>
+                    ))}
+                  </div>
+                  <div className="form" style={{ marginTop: 10 }}>
+                    <button className="btn" type="button" onClick={() => onEdit(question)}>
+                      Редактировать
+                    </button>
+                    <button className="btn btn-danger" type="button" onClick={() => void onDelete(question.id)}>
+                      Удалить
+                    </button>
+                  </div>
+                </div>
+              </article>
+            ))}
+            {!questions.length && <p className="page-subtitle">Вопросов пока нет.</p>}
+          </div>
+        </div>
+      </article>
     </section>
   );
 }

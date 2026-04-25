@@ -11,6 +11,14 @@ export type UserStatus = "active" | "inactive";
 export type TestType = "trial" | "final";
 export type TestStatus = "passed" | "failed";
 
+export interface UserPermissions {
+  news: boolean;
+  tests: boolean;
+  uav: boolean;
+  counteraction: boolean;
+  users: boolean;
+}
+
 export interface SessionUser {
   id: string;
   role: Role;
@@ -18,6 +26,7 @@ export interface SessionUser {
   callsign: string;
   position: Position;
   canManageContent: boolean;
+  permissions: UserPermissions;
 }
 
 export interface UserRecord extends SessionUser {

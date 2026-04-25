@@ -270,6 +270,23 @@ export async function fetchTestQuestions(type: TestType) {
   return (data as TestQuestionRow[]).map(mapQuestion);
 }
 
+export async function fetchActiveQuestionPool() {
+  if (!isSupabaseConfigured) {
+    return listTestQuestions().filter((q) => q.isActive).sort((a, b) => a.order - b.order);
+  }
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("test_questions")
+    .select("id,type,text,options,correct_index,time_limit_sec,order_index,is_active,created_at")
+    .eq("is_active", true)
+    .order("order_index", { ascending: true });
+
+  if (error || !data) {
+    return listTestQuestions().filter((q) => q.isActive).sort((a, b) => a.order - b.order);
+  }
+  return (data as TestQuestionRow[]).map(mapQuestion);
+}
+
 export async function fetchAdminQuestionBank() {
   if (!isSupabaseConfigured) {
     return listTestQuestions();

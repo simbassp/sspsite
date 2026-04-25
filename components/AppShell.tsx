@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { canManageContent, canManageUsers } from "@/lib/permissions";
+import { canAccessAdminPanel, canManageContent, canManageCounteraction, canManageTests, canManageUav, canManageUsers, canManageNews } from "@/lib/permissions";
 import { forceFailFinalAttempt } from "@/lib/tests-repository";
 import { logoutUser } from "@/lib/users-repository";
 import { SessionUser } from "@/lib/types";
@@ -23,23 +23,20 @@ const mainLinks = [
   { href: "/profile", label: "Профиль", icon: "👤" },
 ];
 
-const adminLinks = [
-  { href: "/admin", label: "Управление" },
-  { href: "/admin/news", label: "Новости" },
-  { href: "/admin/counteraction", label: "Противодействие" },
-  { href: "/admin/uav", label: "БПЛА" },
-  { href: "/admin/tests", label: "Тесты" },
-];
-
 export function AppShell({ session, children }: AppShellProps) {
   const pathname = usePathname();
   const bottomLinks = mainLinks.slice(0, 5);
-  const isAdmin = canManageUsers(session);
+  const canEditUsers = canManageUsers(session);
   const hasContentAccess = canManageContent(session);
+  const hasAdminAccess = canAccessAdminPanel(session);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const visibleAdminLinks = isAdmin
-    ? [{ href: "/admin/users", label: "Пользователи" }, { href: "/admin/results", label: "Результаты" }, ...adminLinks]
-    : adminLinks;
+  const visibleAdminLinks = [
+    ...(canEditUsers ? [{ href: "/admin/users", label: "Пользователи" }] : []),
+    ...(canManageTests(session) ? [{ href: "/admin/results", label: "Результаты" }, { href: "/admin/tests", label: "Тесты" }] : []),
+    ...(canManageNews(session) ? [{ href: "/admin/news", label: "Новости" }] : []),
+    ...(canManageCounteraction(session) ? [{ href: "/admin/counteraction", label: "Противодействие" }] : []),
+    ...(canManageUav(session) ? [{ href: "/admin/uav", label: "БПЛА" }] : []),
+  ];
 
   const withTimeout = (promise: Promise<unknown>, timeoutMs: number) =>
     Promise.race([
@@ -110,25 +107,22 @@ export function AppShell({ session, children }: AppShellProps) {
             <div>
               <h1>ССП ПВО</h1>
               <p>
-                {session.callsign} • {isAdmin ? "Админ" : hasContentAccess ? "Редактор" : "Сотрудник"}
+                {session.callsign} • {canEditUsers ? "Админ" : hasContentAccess ? "Редактор" : "Сотрудник"}
               </p>
             </div>
           </div>
           <div className="header-actions">
+            {hasAdminAccess && (
+              <Link className="btn" href="/admin">
+                Управление
+              </Link>
+            )}
             <ThemeToggle />
             <button className="btn btn-danger" type="button" onClick={logout} disabled={isLoggingOut}>
               {isLoggingOut ? "Выход..." : "Выход"}
             </button>
           </div>
         </header>
-
-        {hasContentAccess && (
-          <div className="mobile-admin-shortcut">
-            <Link className="btn" href="/admin">
-              Управление
-            </Link>
-          </div>
-        )}
 
         <div className="screen">{children}</div>
       </main>

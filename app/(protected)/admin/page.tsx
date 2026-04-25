@@ -1,27 +1,32 @@
 import Link from "next/link";
-import { canManageUsers } from "@/lib/permissions";
+import { canManageCounteraction, canManageNews, canManageTests, canManageUav, canManageUsers } from "@/lib/permissions";
 import { getServerSession } from "@/lib/server-auth";
 
 const contentLinks = [
-  { href: "/admin/news", title: "Новости", text: "Добавление и публикация служебных сообщений." },
-  { href: "/admin/counteraction", title: "Защита", text: "Добавление и редактирование карточек противодействия." },
-  { href: "/admin/uav", title: "БПЛА", text: "Управление каталогом БПЛА и ТТХ-страницами." },
-  { href: "/admin/tests", title: "Тесты", text: "Контур контроля пробного и итогового тестов." },
+  { href: "/admin/news", title: "Новости", text: "Добавление и публикация служебных сообщений.", access: canManageNews },
+  { href: "/admin/counteraction", title: "Защита", text: "Добавление и редактирование карточек противодействия.", access: canManageCounteraction },
+  { href: "/admin/uav", title: "БПЛА", text: "Управление каталогом БПЛА и ТТХ-страницами.", access: canManageUav },
+  { href: "/admin/tests", title: "Тесты", text: "Контур контроля пробного и итогового тестов.", access: canManageTests },
+  { href: "/admin/results", title: "Результаты", text: "Мониторинг прохождения и статусов тестирования.", access: canManageTests },
 ];
 
 const adminOnlyLinks = [
-  { href: "/admin/users", title: "Пользователи", text: "Поиск, фильтры, редактирование, деактивация и удаление." },
-  { href: "/admin/results", title: "Результаты", text: "Быстрые фильтры: сдал / не сдал / не проходил." },
+  {
+    href: "/admin/users",
+    title: "Пользователи",
+    text: "Поиск, фильтры, редактирование, деактивация и удаление.",
+    access: canManageUsers,
+  },
 ];
 
 export default async function AdminPage() {
   const session = await getServerSession();
-  const links = canManageUsers(session) ? [...adminOnlyLinks, ...contentLinks] : contentLinks;
+  const links = [...adminOnlyLinks, ...contentLinks].filter((item) => item.access(session));
 
   return (
     <section>
-      <h1 className="page-title">Панель управления</h1>
-      <p className="page-subtitle">Редактирование учебного контента и справочников.</p>
+      <h1 className="page-title">Разделы администрирования</h1>
+      <p className="page-subtitle">Доступные вам разделы управления контентом и пользователями.</p>
 
       <div className="grid grid-two">
         {links.map((item) => (
@@ -35,6 +40,7 @@ export default async function AdminPage() {
           </Link>
         ))}
       </div>
+      {!links.length && <p className="page-subtitle">Для вашей учетной записи еще не выданы права администрирования.</p>}
     </section>
   );
 }

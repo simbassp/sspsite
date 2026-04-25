@@ -35,8 +35,11 @@ export function ThemeToggle() {
   };
 
   return (
-    <button type="button" onClick={onToggle} className="btn">
-      {isHydrated ? (theme === "dark" ? "🌙 Тёмная" : "☀️ Светлая") : "Тема"}
+    <button type="button" onClick={onToggle} className="btn theme-toggle-btn" aria-label="Переключить тему">
+      <span className="theme-toggle-icon" aria-hidden="true">
+        {isHydrated ? (theme === "dark" ? "🌙" : "☀️") : "🌓"}
+      </span>
+      <span className="theme-toggle-text">{isHydrated ? (theme === "dark" ? "Тёмная" : "Светлая") : "Тема"}</span>
     </button>
   );
 }

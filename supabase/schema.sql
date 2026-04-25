@@ -18,10 +18,21 @@ create table if not exists public.app_users (
   callsign text not null,
   position text not null,
   can_manage_content boolean not null default false,
+  can_manage_news boolean not null default false,
+  can_manage_tests boolean not null default false,
+  can_manage_uav boolean not null default false,
+  can_manage_counteraction boolean not null default false,
+  can_manage_users boolean not null default false,
   role public.user_role not null default 'employee',
   status public.user_status not null default 'active',
   created_at timestamptz not null default now()
 );
+
+alter table if exists public.app_users add column if not exists can_manage_news boolean not null default false;
+alter table if exists public.app_users add column if not exists can_manage_tests boolean not null default false;
+alter table if exists public.app_users add column if not exists can_manage_uav boolean not null default false;
+alter table if exists public.app_users add column if not exists can_manage_counteraction boolean not null default false;
+alter table if exists public.app_users add column if not exists can_manage_users boolean not null default false;
 
 create table if not exists public.news (
   id uuid primary key default gen_random_uuid(),
@@ -137,13 +148,35 @@ as $$
       and (
         u.role = 'admin'
         or u.can_manage_content = true
-        or u.position in ('Ведущий специалист', 'Главный специалист', 'Командир взвода')
+        or u.can_manage_news = true
+        or u.can_manage_tests = true
+        or u.can_manage_uav = true
+        or u.can_manage_counteraction = true
       )
   );
 $$;
 
 revoke all on function public.can_manage_content() from public;
 grant execute on function public.can_manage_content() to authenticated;
+
+create or replace function public.can_manage_users()
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1
+    from public.app_users u
+    where u.auth_user_id = auth.uid()
+      and u.status = 'active'
+      and (u.role = 'admin' or u.can_manage_users = true)
+  );
+$$;
+
+revoke all on function public.can_manage_users() from public;
+grant execute on function public.can_manage_users() to authenticated;
 
 create or replace function public.resolve_login_email(p_login text)
 returns text
@@ -209,19 +242,19 @@ security definer
 set search_path = public
 as $$
 declare
-  v_is_admin boolean;
+  v_can_manage_users boolean;
   v_auth_user_id uuid;
 begin
   select exists (
     select 1
     from public.app_users u
     where u.auth_user_id = auth.uid()
-      and u.role = 'admin'
+      and (u.role = 'admin' or u.can_manage_users = true)
       and u.status = 'active'
   )
-  into v_is_admin;
+  into v_can_manage_users;
 
-  if not coalesce(v_is_admin, false) then
+  if not coalesce(v_can_manage_users, false) then
     raise exception 'Недостаточно прав для удаления пользователя';
   end if;
 
@@ -343,20 +376,20 @@ create policy "users_self_read"
 on public.app_users
 for select
 to authenticated
-using (auth_user_id = auth.uid() or public.is_admin());
+using (auth_user_id = auth.uid() or public.can_manage_users());
 
 create policy "users_admin_update"
 on public.app_users
 for update
 to authenticated
-using (public.is_admin())
-with check (public.is_admin());
+using (public.can_manage_users())
+with check (public.can_manage_users());
 
 create policy "users_admin_insert"
 on public.app_users
 for insert
 to authenticated
-with check (public.is_admin());
+with check (public.can_manage_users());
 
 create policy "users_self_insert_employee"
 on public.app_users
@@ -372,7 +405,7 @@ create policy "users_admin_delete"
 on public.app_users
 for delete
 to authenticated
-using (public.is_admin());
+using (public.can_manage_users());
 
 -- news
 create policy "news_authenticated_read"

@@ -6,8 +6,8 @@ import { formatDate } from "@/lib/format";
 import {
   beginFinalAttempt,
   createTrialResult,
+  fetchActiveQuestionPool,
   fetchTestConfig,
-  fetchTestQuestions,
   fetchUserResults,
   finishFinalAttempt,
   forceFailFinalAttempt,
@@ -29,8 +29,7 @@ function pickRandomQuestions(bank: TestQuestion[], count: number) {
 export default function TestsPage() {
   const session = useMemo(() => readClientSession(), []);
   const [results, setResults] = useState<TestResult[]>([]);
-  const [trialQuestions, setTrialQuestions] = useState<TestQuestion[]>([]);
-  const [finalQuestions, setFinalQuestions] = useState<TestQuestion[]>([]);
+  const [questionPool, setQuestionPool] = useState<TestQuestion[]>([]);
   const [selectedQuestions, setSelectedQuestions] = useState<TestQuestion[]>([]);
   const [testConfig, setTestConfig] = useState<TestConfig>({ trialQuestionCount: 3, finalQuestionCount: 5 });
   const [message, setMessage] = useState("");
@@ -50,13 +49,8 @@ export default function TestsPage() {
     if (!session) return;
     (async () => {
       await seedDefaultQuestionsIfEmpty();
-      const [trial, final, config] = await Promise.all([
-        fetchTestQuestions("trial"),
-        fetchTestQuestions("final"),
-        fetchTestConfig(),
-      ]);
-      setTrialQuestions(trial);
-      setFinalQuestions(final);
+      const [pool, config] = await Promise.all([fetchActiveQuestionPool(), fetchTestConfig()]);
+      setQuestionPool(pool);
       setTestConfig(config);
 
       const orphanAttempt = await loadFinalAttempt(session.id);
@@ -155,11 +149,11 @@ export default function TestsPage() {
   }, [timeLeft, activeTest, currentQuestion]);
 
   const onTrial = async () => {
-    if (trialQuestions.length === 0) {
-      setMessage("Пробный тест пока не настроен администратором.");
+    if (questionPool.length === 0) {
+      setMessage("Банк вопросов пока не настроен администратором.");
       return;
     }
-    const randomQuestions = pickRandomQuestions(trialQuestions, testConfig.trialQuestionCount);
+    const randomQuestions = pickRandomQuestions(questionPool, testConfig.trialQuestionCount);
     setActiveTest("trial");
     setSelectedQuestions(randomQuestions);
     setQuestionIndex(0);
@@ -168,11 +162,11 @@ export default function TestsPage() {
   };
 
   const startFinal = async () => {
-    if (finalQuestions.length === 0) {
-      setMessage("Итоговый тест пока не настроен администратором.");
+    if (questionPool.length === 0) {
+      setMessage("Банк вопросов пока не настроен администратором.");
       return;
     }
-    const randomQuestions = pickRandomQuestions(finalQuestions, testConfig.finalQuestionCount);
+    const randomQuestions = pickRandomQuestions(questionPool, testConfig.finalQuestionCount);
     await beginFinalAttempt(session.id);
     setActiveTest("final");
     setSelectedQuestions(randomQuestions);

@@ -11,7 +11,7 @@ import {
   registerEmployee,
   updateUser,
 } from "@/lib/storage";
-import { Position, SessionUser, UserRecord } from "@/lib/types";
+import { Position, SessionUser, UserPermissions, UserRecord } from "@/lib/types";
 
 type UserRow = {
   id: string;
@@ -21,6 +21,11 @@ type UserRow = {
   callsign: string;
   position: string;
   can_manage_content?: boolean;
+  can_manage_news?: boolean;
+  can_manage_tests?: boolean;
+  can_manage_uav?: boolean;
+  can_manage_counteraction?: boolean;
+  can_manage_users?: boolean;
   role: "employee" | "admin";
   status: "active" | "inactive";
 };
@@ -62,14 +67,63 @@ const LOGIN_RESOLVE_TIMEOUT_MS = 5000;
 const LOGIN_AUTH_TIMEOUT_MS = 12000;
 const LOGIN_PROFILE_TIMEOUT_MS = 8000;
 
+function defaultPermissionsFromLegacy(row: {
+  role: "employee" | "admin";
+  can_manage_content?: boolean;
+}): UserPermissions {
+  const isAdmin = row.role === "admin";
+  const legacyContent = row.can_manage_content === true;
+  return {
+    news: isAdmin || legacyContent,
+    tests: isAdmin || legacyContent,
+    uav: isAdmin || legacyContent,
+    counteraction: isAdmin || legacyContent,
+    users: isAdmin,
+  };
+}
+
+function normalizePermissions(input: {
+  role: "employee" | "admin";
+  can_manage_content?: boolean;
+  can_manage_news?: boolean;
+  can_manage_tests?: boolean;
+  can_manage_uav?: boolean;
+  can_manage_counteraction?: boolean;
+  can_manage_users?: boolean;
+  permissions?: Partial<UserPermissions> | undefined;
+}) {
+  const fallback = defaultPermissionsFromLegacy(input);
+  const merged = {
+    ...fallback,
+    ...(input.permissions ?? {}),
+    ...(input.can_manage_news !== undefined ? { news: input.can_manage_news === true } : {}),
+    ...(input.can_manage_tests !== undefined ? { tests: input.can_manage_tests === true } : {}),
+    ...(input.can_manage_uav !== undefined ? { uav: input.can_manage_uav === true } : {}),
+    ...(input.can_manage_counteraction !== undefined ? { counteraction: input.can_manage_counteraction === true } : {}),
+    ...(input.can_manage_users !== undefined ? { users: input.can_manage_users === true } : {}),
+  };
+  if (input.role === "admin") {
+    return {
+      news: true,
+      tests: true,
+      uav: true,
+      counteraction: true,
+      users: true,
+    } satisfies UserPermissions;
+  }
+  return merged satisfies UserPermissions;
+}
+
 function toSessionUser(row: UserRow): SessionUser {
+  const permissions = normalizePermissions(row);
   return {
     id: row.id,
     role: row.role,
     name: row.name,
     callsign: row.callsign,
     position: row.position as Position,
-    canManageContent: row.can_manage_content === true,
+    canManageContent: permissions.news || permissions.tests || permissions.uav || permissions.counteraction,
+    permissions,
   };
 }
 
@@ -245,6 +299,19 @@ function mapAuthErrorMessage(raw: string) {
   return raw;
 }
 
+function normalizeSessionUser(session: SessionUser): SessionUser {
+  const permissions = normalizePermissions({
+    role: session.role,
+    can_manage_content: session.canManageContent,
+    permissions: session.permissions,
+  });
+  return {
+    ...session,
+    permissions,
+    canManageContent: permissions.news || permissions.tests || permissions.uav || permissions.counteraction,
+  };
+}
+
 export async function loginUser(login: string, password: string) {
   if (!isSupabaseConfigured) {
     if (!canUseLocalFallback()) {
@@ -270,7 +337,7 @@ export async function loginUser(login: string, password: string) {
         refresh_token: serverResult.auth.refreshToken,
       })
       .catch(() => undefined);
-    return { ok: true as const, session: serverResult.session };
+    return { ok: true as const, session: normalizeSessionUser(serverResult.session) };
   }
 
   let serverError = "";
@@ -674,7 +741,7 @@ export async function fetchUsers() {
 
 export async function patchUser(
   userId: string,
-  patch: Partial<Pick<UserRecord, "name" | "callsign" | "position" | "status" | "canManageContent">>,
+  patch: Partial<Pick<UserRecord, "name" | "callsign" | "position" | "status" | "canManageContent" | "permissions">>,
 ) {
   if (!isSupabaseConfigured) {
     updateUser(userId, patch);
@@ -682,15 +749,39 @@ export async function patchUser(
   }
 
   const supabase = getSupabaseBrowserClient();
+  const nextPermissions = patch.permissions;
+  const nextCanManageContent =
+    nextPermissions !== undefined
+      ? nextPermissions.news || nextPermissions.tests || nextPermissions.uav || nextPermissions.counteraction
+      : patch.canManageContent;
+
   const payload = {
     ...(patch.name !== undefined ? { name: patch.name } : {}),
     ...(patch.callsign !== undefined ? { callsign: patch.callsign } : {}),
     ...(patch.position !== undefined ? { position: patch.position } : {}),
     ...(patch.status !== undefined ? { status: patch.status } : {}),
-    ...(patch.canManageContent !== undefined ? { can_manage_content: patch.canManageContent } : {}),
+    ...(nextCanManageContent !== undefined ? { can_manage_content: nextCanManageContent } : {}),
+    ...(nextPermissions !== undefined ? { can_manage_news: nextPermissions.news } : {}),
+    ...(nextPermissions !== undefined ? { can_manage_tests: nextPermissions.tests } : {}),
+    ...(nextPermissions !== undefined ? { can_manage_uav: nextPermissions.uav } : {}),
+    ...(nextPermissions !== undefined ? { can_manage_counteraction: nextPermissions.counteraction } : {}),
+    ...(nextPermissions !== undefined ? { can_manage_users: nextPermissions.users } : {}),
   };
   const { error } = await supabase.from("app_users").update(payload).eq("id", userId);
   if (error) {
+    // Backward-compatible fallback for older schemas without granular permission columns.
+    const legacyPayload = {
+      ...(patch.name !== undefined ? { name: patch.name } : {}),
+      ...(patch.callsign !== undefined ? { callsign: patch.callsign } : {}),
+      ...(patch.position !== undefined ? { position: patch.position } : {}),
+      ...(patch.status !== undefined ? { status: patch.status } : {}),
+      ...(nextCanManageContent !== undefined ? { can_manage_content: nextCanManageContent } : {}),
+    };
+    const fallback = await supabase.from("app_users").update(legacyPayload).eq("id", userId);
+    if (fallback.error) {
+      updateUser(userId, patch);
+    }
+  } else {
     updateUser(userId, patch);
   }
 }

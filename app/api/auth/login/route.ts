@@ -16,7 +16,12 @@ type ProfileRow = {
   name: string;
   callsign: string;
   position: string;
-  can_manage_content: boolean;
+  can_manage_content?: boolean;
+  can_manage_news?: boolean;
+  can_manage_tests?: boolean;
+  can_manage_uav?: boolean;
+  can_manage_counteraction?: boolean;
+  can_manage_users?: boolean;
   status: "active" | "inactive";
 };
 
@@ -93,7 +98,7 @@ async function signInWithEmail(baseUrl: string, anonKey: string, email: string, 
 
 async function fetchProfile(baseUrl: string, anonKey: string, accessToken: string, authUserId: string) {
   const url = new URL(`${baseUrl}/rest/v1/app_users`);
-  url.searchParams.set("select", "id,role,name,callsign,position,can_manage_content,status");
+  url.searchParams.set("select", "*");
   url.searchParams.set("auth_user_id", `eq.${authUserId}`);
   url.searchParams.set("limit", "1");
   try {
@@ -192,7 +197,23 @@ export async function POST(request: Request) {
       name: profile.name,
       callsign: profile.callsign,
       position: profile.position,
-      canManageContent: profile.can_manage_content === true,
+      canManageContent:
+        profile.role === "admin" ||
+        profile.can_manage_news === true ||
+        profile.can_manage_tests === true ||
+        profile.can_manage_uav === true ||
+        profile.can_manage_counteraction === true ||
+        profile.can_manage_content === true,
+      permissions: {
+        news: profile.role === "admin" || profile.can_manage_news === true || profile.can_manage_content === true,
+        tests: profile.role === "admin" || profile.can_manage_tests === true || profile.can_manage_content === true,
+        uav: profile.role === "admin" || profile.can_manage_uav === true || profile.can_manage_content === true,
+        counteraction:
+          profile.role === "admin" ||
+          profile.can_manage_counteraction === true ||
+          profile.can_manage_content === true,
+        users: profile.role === "admin" || profile.can_manage_users === true,
+      },
     },
     auth: {
       accessToken,

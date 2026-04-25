@@ -5,12 +5,21 @@ import { getPositions } from "@/lib/storage";
 import { fetchUsers, patchUser, removeUser } from "@/lib/users-repository";
 import { UserRecord } from "@/lib/types";
 
+const permissionOptions = [
+  { key: "news", label: "Новости" },
+  { key: "tests", label: "Тесты" },
+  { key: "uav", label: "БПЛА" },
+  { key: "counteraction", label: "Противодействие" },
+  { key: "users", label: "Редактирование и удаление пользователей" },
+] as const;
+
 export default function AdminUsersPage() {
   const positions = useMemo(() => getPositions(), []);
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | "active" | "inactive">("all");
   const [info, setInfo] = useState("");
+  const [permissionsTargetId, setPermissionsTargetId] = useState<string | null>(null);
   useState(() => {
     fetchUsers().then((next) => setUsers(next));
     return true;
@@ -23,9 +32,25 @@ export default function AdminUsersPage() {
 
   const patchLocal = (
     userId: string,
-    patch: Partial<Pick<UserRecord, "name" | "callsign" | "position" | "status" | "canManageContent">>,
+    patch: Partial<Pick<UserRecord, "name" | "callsign" | "position" | "status" | "canManageContent" | "permissions">>,
   ) => {
-    setUsers((prev) => prev.map((item) => (item.id === userId ? { ...item, ...patch } : item)));
+    setUsers((prev) =>
+      prev.map((item) => {
+        if (item.id !== userId) return item;
+        const nextPermissions = patch.permissions ? { ...item.permissions, ...patch.permissions } : item.permissions;
+        return {
+          ...item,
+          ...patch,
+          permissions: nextPermissions,
+          canManageContent:
+            patch.canManageContent ??
+            nextPermissions.news ||
+              nextPermissions.tests ||
+              nextPermissions.uav ||
+              nextPermissions.counteraction,
+        };
+      }),
+    );
     patchUser(userId, patch).catch(() => setInfo("Не удалось синхронизировать изменения."));
   };
 
@@ -65,7 +90,6 @@ export default function AdminUsersPage() {
                   {user.status === "active" ? "Активен" : "Деактивирован"}
                 </span>
                 <span>{user.role}</span>
-                {user.canManageContent && <span className="pill pill-green">Редактор контента</span>}
                 <span>@{user.login}</span>
               </div>
 
@@ -91,10 +115,10 @@ export default function AdminUsersPage() {
                   className="btn"
                   type="button"
                   onClick={() => {
-                    patchLocal(user.id, { canManageContent: !user.canManageContent });
+                    setPermissionsTargetId((prev) => (prev === user.id ? null : user.id));
                   }}
                 >
-                  {user.canManageContent ? "Снять права редактора" : "Выдать права редактора"}
+                  {permissionsTargetId === user.id ? "Закрыть права" : "Выдать права"}
                 </button>
                 <div style={{ display: "flex", gap: 8 }}>
                   <button
@@ -118,6 +142,45 @@ export default function AdminUsersPage() {
                   </button>
                 </div>
               </div>
+              {permissionsTargetId === user.id && (
+                <div className="card" style={{ marginTop: 10 }}>
+                  <div className="card-body">
+                    <h3 style={{ marginBottom: 8 }}>Права доступа</h3>
+                    <div className="form">
+                      {permissionOptions.map((item) => (
+                        <label key={`${user.id}-${item.key}`} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                          <input
+                            type="checkbox"
+                            checked={user.permissions[item.key]}
+                            onChange={(event) => {
+                              if (user.role === "admin") return;
+                              const nextPermissions = {
+                                ...user.permissions,
+                                [item.key]: event.target.checked,
+                              };
+                              patchLocal(user.id, {
+                                permissions: nextPermissions,
+                                canManageContent:
+                                  nextPermissions.news ||
+                                  nextPermissions.tests ||
+                                  nextPermissions.uav ||
+                                  nextPermissions.counteraction,
+                              });
+                            }}
+                            disabled={user.role === "admin"}
+                          />
+                          <span>{item.label}</span>
+                        </label>
+                      ))}
+                      {user.role === "admin" && (
+                        <p className="page-subtitle" style={{ marginBottom: 0 }}>
+                          У администратора полный доступ по всем разделам.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </article>
         ))}
