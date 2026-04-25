@@ -98,7 +98,7 @@ async function loginViaServer(login: string, password: string): Promise<ServerLo
         body: JSON.stringify({ login, password }),
       }),
       new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error("request_timeout")), 6500);
+        setTimeout(() => reject(new Error("request_timeout")), 3000);
       }),
     ])) as Response;
 
@@ -279,24 +279,27 @@ export async function loginUser(login: string, password: string) {
   let authUserId: string | null = null;
   let lastError = "";
   let successfulEmail = "";
-  const emailsToTry = new Set<string>();
+  const emailsToTry: string[] = [];
   if (loginTrim.includes("@")) {
-    emailsToTry.add(loginTrim);
+    emailsToTry.push(loginTrim);
   } else {
+    const localStyleEmail = `${loginTrim}@ssp.local`;
     const cachedEmail = getCachedEmailForLogin(loginTrim);
     if (cachedEmail) {
-      emailsToTry.add(cachedEmail);
+      emailsToTry.push(cachedEmail);
     } else {
       const resolved = await resolveEmailByLogin(loginTrim);
       if (resolved) {
-        emailsToTry.add(resolved);
+        emailsToTry.push(resolved);
       }
     }
-    // Legacy fallback for local-style accounts.
-    emailsToTry.add(`${loginTrim}@ssp.local`);
+    if (!emailsToTry.includes(localStyleEmail)) {
+      emailsToTry.push(localStyleEmail);
+    }
   }
 
-  for (const email of emailsToTry) {
+  // Keep fallback bounded: max two auth attempts to avoid long mobile hangs.
+  for (const email of emailsToTry.slice(0, 2)) {
     const authResult = (await Promise.race([
       supabase.auth.signInWithPassword({ email, password }),
       new Promise<never>((_, reject) => {
@@ -314,29 +317,6 @@ export async function loginUser(login: string, password: string) {
       break;
     }
     lastError = error?.message ?? lastError;
-  }
-
-  if (!authUserId && !loginTrim.includes("@")) {
-    const resolved = await resolveEmailByLogin(loginTrim);
-    if (resolved && !emailsToTry.has(resolved)) {
-      const authResult = (await Promise.race([
-        supabase.auth.signInWithPassword({ email: resolved, password }),
-        new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error("auth_timeout")), 4500);
-        }),
-      ]).catch(() => null)) as Awaited<ReturnType<typeof supabase.auth.signInWithPassword>> | null;
-      if (!authResult) {
-        lastError = "Сервер авторизации отвечает слишком долго. Попробуйте снова.";
-      } else {
-        const { data, error } = authResult;
-        if (!error && data.user) {
-          authUserId = data.user.id;
-          successfulEmail = resolved;
-        } else {
-          lastError = error?.message ?? lastError;
-        }
-      }
-    }
   }
 
   if (!authUserId) {
