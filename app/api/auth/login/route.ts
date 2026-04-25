@@ -139,8 +139,6 @@ export async function POST(request: Request) {
     emailCandidates.push(login);
   } else {
     emailCandidates.push(`${login}@ssp.local`);
-    const resolved = await resolveEmail(baseUrl, supabaseAnonKey, login);
-    if (resolved && resolved !== `${login}@ssp.local`) emailCandidates.push(resolved);
   }
 
   let authUserId = "";
@@ -158,6 +156,20 @@ export async function POST(request: Request) {
     accessToken = signIn.data.access_token;
     refreshToken = signIn.data.refresh_token;
     break;
+  }
+
+  if ((!authUserId || !accessToken || !refreshToken) && !login.includes("@")) {
+    const resolved = await resolveEmail(baseUrl, supabaseAnonKey, login);
+    if (resolved && !emailCandidates.includes(resolved)) {
+      const signIn = await signInWithEmail(baseUrl, supabaseAnonKey, resolved, password);
+      if (signIn.ok) {
+        authUserId = signIn.data.user?.id ?? "";
+        accessToken = signIn.data.access_token;
+        refreshToken = signIn.data.refresh_token;
+      } else {
+        lastError = signIn.error;
+      }
+    }
   }
 
   if (!authUserId || !accessToken || !refreshToken) {
