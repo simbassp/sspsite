@@ -250,18 +250,6 @@ export async function loginUser(login: string, password: string) {
     return { ok: true as const, session: serverResult.session };
   }
 
-  // In production/mobile we must avoid slow direct auth fallback,
-  // because direct browser -> Supabase calls can hang and trigger UI timeout.
-  if (!canUseLocalFallback()) {
-    if (serverResult && !serverResult.ok) {
-      return { ok: false as const, error: serverResult.error };
-    }
-    return {
-      ok: false as const,
-      error: "Не удалось связаться с сервером авторизации. Попробуйте снова через несколько секунд.",
-    };
-  }
-
   let serverError = "";
   if (serverResult && !serverResult.ok) {
     serverError = serverResult.error;
