@@ -24,7 +24,8 @@ export function resolvePermissions(session: SessionLike): UserPermissions {
   if (!session) return emptyPermissions;
   if (session.role === "admin") return allPermissions();
   const next = session.permissions ?? emptyPermissions;
-  if (session.canManageContent) {
+  const hasGranularPermissions = Boolean(session.permissions);
+  if (!hasGranularPermissions && session.canManageContent) {
     return {
       ...next,
       news: true,
