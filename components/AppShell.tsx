@@ -111,7 +111,9 @@ export function AppShell({ session, children }: AppShellProps) {
       <main>
         <header className="mobile-header">
           <div className="brand">
-            <div className="brand-mark">ПВО</div>
+            <Link href="/dashboard" style={{ display: "contents" }}>
+              <div className="brand-mark">ПВО</div>
+            </Link>
             <div>
               <h1>ССП ПВО</h1>
               <p>

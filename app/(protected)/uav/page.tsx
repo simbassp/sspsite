@@ -59,8 +59,8 @@ export default function UavPage() {
         <div
           style={{
             position: "sticky",
-            top: 0,
-            zIndex: 20,
+            top: 70,
+            zIndex: 15,
             backdropFilter: "blur(12px)",
             background: "color-mix(in srgb, var(--bg) 88%, transparent)",
             margin: "0 -16px",
