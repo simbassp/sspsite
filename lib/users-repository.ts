@@ -57,6 +57,10 @@ export type InviteCodeRecord = {
 
 const LOCAL_INVITES_KEY = "ssp_local_invites_v1";
 const LOGIN_EMAIL_CACHE_KEY = "ssp_login_email_cache_v1";
+const LOGIN_SERVER_TIMEOUT_MS = 2200;
+const LOGIN_RESOLVE_TIMEOUT_MS = 1200;
+const LOGIN_AUTH_TIMEOUT_MS = 2500;
+const LOGIN_PROFILE_TIMEOUT_MS = 2200;
 
 function toSessionUser(row: UserRow): SessionUser {
   return {
@@ -98,7 +102,7 @@ async function loginViaServer(login: string, password: string): Promise<ServerLo
         body: JSON.stringify({ login, password }),
       }),
       new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error("request_timeout")), 3000);
+        setTimeout(() => reject(new Error("request_timeout")), LOGIN_SERVER_TIMEOUT_MS);
       }),
     ])) as Response;
 
@@ -200,7 +204,7 @@ async function resolveEmailByLogin(login: string) {
         p_login: login,
       }),
       new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error("resolve_login_timeout")), 2500);
+        setTimeout(() => reject(new Error("resolve_login_timeout")), LOGIN_RESOLVE_TIMEOUT_MS);
       }),
     ])) as Awaited<ReturnType<typeof supabase.rpc>>;
     const { data, error } = result;
@@ -303,7 +307,7 @@ export async function loginUser(login: string, password: string) {
     const authResult = (await Promise.race([
       supabase.auth.signInWithPassword({ email, password }),
       new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error("auth_timeout")), 4500);
+        setTimeout(() => reject(new Error("auth_timeout")), LOGIN_AUTH_TIMEOUT_MS);
       }),
     ]).catch(() => null)) as Awaited<ReturnType<typeof supabase.auth.signInWithPassword>> | null;
     if (!authResult) {
@@ -323,11 +327,19 @@ export async function loginUser(login: string, password: string) {
     return { ok: false as const, error: lastError || serverError || "Неверный логин/пароль." };
   }
 
-  const { data: profile, error: profileError } = await supabase
-    .from("app_users")
-    .select("*")
-    .eq("auth_user_id", authUserId)
-    .maybeSingle();
+  const profileResult = (await Promise.race([
+    supabase.from("app_users").select("*").eq("auth_user_id", authUserId).maybeSingle(),
+    new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error("profile_timeout")), LOGIN_PROFILE_TIMEOUT_MS);
+    }),
+  ]).catch(() => null)) as { data: UserRow | null; error: { message?: string } | null } | null;
+
+  if (!profileResult) {
+    await supabase.auth.signOut();
+    return { ok: false as const, error: "Профиль app_users отвечает слишком долго. Попробуйте снова." };
+  }
+
+  const { data: profile, error: profileError } = profileResult;
 
   if (profileError || !profile) {
     await supabase.auth.signOut();
