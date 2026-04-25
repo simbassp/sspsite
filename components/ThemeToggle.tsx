@@ -12,11 +12,20 @@ function readTheme(): Theme {
 }
 
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme>(() => readTheme());
+  const [theme, setTheme] = useState<Theme>("dark");
+  const [isHydrated, setIsHydrated] = useState(false);
 
   useEffect(() => {
+    const next = readTheme();
+    setTheme(next);
+    document.documentElement.setAttribute("data-theme", next);
+    setIsHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isHydrated) return;
     document.documentElement.setAttribute("data-theme", theme);
-  }, [theme]);
+  }, [isHydrated, theme]);
 
   const onToggle = () => {
     const next: Theme = theme === "dark" ? "light" : "dark";
@@ -27,7 +36,7 @@ export function ThemeToggle() {
 
   return (
     <button type="button" onClick={onToggle} className="btn">
-      {theme === "dark" ? "🌙 Тёмная" : "☀️ Светлая"}
+      {isHydrated ? (theme === "dark" ? "🌙 Тёмная" : "☀️ Светлая") : "Тема"}
     </button>
   );
 }
