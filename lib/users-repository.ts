@@ -90,11 +90,14 @@ function mapInvite(row: InviteCodeRow): InviteCodeRecord {
 
 async function loginViaServer(login: string, password: string): Promise<ServerLoginSuccess | ServerLoginError | null> {
   if (typeof window === "undefined") return null;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 6500);
   try {
     const response = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ login, password }),
+      signal: controller.signal,
     });
     const payload = (await response.json()) as ServerLoginSuccess | ServerLoginError;
     if (!response.ok) {
@@ -106,6 +109,8 @@ async function loginViaServer(login: string, password: string): Promise<ServerLo
     return payload;
   } catch {
     return null;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
@@ -211,6 +216,7 @@ export async function loginUser(login: string, password: string) {
 
   const loginTrim = login.trim();
   const serverResult = await loginViaServer(loginTrim, password);
+  let serverError = "";
   if (serverResult?.ok) {
     const supabase = getSupabaseBrowserClient();
     await supabase.auth
@@ -222,7 +228,7 @@ export async function loginUser(login: string, password: string) {
     return { ok: true as const, session: serverResult.session };
   }
   if (serverResult && !serverResult.ok) {
-    return { ok: false as const, error: serverResult.error };
+    serverError = serverResult.error;
   }
 
   const supabase = getSupabaseBrowserClient();
@@ -266,7 +272,7 @@ export async function loginUser(login: string, password: string) {
   }
 
   if (!authUserId) {
-    return { ok: false as const, error: lastError || "Неверный логин/пароль." };
+    return { ok: false as const, error: serverError || lastError || "Неверный логин/пароль." };
   }
 
   const { data: profile, error: profileError } = await supabase
