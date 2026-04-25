@@ -7,17 +7,20 @@ import { NewsItem } from "@/lib/types";
 type NewsRow = {
   id: string;
   title: string;
-  body: string;
+  body?: string;
+  text?: string;
+  content?: string;
   priority: "high" | "normal";
   author: string;
   created_at: string;
 };
 
 function mapNewsRow(row: NewsRow): NewsItem {
+  const body = row.body ?? row.text ?? row.content ?? "";
   return {
     id: row.id,
     title: row.title,
-    body: row.body,
+    body,
     priority: row.priority,
     author: row.author,
     createdAt: row.created_at,
@@ -32,7 +35,7 @@ export async function fetchNews(): Promise<NewsItem[]> {
   const supabase = getSupabaseBrowserClient();
   const { data, error } = await supabase
     .from("news")
-    .select("id,title,body,priority,author,created_at")
+    .select("*")
     .order("created_at", { ascending: false });
 
   if (error || !data) {
@@ -49,12 +52,22 @@ export async function createNews(payload: { title: string; body: string; priorit
   }
 
   const supabase = getSupabaseBrowserClient();
-  const { error } = await supabase.from("news").insert({
+  let { error } = await supabase.from("news").insert({
     title: payload.title,
     body: payload.body,
     priority: payload.priority,
     author: payload.author,
   });
+  if (error && error.message.toLowerCase().includes("body")) {
+    // Compatibility fallback for environments where news text column is named differently.
+    const retry = await supabase.from("news").insert({
+      title: payload.title,
+      text: payload.body,
+      priority: payload.priority,
+      author: payload.author,
+    });
+    error = retry.error;
+  }
 
   if (error) {
     addNews(payload);
