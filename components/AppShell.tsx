@@ -25,7 +25,7 @@ interface AppShellProps {
 const mainLinks = [
   { href: "/dashboard", label: "Главная", icon: "🏠" },
   { href: "/news", label: "Новости", icon: "📰" },
-  { href: "/counteraction", label: "Защита", icon: "🛡️" },
+  { href: "/counteraction", label: "Противодействие", icon: "🛡️" },
   { href: "/uav", label: "БПЛА", icon: "🚁" },
   { href: "/tests", label: "Тесты", icon: "🧪" },
   { href: "/profile", label: "Профиль", icon: "👤" },
