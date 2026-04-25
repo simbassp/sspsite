@@ -20,6 +20,8 @@ type ProfileRow = {
   status: "active" | "inactive";
 };
 
+const SUPABASE_REQUEST_TIMEOUT_MS = 4500;
+
 function normalizeSupabaseUrl(url: string) {
   return url.endsWith("/") ? url.slice(0, -1) : url;
 }
@@ -32,40 +34,61 @@ function authError(message: string) {
   return "Не удалось выполнить вход. Попробуйте снова.";
 }
 
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit, timeoutMs = SUPABASE_REQUEST_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 async function resolveEmail(baseUrl: string, anonKey: string, login: string) {
-  const response = await fetch(`${baseUrl}/rest/v1/rpc/resolve_login_email`, {
-    method: "POST",
-    headers: {
-      apikey: anonKey,
-      authorization: `Bearer ${anonKey}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({ p_login: login }),
-    cache: "no-store",
-  });
-  if (!response.ok) return "";
-  const data = (await response.json()) as string | null;
-  return typeof data === "string" ? data : "";
+  try {
+    const response = await fetchWithTimeout(`${baseUrl}/rest/v1/rpc/resolve_login_email`, {
+      method: "POST",
+      headers: {
+        apikey: anonKey,
+        authorization: `Bearer ${anonKey}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ p_login: login }),
+      cache: "no-store",
+    });
+    if (!response.ok) return "";
+    const data = (await response.json()) as string | null;
+    return typeof data === "string" ? data : "";
+  } catch {
+    return "";
+  }
 }
 
 async function signInWithEmail(baseUrl: string, anonKey: string, email: string, password: string) {
-  const response = await fetch(`${baseUrl}/auth/v1/token?grant_type=password`, {
-    method: "POST",
-    headers: {
-      apikey: anonKey,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({ email, password }),
-    cache: "no-store",
-  });
-  const data = (await response.json()) as SupabaseTokenResponse;
-  if (!response.ok || !data.access_token || !data.refresh_token) {
+  try {
+    const response = await fetchWithTimeout(`${baseUrl}/auth/v1/token?grant_type=password`, {
+      method: "POST",
+      headers: {
+        apikey: anonKey,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ email, password }),
+      cache: "no-store",
+    });
+    const data = (await response.json()) as SupabaseTokenResponse;
+    if (!response.ok || !data.access_token || !data.refresh_token) {
+      return {
+        ok: false as const,
+        error: authError(data.error_description ?? data.msg ?? "auth_failed"),
+      };
+    }
+    return { ok: true as const, data };
+  } catch {
     return {
       ok: false as const,
-      error: authError(data.error_description ?? data.msg ?? "auth_failed"),
+      error: "Сервер авторизации временно недоступен. Повторите попытку.",
     };
   }
-  return { ok: true as const, data };
 }
 
 async function fetchProfile(baseUrl: string, anonKey: string, accessToken: string, authUserId: string) {
@@ -73,17 +96,21 @@ async function fetchProfile(baseUrl: string, anonKey: string, accessToken: strin
   url.searchParams.set("select", "id,role,name,callsign,position,can_manage_content,status");
   url.searchParams.set("auth_user_id", `eq.${authUserId}`);
   url.searchParams.set("limit", "1");
-  const response = await fetch(url.toString(), {
-    method: "GET",
-    headers: {
-      apikey: anonKey,
-      authorization: `Bearer ${accessToken}`,
-    },
-    cache: "no-store",
-  });
-  if (!response.ok) return null;
-  const rows = (await response.json()) as ProfileRow[];
-  return Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  try {
+    const response = await fetchWithTimeout(url.toString(), {
+      method: "GET",
+      headers: {
+        apikey: anonKey,
+        authorization: `Bearer ${accessToken}`,
+      },
+      cache: "no-store",
+    });
+    if (!response.ok) return null;
+    const rows = (await response.json()) as ProfileRow[];
+    return Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function POST(request: Request) {
@@ -111,9 +138,9 @@ export async function POST(request: Request) {
   if (login.includes("@")) {
     emailCandidates.push(login);
   } else {
-    const resolved = await resolveEmail(baseUrl, supabaseAnonKey, login);
-    if (resolved) emailCandidates.push(resolved);
     emailCandidates.push(`${login}@ssp.local`);
+    const resolved = await resolveEmail(baseUrl, supabaseAnonKey, login);
+    if (resolved && resolved !== `${login}@ssp.local`) emailCandidates.push(resolved);
   }
 
   let authUserId = "";
