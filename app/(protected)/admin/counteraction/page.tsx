@@ -12,10 +12,6 @@ type DraftCounteraction = {
   image: string;
   summary: string;
   specsText: string[];
-  overview: string;
-  tth: string;
-  usage: string;
-  materials: string;
 };
 
 const emptyDraft: DraftCounteraction = {
@@ -24,10 +20,6 @@ const emptyDraft: DraftCounteraction = {
   image: "",
   summary: "",
   specsText: ["", "", "", "", "", "", "", ""],
-  overview: "",
-  tth: "",
-  usage: "",
-  materials: "",
 };
 
 function normalizeSpecs(lines: string[]) {
@@ -95,13 +87,13 @@ export default function AdminCounteractionPage() {
       title: draft.title.trim(),
       category: draft.category.trim() || "Без категории",
       image: draft.image.trim(),
-      summary: draft.summary.trim() || draft.overview.trim(),
+      summary: draft.summary.trim(),
       specs: specs.slice(0, 8),
       details: {
-        overview: draft.overview.trim(),
-        tth: draft.tth.trim(),
-        usage: draft.usage.trim(),
-        materials: draft.materials.trim(),
+        overview: "",
+        tth: "",
+        usage: "",
+        materials: "",
       },
     });
     setMessage(draft.id ? "Карточка противодействия обновлена." : "Карточка противодействия добавлена.");
@@ -154,10 +146,6 @@ export default function AdminCounteractionPage() {
       image: item.image,
       summary: item.summary,
       specsText: specsToText(item.specs),
-      overview: item.details.overview,
-      tth: item.details.tth,
-      usage: item.details.usage,
-      materials: item.details.materials,
     });
     if (typeof window !== "undefined") {
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -259,38 +247,6 @@ export default function AdminCounteractionPage() {
                 />
               </div>
             ))}
-
-            <label className="label">Обзор</label>
-            <textarea
-              className="input"
-              rows={3}
-              value={draft.overview}
-              onChange={(e) => setDraft((prev) => ({ ...prev, overview: e.target.value }))}
-            />
-
-            <label className="label">ТТХ</label>
-            <textarea
-              className="input"
-              rows={3}
-              value={draft.tth}
-              onChange={(e) => setDraft((prev) => ({ ...prev, tth: e.target.value }))}
-            />
-
-            <label className="label">Применение</label>
-            <textarea
-              className="input"
-              rows={3}
-              value={draft.usage}
-              onChange={(e) => setDraft((prev) => ({ ...prev, usage: e.target.value }))}
-            />
-
-            <label className="label">Материалы</label>
-            <textarea
-              className="input"
-              rows={3}
-              value={draft.materials}
-              onChange={(e) => setDraft((prev) => ({ ...prev, materials: e.target.value }))}
-            />
 
             {message && <p className="page-subtitle">{message}</p>}
             <button className="btn btn-primary" type="button" onClick={() => void onSave()}>
