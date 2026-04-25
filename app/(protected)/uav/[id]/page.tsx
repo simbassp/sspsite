@@ -9,10 +9,25 @@ export default function UavDetailPage() {
   const params = useParams<{ id: string }>();
   const [tab, setTab] = useState<"overview" | "tth" | "usage" | "materials">("overview");
   const [item, setItem] = useState<CatalogItem | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchUavById(params.id).then(setItem);
+    let active = true;
+    fetchUavById(params.id)
+      .then((row) => {
+        if (active) setItem(row);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [params.id]);
+
+  if (loading) {
+    return <p className="page-subtitle">Загрузка карточки БПЛА...</p>;
+  }
 
   if (!item) {
     return <p className="page-subtitle">Карточка БПЛА не найдена.</p>;

@@ -106,6 +106,11 @@ export function AppShell({ session, children }: AppShellProps) {
             </div>
           </div>
           <div className="header-actions">
+            {hasContentAccess && (
+              <Link className="btn" href="/admin">
+                Управление
+              </Link>
+            )}
             <ThemeToggle />
             <button className="btn btn-danger" type="button" onClick={logout}>
               Выход

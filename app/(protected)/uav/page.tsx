@@ -8,15 +8,33 @@ import { CatalogItem } from "@/lib/types";
 
 export default function UavPage() {
   const [items, setItems] = useState<CatalogItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchUavItems().then(setItems);
+    let active = true;
+    fetchUavItems()
+      .then((rows) => {
+        if (active) setItems(rows);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   return (
     <section>
       <h1 className="page-title">ТТХ БПЛА</h1>
       <p className="page-subtitle">Быстрый обзор и полная карточка с подробными характеристиками.</p>
+
+      {loading && <p className="page-subtitle">Загрузка карточек БПЛА...</p>}
+      {!loading && items.length === 0 && (
+        <p className="page-subtitle">
+          Пока нет доступных карточек БПЛА. Проверьте подключение к сети и обновите страницу.
+        </p>
+      )}
 
       <div className="grid grid-two">
         {items.map((item) => (

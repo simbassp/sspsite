@@ -30,6 +30,14 @@ type CatalogRow = {
   } | unknown;
 };
 
+type TimedOut = { __timeout: true };
+
+function timeoutResult(ms: number) {
+  return new Promise<TimedOut>((resolve) => {
+    setTimeout(() => resolve({ __timeout: true }), ms);
+  });
+}
+
 function toCatalogItem(row: CatalogRow): CatalogItem {
   const rawSpecs = Array.isArray(row.specs) ? row.specs : [];
   const specs = rawSpecs
@@ -74,11 +82,19 @@ function slugify(value: string) {
 async function fetchCatalogItems(kind: "counteraction" | "uav", fallback: () => CatalogItem[]) {
   if (!isSupabaseConfigured) return fallback();
   const supabase = getSupabaseBrowserClient();
-  const { data, error } = await supabase
-    .from("catalog_items")
-    .select("id,slug,kind,title,category,summary,image,specs,details")
-    .eq("kind", kind)
-    .order("created_at", { ascending: false });
+  const response = await Promise.race([
+    supabase
+      .from("catalog_items")
+      .select("id,slug,kind,title,category,summary,image,specs,details")
+      .eq("kind", kind)
+      .order("created_at", { ascending: false }),
+    timeoutResult(7000),
+  ]);
+
+  if ("__timeout" in response) {
+    return fallback();
+  }
+  const { data, error } = response;
 
   if (error || !data) {
     return fallback();
@@ -97,12 +113,20 @@ async function fetchCatalogById(
 ) {
   if (!isSupabaseConfigured) return fallback(itemId);
   const supabase = getSupabaseBrowserClient();
-  const { data, error } = await supabase
-    .from("catalog_items")
-    .select("id,slug,kind,title,category,summary,image,specs,details")
-    .eq("kind", kind)
-    .eq("id", itemId)
-    .maybeSingle();
+  const response = await Promise.race([
+    supabase
+      .from("catalog_items")
+      .select("id,slug,kind,title,category,summary,image,specs,details")
+      .eq("kind", kind)
+      .eq("id", itemId)
+      .maybeSingle(),
+    timeoutResult(7000),
+  ]);
+
+  if ("__timeout" in response) {
+    return fallback(itemId);
+  }
+  const { data, error } = response;
 
   if (error || !data) {
     return fallback(itemId);

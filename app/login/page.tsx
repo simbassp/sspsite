@@ -17,14 +17,18 @@ export default function LoginPage() {
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
-    const result = await loginUser(login.trim(), password);
-    if (!result.ok) {
-      setError(result.error);
-      return;
-    }
+    try {
+      const result = await loginUser(login.trim(), password);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
 
-    persistSession(result.session);
-    router.push("/dashboard");
+      persistSession(result.session);
+      router.push("/dashboard");
+    } catch {
+      setError("Ошибка сети: не удалось связаться с сервером авторизации. Проверьте интернет и попробуйте снова.");
+    }
   };
 
   const openRequestReset = () => {
@@ -48,13 +52,18 @@ export default function LoginPage() {
       return;
     }
     setIsSendingReset(true);
-    const result = await requestPasswordReset(login.trim());
-    setIsSendingReset(false);
-    if (!result.ok) {
-      setError(result.error);
-      return;
+    try {
+      const result = await requestPasswordReset(login.trim());
+      setIsSendingReset(false);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setInfo("Ссылка на сброс отправлена на почту.");
+    } catch {
+      setIsSendingReset(false);
+      setError("Ошибка сети: не удалось отправить запрос на сброс. Проверьте интернет и попробуйте снова.");
     }
-    setInfo("Ссылка на сброс отправлена на почту.");
   };
 
   return (
