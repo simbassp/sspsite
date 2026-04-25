@@ -102,6 +102,11 @@ async function loginViaServer(login: string, password: string): Promise<ServerLo
       }),
     ])) as Response;
 
+    const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+    if (!contentType.includes("application/json")) {
+      return null;
+    }
+
     let payload: ServerLoginSuccess | ServerLoginError | null = null;
     try {
       payload = (await response.json()) as ServerLoginSuccess | ServerLoginError;
@@ -110,6 +115,10 @@ async function loginViaServer(login: string, password: string): Promise<ServerLo
     }
 
     if (!response.ok) {
+      // Infrastructure/proxy response: let direct Supabase fallback handle auth.
+      if ([404, 405, 500, 502, 503, 504].includes(response.status)) {
+        return null;
+      }
       return {
         ok: false,
         error:
@@ -331,7 +340,7 @@ export async function loginUser(login: string, password: string) {
   }
 
   if (!authUserId) {
-    return { ok: false as const, error: serverError || lastError || "Неверный логин/пароль." };
+    return { ok: false as const, error: lastError || serverError || "Неверный логин/пароль." };
   }
 
   const { data: profile, error: profileError } = await supabase
