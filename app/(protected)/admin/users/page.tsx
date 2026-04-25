@@ -127,8 +127,13 @@ export default function AdminUsersPage() {
                     onClick={async () => {
                       const confirmed = window.confirm(`Удалить пользователя ${user.name} (@${user.login})?`);
                       if (!confirmed) return;
-                      await removeUser(user.id);
+                      const result = await removeUser(user.id);
+                      if (!result.ok) {
+                        setInfo(result.error);
+                        return;
+                      }
                       setUsers((prev) => prev.filter((item) => item.id !== user.id));
+                      setInfo("Пользователь удален.");
                       await refresh();
                     }}
                   >

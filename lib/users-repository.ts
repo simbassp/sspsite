@@ -789,20 +789,23 @@ export async function patchUser(
 export async function removeUser(userId: string) {
   if (!isSupabaseConfigured) {
     deleteUser(userId);
-    return;
+    return { ok: true as const };
   }
 
   const supabase = getSupabaseBrowserClient();
-  const { error } = await supabase.rpc("admin_delete_user", { p_user_id: userId });
-  if (error) {
+  const { data, error } = await supabase.rpc("admin_delete_user", { p_user_id: userId });
+  if (error || data !== true) {
     const { error: fallbackError } = await supabase.from("app_users").delete().eq("id", userId);
     if (fallbackError) {
-      deleteUser(userId);
-      return;
+      return {
+        ok: false as const,
+        error: fallbackError.message || error?.message || "Не удалось удалить пользователя на сервере.",
+      };
     }
   }
   // Keep local fallback storage in sync with remote deletes.
   deleteUser(userId);
+  return { ok: true as const };
 }
 
 export async function logoutUser() {
