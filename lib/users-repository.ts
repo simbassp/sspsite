@@ -185,11 +185,21 @@ function cacheEmailForLogin(login: string, email: string) {
 async function resolveEmailByLogin(login: string) {
   if (!isSupabaseConfigured) return null;
   const supabase = getSupabaseBrowserClient();
-  const { data, error } = await supabase.rpc("resolve_login_email", {
-    p_login: login,
-  });
-  if (error || !data || typeof data !== "string") return null;
-  return data;
+  try {
+    const result = (await Promise.race([
+      supabase.rpc("resolve_login_email", {
+        p_login: login,
+      }),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("resolve_login_timeout")), 2500);
+      }),
+    ])) as Awaited<ReturnType<typeof supabase.rpc>>;
+    const { data, error } = result;
+    if (error || !data || typeof data !== "string") return null;
+    return data;
+  } catch {
+    return null;
+  }
 }
 
 async function validateInviteCode(code: string) {
@@ -267,13 +277,28 @@ export async function loginUser(login: string, password: string) {
     const cachedEmail = getCachedEmailForLogin(loginTrim);
     if (cachedEmail) {
       emailsToTry.add(cachedEmail);
+    } else {
+      const resolved = await resolveEmailByLogin(loginTrim);
+      if (resolved) {
+        emailsToTry.add(resolved);
+      }
     }
-    // Fast local-style fallback, avoids blocking on RPC lookup first.
+    // Legacy fallback for local-style accounts.
     emailsToTry.add(`${loginTrim}@ssp.local`);
   }
 
   for (const email of emailsToTry) {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const authResult = (await Promise.race([
+      supabase.auth.signInWithPassword({ email, password }),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("auth_timeout")), 4500);
+      }),
+    ]).catch(() => null)) as Awaited<ReturnType<typeof supabase.auth.signInWithPassword>> | null;
+    if (!authResult) {
+      lastError = "Сервер авторизации отвечает слишком долго. Попробуйте снова.";
+      continue;
+    }
+    const { data, error } = authResult;
     if (!error && data.user) {
       authUserId = data.user.id;
       successfulEmail = email;
@@ -285,12 +310,22 @@ export async function loginUser(login: string, password: string) {
   if (!authUserId && !loginTrim.includes("@")) {
     const resolved = await resolveEmailByLogin(loginTrim);
     if (resolved && !emailsToTry.has(resolved)) {
-      const { data, error } = await supabase.auth.signInWithPassword({ email: resolved, password });
-      if (!error && data.user) {
-        authUserId = data.user.id;
-        successfulEmail = resolved;
+      const authResult = (await Promise.race([
+        supabase.auth.signInWithPassword({ email: resolved, password }),
+        new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error("auth_timeout")), 4500);
+        }),
+      ]).catch(() => null)) as Awaited<ReturnType<typeof supabase.auth.signInWithPassword>> | null;
+      if (!authResult) {
+        lastError = "Сервер авторизации отвечает слишком долго. Попробуйте снова.";
       } else {
-        lastError = error?.message ?? lastError;
+        const { data, error } = authResult;
+        if (!error && data.user) {
+          authUserId = data.user.id;
+          successfulEmail = resolved;
+        } else {
+          lastError = error?.message ?? lastError;
+        }
       }
     }
   }
