@@ -184,6 +184,7 @@ export default function TestsPage() {
   }
 
   async function finishAttempt(type: "trial" | "final", finalAnswers: Record<string, number>) {
+    if (!session) return;
     const questions = activeQuestionsRef.current;
     const correct = questions.reduce((acc, q) => acc + (finalAnswers[q.id] === q.correctIndex ? 1 : 0), 0);
     const score = Math.round((correct / Math.max(questions.length, 1)) * 100);
