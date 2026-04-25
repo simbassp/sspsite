@@ -89,13 +89,6 @@ function writeLocalInvites(rows: InviteCodeRecord[]) {
   window.localStorage.setItem(LOCAL_INVITES_KEY, JSON.stringify(rows));
 }
 
-function candidateEmails(login: string) {
-  if (login.includes("@")) {
-    return [login];
-  }
-  return [`${login}@ssp.local`, login];
-}
-
 async function resolveEmailByLogin(login: string) {
   if (!isSupabaseConfigured) return null;
   const supabase = getSupabaseBrowserClient();
@@ -156,12 +149,17 @@ export async function loginUser(login: string, password: string) {
   let authUserId: string | null = null;
   let lastError = "";
   const loginTrim = login.trim();
-  const emailsToTry = new Set<string>(candidateEmails(loginTrim));
-  if (!loginTrim.includes("@")) {
+  const emailsToTry: string[] = [];
+  if (loginTrim.includes("@")) {
+    emailsToTry.push(loginTrim);
+  } else {
     const resolved = await resolveEmailByLogin(loginTrim);
     if (resolved) {
-      emailsToTry.add(resolved);
+      // Fast path for mobile: try the resolved profile email first.
+      emailsToTry.push(resolved);
     }
+    // Fallback for legacy local-style accounts.
+    emailsToTry.push(`${loginTrim}@ssp.local`);
   }
 
   for (const email of emailsToTry) {
