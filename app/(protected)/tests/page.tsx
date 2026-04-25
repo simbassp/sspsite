@@ -1,6 +1,5 @@
 "use client";
 
-import type { CSSProperties } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { readClientSession } from "@/lib/client-auth";
 import { formatDate } from "@/lib/format";
@@ -329,30 +328,16 @@ export default function TestsPage() {
     setMessage(`Итоговый тест запущен: ${randomQuestions.length} случайных вопросов. Режим строгий.`);
   };
 
-  const trialButtonStyle = (index: number): CSSProperties | undefined => {
-    if (activeTest !== "trial" || !trialFeedback) return undefined;
+  const trialOptionClassName = (index: number) => {
+    if (activeTest !== "trial" || !trialFeedback) return "btn";
     const { chosen, correct } = trialFeedback;
-    if (index === correct) {
-      return {
-        border: "2px solid #198754",
-        backgroundColor: "#d1e7dd",
-        color: "#0a3622",
-        WebkitTextFillColor: "#0a3622",
-      };
-    }
-    if (chosen !== null && index === chosen && chosen !== correct) {
-      return {
-        border: "2px solid #dc3545",
-        backgroundColor: "#f8d7da",
-        color: "#58151c",
-        WebkitTextFillColor: "#58151c",
-      };
-    }
-    return { opacity: 0.75, color: "var(--text)", WebkitTextFillColor: "var(--text)" };
+    if (index === correct) return "btn trial-feedback-btn--correct";
+    if (chosen !== null && index === chosen && chosen !== correct) return "btn trial-feedback-btn--wrong";
+    return "btn trial-feedback-btn--dim";
   };
 
   return (
-    <section>
+    <section className="tests-page">
       <h1 className="page-title">Тестирование</h1>
       <p className="page-subtitle">
         {testConfig.uavAutoGeneration
@@ -415,10 +400,9 @@ export default function TestsPage() {
             <div className="form" style={{ marginTop: 10 }}>
               {currentQuestion.options.map((option, index) => (
                 <button
-                  className="btn"
+                  className={trialOptionClassName(index)}
                   type="button"
                   key={`${currentQuestion.id}-${index}-${option}`}
-                  style={trialButtonStyle(index)}
                   disabled={(activeTest === "trial" && !!trialFeedback) || (activeTest === "final" && isAnswering)}
                   onClick={() => {
                     if (activeTest === "trial") void onTrialOptionClick(index);
@@ -441,10 +425,10 @@ export default function TestsPage() {
         </article>
       )}
 
-      <h2 className="page-title" style={{ marginTop: 16, fontSize: 18 }}>
+      <h2 className="page-title tests-history" style={{ marginTop: 16, fontSize: 18 }}>
         История попыток
       </h2>
-      <div className="list">
+      <div className="list tests-history">
         {results.map((result) => (
           <article className="card" key={result.id}>
             <div className="card-body">

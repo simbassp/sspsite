@@ -99,7 +99,8 @@ a {
   z-index: 1;
   max-width: 1200px;
   margin: 0 auto;
-  padding-bottom: 96px;
+  /* Запас под фиксированный bottom-nav + safe area (история и низ страницы не прячутся на телефоне) */
+  padding-bottom: calc(110px + env(safe-area-inset-bottom, 0px));
 }
 
 .desktop-sidebar {
@@ -459,4 +460,73 @@ html[data-theme="dark"] .select option {
     min-width: 42px;
     justify-content: center;
   }
+
+  .tests-page .page-title {
+    font-size: 20px;
+  }
+
+  .tests-page .page-subtitle {
+    font-size: 14px;
+    margin-bottom: 12px;
+  }
+
+  .tests-page .card-body h3 {
+    font-size: 16px;
+    line-height: 1.35;
+  }
+
+  .tests-page .meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .tests-page .tests-history {
+    scroll-margin-bottom: calc(100px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* Пробный тест: подсветка ответов — в светлой теме пастель, в тёмной только контур/текст без «мыльных» заливок */
+.trial-feedback-btn--correct {
+  border-width: 2px !important;
+  border-style: solid !important;
+  border-color: #198754 !important;
+  background-color: #d1e7dd !important;
+  color: #0a3622 !important;
+  -webkit-text-fill-color: #0a3622 !important;
+}
+
+.trial-feedback-btn--wrong {
+  border-width: 2px !important;
+  border-style: solid !important;
+  border-color: #dc3545 !important;
+  background-color: #f8d7da !important;
+  color: #58151c !important;
+  -webkit-text-fill-color: #58151c !important;
+}
+
+.trial-feedback-btn--dim {
+  opacity: 0.72;
+}
+
+html[data-theme="dark"] .trial-feedback-btn--correct {
+  background-color: transparent !important;
+  background: transparent !important;
+  border-color: rgba(255, 255, 255, 0.92) !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+html[data-theme="dark"] .trial-feedback-btn--wrong {
+  background-color: transparent !important;
+  background: transparent !important;
+  border-color: rgba(255, 140, 140, 0.95) !important;
+  color: #ffe0e0 !important;
+  -webkit-text-fill-color: #ffe0e0 !important;
+}
+
+html[data-theme="dark"] .trial-feedback-btn--dim {
+  opacity: 0.42;
+  color: var(--muted) !important;
+  -webkit-text-fill-color: var(--muted) !important;
 }
