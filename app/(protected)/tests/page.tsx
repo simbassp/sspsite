@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { readClientSession } from "@/lib/client-auth";
 import { formatDate } from "@/lib/format";
@@ -20,6 +21,8 @@ import { generateUavTtxQuestionBank } from "@/lib/uav-test-generator";
 import { fetchUavItems } from "@/lib/uav-repository";
 import { TestConfig, TestQuestion, TestResult } from "@/lib/types";
 
+const TRIAL_FEEDBACK_MS = 2600;
+
 function pickRandomQuestions(bank: TestQuestion[], count: number) {
   const cloned = [...bank];
   for (let i = cloned.length - 1; i > 0; i -= 1) {
@@ -29,11 +32,12 @@ function pickRandomQuestions(bank: TestQuestion[], count: number) {
   return cloned.slice(0, Math.max(1, Math.min(count, cloned.length)));
 }
 
-/** Единое время на вопрос из настроек админки на время попытки. */
 function applySessionTimeLimits(questions: TestQuestion[], sec: number): TestQuestion[] {
   const t = Math.max(5, Math.floor(sec));
   return questions.map((q) => ({ ...q, timeLimitSec: t }));
 }
+
+type TrialFeedback = { chosen: number | null; correct: number };
 
 export default function TestsPage() {
   const session = useMemo(() => readClientSession(), []);
@@ -47,8 +51,25 @@ export default function TestsPage() {
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [timeLeft, setTimeLeft] = useState(0);
   const [isAnswering, setIsAnswering] = useState(false);
-  /** Пока таймер не успел сброситься после смены вопроса, timeLeft может быть 0 — не считать это таймаутом. */
+  const [trialFeedback, setTrialFeedback] = useState<TrialFeedback | null>(null);
+
+  const isAnsweringRef = useRef(false);
+  isAnsweringRef.current = isAnswering;
+
   const ignoreZeroTimeLeftOnceRef = useRef(false);
+  const answersRef = useRef<Record<string, number>>({});
+  const questionIndexRef = useRef(0);
+  const activeQuestionsRef = useRef<TestQuestion[]>([]);
+  const currentQuestionRef = useRef<TestQuestion | undefined>(undefined);
+  const activeTestRef = useRef<"trial" | "final" | null>(null);
+  const trialRevealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const completeTrialAfterRevealRef = useRef<() => void>(() => {});
+
+  answersRef.current = answers;
+  questionIndexRef.current = questionIndex;
+  activeQuestionsRef.current = selectedQuestions;
+  currentQuestionRef.current = selectedQuestions[questionIndex];
+  activeTestRef.current = activeTest;
 
   const refresh = async () => {
     if (!session) return;
@@ -90,6 +111,19 @@ export default function TestsPage() {
   const currentQuestion = activeQuestions[questionIndex];
 
   useEffect(() => {
+    if (trialRevealTimerRef.current) {
+      clearTimeout(trialRevealTimerRef.current);
+      trialRevealTimerRef.current = null;
+    }
+    return () => {
+      if (trialRevealTimerRef.current) {
+        clearTimeout(trialRevealTimerRef.current);
+        trialRevealTimerRef.current = null;
+      }
+    };
+  }, [currentQuestion?.id]);
+
+  useEffect(() => {
     if (!session || activeTest !== "final") return;
     const onExit = () => void forceFailFinalAttempt(session.id);
 
@@ -108,19 +142,49 @@ export default function TestsPage() {
   }, [currentQuestion?.id, activeTest]);
 
   useEffect(() => {
-    if (!activeTest || !currentQuestion) return;
-    const timer = window.setInterval(() => {
-      setTimeLeft((prev) => (prev > 0 ? prev - 1 : 0));
+    if (!activeTest || !currentQuestion || trialFeedback) return;
+    const id = window.setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 0) return 0;
+        if (prev <= 1) {
+          queueMicrotask(() => {
+            if (ignoreZeroTimeLeftOnceRef.current) {
+              ignoreZeroTimeLeftOnceRef.current = false;
+              return;
+            }
+            const at = activeTestRef.current;
+            const q = currentQuestionRef.current;
+            if (!q || !at) return;
+            if (at === "trial") {
+              setTrialFeedback({ chosen: null, correct: q.correctIndex });
+              setAnswers((prev) => {
+                const next = { ...prev, [q.id]: -1 };
+                answersRef.current = next;
+                return next;
+              });
+              if (trialRevealTimerRef.current) clearTimeout(trialRevealTimerRef.current);
+              trialRevealTimerRef.current = setTimeout(() => {
+                trialRevealTimerRef.current = null;
+                completeTrialAfterRevealRef.current();
+              }, TRIAL_FEEDBACK_MS);
+            } else {
+              void submitFinalAnswer(-1);
+            }
+          });
+          return 0;
+        }
+        return prev - 1;
+      });
     }, 1000);
-    return () => window.clearInterval(timer);
-  }, [activeTest, currentQuestion?.id]);
+    return () => window.clearInterval(id);
+  }, [activeTest, currentQuestion?.id, trialFeedback]);
 
   if (!session) {
     return <p className="page-subtitle">Ошибка сессии. Перезайдите в систему.</p>;
   }
 
-  const finishAttempt = async (type: "trial" | "final", finalAnswers: Record<string, number>) => {
-    const questions = activeQuestions;
+  async function finishAttempt(type: "trial" | "final", finalAnswers: Record<string, number>) {
+    const questions = activeQuestionsRef.current;
     const correct = questions.reduce((acc, q) => acc + (finalAnswers[q.id] === q.correctIndex ? 1 : 0), 0);
     const score = Math.round((correct / Math.max(questions.length, 1)) * 100);
 
@@ -138,43 +202,77 @@ export default function TestsPage() {
     setAnswers({});
     setSelectedQuestions([]);
     setTimeLeft(0);
+    setTrialFeedback(null);
+    setIsAnswering(false);
     await refresh();
-  };
+  }
 
-  const answerCurrent = async (optionIndex: number) => {
-    if (!activeTest || !currentQuestion || isAnswering) return;
+  function completeTrialAfterReveal() {
+    setTrialFeedback(null);
+    const idx = questionIndexRef.current;
+    const list = activeQuestionsRef.current;
+    const nextAnswers = answersRef.current;
+    if (!list.length) {
+      setIsAnswering(false);
+      return;
+    }
+    if (idx >= list.length - 1) {
+      void finishAttempt("trial", nextAnswers);
+      setIsAnswering(false);
+      return;
+    }
+    setQuestionIndex(idx + 1);
+    if (trialRevealTimerRef.current) {
+      clearTimeout(trialRevealTimerRef.current);
+      trialRevealTimerRef.current = null;
+    }
+    setIsAnswering(false);
+  }
+
+  completeTrialAfterRevealRef.current = completeTrialAfterReveal;
+
+  const submitFinalAnswer = async (optionIndex: number) => {
+    const at = activeTestRef.current;
+    const q = currentQuestionRef.current;
+    const idx = questionIndexRef.current;
+    const list = activeQuestionsRef.current;
+    if (!at || at !== "final" || !q || isAnsweringRef.current) return;
     setIsAnswering(true);
-    const nextAnswers = { ...answers, [currentQuestion.id]: optionIndex };
+    const nextAnswers = { ...answersRef.current, [q.id]: optionIndex };
+    answersRef.current = nextAnswers;
     setAnswers(nextAnswers);
 
-    if (questionIndex < activeQuestions.length - 1) {
-      const nextIndex = questionIndex + 1;
+    if (idx < list.length - 1) {
+      const nextIndex = idx + 1;
       setQuestionIndex(nextIndex);
-      if (activeTest === "final") {
-        await persistFinalAttempt({
-          userId: session.id,
-          startedAt: new Date().toISOString(),
-          questionIndex: nextIndex,
-          answers: Object.fromEntries(Object.entries(nextAnswers).map(([k, v]) => [k, String(v)])),
-        });
-      }
+      await persistFinalAttempt({
+        userId: session!.id,
+        startedAt: new Date().toISOString(),
+        questionIndex: nextIndex,
+        answers: Object.fromEntries(Object.entries(nextAnswers).map(([k, v]) => [k, String(v)])),
+      });
       setIsAnswering(false);
       return;
     }
 
-    await finishAttempt(activeTest, nextAnswers);
+    await finishAttempt("final", nextAnswers);
     setIsAnswering(false);
   };
 
-  useEffect(() => {
-    if (!activeTest || !currentQuestion) return;
-    if (timeLeft > 0) return;
-    if (ignoreZeroTimeLeftOnceRef.current) {
-      ignoreZeroTimeLeftOnceRef.current = false;
-      return;
-    }
-    void answerCurrent(-1);
-  }, [timeLeft, activeTest, currentQuestion?.id]);
+  const onTrialOptionClick = (optionIndex: number) => {
+    const q = currentQuestionRef.current;
+    if (!q || activeTestRef.current !== "trial" || trialFeedback || isAnswering) return;
+    setIsAnswering(true);
+    setTrialFeedback({ chosen: optionIndex, correct: q.correctIndex });
+    const nextAnswers = { ...answersRef.current, [q.id]: optionIndex };
+    answersRef.current = nextAnswers;
+    setAnswers(nextAnswers);
+    if (trialRevealTimerRef.current) clearTimeout(trialRevealTimerRef.current);
+    trialRevealTimerRef.current = setTimeout(() => {
+      trialRevealTimerRef.current = null;
+      completeTrialAfterRevealRef.current();
+    }, TRIAL_FEEDBACK_MS);
+  };
 
   const onTrial = async () => {
     if (questionPool.length === 0) {
@@ -191,10 +289,12 @@ export default function TestsPage() {
     );
     const first = randomQuestions[0];
     ignoreZeroTimeLeftOnceRef.current = true;
+    setTrialFeedback(null);
     setActiveTest("trial");
     setSelectedQuestions(randomQuestions);
     setQuestionIndex(0);
     setAnswers({});
+    answersRef.current = {};
     if (first) setTimeLeft(Math.max(1, first.timeLimitSec));
     setMessage(`Пробный тест запущен: ${randomQuestions.length} случайных вопросов.`);
   };
@@ -215,12 +315,32 @@ export default function TestsPage() {
     const first = randomQuestions[0];
     await beginFinalAttempt(session.id);
     ignoreZeroTimeLeftOnceRef.current = true;
+    setTrialFeedback(null);
     setActiveTest("final");
     setSelectedQuestions(randomQuestions);
     setQuestionIndex(0);
     setAnswers({});
+    answersRef.current = {};
     if (first) setTimeLeft(Math.max(1, first.timeLimitSec));
     setMessage(`Итоговый тест запущен: ${randomQuestions.length} случайных вопросов. Режим строгий.`);
+  };
+
+  const trialButtonStyle = (index: number): CSSProperties | undefined => {
+    if (activeTest !== "trial" || !trialFeedback) return undefined;
+    const { chosen, correct } = trialFeedback;
+    if (index === correct) {
+      return {
+        border: "2px solid #198754",
+        backgroundColor: "#d1e7dd",
+      };
+    }
+    if (chosen !== null && index === chosen && chosen !== correct) {
+      return {
+        border: "2px solid #dc3545",
+        backgroundColor: "#f8d7da",
+      };
+    }
+    return { opacity: 0.75 };
   };
 
   return (
@@ -238,7 +358,8 @@ export default function TestsPage() {
           <div className="card-body">
             <h3>Пробный тест</h3>
             <p className="page-subtitle" style={{ marginTop: 8 }}>
-              Без штрафов за выход. Можно проходить многократно.
+              Без штрафов за выход. Можно проходить многократно. После ответа или истечения времени показывается подсветка
+              верного варианта.
             </p>
             <button className="btn btn-primary" type="button" onClick={onTrial}>
               Начать пробный тест
@@ -267,7 +388,20 @@ export default function TestsPage() {
               {activeTest === "final" ? "Итоговый" : "Пробный"} вопрос {questionIndex + 1} / {activeQuestions.length}
             </p>
             <p className="page-subtitle" style={{ marginTop: 8 }}>
-              Осталось времени: <strong>{timeLeft}</strong> сек
+              {activeTest === "trial" && trialFeedback ? (
+                <>
+                  {trialFeedback.chosen === null
+                    ? "Время вышло. Правильный ответ подсвечен."
+                    : trialFeedback.chosen === trialFeedback.correct
+                      ? "Верно. Правильный ответ подсвечен."
+                      : "Неверно. Ваш вариант — красным, правильный — зелёным."}{" "}
+                  Следующий вопрос через {Math.ceil(TRIAL_FEEDBACK_MS / 1000)} с…
+                </>
+              ) : (
+                <>
+                  Осталось времени: <strong>{timeLeft}</strong> сек
+                </>
+              )}
             </p>
             <h3 style={{ marginTop: 8 }}>{currentQuestion.text}</h3>
             <div className="form" style={{ marginTop: 10 }}>
@@ -276,7 +410,12 @@ export default function TestsPage() {
                   className="btn"
                   type="button"
                   key={`${currentQuestion.id}-${index}-${option}`}
-                  onClick={() => void answerCurrent(index)}
+                  style={trialButtonStyle(index)}
+                  disabled={(activeTest === "trial" && !!trialFeedback) || (activeTest === "final" && isAnswering)}
+                  onClick={() => {
+                    if (activeTest === "trial") void onTrialOptionClick(index);
+                    else void submitFinalAnswer(index);
+                  }}
                 >
                   {option}
                 </button>

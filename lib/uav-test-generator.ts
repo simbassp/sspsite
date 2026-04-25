@@ -58,6 +58,11 @@ function sameMeasurementClass(correct: string, candidate: string): boolean {
 function numericRatioOk(correctNum: number, candNum: number, relaxed: boolean): boolean {
   if (!Number.isFinite(correctNum) || !Number.isFinite(candNum) || correctNum === 0) return false;
   const r = candNum / correctNum;
+  if (Math.abs(correctNum) < 35) {
+    const lo = relaxed ? 0.4 : 0.55;
+    const hi = relaxed ? 2.5 : 2.0;
+    return r >= lo && r <= hi;
+  }
   const lo = relaxed ? 0.82 : Math.abs(correctNum) >= 800 ? 0.9 : Math.abs(correctNum) >= 200 ? 0.88 : 0.8;
   const hi = relaxed ? 1.18 : Math.abs(correctNum) >= 800 ? 1.1 : Math.abs(correctNum) >= 200 ? 1.12 : 1.22;
   return r >= lo && r <= hi;
@@ -69,6 +74,47 @@ function plausibleNumericNeighbor(correct: string, candidate: string, relaxed: b
   if (!a.isNumeric || !b.isNumeric || a.num === null || b.num === null) return true;
   if (!sameMeasurementClass(correct, candidate)) return false;
   return numericRatioOk(a.num, b.num, relaxed);
+}
+
+/** Смещения и множители для «2 кг», «5 кг» и т.п. — только похожие числа, без текстовых заглушек. */
+function syntheticNearNumericWrongs(correct: string, need: number, seen: Set<string>): string[] {
+  const p = parseValueParts(correct);
+  if (!p.isNumeric || p.num === null) return [];
+  const unitPart = correct.trim().replace(/^-?[\d]+[.,\d]*\s*/u, "").trim();
+  if (!unitPart) return [];
+
+  const n = p.num;
+  const out: string[] = [];
+
+  const tryPush = (candRaw: number) => {
+    let c = candRaw;
+    if (!Number.isFinite(c) || c <= 0) return;
+    if (Math.abs(c - n) < 0.04) return;
+    const numStr = formatNumberForWrong(correct, c);
+    const formatted = `${numStr} ${unitPart}`.trim();
+    const lk = formatted.toLowerCase();
+    if (seen.has(lk)) return;
+    if (!sameMeasurementClass(correct, formatted)) return;
+    seen.add(lk);
+    out.push(formatted);
+  };
+
+  const small = Math.abs(n) <= 40;
+  const steps = small
+    ? [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 6, 7, 8, -0.25, -0.5, -0.75, -1, -1.5]
+    : [1, 2, 3, 5, 8, 10, 15, 20, -1, -2, -3, -5, -8];
+  for (const d of steps) {
+    tryPush(Math.round((n + d) * 100) / 100);
+    if (out.length >= need) return out;
+  }
+
+  const mults = small ? [1.2, 1.35, 1.5, 1.65, 1.8, 0.72, 0.8, 0.88] : [1.04, 0.96, 1.08, 0.92, 1.12, 0.88];
+  for (const m of mults) {
+    tryPush(Math.round(n * m * 100) / 100);
+    if (out.length >= need) return out;
+  }
+
+  return out;
 }
 
 function isEngineSpecKey(keyNorm: string) {
@@ -132,7 +178,8 @@ function syntheticNumericWrongs(
       Math.abs(n) >= 2000 ? 20 : Math.abs(n) >= 800 ? 10 : Math.abs(n) >= 200 ? 5 : Math.abs(n) >= 50 ? 2 : 1;
     cand = Math.round(cand / step) * step;
     if (Math.abs(cand - n) < 1e-6) continue;
-    if (!numericRatioOk(n, cand, relaxed)) continue;
+    if (Math.abs(n) >= 35 && !numericRatioOk(n, cand, relaxed)) continue;
+    if (Math.abs(n) < 35 && (cand / n < 0.5 || cand / n > 2.2)) continue;
 
     const numStr = formatNumberForWrong(correct, cand);
     const formatted = `${numStr} ${unitPart}`.trim();
@@ -191,8 +238,25 @@ function buildFourOptions(correct: string, wrongPool: string[]): { options: stri
     wrongs.push(syn);
   }
 
+  const pCorrect = parseValueParts(correctTrim);
+  const hasNumericUnit =
+    pCorrect.isNumeric && pCorrect.num !== null && correctTrim.replace(/^-?[\d]+[.,\d]*\s*/u, "").trim().length > 0;
+
+  for (const near of syntheticNearNumericWrongs(correctTrim, 24, seen)) {
+    if (wrongs.length >= 12) break;
+    wrongs.push(near);
+  }
+
   let padIdx = 0;
   while (wrongs.length < 3) {
+    if (hasNumericUnit) {
+      for (const near of syntheticNearNumericWrongs(correctTrim, 40, seen)) {
+        if (wrongs.length >= 3) break;
+        wrongs.push(near);
+      }
+    }
+    if (wrongs.length >= 3) break;
+
     const base = FALLBACK_DISTRACTORS[padIdx % FALLBACK_DISTRACTORS.length]!;
     padIdx += 1;
     let t = padIdx > FALLBACK_DISTRACTORS.length ? `${base} (${padIdx})` : base;
