@@ -146,6 +146,7 @@ async function loginViaServer(login: string, password: string): Promise<ServerLo
         error: "Сервер авторизации отвечает слишком долго. Попробуйте снова.",
       };
     }
+    console.error("[loginViaServer] Network error, will try Supabase fallback:", error);
     return null;
   }
 }
@@ -246,6 +247,7 @@ function mapAuthErrorMessage(raw: string) {
 }
 
 export async function loginUser(login: string, password: string) {
+  console.log("[loginUser] Starting login for:", login);
   if (!isSupabaseConfigured) {
     if (!canUseLocalFallback()) {
       return {
@@ -261,8 +263,10 @@ export async function loginUser(login: string, password: string) {
   }
 
   const loginTrim = login.trim();
+  console.log("[loginUser] Trying server login...");
   const serverResult = await loginViaServer(loginTrim, password);
   if (serverResult?.ok) {
+    console.log("[loginUser] Server login success");
     const supabase = getSupabaseBrowserClient();
     await supabase.auth
       .setSession({
@@ -275,7 +279,10 @@ export async function loginUser(login: string, password: string) {
 
   let serverError = "";
   if (serverResult && !serverResult.ok) {
+    console.log("[loginUser] Server login failed:", serverResult.error);
     serverError = serverResult.error;
+  } else {
+    console.log("[loginUser] Server login returned null, trying Supabase fallback");
   }
 
   const supabase = getSupabaseBrowserClient();
@@ -303,23 +310,31 @@ export async function loginUser(login: string, password: string) {
   }
 
   // Keep fallback bounded: max two auth attempts to avoid long mobile hangs.
+  console.log("[loginUser] Trying emails:", emailsToTry.slice(0, 2));
   for (const email of emailsToTry.slice(0, 2)) {
+    console.log("[loginUser] Attempting Supabase auth with:", email);
     const authResult = (await Promise.race([
       supabase.auth.signInWithPassword({ email, password }),
       new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error("auth_timeout")), LOGIN_AUTH_TIMEOUT_MS);
       }),
-    ]).catch(() => null)) as Awaited<ReturnType<typeof supabase.auth.signInWithPassword>> | null;
+    ]).catch((err) => {
+      console.error("[loginUser] Supabase auth error:", err);
+      return null;
+    })) as Awaited<ReturnType<typeof supabase.auth.signInWithPassword>> | null;
     if (!authResult) {
       lastError = "Сервер авторизации отвечает слишком долго. Попробуйте снова.";
+      console.log("[loginUser] Auth timeout or error for:", email);
       continue;
     }
     const { data, error } = authResult;
     if (!error && data.user) {
+      console.log("[loginUser] Supabase auth success");
       authUserId = data.user.id;
       successfulEmail = email;
       break;
     }
+    console.log("[loginUser] Auth failed for", email, ":", error?.message);
     lastError = error?.message ?? lastError;
   }
 
