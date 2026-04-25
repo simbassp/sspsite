@@ -57,8 +57,12 @@ export default function UavPage() {
               </p>
               <p className="label">Ключевые характеристики</p>
               <div className="grid grid-two">
-                {item.specs.slice(0, 6).map((spec) => (
-                  <div key={spec.key} className="card">
+                {item.specs.slice(0, 7).map((spec, index) => (
+                  <div
+                    key={spec.key}
+                    className="card"
+                    style={index === 6 ? { gridColumn: "1 / -1" } : undefined}
+                  >
                     <div className="card-body">
                       <p className="label">{spec.key}</p>
                       <p style={{ marginTop: 6, fontWeight: 700 }}>{spec.value}</p>

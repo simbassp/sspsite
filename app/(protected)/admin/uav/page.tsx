@@ -19,7 +19,7 @@ const emptyDraft: DraftUav = {
   category: "",
   image: "",
   summary: "",
-  specsText: ["", "", "", "", ""],
+  specsText: ["", "", "", "", "", ""],
   engineType: "электрический",
 };
 
@@ -45,9 +45,9 @@ function normalizeSpecs(lines: string[]) {
 function specsToText(specs: CatalogItem["specs"]) {
   const lines = specs
     .filter((item) => item.key.trim().toLowerCase() !== "тип двигателя")
-    .slice(0, 5)
+    .slice(0, 6)
     .map((item) => `${item.key}: ${item.value}`);
-  while (lines.length < 5) lines.push("");
+  while (lines.length < 6) lines.push("");
   return lines;
 }
 
@@ -87,7 +87,7 @@ export default function AdminUavPage() {
     if (!draft.image.trim()) return setMessage("Добавьте изображение (ссылка или загрузка файла).");
 
     const specs = normalizeSpecs(draft.specsText);
-    if (specs.length < 5) return setMessage("Заполните 5 строк ТТХ.");
+    if (specs.length < 6) return setMessage("Заполните 6 строк ТТХ.");
 
     try {
       await saveUavItem({
@@ -96,7 +96,7 @@ export default function AdminUavPage() {
         category: draft.category.trim() || "Без категории",
         image: draft.image.trim(),
         summary: draft.summary.trim(),
-        specs: [...specs.slice(0, 5), { key: "Тип двигателя", value: draft.engineType }],
+        specs: [...specs.slice(0, 6), { key: "Тип двигателя", value: draft.engineType }],
         details: {
           overview: "",
           tth: "",
@@ -176,7 +176,7 @@ export default function AdminUavPage() {
   return (
     <section>
       <h1 className="page-title">Админ / БПЛА</h1>
-      <p className="page-subtitle">Добавление и редактирование БПЛА: изображение, 5 ТТХ и тип двигателя.</p>
+      <p className="page-subtitle">Добавление и редактирование БПЛА: изображение, 6 ТТХ и тип двигателя.</p>
 
       <article className="card">
         <div className="card-body">
@@ -252,7 +252,7 @@ export default function AdminUavPage() {
               onChange={(e) => setDraft((prev) => ({ ...prev, summary: e.target.value }))}
             />
 
-            <h3 style={{ marginTop: 4 }}>5 строк характеристик</h3>
+            <h3 style={{ marginTop: 4 }}>6 строк характеристик</h3>
             {draft.specsText.map((line, index) => (
               <div key={`spec-${index}`}>
                 <label className="label">ТТХ {index + 1}</label>
