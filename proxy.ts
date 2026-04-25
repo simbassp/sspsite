@@ -31,6 +31,7 @@ export function proxy(request: NextRequest) {
       (session.role === "admin" ||
         session.canManageContent === true ||
         session.permissions?.users === true ||
+        session.permissions?.results === true ||
         session.permissions?.news === true ||
         session.permissions?.tests === true ||
         session.permissions?.uav === true ||
