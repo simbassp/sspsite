@@ -162,8 +162,8 @@ export const seedData: AppData = {
   ],
   testQuestions: createDefaultQuestionBank(),
   testConfig: {
-    trialQuestionCount: 3,
-    finalQuestionCount: 5,
+    trialQuestionCount: 10,
+    finalQuestionCount: 15,
   },
   testResults: [
     {

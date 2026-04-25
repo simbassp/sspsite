@@ -15,6 +15,8 @@ import {
   persistFinalAttempt,
   seedDefaultQuestionsIfEmpty,
 } from "@/lib/tests-repository";
+import { generateUavTtxQuestionBank } from "@/lib/uav-test-generator";
+import { fetchUavItems } from "@/lib/uav-repository";
 import { TestConfig, TestQuestion, TestResult } from "@/lib/types";
 
 function pickRandomQuestions(bank: TestQuestion[], count: number) {
@@ -31,7 +33,7 @@ export default function TestsPage() {
   const [results, setResults] = useState<TestResult[]>([]);
   const [questionPool, setQuestionPool] = useState<TestQuestion[]>([]);
   const [selectedQuestions, setSelectedQuestions] = useState<TestQuestion[]>([]);
-  const [testConfig, setTestConfig] = useState<TestConfig>({ trialQuestionCount: 3, finalQuestionCount: 5 });
+  const [testConfig, setTestConfig] = useState<TestConfig>({ trialQuestionCount: 10, finalQuestionCount: 15 });
   const [message, setMessage] = useState("");
   const [activeTest, setActiveTest] = useState<"trial" | "final" | null>(null);
   const [questionIndex, setQuestionIndex] = useState(0);
@@ -49,8 +51,18 @@ export default function TestsPage() {
     if (!session) return;
     (async () => {
       await seedDefaultQuestionsIfEmpty();
-      const [pool, config] = await Promise.all([fetchActiveQuestionPool(), fetchTestConfig()]);
-      setQuestionPool(pool);
+      const [uavItems, dbPool, config] = await Promise.all([
+        fetchUavItems(),
+        fetchActiveQuestionPool(),
+        fetchTestConfig(),
+      ]);
+      const fromUav = generateUavTtxQuestionBank(uavItems);
+      if (fromUav.length > 0) {
+        const ids = new Set(fromUav.map((q) => q.id));
+        setQuestionPool([...fromUav, ...dbPool.filter((q) => !ids.has(q.id))]);
+      } else {
+        setQuestionPool(dbPool);
+      }
       setTestConfig(config);
 
       const orphanAttempt = await loadFinalAttempt(session.id);
@@ -150,7 +162,7 @@ export default function TestsPage() {
 
   const onTrial = async () => {
     if (questionPool.length === 0) {
-      setMessage("Банк вопросов пока не настроен администратором.");
+      setMessage("Нет карточек БПЛА с ТТХ или банка вопросов. Добавьте модели в справочник БПЛА.");
       return;
     }
     const randomQuestions = pickRandomQuestions(questionPool, testConfig.trialQuestionCount);
@@ -163,7 +175,7 @@ export default function TestsPage() {
 
   const startFinal = async () => {
     if (questionPool.length === 0) {
-      setMessage("Банк вопросов пока не настроен администратором.");
+      setMessage("Нет карточек БПЛА с ТТХ или банка вопросов. Добавьте модели в справочник БПЛА.");
       return;
     }
     const randomQuestions = pickRandomQuestions(questionPool, testConfig.finalQuestionCount);
@@ -178,14 +190,16 @@ export default function TestsPage() {
   return (
     <section>
       <h1 className="page-title">Тестирование</h1>
-      <p className="page-subtitle">Пробный тест в мягком режиме и итоговый в строгом.</p>
+      <p className="page-subtitle">
+        Вопросы формируются из ТТХ карточек БПЛА (случайная выборка). На каждый вопрос — 10 секунд.
+      </p>
 
       <div className="grid grid-two">
         <article className="card">
           <div className="card-body">
             <h3>Пробный тест</h3>
             <p className="page-subtitle" style={{ marginTop: 8 }}>
-              Без штрафов за выход. Можно проходить многократно. Время задается администратором на каждый вопрос.
+              Без штрафов за выход. Можно проходить многократно. Количество вопросов задаётся в админке (по умолчанию 10).
             </p>
             <button className="btn btn-primary" type="button" onClick={onTrial}>
               Начать пробный тест

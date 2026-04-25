@@ -89,8 +89,8 @@ create table if not exists public.test_questions (
 
 create table if not exists public.test_settings (
   id integer primary key default 1 check (id = 1),
-  trial_question_count integer not null default 3 check (trial_question_count >= 1),
-  final_question_count integer not null default 5 check (final_question_count >= 1),
+  trial_question_count integer not null default 10 check (trial_question_count >= 1),
+  final_question_count integer not null default 15 check (final_question_count >= 1),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -106,7 +106,7 @@ create table if not exists public.registration_invites (
 );
 
 insert into public.test_settings (id, trial_question_count, final_question_count)
-values (1, 3, 5)
+values (1, 10, 15)
 on conflict (id) do nothing;
 
 create index if not exists idx_app_users_login on public.app_users(login);

@@ -34,7 +34,7 @@ const initialDraft: DraftQuestion = {
 export default function AdminTestsPage() {
   const [results, setResults] = useState<TestResult[]>([]);
   const [questions, setQuestions] = useState<TestQuestion[]>([]);
-  const [config, setConfig] = useState<TestConfig>({ trialQuestionCount: 3, finalQuestionCount: 5 });
+  const [config, setConfig] = useState<TestConfig>({ trialQuestionCount: 10, finalQuestionCount: 15 });
   const [draft, setDraft] = useState<DraftQuestion>(initialDraft);
   const [message, setMessage] = useState("");
   const [isEditingTimeLimit, setIsEditingTimeLimit] = useState(false);
@@ -146,7 +146,10 @@ export default function AdminTestsPage() {
   return (
     <section>
       <h1 className="page-title">Админ / Тесты</h1>
-      <p className="page-subtitle">Единый банк вопросов для тестирования и мониторинг результатов.</p>
+      <p className="page-subtitle">
+        Основной банк для сотрудников строится автоматически из ТТХ карточек БПЛА (10 сек на вопрос). Ниже —
+        дополнительные ручные вопросы в БД и настройки числа вопросов в пробном и итоговом тесте.
+      </p>
       <div className="grid grid-two">
         <div className="card">
           <div className="card-body">
