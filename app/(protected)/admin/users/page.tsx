@@ -136,21 +136,33 @@ export default function AdminUsersPage() {
                     onClick={async () => {
                       const confirmed = window.confirm(`Удалить пользователя ${user.name} (@${user.login})?`);
                       if (!confirmed) return;
-                      setDeletingId(user.id);
+                      const userId = user.id;
+                      setDeletingId(userId);
                       setInfo("Удаляем…");
+                      let hadError: Error | null = null;
+                      let remoteWarning: string | undefined;
                       try {
-                        const result = await removeUser(user.id);
+                        const result = await removeUser(userId);
                         if ("warning" in result && result.warning) {
-                          setInfo(result.warning);
-                        } else {
-                          setInfo("Пользователь удалён.");
+                          remoteWarning = result.warning;
                         }
                       } catch (e) {
-                        setInfo(e instanceof Error ? e.message : "Не удалось завершить удаление.");
+                        hadError = e instanceof Error ? e : new Error(String(e));
                       } finally {
                         try {
                           const next = await fetchUsers();
                           setUsers(next);
+                          if (hadError) {
+                            setInfo(hadError.message);
+                          } else if (next.some((u) => u.id === userId)) {
+                            setInfo(
+                              "В базе запись public.app_users не снялась. Откройте Supabase → SQL, выполните скрипт из файла supabase/migrations/20260426150000_admin_delete_user_app_first.sql, затем снова нажмите «Удалить».",
+                            );
+                          } else if (remoteWarning) {
+                            setInfo(remoteWarning);
+                          } else {
+                            setInfo("Пользователь удалён.");
+                          }
                         } catch {
                           setInfo("Сервер не ответил при обновлении списка — обновите страницу вручную.");
                         }

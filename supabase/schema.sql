@@ -298,12 +298,17 @@ begin
   from public.app_users
   where id = p_user_id;
 
+  if not found then
+    return true;
+  end if;
+
+  -- Сначала `app_users` (и каскады к результатам/попыткам), иначе строка могла остаться, а UI снова подтянет её с сервера.
+  delete from public.app_users
+  where id = p_user_id;
+
   if v_auth_user_id is not null then
     delete from auth.users
     where id = v_auth_user_id;
-  else
-    delete from public.app_users
-    where id = p_user_id;
   end if;
 
   return true;
