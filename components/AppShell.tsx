@@ -160,9 +160,9 @@ export function AppShell({ session, children }: AppShellProps) {
         {bottomLinks.map((link) => {
           const active = pathname === link.href || pathname.startsWith(`${link.href}/`);
           return (
-            <Link key={link.href} href={link.href} className={active ? "active" : ""}>
+            <Link key={link.href} href={link.href} className={active ? "active" : ""} aria-label={link.label}>
               <div>{link.icon}</div>
-              <div>{link.label}</div>
+              <div className="bottom-nav-label">{link.label}</div>
             </Link>
           );
         })}

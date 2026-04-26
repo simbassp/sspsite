@@ -2,8 +2,18 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
 
-type HomeStatsOk = { ok: true; activeUserCount: number; newsCount: number };
+type CountsPayload = { active_users?: unknown; news_count?: unknown };
+
+function parseCounts(raw: unknown): { active: number; news: number } | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as CountsPayload;
+  const a = o.active_users;
+  const n = o.news_count;
+  if (typeof a !== "number" || typeof n !== "number") return null;
+  return { active: a, news: n };
+}
 
 export default function DashboardPage() {
   const [activeUserCount, setActiveUserCount] = useState<number | null>(null);
@@ -16,18 +26,38 @@ export default function DashboardPage() {
     (async () => {
       setIsLoading(true);
       setLoadError("");
+      if (!isSupabaseConfigured) {
+        setActiveUserCount(null);
+        setNewsCount(null);
+        if (!cancelled) setIsLoading(false);
+        return;
+      }
       try {
-        const response = await fetch("/api/home-stats", { cache: "no-store" });
-        const payload = (await response.json()) as HomeStatsOk | { ok: false; error?: string };
+        const supabase = getSupabaseBrowserClient();
+        const { data, error } = await supabase.rpc("home_stats_counts");
         if (cancelled) return;
-        if (!response.ok || !payload || !("ok" in payload) || payload.ok !== true) {
-          setLoadError("Сводка недоступна. Обновите страницу или зайдите позже.");
+        if (error) {
+          const msg = (error.message || "").toLowerCase();
+          const missingFn =
+            msg.includes("does not exist") || msg.includes("unknown") || error.code === "42883" || msg.includes("function");
+          setLoadError(
+            missingFn
+              ? "На сервере БД нужно один раз выполнить SQL из supabase/migrations/20260426120000_home_stats_counts.sql (или конец supabase/schema.sql), затем обновить страницу."
+              : `Не удалось загрузить сводку: ${error.message}`,
+          );
           setActiveUserCount(null);
           setNewsCount(null);
           return;
         }
-        setActiveUserCount(payload.activeUserCount);
-        setNewsCount(payload.newsCount);
+        const parsed = parseCounts(data);
+        if (!parsed) {
+          setLoadError("Некорректный ответ сервера.");
+          setActiveUserCount(null);
+          setNewsCount(null);
+          return;
+        }
+        setActiveUserCount(parsed.active);
+        setNewsCount(parsed.news);
       } catch {
         if (cancelled) return;
         setLoadError("Часть данных не загрузилась. Проверьте интернет и обновите страницу.");
@@ -45,10 +75,6 @@ export default function DashboardPage() {
   return (
     <section>
       <h1 className="page-title">Главная</h1>
-      <p className="page-subtitle">
-        Общая сводка по контуру и быстрые ссылки. Личные результаты тестов — в разделе «Профиль»; сводка по
-        сотрудникам для администраторов — в «Управление → Пользователи / Результаты».
-      </p>
       {isLoading && <p className="page-subtitle">Загружаем данные…</p>}
       {loadError && <p className="page-subtitle">{loadError}</p>}
 

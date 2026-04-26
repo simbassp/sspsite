@@ -378,6 +378,17 @@ html[data-theme="dark"] .select option {
   min-width: 0;
 }
 
+@media (max-width: 819px) {
+  .bottom-nav-label {
+    display: none;
+  }
+
+  .bottom-nav a {
+    padding: 10px 2px;
+    font-size: 0;
+  }
+}
+
 .bottom-nav a.active {
   background: var(--glass);
 }
