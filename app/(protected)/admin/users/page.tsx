@@ -22,6 +22,7 @@ export default function AdminUsersPage() {
   const [info, setInfo] = useState("");
   const [permissionsTargetId, setPermissionsTargetId] = useState<string | null>(null);
   const [permissionDrafts, setPermissionDrafts] = useState<Record<string, UserRecord["permissions"]>>({});
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     void fetchUsers().then((next) => setUsers(next));
@@ -131,19 +132,33 @@ export default function AdminUsersPage() {
                   <button
                     className="btn btn-danger"
                     type="button"
+                    disabled={deletingId === user.id}
                     onClick={async () => {
                       const confirmed = window.confirm(`Удалить пользователя ${user.name} (@${user.login})?`);
                       if (!confirmed) return;
-                      const result = await removeUser(user.id);
-                      if ("warning" in result && result.warning) {
-                        setInfo(result.warning);
-                      } else {
-                        setInfo("Пользователь удален.");
+                      setDeletingId(user.id);
+                      setInfo("Удаляем…");
+                      try {
+                        const result = await removeUser(user.id);
+                        if ("warning" in result && result.warning) {
+                          setInfo(result.warning);
+                        } else {
+                          setInfo("Пользователь удалён.");
+                        }
+                      } catch (e) {
+                        setInfo(e instanceof Error ? e.message : "Не удалось завершить удаление.");
+                      } finally {
+                        try {
+                          const next = await fetchUsers();
+                          setUsers(next);
+                        } catch {
+                          setInfo("Сервер не ответил при обновлении списка — обновите страницу вручную.");
+                        }
+                        setDeletingId(null);
                       }
-                      await refresh();
                     }}
                   >
-                    Удалить
+                    {deletingId === user.id ? "Удаляем…" : "Удалить"}
                   </button>
                 </div>
               </div>

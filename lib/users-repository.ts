@@ -4,7 +4,7 @@ import { clearSessionCookie, serializeSessionCookie } from "@/lib/auth";
 import { readClientSession } from "@/lib/client-auth";
 import { SESSION_COOKIE } from "@/lib/seed";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
-import { withTimeoutAndRetry } from "@/lib/async-utils";
+import { withTimeout, withTimeoutAndRetry } from "@/lib/async-utils";
 import {
   authenticate,
   deleteUser,
@@ -858,6 +858,8 @@ export async function patchUser(
   }
 }
 
+const REMOVE_USER_TIMEOUT_MS = 15000;
+
 export async function removeUser(userId: string) {
   if (!isSupabaseConfigured) {
     deleteUser(userId);
@@ -865,21 +867,39 @@ export async function removeUser(userId: string) {
   }
 
   const supabase = getSupabaseBrowserClient();
-  const { data, error } = await supabase.rpc("admin_delete_user", { p_user_id: userId });
-  if (error || data !== true) {
-    const { error: fallbackError } = await supabase.from("app_users").delete().eq("id", userId);
-    if (fallbackError) {
-      // If remote deletion is unavailable, still remove from local fallback storage.
-      deleteUser(userId);
-      return {
-        ok: true as const,
-        warning:
-          fallbackError.message || error?.message || "Пользователь удален только локально. Удаление на сервере не выполнено.",
-      };
+  let serverWarning: string | undefined;
+
+  try {
+    const { data, error } = await withTimeout(
+      supabase.rpc("admin_delete_user", { p_user_id: userId }),
+      REMOVE_USER_TIMEOUT_MS,
+      "remove_user_timeout",
+    );
+    const rpcOk = !error && (data as unknown) === true;
+    if (!rpcOk) {
+      const { error: delErr } = await withTimeout(
+        supabase.from("app_users").delete().eq("id", userId),
+        REMOVE_USER_TIMEOUT_MS,
+        "remove_user_delete_timeout",
+      );
+      if (delErr) {
+        serverWarning = delErr.message || error?.message || "server_delete_failed";
+      }
     }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    serverWarning = serverWarning || msg;
+  } finally {
+    // Всегда чистим локальный кэш, иначе «фантомы» остаются в UI при сбоях/зависаниях RPC
+    deleteUser(userId);
   }
-  // Keep local fallback storage in sync with remote deletes.
-  deleteUser(userId);
+
+  if (serverWarning) {
+    return {
+      ok: true as const,
+      warning: `Список на устройстве обновлён. Сервер: ${serverWarning}`,
+    };
+  }
   return { ok: true as const };
 }
 
