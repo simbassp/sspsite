@@ -1,16 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { fetchNews } from "@/lib/news-repository";
-import { fetchAllResults } from "@/lib/tests-repository";
-import { fetchUsers } from "@/lib/users-repository";
-import { NewsItem, TestResult, UserRecord } from "@/lib/types";
+import { useEffect, useState } from "react";
+
+type HomeStatsOk = { ok: true; activeUserCount: number; newsCount: number };
 
 export default function DashboardPage() {
-  const [users, setUsers] = useState<UserRecord[]>([]);
-  const [news, setNews] = useState<NewsItem[]>([]);
-  const [results, setResults] = useState<TestResult[]>([]);
+  const [activeUserCount, setActiveUserCount] = useState<number | null>(null);
+  const [newsCount, setNewsCount] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
 
@@ -20,14 +17,22 @@ export default function DashboardPage() {
       setIsLoading(true);
       setLoadError("");
       try {
-        const [nextUsers, nextNews, nextResults] = await Promise.all([fetchUsers(), fetchNews(), fetchAllResults()]);
+        const response = await fetch("/api/home-stats", { cache: "no-store" });
+        const payload = (await response.json()) as HomeStatsOk | { ok: false; error?: string };
         if (cancelled) return;
-        setUsers(nextUsers);
-        setNews(nextNews);
-        setResults(nextResults);
+        if (!response.ok || !payload || !("ok" in payload) || payload.ok !== true) {
+          setLoadError("Сводка недоступна. Обновите страницу или зайдите позже.");
+          setActiveUserCount(null);
+          setNewsCount(null);
+          return;
+        }
+        setActiveUserCount(payload.activeUserCount);
+        setNewsCount(payload.newsCount);
       } catch {
         if (cancelled) return;
         setLoadError("Часть данных не загрузилась. Проверьте интернет и обновите страницу.");
+        setActiveUserCount(null);
+        setNewsCount(null);
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -37,49 +42,33 @@ export default function DashboardPage() {
     };
   }, []);
 
-  const stats = useMemo(() => {
-    const activeUsers = users.filter((u) => u.status === "active");
-    const finalResults = results.filter((r) => r.type === "final");
-    const passed = finalResults.filter((r) => r.status === "passed").length;
-
-    return {
-      users: activeUsers.length,
-      news: news.length,
-      totalResults: finalResults.length,
-      passedFinalPercent: finalResults.length ? Math.round((passed / finalResults.length) * 100) : 0,
-    };
-  }, [news.length, results, users]);
-
   return (
     <section>
-      <h1 className="page-title">Dashboard</h1>
-      <p className="page-subtitle">Короткая сводка и быстрый вход в разделы без длинного скролла.</p>
+      <h1 className="page-title">Главная</h1>
+      <p className="page-subtitle">
+        Общая сводка по контуру и быстрые ссылки. Личные результаты тестов — в разделе «Профиль»; сводка по
+        сотрудникам для администраторов — в «Управление → Пользователи / Результаты».
+      </p>
       {isLoading && <p className="page-subtitle">Загружаем данные…</p>}
       {loadError && <p className="page-subtitle">{loadError}</p>}
 
       <div className="grid grid-two">
         <div className="card">
           <div className="card-body">
-            <p className="label">Активных сотрудников</p>
-            <p className="stat-value">{stats.users}</p>
+            <p className="label">Активных учётных записей</p>
+            <p className="label" style={{ marginTop: 6, fontSize: 12 }}>
+              Всего в системе (статус «активен»)
+            </p>
+            <p className="stat-value">{activeUserCount === null ? "—" : activeUserCount}</p>
           </div>
         </div>
         <div className="card">
           <div className="card-body">
-            <p className="label">Новостей в базе</p>
-            <p className="stat-value">{stats.news}</p>
-          </div>
-        </div>
-        <div className="card">
-          <div className="card-body">
-            <p className="label">Итоговый тест</p>
-            <p className="stat-value">{stats.passedFinalPercent}%</p>
-          </div>
-        </div>
-        <div className="card">
-          <div className="card-body">
-            <p className="label">Попыток итогового</p>
-            <p className="stat-value">{stats.totalResults}</p>
+            <p className="label">Новостей в ленте</p>
+            <p className="label" style={{ marginTop: 6, fontSize: 12 }}>
+              Записей в разделе «Новости»
+            </p>
+            <p className="stat-value">{newsCount === null ? "—" : newsCount}</p>
           </div>
         </div>
       </div>
@@ -114,6 +103,14 @@ export default function DashboardPage() {
             <h3>Тесты</h3>
             <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
               Пробный мягкий режим и строгий итоговый.
+            </p>
+          </div>
+        </Link>
+        <Link href="/profile" className="card" style={{ gridColumn: "1 / -1" }}>
+          <div className="card-body">
+            <h3>Профиль</h3>
+            <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
+              Ваши данные и личные результаты тестов.
             </p>
           </div>
         </Link>

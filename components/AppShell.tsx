@@ -33,7 +33,7 @@ const mainLinks = [
 
 export function AppShell({ session, children }: AppShellProps) {
   const pathname = usePathname();
-  const bottomLinks = mainLinks.slice(0, 5);
+  const bottomLinks = mainLinks;
   const canEditUsers = canManageUsers(session);
   const hasAdminAccess = canAccessAdminPanel(session);
   const [isLoggingOut, setIsLoggingOut] = useState(false);

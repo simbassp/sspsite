@@ -359,9 +359,9 @@ html[data-theme="dark"] .select option {
   bottom: 0;
   z-index: 20;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 8px;
-  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 4px 6px;
+  padding: 10px 8px calc(10px + env(safe-area-inset-bottom));
   background: color-mix(in srgb, var(--bg) 88%, transparent);
   backdrop-filter: blur(12px);
   border-top: 1px solid var(--line);
@@ -370,10 +370,12 @@ html[data-theme="dark"] .select option {
 .bottom-nav a {
   display: grid;
   justify-items: center;
-  gap: 4px;
-  padding: 8px 4px;
+  gap: 2px;
+  padding: 6px 2px;
   border-radius: 12px;
-  font-size: 11px;
+  font-size: 10px;
+  line-height: 1.2;
+  min-width: 0;
 }
 
 .bottom-nav a.active {
