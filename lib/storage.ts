@@ -157,6 +157,22 @@ export function listUsers() {
   return readData().users;
 }
 
+/**
+ * Подмешанный ранее локальный список (демо, офлайн) может расходиться с `app_users` в Supabase.
+ * После успешной выгрузки с сервера перезаписываем кэш, чтобы и админка, и счётчики не путались.
+ */
+export function replaceAllUsersInLocalCache(nextUsers: UserRecord[]) {
+  if (typeof window === "undefined") return;
+  const data = readData();
+  data.users = nextUsers.map((u) =>
+    withNormalizedPermissions({
+      ...u,
+      password: u.password ?? "",
+    } as UserRecord),
+  );
+  writeData(data);
+}
+
 export function updateUser(
   userId: string,
   patch: Partial<Pick<UserRecord, "name" | "callsign" | "position" | "status" | "canManageContent" | "permissions">>,

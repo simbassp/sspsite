@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getPositions } from "@/lib/storage";
 import { fetchUsers, patchUser, removeUser } from "@/lib/users-repository";
 import { UserRecord } from "@/lib/types";
@@ -22,10 +22,10 @@ export default function AdminUsersPage() {
   const [info, setInfo] = useState("");
   const [permissionsTargetId, setPermissionsTargetId] = useState<string | null>(null);
   const [permissionDrafts, setPermissionDrafts] = useState<Record<string, UserRecord["permissions"]>>({});
-  useState(() => {
-    fetchUsers().then((next) => setUsers(next));
-    return true;
-  });
+
+  useEffect(() => {
+    void fetchUsers().then((next) => setUsers(next));
+  }, []);
 
   const refresh = async () => {
     const next = await fetchUsers();
@@ -135,8 +135,12 @@ export default function AdminUsersPage() {
                       const confirmed = window.confirm(`Удалить пользователя ${user.name} (@${user.login})?`);
                       if (!confirmed) return;
                       const result = await removeUser(user.id);
-                      setUsers((prev) => prev.filter((item) => item.id !== user.id));
-                      setInfo("warning" in result && result.warning ? result.warning : "Пользователь удален.");
+                      if ("warning" in result && result.warning) {
+                        setInfo(result.warning);
+                      } else {
+                        setInfo("Пользователь удален.");
+                      }
+                      await refresh();
                     }}
                   >
                     Удалить

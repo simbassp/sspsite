@@ -10,6 +10,7 @@ import {
   deleteUser,
   listUsers,
   registerEmployee,
+  replaceAllUsersInLocalCache,
   updateUser,
 } from "@/lib/storage";
 import { Position, SessionUser, UserPermissions, UserRecord } from "@/lib/types";
@@ -784,7 +785,9 @@ export async function fetchUsers() {
     if (error || !data) {
       return listUsers();
     }
-    return (data as UserRow[]).map(toUserRecord);
+    const list = (data as UserRow[]).map(toUserRecord);
+    replaceAllUsersInLocalCache(list);
+    return list;
   } catch {
     return listUsers();
   }
