@@ -11,12 +11,29 @@ export default function AdminResultsPage() {
   const [filter, setFilter] = useState<Filter>("all");
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [results, setResults] = useState<TestResult[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
-    Promise.all([fetchUsers(), fetchAllResults()]).then(([nextUsers, nextResults]) => {
-      setUsers(nextUsers.filter((u) => u.role === "employee"));
-      setResults(nextResults.filter((r) => r.type === "final"));
-    });
+    let cancelled = false;
+    (async () => {
+      setIsLoading(true);
+      setLoadError("");
+      try {
+        const [nextUsers, nextResults] = await Promise.all([fetchUsers(), fetchAllResults()]);
+        if (cancelled) return;
+        setUsers(nextUsers.filter((u) => u.role === "employee"));
+        setResults(nextResults.filter((r) => r.type === "final"));
+      } catch {
+        if (cancelled) return;
+        setLoadError("Не удалось получить данные результатов. Попробуйте обновить страницу.");
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const rows = useMemo<
@@ -44,6 +61,8 @@ export default function AdminResultsPage() {
     <section>
       <h1 className="page-title">Админ / Результаты тестов</h1>
       <p className="page-subtitle">Быстрые фильтры по статусам прохождения итогового теста.</p>
+      {isLoading && <p className="page-subtitle">Загружаем результаты…</p>}
+      {loadError && <p className="page-subtitle">{loadError}</p>}
 
       <div className="chips">
         <button className={`chip ${filter === "all" ? "active" : ""}`} type="button" onClick={() => setFilter("all")}>

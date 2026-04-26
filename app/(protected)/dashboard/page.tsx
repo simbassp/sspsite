@@ -11,13 +11,30 @@ export default function DashboardPage() {
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [news, setNews] = useState<NewsItem[]>([]);
   const [results, setResults] = useState<TestResult[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
-    Promise.all([fetchUsers(), fetchNews(), fetchAllResults()]).then(([nextUsers, nextNews, nextResults]) => {
-      setUsers(nextUsers);
-      setNews(nextNews);
-      setResults(nextResults);
-    });
+    let cancelled = false;
+    (async () => {
+      setIsLoading(true);
+      setLoadError("");
+      try {
+        const [nextUsers, nextNews, nextResults] = await Promise.all([fetchUsers(), fetchNews(), fetchAllResults()]);
+        if (cancelled) return;
+        setUsers(nextUsers);
+        setNews(nextNews);
+        setResults(nextResults);
+      } catch {
+        if (cancelled) return;
+        setLoadError("Часть данных не загрузилась. Проверьте интернет и обновите страницу.");
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const stats = useMemo(() => {
@@ -37,6 +54,8 @@ export default function DashboardPage() {
     <section>
       <h1 className="page-title">Dashboard</h1>
       <p className="page-subtitle">Короткая сводка и быстрый вход в разделы без длинного скролла.</p>
+      {isLoading && <p className="page-subtitle">Загружаем данные…</p>}
+      {loadError && <p className="page-subtitle">{loadError}</p>}
 
       <div className="grid grid-two">
         <div className="card">

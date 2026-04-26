@@ -17,6 +17,7 @@ import {
 } from "@/lib/storage";
 import { createDefaultQuestionBank } from "@/lib/test-question-bank";
 import { normalizeTestConfig } from "@/lib/test-config";
+import { withTimeoutAndRetry } from "@/lib/async-utils";
 import { FinalAttemptState, TestConfig, TestQuestion, TestResult, TestType } from "@/lib/types";
 
 type TestResultRow = {
@@ -103,33 +104,51 @@ export async function fetchUserResults(userId: string) {
   if (!isSupabaseConfigured) {
     return listTestResults().filter((r) => r.userId === userId);
   }
-  const supabase = getSupabaseBrowserClient();
-  const { data, error } = await supabase
-    .from("test_results")
-    .select("id,user_id,type,status,score,created_at")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false });
-
-  if (error || !data) {
+  try {
+    const supabase = getSupabaseBrowserClient();
+    const { data, error } = await withTimeoutAndRetry(
+      () =>
+        supabase
+          .from("test_results")
+          .select("id,user_id,type,status,score,created_at")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false }),
+      7000,
+      1,
+      "fetch_user_results_timeout",
+    );
+    if (error || !data) {
+      return listTestResults().filter((r) => r.userId === userId);
+    }
+    return (data as TestResultRow[]).map(mapResult);
+  } catch {
     return listTestResults().filter((r) => r.userId === userId);
   }
-  return (data as TestResultRow[]).map(mapResult);
 }
 
 export async function fetchAllResults() {
   if (!isSupabaseConfigured) {
     return listTestResults();
   }
-  const supabase = getSupabaseBrowserClient();
-  const { data, error } = await supabase
-    .from("test_results")
-    .select("id,user_id,type,status,score,created_at")
-    .order("created_at", { ascending: false });
-
-  if (error || !data) {
+  try {
+    const supabase = getSupabaseBrowserClient();
+    const { data, error } = await withTimeoutAndRetry(
+      () =>
+        supabase
+          .from("test_results")
+          .select("id,user_id,type,status,score,created_at")
+          .order("created_at", { ascending: false }),
+      7000,
+      1,
+      "fetch_all_results_timeout",
+    );
+    if (error || !data) {
+      return listTestResults();
+    }
+    return (data as TestResultRow[]).map(mapResult);
+  } catch {
     return listTestResults();
   }
-  return (data as TestResultRow[]).map(mapResult);
 }
 
 export async function createTrialResult(userId: string, score: number) {
@@ -196,17 +215,26 @@ export async function loadFinalAttempt(userId: string) {
   if (!isSupabaseConfigured) {
     return getFinalAttempt(userId);
   }
-  const supabase = getSupabaseBrowserClient();
-  const { data, error } = await supabase
-    .from("final_attempts")
-    .select("user_id,started_at,question_index,answers")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if (error || !data) {
+  try {
+    const supabase = getSupabaseBrowserClient();
+    const { data, error } = await withTimeoutAndRetry(
+      () =>
+        supabase
+          .from("final_attempts")
+          .select("user_id,started_at,question_index,answers")
+          .eq("user_id", userId)
+          .maybeSingle(),
+      6000,
+      1,
+      "load_final_attempt_timeout",
+    );
+    if (error || !data) {
+      return getFinalAttempt(userId);
+    }
+    return mapAttempt(data as FinalAttemptRow);
+  } catch {
     return getFinalAttempt(userId);
   }
-  return mapAttempt(data as FinalAttemptRow);
 }
 
 export async function finishFinalAttempt(userId: string, score: number, passed: boolean) {
@@ -281,17 +309,26 @@ export async function fetchActiveQuestionPool() {
   if (!isSupabaseConfigured) {
     return listTestQuestions().filter((q) => q.isActive).sort((a, b) => a.order - b.order);
   }
-  const supabase = getSupabaseBrowserClient();
-  const { data, error } = await supabase
-    .from("test_questions")
-    .select("id,type,text,options,correct_index,time_limit_sec,order_index,is_active,created_at")
-    .eq("is_active", true)
-    .order("order_index", { ascending: true });
-
-  if (error || !data) {
+  try {
+    const supabase = getSupabaseBrowserClient();
+    const { data, error } = await withTimeoutAndRetry(
+      () =>
+        supabase
+          .from("test_questions")
+          .select("id,type,text,options,correct_index,time_limit_sec,order_index,is_active,created_at")
+          .eq("is_active", true)
+          .order("order_index", { ascending: true }),
+      7000,
+      1,
+      "fetch_questions_timeout",
+    );
+    if (error || !data) {
+      return listTestQuestions().filter((q) => q.isActive).sort((a, b) => a.order - b.order);
+    }
+    return (data as TestQuestionRow[]).map(mapQuestion);
+  } catch {
     return listTestQuestions().filter((q) => q.isActive).sort((a, b) => a.order - b.order);
   }
-  return (data as TestQuestionRow[]).map(mapQuestion);
 }
 
 export async function fetchAdminQuestionBank() {
@@ -393,17 +430,26 @@ export async function fetchTestConfig() {
   if (!isSupabaseConfigured) {
     return getTestConfig();
   }
-  const supabase = getSupabaseBrowserClient();
-  const { data, error } = await supabase
-    .from("test_settings")
-    .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
-    .eq("id", 1)
-    .maybeSingle();
-
-  if (error || !data) {
+  try {
+    const supabase = getSupabaseBrowserClient();
+    const { data, error } = await withTimeoutAndRetry(
+      () =>
+        supabase
+          .from("test_settings")
+          .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
+          .eq("id", 1)
+          .maybeSingle(),
+      6000,
+      1,
+      "fetch_test_config_timeout",
+    );
+    if (error || !data) {
+      return getTestConfig();
+    }
+    return mapConfig(data as TestConfigRow);
+  } catch {
     return getTestConfig();
   }
-  return mapConfig(data as TestConfigRow);
 }
 
 export async function saveTestConfig(config: TestConfig) {

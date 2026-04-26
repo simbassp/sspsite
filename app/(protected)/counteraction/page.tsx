@@ -51,11 +51,22 @@ export default function CounteractionPage() {
   const [draft, setDraft] = useState<InlineDraft | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
   const canInlineEdit = canManageCounteraction(readClientSession());
 
   const refresh = async () => {
-    const rows = await fetchCounteractionItems();
-    setItems(rows);
+    setIsLoading(true);
+    try {
+      const rows = await fetchCounteractionItems();
+      setItems(rows);
+      if (!rows.length) {
+        setMessage((prev) => prev || "Данные временно недоступны или ещё не добавлены.");
+      }
+    } catch {
+      setMessage("Не удалось загрузить каталог. Проверьте интернет и повторите попытку.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -179,6 +190,7 @@ export default function CounteractionPage() {
     <section>
       <h1 className="page-title">Противодействие</h1>
       <p className="page-subtitle">Каталог со сжатыми параметрами и переходом в детальные вкладки.</p>
+      {isLoading && <p className="page-subtitle">Загружаем каталог…</p>}
       {message && <p className="page-subtitle">{message}</p>}
 
       {items.length > 1 && (

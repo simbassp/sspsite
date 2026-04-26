@@ -481,25 +481,6 @@ html[data-theme="dark"] .select option {
     justify-content: center;
   }
 
-  /* На узком экране история сразу под описанием (не внизу за длинной формой вопроса). */
-  .tests-page {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-  }
-
-  .tests-page-head {
-    order: 1;
-  }
-
-  .tests-history-section {
-    order: 2;
-  }
-
-  .tests-page-main {
-    order: 3;
-  }
-
   .tests-page .page-title {
     font-size: 20px;
   }

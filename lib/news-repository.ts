@@ -2,6 +2,7 @@
 
 import { listNews, addNews } from "@/lib/storage";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
+import { withTimeoutAndRetry } from "@/lib/async-utils";
 import { NewsItem } from "@/lib/types";
 
 type NewsRow = {
@@ -32,17 +33,25 @@ export async function fetchNews(): Promise<NewsItem[]> {
     return listNews();
   }
 
-  const supabase = getSupabaseBrowserClient();
-  const { data, error } = await supabase
-    .from("news")
-    .select("*")
-    .order("created_at", { ascending: false });
-
-  if (error || !data) {
+  try {
+    const supabase = getSupabaseBrowserClient();
+    const { data, error } = await withTimeoutAndRetry(
+      () =>
+        supabase
+          .from("news")
+          .select("*")
+          .order("created_at", { ascending: false }),
+      7000,
+      1,
+      "fetch_news_timeout",
+    );
+    if (error || !data) {
+      return listNews();
+    }
+    return (data as NewsRow[]).map(mapNewsRow);
+  } catch {
     return listNews();
   }
-
-  return (data as NewsRow[]).map(mapNewsRow);
 }
 
 export async function createNews(payload: { title: string; body: string; priority: "high" | "normal"; author: string }) {

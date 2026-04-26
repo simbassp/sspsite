@@ -79,32 +79,45 @@ export default function TestsPage() {
 
   useEffect(() => {
     if (!session) return;
+    let cancelled = false;
     (async () => {
-      await seedDefaultQuestionsIfEmpty();
-      const [uavItems, dbPool, config] = await Promise.all([
-        fetchUavItems(),
-        fetchActiveQuestionPool(),
-        fetchTestConfig(),
-      ]);
-      const fromUav = config.uavAutoGeneration
-        ? generateUavTtxQuestionBank(uavItems, config.timePerQuestionSec)
-        : [];
-      if (fromUav.length > 0) {
-        const ids = new Set(fromUav.map((q) => q.id));
-        setQuestionPool([...fromUav, ...dbPool.filter((q) => !ids.has(q.id))]);
-      } else {
-        setQuestionPool(dbPool);
-      }
-      setTestConfig(config);
+      try {
+        await seedDefaultQuestionsIfEmpty();
+        const [uavItems, dbPool, config] = await Promise.all([
+          fetchUavItems(),
+          fetchActiveQuestionPool(),
+          fetchTestConfig(),
+        ]);
+        if (cancelled) return;
+        const fromUav = config.uavAutoGeneration
+          ? generateUavTtxQuestionBank(uavItems, config.timePerQuestionSec)
+          : [];
+        if (fromUav.length > 0) {
+          const ids = new Set(fromUav.map((q) => q.id));
+          setQuestionPool([...fromUav, ...dbPool.filter((q) => !ids.has(q.id))]);
+        } else {
+          setQuestionPool(dbPool);
+        }
+        setTestConfig(config);
 
-      const orphanAttempt = await loadFinalAttempt(session.id);
-      if (orphanAttempt) {
-        await forceFailFinalAttempt(session.id);
-        setMessage("Итоговая попытка была прервана (обновление/закрытие/выход) и засчитана как НЕ СДАЛ.");
+        const orphanAttempt = await loadFinalAttempt(session.id);
+        if (cancelled) return;
+        if (orphanAttempt) {
+          await forceFailFinalAttempt(session.id);
+          if (cancelled) return;
+          setMessage("Итоговая попытка была прервана (обновление/закрытие/выход) и засчитана как НЕ СДАЛ.");
+        }
+        const all = await fetchUserResults(session.id);
+        if (cancelled) return;
+        setResults(all);
+      } catch {
+        if (cancelled) return;
+        setMessage("Не удалось полностью загрузить данные тестов. Проверьте интернет и обновите страницу.");
       }
-      const all = await fetchUserResults(session.id);
-      setResults(all);
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [session]);
 
   const activeQuestions = selectedQuestions;

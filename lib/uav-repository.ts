@@ -1,11 +1,11 @@
 "use client";
 
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
+import { withTimeoutAndRetry } from "@/lib/async-utils";
 import {
   getCounteractionById,
   getUavById,
   listCounteraction,
-  listUav,
   removeCounteractionItem,
   removeUavItem,
   upsertCounteractionItem,
@@ -204,7 +204,16 @@ async function deleteCatalogItem(
 
 export async function fetchUavItems() {
   try {
-    const response = await fetch("/api/uav", { cache: "no-store" });
+    const response = await withTimeoutAndRetry(
+      () =>
+        fetch("/api/uav", {
+          cache: "no-store",
+          headers: { "cache-control": "no-store" },
+        }),
+      7000,
+      1,
+      "fetch_uav_items_timeout",
+    );
     if (!response.ok) return [];
     const payload = (await response.json()) as { ok?: boolean; items?: CatalogItem[] };
     return Array.isArray(payload.items) ? payload.items : [];

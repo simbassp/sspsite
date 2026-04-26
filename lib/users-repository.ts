@@ -4,6 +4,7 @@ import { clearSessionCookie, serializeSessionCookie } from "@/lib/auth";
 import { readClientSession } from "@/lib/client-auth";
 import { SESSION_COOKIE } from "@/lib/seed";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
+import { withTimeoutAndRetry } from "@/lib/async-utils";
 import {
   authenticate,
   deleteUser,
@@ -768,17 +769,25 @@ export async function fetchUsers() {
     return listUsers();
   }
 
-  const supabase = getSupabaseBrowserClient();
-  const { data, error } = await supabase
-    .from("app_users")
-    .select("*")
-    .order("created_at", { ascending: false });
-
-  if (error || !data) {
+  try {
+    const supabase = getSupabaseBrowserClient();
+    const { data, error } = await withTimeoutAndRetry(
+      () =>
+        supabase
+          .from("app_users")
+          .select("*")
+          .order("created_at", { ascending: false }),
+      7000,
+      1,
+      "fetch_users_timeout",
+    );
+    if (error || !data) {
+      return listUsers();
+    }
+    return (data as UserRow[]).map(toUserRecord);
+  } catch {
     return listUsers();
   }
-
-  return (data as UserRow[]).map(toUserRecord);
 }
 
 export async function patchUser(
