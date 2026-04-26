@@ -385,7 +385,13 @@ html[data-theme="dark"] .select option {
 
   .bottom-nav a {
     padding: 10px 2px;
-    font-size: 0;
+  }
+
+  /* Явный размер: родительский font-size: 0 скрывал и эмодзи-иконки */
+  .bottom-nav-icon {
+    display: block;
+    font-size: 22px;
+    line-height: 1;
   }
 }
 

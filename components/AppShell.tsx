@@ -161,8 +161,10 @@ export function AppShell({ session, children }: AppShellProps) {
           const active = pathname === link.href || pathname.startsWith(`${link.href}/`);
           return (
             <Link key={link.href} href={link.href} className={active ? "active" : ""} aria-label={link.label}>
-              <div>{link.icon}</div>
-              <div className="bottom-nav-label">{link.label}</div>
+              <span className="bottom-nav-icon" aria-hidden="true">
+                {link.icon}
+              </span>
+              <span className="bottom-nav-label">{link.label}</span>
             </Link>
           );
         })}
