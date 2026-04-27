@@ -37,20 +37,25 @@ export async function GET(req: Request) {
   try {
     const supabase = getServerSupabaseServiceClient();
 
-    let usersQ = await supabase
+    let usersPrimary = await supabase
       .from("app_users")
       .select("id,name,callsign,role,status,final_test_counting_from")
       .limit(1000);
 
-    if (usersQ.error && isMissingColumnError(usersQ.error.message)) {
-      usersQ = await supabase.from("app_users").select("id,name,callsign,role,status").limit(1000);
+    let usersRows = usersPrimary.data;
+    let usersErr = usersPrimary.error;
+
+    if (usersErr && isMissingColumnError(usersErr.message)) {
+      const usersFallback = await supabase.from("app_users").select("id,name,callsign,role,status").limit(1000);
+      usersRows = usersFallback.data;
+      usersErr = usersFallback.error;
     }
 
-    if (usersQ.error || !usersQ.data) {
-      return Response.json({ ok: false, error: usersQ.error?.message || "users_failed" }, { status: 500 });
+    if (usersErr || !usersRows) {
+      return Response.json({ ok: false, error: usersErr?.message || "users_failed" }, { status: 500 });
     }
 
-    const users = usersQ.data as Array<{
+    const users = usersRows as Array<{
       id: string;
       name: string;
       callsign: string;
@@ -59,36 +64,43 @@ export async function GET(req: Request) {
       final_test_counting_from?: string | null;
     }>;
 
-    let resultsQ = await supabase
+    let resultsPrimary = await supabase
       .from("test_results")
       .select("id,user_id,type,status,score,created_at,questions_total,questions_correct")
       .eq("type", "final")
       .order("created_at", { ascending: false })
       .limit(8000);
 
-    if (resultsQ.error && isMissingColumnError(resultsQ.error.message)) {
-      resultsQ = await supabase
+    let resultsRows = resultsPrimary.data;
+    let resultsErr = resultsPrimary.error;
+
+    if (resultsErr && isMissingColumnError(resultsErr.message)) {
+      const resultsMid = await supabase
         .from("test_results")
         .select("id,user_id,type,status,score,created_at")
         .eq("type", "final")
         .order("created_at", { ascending: false })
         .limit(8000);
+      resultsRows = resultsMid.data;
+      resultsErr = resultsMid.error;
     }
 
-    if (resultsQ.error && isMissingColumnError(resultsQ.error.message)) {
-      resultsQ = await supabase
+    if (resultsErr && isMissingColumnError(resultsErr.message)) {
+      const resultsLegacy = await supabase
         .from("test_results")
         .select("id,user_id,test_type,status,score,created_at")
         .eq("test_type", "final")
         .order("created_at", { ascending: false })
         .limit(8000);
+      resultsRows = resultsLegacy.data;
+      resultsErr = resultsLegacy.error;
     }
 
-    if (resultsQ.error) {
-      return Response.json({ ok: false, error: resultsQ.error.message || "results_failed" }, { status: 500 });
+    if (resultsErr) {
+      return Response.json({ ok: false, error: resultsErr.message || "results_failed" }, { status: 500 });
     }
 
-    const finalRows = ((resultsQ.data || []) as Array<Record<string, unknown>>)
+    const finalRows = ((resultsRows || []) as Array<Record<string, unknown>>)
       .filter((r) => (r.type ?? r.test_type) === "final")
       .map((r) => ({
         id: String(r.id),
