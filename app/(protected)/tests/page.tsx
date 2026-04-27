@@ -40,6 +40,7 @@ type TrialFeedback = { chosen: number | null; correct: number };
 
 export default function TestsPage() {
   const session = useMemo(() => readClientSession(), []);
+  const [isHydrated, setIsHydrated] = useState(false);
   const [results, setResults] = useState<TestResult[]>([]);
   const [questionPool, setQuestionPool] = useState<TestQuestion[]>([]);
   const [selectedQuestions, setSelectedQuestions] = useState<TestQuestion[]>([]);
@@ -57,6 +58,10 @@ export default function TestsPage() {
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState("");
   const [isPoolLoading, setIsPoolLoading] = useState(false);
+
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
 
   const isAnsweringRef = useRef(false);
   isAnsweringRef.current = isAnswering;
@@ -352,6 +357,10 @@ export default function TestsPage() {
     }, 1000);
     return () => window.clearInterval(id);
   }, [activeTest, currentQuestion?.id, trialFeedback]);
+
+  if (!isHydrated) {
+    return <p className="page-subtitle">Загрузка тестов...</p>;
+  }
 
   if (!session) {
     return <p className="page-subtitle">Ошибка сессии. Перезайдите в систему.</p>;
