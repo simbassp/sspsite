@@ -127,8 +127,11 @@ create index if not exists idx_app_users_login on public.app_users(login);
 create index if not exists idx_app_users_role on public.app_users(role);
 create index if not exists idx_test_results_user_id on public.test_results(user_id);
 create index if not exists idx_test_results_type_status on public.test_results(type, status);
+create index if not exists idx_test_results_user_created_desc on public.test_results(user_id, created_at desc);
 create index if not exists idx_catalog_items_kind on public.catalog_items(kind);
+create index if not exists idx_catalog_items_kind_created_desc on public.catalog_items(kind, created_at desc);
 create index if not exists idx_test_questions_type_order on public.test_questions(type, order_index);
+create index if not exists idx_test_questions_active_order on public.test_questions(is_active, order_index);
 
 create or replace function public.is_admin()
 returns boolean

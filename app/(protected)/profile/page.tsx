@@ -38,18 +38,38 @@ export default function ProfilePage() {
   const [passwordInput, setPasswordInput] = useState("");
   const [passwordRepeat, setPasswordRepeat] = useState("");
   const [settingsMessage, setSettingsMessage] = useState("");
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [initialLoadError, setInitialLoadError] = useState("");
+  const [isInviteLoading, setIsInviteLoading] = useState(false);
   const [profileNameInput, setProfileNameInput] = useState(() => session?.name ?? "");
   const [profileCallsignInput, setProfileCallsignInput] = useState(() => session?.callsign ?? "");
 
   useEffect(() => {
     if (!session) return;
-    fetchUserResults(session.id).then(setRows);
-    fetchCurrentAuthEmail().then((result) => {
-      if (result.ok) setEmailInput(result.email);
-    });
-    if (session.role === "admin") {
-      fetchInviteCodes().then(setInviteCodes);
-    }
+    let cancelled = false;
+    (async () => {
+      setIsInitialLoading(true);
+      setInitialLoadError("");
+      try {
+        const [nextRows, emailResult] = await Promise.all([fetchUserResults(session.id), fetchCurrentAuthEmail()]);
+        if (cancelled) return;
+        setRows(nextRows);
+        if (emailResult.ok) setEmailInput(emailResult.email);
+        if (session.role === "admin") {
+          setIsInviteLoading(true);
+          const codes = await fetchInviteCodes();
+          if (!cancelled) setInviteCodes(codes);
+          if (!cancelled) setIsInviteLoading(false);
+        }
+      } catch {
+        if (!cancelled) setInitialLoadError("Не удалось загрузить часть данных профиля. Попробуйте обновить страницу.");
+      } finally {
+        if (!cancelled) setIsInitialLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [session]);
 
   const stats = useMemo(() => {
@@ -212,6 +232,8 @@ export default function ProfilePage() {
   return (
     <section>
       <h1 className="page-title">Профиль</h1>
+      {isInitialLoading && <p className="page-subtitle">Загружаем профиль...</p>}
+      {!!initialLoadError && <p className="page-subtitle">{initialLoadError}</p>}
       <article className="card">
         <div className="card-body">
           <h3>{profileNameInput || session.name}</h3>
@@ -480,6 +502,7 @@ export default function ProfilePage() {
                 </article>
               ))}
               {!inviteCodes.length && <p className="page-subtitle">Пока нет кодов приглашений.</p>}
+              {isInviteLoading && <p className="page-subtitle">Загружаем коды приглашений...</p>}
             </div>
           </div>
         </article>

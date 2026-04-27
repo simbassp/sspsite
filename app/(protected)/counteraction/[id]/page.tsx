@@ -18,17 +18,41 @@ export default function CounteractionDetailPage() {
   const [tab, setTab] = useState<"overview" | "tth" | "usage" | "materials">("overview");
   const [item, setItem] = useState<CatalogItem | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [imageIndex, setImageIndex] = useState(0);
 
+  const load = async () => {
+    setLoading(true);
+    setLoadError("");
+    try {
+      const next = await fetchCounteractionById(params.id);
+      setItem(next);
+    } catch {
+      setItem(null);
+      setLoadError("Не удалось загрузить карточку. Проверьте интернет и попробуйте снова.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    fetchCounteractionById(params.id)
-      .then(setItem)
-      .finally(() => setLoading(false));
+    void load();
     setImageIndex(0);
   }, [params.id]);
 
   if (loading) {
     return <p className="page-subtitle">Загрузка карточки...</p>;
+  }
+
+  if (!loading && loadError) {
+    return (
+      <section>
+        <p className="page-subtitle">{loadError}</p>
+        <button className="btn" type="button" onClick={() => void load()}>
+          Повторить
+        </button>
+      </section>
+    );
   }
 
   if (!item) {

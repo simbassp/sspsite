@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getPositions } from "@/lib/storage";
 import { fetchUsers, patchUser, removeUser } from "@/lib/users-repository";
 import { UserRecord } from "@/lib/types";
@@ -23,6 +23,7 @@ export default function AdminUsersPage() {
   const [permissionsTargetId, setPermissionsTargetId] = useState<string | null>(null);
   const [permissionDrafts, setPermissionDrafts] = useState<Record<string, UserRecord["permissions"]>>({});
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const patchTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   useEffect(() => {
     void fetchUsers().then((next) => setUsers(next));
@@ -56,8 +57,20 @@ export default function AdminUsersPage() {
         };
       }),
     );
-    patchUser(userId, patch).catch(() => setInfo("Не удалось синхронизировать изменения."));
+    if (patchTimersRef.current[userId]) {
+      clearTimeout(patchTimersRef.current[userId]);
+    }
+    patchTimersRef.current[userId] = setTimeout(() => {
+      patchUser(userId, patch).catch(() => setInfo("Не удалось синхронизировать изменения."));
+      delete patchTimersRef.current[userId];
+    }, 350);
   };
+
+  useEffect(() => {
+    return () => {
+      Object.values(patchTimersRef.current).forEach((timerId) => clearTimeout(timerId));
+    };
+  }, []);
 
   const visible = users.filter((item) => {
     const matchesText =

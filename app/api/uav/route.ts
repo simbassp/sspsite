@@ -72,6 +72,7 @@ export async function GET() {
   url.searchParams.set("select", "id,slug,kind,title,category,summary,image,specs,details");
   url.searchParams.set("kind", "eq.uav");
   url.searchParams.set("order", "created_at.desc");
+  url.searchParams.set("limit", "200");
 
   try {
     const controller = new AbortController();

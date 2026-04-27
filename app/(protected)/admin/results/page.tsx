@@ -39,8 +39,14 @@ export default function AdminResultsPage() {
   const rows = useMemo<
     Array<{ id: string; name: string; callsign: string; status: Filter; score: number | null; date: string | null }>
   >(() => {
+    const latestByUserId = new Map<string, TestResult>();
+    for (const result of results) {
+      if (!latestByUserId.has(result.userId)) {
+        latestByUserId.set(result.userId, result);
+      }
+    }
     return users.map((user) => {
-      const latest = results.find((r) => r.userId === user.id);
+      const latest = latestByUserId.get(user.id);
       if (!latest) {
         return { id: user.id, name: user.name, callsign: user.callsign, status: "not_started" as const, score: null, date: null };
       }

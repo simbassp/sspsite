@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { loginUser, persistSession, requestPasswordReset } from "@/lib/users-repository";
 
-const AUTH_REQUEST_TIMEOUT_MS = 45000;
+const AUTH_REQUEST_TIMEOUT_MS = 18000;
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {

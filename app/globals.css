@@ -379,6 +379,12 @@ html[data-theme="dark"] .select option {
 }
 
 @media (max-width: 819px) {
+  .mobile-header,
+  .uav-model-nav,
+  .bottom-nav {
+    backdrop-filter: none;
+  }
+
   .bottom-nav-label {
     display: none;
   }

@@ -16,6 +16,10 @@ type NewsRow = {
   created_at: string;
 };
 
+const NEWS_CACHE_TTL_MS = 60_000;
+const NEWS_CACHE_KEY = "ssp_news_cache_v1";
+let newsMemoryCache: { ts: number; rows: NewsItem[] } | null = null;
+
 function mapNewsRow(row: NewsRow): NewsItem {
   const body = row.body ?? row.text ?? row.content ?? "";
   return {
@@ -28,9 +32,44 @@ function mapNewsRow(row: NewsRow): NewsItem {
   };
 }
 
-export async function fetchNews(): Promise<NewsItem[]> {
+function readNewsCache(limit: number) {
+  const now = Date.now();
+  if (newsMemoryCache && now - newsMemoryCache.ts < NEWS_CACHE_TTL_MS) {
+    return newsMemoryCache.rows.slice(0, limit);
+  }
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(NEWS_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { ts?: number; rows?: NewsItem[] };
+    if (!parsed.ts || !Array.isArray(parsed.rows)) return null;
+    if (now - parsed.ts >= NEWS_CACHE_TTL_MS) return null;
+    newsMemoryCache = { ts: parsed.ts, rows: parsed.rows };
+    return parsed.rows.slice(0, limit);
+  } catch {
+    return null;
+  }
+}
+
+function writeNewsCache(rows: NewsItem[]) {
+  const payload = { ts: Date.now(), rows };
+  newsMemoryCache = payload;
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(NEWS_CACHE_KEY, JSON.stringify(payload));
+  } catch {}
+}
+
+export async function fetchNews(limit = 40, forceRefresh = false): Promise<NewsItem[]> {
+  const safeLimit = Math.max(1, Math.min(limit, 200));
+  if (!forceRefresh) {
+    const cached = readNewsCache(safeLimit);
+    if (cached) return cached;
+  }
   if (!isSupabaseConfigured) {
-    return listNews();
+    const local = listNews().slice(0, safeLimit);
+    writeNewsCache(local);
+    return local;
   }
 
   try {
@@ -39,18 +78,21 @@ export async function fetchNews(): Promise<NewsItem[]> {
       () =>
         supabase
           .from("news")
-          .select("*")
-          .order("created_at", { ascending: false }),
+          .select("id,title,body,text,content,priority,author,created_at")
+          .order("created_at", { ascending: false })
+          .limit(safeLimit),
       7000,
       1,
       "fetch_news_timeout",
     );
     if (error || !data) {
-      return listNews();
+      return listNews().slice(0, safeLimit);
     }
-    return (data as NewsRow[]).map(mapNewsRow);
+    const mapped = (data as NewsRow[]).map(mapNewsRow);
+    writeNewsCache(mapped);
+    return mapped;
   } catch {
-    return listNews();
+    return listNews().slice(0, safeLimit);
   }
 }
 

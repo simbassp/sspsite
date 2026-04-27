@@ -9,11 +9,24 @@ export default function NewsPage() {
   const [news, setNews] = useState<NewsItem[]>([]);
   const [filter, setFilter] = useState<"all" | "high">("all");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const load = async (forceRefresh = false) => {
+    setLoading(true);
+    setError("");
+    try {
+      const rows = await fetchNews(40, forceRefresh);
+      setNews(rows);
+    } catch {
+      setError("Не удалось загрузить новости. Проверьте интернет и попробуйте снова.");
+      setNews([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    fetchNews()
-      .then((rows) => setNews(rows))
-      .finally(() => setLoading(false));
+    void load();
   }, []);
 
   const visible = news.filter((item) => (filter === "all" ? true : item.priority === "high"));
@@ -33,7 +46,29 @@ export default function NewsPage() {
       </div>
 
       <div className="list" style={{ marginTop: 12 }}>
-        {loading && <p className="page-subtitle">Загрузка новостей...</p>}
+        {loading && (
+          <>
+            <p className="page-subtitle">Загрузка новостей...</p>
+            {[1, 2].map((i) => (
+              <article className="card" key={`news-skeleton-${i}`}>
+                <div className="card-body">
+                  <p className="label">Загружаем карточку...</p>
+                </div>
+              </article>
+            ))}
+          </>
+        )}
+        {!loading && !!error && (
+          <article className="card">
+            <div className="card-body form">
+              <p className="page-subtitle">{error}</p>
+              <button className="btn" type="button" onClick={() => void load(true)}>
+                Повторить
+              </button>
+            </div>
+          </article>
+        )}
+        {!loading && !error && !visible.length && <p className="page-subtitle">Новости пока отсутствуют.</p>}
         {visible.map((item) => (
           <article className="card" key={item.id}>
             <div className="card-body">

@@ -49,6 +49,7 @@ type InlineDraft = {
 export default function UavPage() {
   const [items, setItems] = useState<CatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [zoomedSrc, setZoomedSrc] = useState<string | null>(null);
   const [imgErrors, setImgErrors] = useState<Record<string, boolean>>({});
   const cardRefs = useRef<Record<string, HTMLElement | null>>({});
@@ -58,19 +59,26 @@ export default function UavPage() {
   const [message, setMessage] = useState("");
   const canInlineEdit = canManageUav(readClientSession());
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
+  const load = async () => {
+    setLoading(true);
+    setLoadError("");
+    try {
       const rows = await fetchUavItems();
       setItems(rows);
+    } catch {
+      setLoadError("Не удалось загрузить карточки БПЛА. Проверьте интернет и повторите попытку.");
+      setItems([]);
+    } finally {
       setLoading(false);
-    };
+    }
+  };
+
+  useEffect(() => {
     void load();
   }, []);
 
   const refresh = async () => {
-    const rows = await fetchUavItems();
-    setItems(rows);
+    await load();
   };
 
   useEffect(() => {
@@ -187,6 +195,14 @@ export default function UavPage() {
       <p className="page-subtitle">Быстрый обзор и полная карточка с подробными характеристиками.</p>
 
       {loading && <p className="page-subtitle">Загрузка карточек БПЛА...</p>}
+      {!loading && !!loadError && (
+        <div className="form" style={{ marginBottom: 12 }}>
+          <p className="page-subtitle">{loadError}</p>
+          <button className="btn" type="button" onClick={() => void load()}>
+            Повторить
+          </button>
+        </div>
+      )}
       {!loading && items.length === 0 && (
         <p className="page-subtitle">
           Пока нет доступных карточек БПЛА. Проверьте подключение к сети и обновите страницу.
