@@ -516,7 +516,7 @@ html[data-theme="dark"] .select option {
   gap: 12px;
 }
 
-/* Шесть сводных карточек — одна сетка 2×3. align-items: start — высота строки по контенту (не тянуть «командира» под высоту блока с должностью). */
+/* Сводные карточки — сетка 2×2. На широком экране строка по высоте контента; на телефоне карточки в строке тянутся к одной высоте. */
 .dashboard-home-summary {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -528,6 +528,25 @@ html[data-theme="dark"] .select option {
 
 /* Компактная типографика только на узком экране; padding карточек — как у остального сайта (16px). */
 @media (max-width: 819px) {
+  .dashboard-home-summary {
+    align-items: stretch;
+    grid-auto-rows: auto;
+  }
+
+  .dashboard-home-summary .dashboard-highlight-card {
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .dashboard-home-summary .dashboard-highlight-card .card-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
   .dashboard-home-summary .label {
     font-size: 11px;
   }
