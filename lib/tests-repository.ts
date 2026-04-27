@@ -593,15 +593,53 @@ export async function saveTestConfig(config: TestConfig) {
     uav_auto_generation: normalized.uavAutoGeneration,
     updated_at: new Date().toISOString(),
   };
-  const { data, error } = await supabase
+  let saveRes = await supabase
     .from("test_settings")
     .upsert(payload, { onConflict: "id" })
     .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
     .single();
 
-  if (error || !data) {
+  if (saveRes.error && isMissingColumnError(saveRes.error.message)) {
+    // Legacy schemas may not have updated_at.
+    const payloadWithoutUpdatedAt = {
+      id: 1,
+      trial_question_count: normalized.trialQuestionCount,
+      final_question_count: normalized.finalQuestionCount,
+      time_per_question_sec: normalized.timePerQuestionSec,
+      uav_auto_generation: normalized.uavAutoGeneration,
+    };
+    saveRes = await supabase
+      .from("test_settings")
+      .upsert(payloadWithoutUpdatedAt, { onConflict: "id" })
+      .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
+      .single();
+  }
+
+  if (saveRes.error && isMissingColumnError(saveRes.error.message)) {
+    // Very old schema: keep question counts persistent at minimum.
+    const legacyPayload = {
+      id: 1,
+      trial_question_count: normalized.trialQuestionCount,
+      final_question_count: normalized.finalQuestionCount,
+    };
+    const legacyRes = await supabase
+      .from("test_settings")
+      .upsert(legacyPayload, { onConflict: "id" })
+      .select("trial_question_count,final_question_count")
+      .single();
+    if (!legacyRes.error && legacyRes.data) {
+      return normalizeTestConfig({
+        trialQuestionCount: Number((legacyRes.data as { trial_question_count?: unknown }).trial_question_count ?? 10),
+        finalQuestionCount: Number((legacyRes.data as { final_question_count?: unknown }).final_question_count ?? 15),
+        timePerQuestionSec: normalized.timePerQuestionSec,
+        uavAutoGeneration: normalized.uavAutoGeneration,
+      });
+    }
+  }
+
+  if (saveRes.error || !saveRes.data) {
     updateTestConfig(config);
     return getTestConfig();
   }
-  return mapConfig(data as TestConfigRow);
+  return mapConfig(saveRes.data as TestConfigRow);
 }

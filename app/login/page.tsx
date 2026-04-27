@@ -48,6 +48,15 @@ export default function LoginPage() {
     document.body.appendChild(script);
   }, [showDebug]);
 
+  useEffect(() => {
+    // If a stale session still exists when login page opens, mark presence as offline.
+    void fetch("/api/presence", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ online: false }),
+    }).catch(() => undefined);
+  }, []);
+
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (isSubmitting) return;

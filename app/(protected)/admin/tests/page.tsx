@@ -38,6 +38,7 @@ export default function AdminTestsPage() {
   const [draft, setDraft] = useState<DraftQuestion>(initialDraft);
   const [message, setMessage] = useState("");
   const [isEditingTimeLimit, setIsEditingTimeLimit] = useState(false);
+  const [isSavingConfig, setIsSavingConfig] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
 
@@ -184,9 +185,14 @@ export default function AdminTestsPage() {
 
   const onSaveConfig = async () => {
     setMessage("");
-    const nextConfig = await saveTestConfig(normalizeTestConfig(config));
-    setConfig(nextConfig);
-    setMessage("Настройки количества вопросов сохранены.");
+    setIsSavingConfig(true);
+    try {
+      const nextConfig = await saveTestConfig(normalizeTestConfig(config));
+      setConfig(nextConfig);
+      setMessage("Настройки тестов сохранены.");
+    } finally {
+      setIsSavingConfig(false);
+    }
   };
 
   return (
@@ -312,8 +318,14 @@ export default function AdminTestsPage() {
               </button>
             </div>
 
-            <button className="btn btn-primary" type="button" onClick={() => void onSaveConfig()} style={{ marginTop: 14 }}>
-              Сохранить настройки тестов
+            <button
+              className="btn btn-primary"
+              type="button"
+              onClick={() => void onSaveConfig()}
+              style={{ marginTop: 14 }}
+              disabled={isSavingConfig}
+            >
+              {isSavingConfig ? "Сохраняем..." : "Сохранить настройки тестов"}
             </button>
           </div>
         </div>
