@@ -69,7 +69,7 @@ const LOGIN_SERVER_TIMEOUT_MS = 12000;
 const LOGIN_RESOLVE_TIMEOUT_MS = 5000;
 const LOGIN_AUTH_TIMEOUT_MS = 12000;
 const LOGIN_PROFILE_TIMEOUT_MS = 8000;
-const REGISTER_VALIDATE_TIMEOUT_MS = 7000;
+const REGISTER_VALIDATE_TIMEOUT_MS = 3000;
 const REGISTER_AUTH_TIMEOUT_MS = 15000;
 
 function defaultPermissionsFromLegacy(row: {
@@ -301,7 +301,8 @@ async function validateInviteCode(code: string) {
 async function resolveInviteCodeForRegistration(inputCode: string) {
   const trimmed = inputCode.trim();
   if (!trimmed) return "";
-  const variants = Array.from(new Set([trimmed, trimmed.toUpperCase(), trimmed.toLowerCase()]));
+  // Keep registration snappy on mobile: try only raw and uppercase.
+  const variants = Array.from(new Set([trimmed, trimmed.toUpperCase()]));
   for (const variant of variants) {
     const valid = await validateInviteCode(variant);
     if (valid) return variant;
@@ -321,10 +322,10 @@ function mapAuthErrorMessage(raw: string) {
     return "Слишком много запросов на сброс. Подождите 60 секунд и попробуйте снова.";
   }
   if (msg.includes("invite") || msg.includes("приглаш")) {
-    return "У вас нет приглашения. Проверьте персональный код регистрации.";
+    return "Код приглашения недействителен или лимит использований исчерпан. Запросите у администратора новый код.";
   }
   if (msg.includes("database error saving new user")) {
-    return "Регистрация отклонена. Проверьте персональный код приглашения.";
+    return "Регистрация отклонена. Код приглашения недействителен или лимит кода исчерпан. Запросите у администратора новый код.";
   }
   return raw;
 }
@@ -648,7 +649,7 @@ export async function registerUser(payload: {
   if (!inviteCode) {
     return {
       ok: false as const,
-      error: "У вас нет приглашения. Неверный персональный код (проверьте регистр и пробелы).",
+      error: "Персональный код недействителен или лимит использований исчерпан. Запросите у администратора новый код.",
     };
   }
 
@@ -676,7 +677,7 @@ export async function registerUser(payload: {
     data = result.data as { user?: unknown };
     error = result.error as { message: string } | null;
   } catch {
-    return { ok: false as const, error: "Сервер регистрации отвечает слишком долго. Повторите попытку." };
+    return { ok: false as const, error: "Сервер регистрации не отвечает. Повторите попытку через 10-20 секунд." };
   }
 
   if (error) {

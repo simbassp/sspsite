@@ -128,9 +128,7 @@ export function AppShell({ session, children }: AppShellProps) {
             </Link>
             <div>
               <h1>ССП ПВО</h1>
-              <p>
-                {session.callsign} • {canEditUsers ? "Админ" : hasAdminAccess ? "Редактор" : "Сотрудник"}
-              </p>
+              <p>{session.callsign}</p>
             </div>
           </div>
           <div className="header-actions">

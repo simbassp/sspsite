@@ -107,7 +107,6 @@ export default function AdminUsersPage() {
                 <span className={`pill ${user.status === "active" ? "pill-green" : "pill-yellow"}`}>
                   {user.status === "active" ? "Активен" : "Деактивирован"}
                 </span>
-                <span>{user.role}</span>
                 <span>@{user.login}</span>
               </div>
 

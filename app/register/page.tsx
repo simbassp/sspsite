@@ -6,7 +6,7 @@ import { FormEvent, useMemo, useState } from "react";
 import { getPositions } from "@/lib/storage";
 import { registerUser } from "@/lib/users-repository";
 
-const REGISTER_REQUEST_TIMEOUT_MS = 45000;
+const REGISTER_REQUEST_TIMEOUT_MS = 18000;
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -92,7 +92,7 @@ export default function RegisterPage() {
       <div className="card auth-card">
         <div className="card-body">
           <h1 className="page-title">Регистрация сотрудника</h1>
-          <p className="page-subtitle">Создание учетной записи сотрудника (роль: employee).</p>
+          <p className="page-subtitle">Создание учетной записи сотрудника.</p>
 
           <form className="form" onSubmit={onSubmit}>
             <label className="label">Email</label>
