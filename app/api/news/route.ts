@@ -17,34 +17,42 @@ export async function GET(request: Request) {
 
   try {
     const supabase = getServerSupabaseServiceClient();
-    let query = await supabase
+    const primaryQ = await supabase
       .from("news")
       .select("id,title,body,text,content,priority,author,created_at")
       .order("created_at", { ascending: false })
       .limit(limit);
-    if (query.error && isMissingColumnError(query.error.message)) {
-      query = await supabase
+    let rows: unknown[] = (primaryQ.data as unknown[]) || [];
+    let queryError: string | null = primaryQ.error?.message || null;
+    if (primaryQ.error && isMissingColumnError(primaryQ.error.message)) {
+      const bodyQ = await supabase
         .from("news")
         .select("id,title,body,priority,author,created_at")
         .order("created_at", { ascending: false })
         .limit(limit);
+      rows = (bodyQ.data as unknown[]) || [];
+      queryError = bodyQ.error?.message || null;
     }
-    if (query.error && isMissingColumnError(query.error.message)) {
-      query = await supabase
+    if (queryError && isMissingColumnError(queryError)) {
+      const textQ = await supabase
         .from("news")
         .select("id,title,text,priority,author,created_at")
         .order("created_at", { ascending: false })
         .limit(limit);
+      rows = (textQ.data as unknown[]) || [];
+      queryError = textQ.error?.message || null;
     }
-    if (query.error && isMissingColumnError(query.error.message)) {
-      query = await supabase
+    if (queryError && isMissingColumnError(queryError)) {
+      const contentQ = await supabase
         .from("news")
         .select("id,title,content,priority,author,created_at")
         .order("created_at", { ascending: false })
         .limit(limit);
+      rows = (contentQ.data as unknown[]) || [];
+      queryError = contentQ.error?.message || null;
     }
-    if (query.error) return Response.json({ ok: false, error: query.error.message }, { status: 500 });
-    return Response.json({ ok: true, rows: query.data || [] });
+    if (queryError) return Response.json({ ok: false, error: queryError }, { status: 500 });
+    return Response.json({ ok: true, rows });
   } catch (error) {
     return Response.json(
       { ok: false, error: error instanceof Error ? error.message : "news_exception" },
