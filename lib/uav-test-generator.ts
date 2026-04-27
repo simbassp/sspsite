@@ -1,3 +1,9 @@
+import {
+  answerEquivalenceKey,
+  dedupeQuestionOptions,
+  normalizeUnitToken,
+  parseValueParts,
+} from "@/lib/answer-equivalence";
 import { CatalogItem, TestQuestion, TestType } from "@/lib/types";
 
 const DEFAULT_TYPE: TestType = "trial";
@@ -13,24 +19,6 @@ const FALLBACK_DISTRACTORS = [
 
 function normKey(key: string) {
   return key.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-function normalizeUnitToken(unit: string) {
-  return unit.replace(/\s+/g, "").toLowerCase();
-}
-
-/** Число и хвост строки (единица измерения или текст без ведущего числа). */
-function parseValueParts(s: string): { num: number | null; unit: string; isNumeric: boolean } {
-  const t = s.trim().replace(/\s+/g, " ");
-  const m = t.match(/^(-?[\d]+[.,\d]*)\s*(.*)$/u);
-  if (m && m[1]) {
-    const num = parseFloat(m[1].replace(",", "."));
-    const rest = (m[2] ?? "").trim();
-    if (Number.isFinite(num)) {
-      return { num, unit: rest.toLowerCase(), isNumeric: true };
-    }
-  }
-  return { num: null, unit: t.toLowerCase(), isNumeric: false };
 }
 
 /** Неверные ответы только из той же «размерности», что и правильный (те же единицы или оба текста без чисел). */
@@ -92,7 +80,7 @@ function syntheticNearNumericWrongs(correct: string, need: number, seen: Set<str
     if (Math.abs(c - n) < 0.04) return;
     const numStr = formatNumberForWrong(correct, c);
     const formatted = `${numStr} ${unitPart}`.trim();
-    const lk = formatted.toLowerCase();
+    const lk = answerEquivalenceKey(formatted);
     if (seen.has(lk)) return;
     if (!sameMeasurementClass(correct, formatted)) return;
     seen.add(lk);
@@ -145,12 +133,10 @@ function shuffleInPlace<T>(arr: T[]) {
   }
 }
 
-function formatNumberForWrong(correct: string, n: number): string {
-  const prefersComma = correct.includes(",") && !correct.includes(".");
+/** Варианты-отвлекающие всегда с точкой в дроби — как в ТТХ, без пар «2.5» / «2,5». */
+function formatNumberForWrong(_correct: string, n: number): string {
   const rounded = Math.abs(n) >= 100 ? Math.round(n / 5) * 5 : Math.abs(n) >= 20 ? Math.round(n) : Math.round(n * 10) / 10;
-  let s = Number.isInteger(rounded) && !prefersComma ? String(rounded) : String(rounded).replace(".", ",");
-  if (prefersComma && s.includes(".")) s = s.replace(".", ",");
-  return s;
+  return String(rounded);
 }
 
 /** Похожие числа в той же единице, в узком диапазоне от правильного значения. */
@@ -183,7 +169,7 @@ function syntheticNumericWrongs(
 
     const numStr = formatNumberForWrong(correct, cand);
     const formatted = `${numStr} ${unitPart}`.trim();
-    const lk = formatted.toLowerCase();
+    const lk = answerEquivalenceKey(formatted);
     if (seen.has(lk)) continue;
     if (!sameMeasurementClass(correct, formatted)) continue;
     seen.add(lk);
@@ -195,7 +181,7 @@ function syntheticNumericWrongs(
 
 function buildFourOptions(correct: string, wrongPool: string[]): { options: string[]; correctIndex: number } {
   const correctTrim = correct.trim();
-  const seen = new Set<string>([correctTrim.toLowerCase()]);
+  const seen = new Set<string>([answerEquivalenceKey(correctTrim)]);
   const wrongs: string[] = [];
 
   const filteredPool = wrongPool.filter(
@@ -205,7 +191,7 @@ function buildFourOptions(correct: string, wrongPool: string[]): { options: stri
   for (const w of filteredPool) {
     const t = w.trim();
     if (!t) continue;
-    const lk = t.toLowerCase();
+    const lk = answerEquivalenceKey(t);
     if (seen.has(lk)) continue;
     seen.add(lk);
     wrongs.push(t);
@@ -225,7 +211,7 @@ function buildFourOptions(correct: string, wrongPool: string[]): { options: stri
     for (const w of relaxedPool) {
       const t = w.trim();
       if (!t) continue;
-      const lk = t.toLowerCase();
+      const lk = answerEquivalenceKey(t);
       if (seen.has(lk)) continue;
       seen.add(lk);
       wrongs.push(t);
@@ -261,17 +247,19 @@ function buildFourOptions(correct: string, wrongPool: string[]): { options: stri
     padIdx += 1;
     let t = padIdx > FALLBACK_DISTRACTORS.length ? `${base} (${padIdx})` : base;
     let guard = 0;
-    while (seen.has(t.toLowerCase()) && guard < 50) {
+    while (seen.has(answerEquivalenceKey(t)) && guard < 50) {
       guard += 1;
       t = `${base} (${guard})`;
     }
-    seen.add(t.toLowerCase());
+    seen.add(answerEquivalenceKey(t));
     wrongs.push(t);
   }
 
   const options = [correctTrim, wrongs[0]!, wrongs[1]!, wrongs[2]!];
   shuffleInPlace(options);
-  return { options, correctIndex: options.indexOf(correctTrim) };
+  const correctKey = answerEquivalenceKey(correctTrim);
+  const correctIndex = options.findIndex((o) => answerEquivalenceKey(o) === correctKey);
+  return { options, correctIndex: correctIndex >= 0 ? correctIndex : 0 };
 }
 
 function collectWrongValuePool(
@@ -354,17 +342,19 @@ export function generateUavTtxQuestionBank(items: CatalogItem[], timeLimitSec = 
       }
 
       order += 1;
-      out.push({
-        id: stableQuestionId(item.id, specIndex, keyNorm),
-        type: DEFAULT_TYPE,
-        text,
-        options,
-        correctIndex,
-        timeLimitSec: lim,
-        order,
-        isActive: true,
-        createdAt,
-      });
+      out.push(
+        dedupeQuestionOptions({
+          id: stableQuestionId(item.id, specIndex, keyNorm),
+          type: DEFAULT_TYPE,
+          text,
+          options,
+          correctIndex,
+          timeLimitSec: lim,
+          order,
+          isActive: true,
+          createdAt,
+        }),
+      );
     });
   }
 

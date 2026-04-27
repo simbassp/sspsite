@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { answerEquivalenceKey } from "@/lib/answer-equivalence";
 import {
   deleteAdminQuestion,
   fetchAdminQuestionBank,
@@ -133,6 +134,17 @@ export default function AdminTestsPage() {
     if (draft.correctIndex < 0 || draft.correctIndex > options.length - 1) {
       setMessage("Выберите корректный правильный ответ.");
       return;
+    }
+
+    for (let i = 0; i < options.length; i += 1) {
+      for (let j = i + 1; j < options.length; j += 1) {
+        if (answerEquivalenceKey(options[i]) === answerEquivalenceKey(options[j])) {
+          setMessage(
+            "Есть совпадающие варианты ответа (в том числе одно и то же число с точкой и с запятой, например 2.5 и 2,5). Удалите дубликат.",
+          );
+          return;
+        }
+      }
     }
 
     const maxOrder = questions.reduce((acc, item) => Math.max(acc, item.order), 0);

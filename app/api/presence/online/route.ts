@@ -1,3 +1,4 @@
+import { ONLINE_LAST_SEEN_MAX_MS } from "@/lib/presence-constants";
 import { canViewOnline } from "@/lib/permissions";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
@@ -11,6 +12,8 @@ export async function GET() {
     return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
   }
 
+  const staleBefore = new Date(Date.now() - ONLINE_LAST_SEEN_MAX_MS).toISOString();
+
   try {
     const supabase = getServerSupabaseServiceClient();
     const q = await supabase
@@ -18,6 +21,7 @@ export async function GET() {
       .select("name,callsign,is_online,status")
       .eq("is_online", true)
       .eq("status", "active")
+      .gte("last_seen_at", staleBefore)
       .order("name", { ascending: true })
       .limit(200);
     if (q.error) return Response.json({ ok: false, error: q.error.message || "presence_online_failed" }, { status: 500 });

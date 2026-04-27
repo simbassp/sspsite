@@ -1,3 +1,5 @@
+import { dedupeQuestionOptions } from "@/lib/answer-equivalence";
+import { TestQuestion } from "@/lib/types";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 
@@ -80,31 +82,35 @@ export async function GET() {
       );
     }
 
-    let mappedQuestions: Array<Record<string, unknown>> = [];
+    let mappedQuestions: TestQuestion[] = [];
     if (!questionsError) {
-      mappedQuestions = (questionsData as QuestionRow[]).map((q, index) => ({
-        id: q.id,
-        type: q.type,
-        text: q.text,
-        options: q.options,
-        correctIndex: q.correct_index,
-        timeLimitSec: Number(q.time_limit_sec ?? 10),
-        order: Number(q.order_index ?? index + 1),
-        isActive: Boolean(q.is_active ?? q.active ?? true),
-        createdAt: q.created_at,
-      }));
+      mappedQuestions = (questionsData as QuestionRow[]).map((q, index) =>
+        dedupeQuestionOptions({
+          id: q.id,
+          type: q.type,
+          text: q.text,
+          options: q.options,
+          correctIndex: q.correct_index,
+          timeLimitSec: Number(q.time_limit_sec ?? 10),
+          order: Number(q.order_index ?? index + 1),
+          isActive: Boolean(q.is_active ?? q.active ?? true),
+          createdAt: q.created_at,
+        } as TestQuestion),
+      );
     } else if (isMissingColumnError(questionsError)) {
-      mappedQuestions = (questionsData as LegacyQuestionRow[]).map((q, index) => ({
-        id: q.id,
-        type: q.type === "final" ? "final" : "trial",
-        text: q.text,
-        options: q.options,
-        correctIndex: Number(q.correct_index ?? 0),
-        timeLimitSec: 10,
-        order: index + 1,
-        isActive: true,
-        createdAt: q.created_at,
-      }));
+      mappedQuestions = (questionsData as LegacyQuestionRow[]).map((q, index) =>
+        dedupeQuestionOptions({
+          id: q.id,
+          type: q.type === "final" ? "final" : "trial",
+          text: q.text,
+          options: q.options,
+          correctIndex: Number(q.correct_index ?? 0),
+          timeLimitSec: 10,
+          order: index + 1,
+          isActive: true,
+          createdAt: q.created_at,
+        } as TestQuestion),
+      );
     }
 
     return Response.json({

@@ -17,6 +17,7 @@ import {
 } from "@/lib/storage";
 import { createDefaultQuestionBank } from "@/lib/test-question-bank";
 import { normalizeTestConfig } from "@/lib/test-config";
+import { dedupeQuestionOptions } from "@/lib/answer-equivalence";
 import { withTimeoutAndRetry } from "@/lib/async-utils";
 import { FinalAttemptState, TestConfig, TestQuestion, TestResult, TestType } from "@/lib/types";
 
@@ -132,7 +133,7 @@ function mapAttempt(row: FinalAttemptRow): FinalAttemptState {
 }
 
 function mapQuestion(row: TestQuestionRow): TestQuestion {
-  return {
+  return dedupeQuestionOptions({
     id: row.id,
     type: row.type,
     text: row.text,
@@ -142,7 +143,7 @@ function mapQuestion(row: TestQuestionRow): TestQuestion {
     order: row.order_index,
     isActive: Boolean(row.is_active ?? row.active ?? true),
     createdAt: row.created_at,
-  };
+  });
 }
 
 function mapConfig(row: TestConfigRow): TestConfig {
@@ -419,17 +420,19 @@ export async function fetchActiveQuestionPool() {
       data = minimalRes.data as unknown;
       error = minimalRes.error as { message: string } | null;
       if (!error && Array.isArray(data)) {
-        const mapped = (data as Array<Record<string, unknown>>).map((row, index) => ({
-          id: String(row.id),
-          type: row.type === "final" ? "final" : "trial",
-          text: String(row.text || ""),
-          options: Array.isArray(row.options) ? (row.options as string[]) : [],
-          correctIndex: Number(row.correct_index ?? 0),
-          timeLimitSec: 10,
-          order: index + 1,
-          isActive: true,
-          createdAt: String(row.created_at || new Date().toISOString()),
-        })) as TestQuestion[];
+        const mapped = (data as Array<Record<string, unknown>>).map((row, index) =>
+          dedupeQuestionOptions({
+            id: String(row.id),
+            type: row.type === "final" ? "final" : "trial",
+            text: String(row.text || ""),
+            options: Array.isArray(row.options) ? (row.options as string[]) : [],
+            correctIndex: Number(row.correct_index ?? 0),
+            timeLimitSec: 10,
+            order: index + 1,
+            isActive: true,
+            createdAt: String(row.created_at || new Date().toISOString()),
+          }),
+        );
         return mapped;
       }
     }

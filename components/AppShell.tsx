@@ -51,11 +51,70 @@ export function AppShell({ session, children }: AppShellProps) {
   }, []);
 
   useEffect(() => {
-    void fetch("/api/presence", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ online: true }),
-    }).catch(() => undefined);
+    const HEARTBEAT_MS = 45_000;
+
+    const postPresence = (online: boolean, keepalive?: boolean) => {
+      void fetch("/api/presence", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ online }),
+        ...(keepalive ? { keepalive: true as const } : {}),
+      }).catch(() => undefined);
+    };
+
+    let heartbeat: ReturnType<typeof setInterval> | undefined;
+    const stopHeartbeat = () => {
+      if (heartbeat) clearInterval(heartbeat);
+      heartbeat = undefined;
+    };
+    const startHeartbeat = () => {
+      stopHeartbeat();
+      heartbeat = setInterval(() => {
+        if (typeof document !== "undefined" && document.visibilityState === "visible") {
+          postPresence(true);
+        }
+      }, HEARTBEAT_MS);
+    };
+
+    const onHidden = () => {
+      stopHeartbeat();
+      postPresence(false, true);
+    };
+    const onVisible = () => {
+      postPresence(true);
+      startHeartbeat();
+    };
+
+    const onVisibility = () => {
+      if (typeof document === "undefined") return;
+      if (document.visibilityState === "hidden") onHidden();
+      else onVisible();
+    };
+
+    const onBlur = () => {
+      stopHeartbeat();
+      postPresence(false, true);
+    };
+    const onFocus = () => {
+      postPresence(true);
+      if (typeof document !== "undefined" && document.visibilityState === "visible") startHeartbeat();
+    };
+
+    postPresence(true);
+    if (typeof document !== "undefined" && document.visibilityState === "visible") startHeartbeat();
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", onHidden);
+    window.addEventListener("blur", onBlur);
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", onHidden);
+      window.removeEventListener("blur", onBlur);
+      window.removeEventListener("focus", onFocus);
+      stopHeartbeat();
+      postPresence(false, true);
+    };
   }, []);
   const visibleAdminLinks = [
     ...(canEditUsers ? [{ href: "/admin/users", label: "Пользователи" }] : []),

@@ -193,64 +193,66 @@ export default function DashboardPage() {
   };
 
   return (
-    <section>
+    <section className="dashboard-page">
       <h1 className="page-title">Главная</h1>
       {isLoading && <p className="page-subtitle">Загружаем данные…</p>}
       {loadError && <p className="page-subtitle">{loadError}</p>}
 
-      <div className="grid grid-two">
-        <div className="card" style={{ position: "relative" }}>
-          {renderReactions("newcomer")}
-          <div className="card-body">
-            <p className="label">Наш новый товарищ</p>
-            <h3 style={{ marginTop: 10, marginBottom: 0, fontSize: 24 }}>
-              {highlights.newcomer ? `${highlights.newcomer.name} ${highlights.newcomer.callsign}` : "Нет данных"}
-            </h3>
+      <div className="dashboard-home-summary">
+        <div className="grid grid-two">
+          <div className="card" style={{ position: "relative" }}>
+            {renderReactions("newcomer")}
+            <div className="card-body">
+              <p className="label">Наш новый товарищ</p>
+              <h3 className="dashboard-highlight-name">
+                {highlights.newcomer ? `${highlights.newcomer.name} ${highlights.newcomer.callsign}` : "Нет данных"}
+              </h3>
+            </div>
+          </div>
+          <div className="card" style={{ position: "relative" }}>
+            {renderReactions("departed")}
+            <div className="card-body">
+              <p className="label">Нас покинул</p>
+              <h3 className="dashboard-highlight-name">
+                {highlights.departed ? `${highlights.departed.name} ${highlights.departed.callsign}` : "Нет записей"}
+              </h3>
+            </div>
+          </div>
+          <div className="card" style={{ position: "relative" }}>
+            {renderReactions("promoted")}
+            <div className="card-body">
+              <p className="label">В повышении должности</p>
+              <h3 className="dashboard-highlight-name">
+                {highlights.promoted ? `${highlights.promoted.name} ${highlights.promoted.callsign}` : "Нет записей"}
+              </h3>
+              {highlights.promoted?.position ? (
+                <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
+                  Новая должность: {highlights.promoted.position}
+                </p>
+              ) : null}
+            </div>
+          </div>
+          <div className="card" style={{ position: "relative" }}>
+            {renderReactions("commander")}
+            <div className="card-body">
+              <p className="label">Наш командир</p>
+              <h3 className="dashboard-highlight-name">Владислав Клиган</h3>
+            </div>
           </div>
         </div>
-        <div className="card" style={{ position: "relative" }}>
-          {renderReactions("departed")}
-          <div className="card-body">
-            <p className="label">Нас покинул</p>
-            <h3 style={{ marginTop: 10, marginBottom: 0, fontSize: 24 }}>
-              {highlights.departed ? `${highlights.departed.name} ${highlights.departed.callsign}` : "Нет записей"}
-            </h3>
-          </div>
-        </div>
-        <div className="card" style={{ position: "relative" }}>
-          {renderReactions("promoted")}
-          <div className="card-body">
-            <p className="label">В повышении должности</p>
-            <h3 style={{ marginTop: 10, marginBottom: 0, fontSize: 24 }}>
-              {highlights.promoted ? `${highlights.promoted.name} ${highlights.promoted.callsign}` : "Нет записей"}
-            </h3>
-            {highlights.promoted?.position ? (
-              <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
-                Новая должность: {highlights.promoted.position}
-              </p>
-            ) : null}
-          </div>
-        </div>
-        <div className="card" style={{ position: "relative" }}>
-          {renderReactions("commander")}
-          <div className="card-body">
-            <p className="label">Наш командир</p>
-            <h3 style={{ marginTop: 10, marginBottom: 0, fontSize: 24 }}>Владислав Клиган</h3>
-          </div>
-        </div>
-      </div>
 
-      <div className="grid grid-two" style={{ marginTop: 12 }}>
-        <div className="card">
-          <div className="card-body">
-            <p className="label">Активных учётных записей</p>
-            <p className="stat-value">{activeUserCount === null ? "—" : activeUserCount}</p>
+        <div className="grid grid-two">
+          <div className="card">
+            <div className="card-body">
+              <p className="label">Активных учётных записей</p>
+              <p className="stat-value">{activeUserCount === null ? "—" : activeUserCount}</p>
+            </div>
           </div>
-        </div>
-        <div className="card">
-          <div className="card-body">
-            <p className="label">Новостей в ленте</p>
-            <p className="stat-value">{newsCount === null ? "—" : newsCount}</p>
+          <div className="card">
+            <div className="card-body">
+              <p className="label">Новостей в ленте</p>
+              <p className="stat-value">{newsCount === null ? "—" : newsCount}</p>
+            </div>
           </div>
         </div>
       </div>
