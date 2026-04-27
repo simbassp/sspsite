@@ -6,17 +6,12 @@ import { formatDate } from "@/lib/format";
 import {
   beginFinalAttempt,
   createTrialResult,
-  fetchActiveQuestionPool,
-  fetchTestConfig,
   finishFinalAttempt,
   forceFailFinalAttempt,
-  loadFinalAttempt,
   persistFinalAttempt,
-  seedDefaultQuestionsIfEmpty,
 } from "@/lib/tests-repository";
 import { DEFAULT_TEST_CONFIG } from "@/lib/test-config";
 import { generateUavTtxQuestionBank } from "@/lib/uav-test-generator";
-import { fetchUavItems } from "@/lib/uav-repository";
 import { TestConfig, TestQuestion, TestResult } from "@/lib/types";
 
 const TRIAL_FEEDBACK_MS = 2600;
@@ -52,6 +47,9 @@ export default function TestsPage() {
   const [trialFeedback, setTrialFeedback] = useState<TrialFeedback | null>(null);
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [bootstrapError, setBootstrapError] = useState("");
+  const [isHistoryLoading, setIsHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState("");
+  const [isPoolLoading, setIsPoolLoading] = useState(false);
 
   const isAnsweringRef = useRef(false);
   isAnsweringRef.current = isAnswering;
@@ -74,20 +72,60 @@ export default function TestsPage() {
 
   const refresh = async () => {
     if (!session) return;
+    setIsHistoryLoading(true);
+    setHistoryError("");
     try {
       const response = await fetch("/api/tests/history", { cache: "no-store" });
       const payload = (await response.json()) as { ok?: boolean; rows?: Array<Record<string, unknown>> };
-      if (!response.ok || !payload.ok || !Array.isArray(payload.rows)) return;
+      if (!response.ok || !payload.ok || !Array.isArray(payload.rows)) {
+        setHistoryError("Не удалось загрузить историю попыток.");
+        setIsHistoryLoading(false);
+        return;
+      }
       const mapped = payload.rows.map((r) => ({
         id: String(r.id),
         userId: String(r.user_id),
-        type: r.type === "final" ? "final" : "trial",
+        type: (r.test_type ?? r.type) === "final" ? "final" : "trial",
         status: r.status === "passed" ? "passed" : "failed",
         score: Number(r.score || 0),
-        createdAt: String(r.created_at),
+        createdAt: String(r.completed_at || r.created_at),
       })) as TestResult[];
       setResults(mapped);
-    } catch {}
+    } catch {
+      setHistoryError("Не удалось загрузить историю попыток.");
+    } finally {
+      setIsHistoryLoading(false);
+    }
+  };
+
+  const ensureQuestionPoolLoaded = async (): Promise<TestQuestion[] | null> => {
+    if (questionPool.length > 0) return questionPool;
+    setIsPoolLoading(true);
+    try {
+      const response = await fetch("/api/tests/pool", { cache: "no-store" });
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        questionPool?: TestQuestion[];
+        uavItems?: unknown[];
+      };
+      if (!response.ok || !payload.ok) return null;
+      const dbPool = Array.isArray(payload.questionPool) ? payload.questionPool : [];
+      const uavItems = Array.isArray(payload.uavItems) ? payload.uavItems : [];
+      const fromUav = testConfig.uavAutoGeneration ? generateUavTtxQuestionBank(uavItems as never[], testConfig.timePerQuestionSec) : [];
+      if (fromUav.length > 0) {
+        const ids = new Set(fromUav.map((q) => q.id));
+        const merged = [...fromUav, ...dbPool.filter((q) => !ids.has(q.id))];
+        setQuestionPool(merged);
+        return merged;
+      } else {
+        setQuestionPool(dbPool);
+        return dbPool;
+      }
+    } catch {
+      return null;
+    } finally {
+      setIsPoolLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -102,9 +140,6 @@ export default function TestsPage() {
           ok?: boolean;
           error?: string;
           config?: TestConfig;
-          questionPool?: TestQuestion[];
-          uavItems?: unknown[];
-          results?: Array<Record<string, unknown>>;
           hasOrphanAttempt?: boolean;
         };
         if (!response.ok || !payload.ok) {
@@ -112,17 +147,6 @@ export default function TestsPage() {
         }
         if (cancelled) return;
         const config = payload.config || DEFAULT_TEST_CONFIG;
-        const dbPool = Array.isArray(payload.questionPool) ? payload.questionPool : [];
-        const uavItems = Array.isArray(payload.uavItems) ? payload.uavItems : [];
-        const fromUav = config.uavAutoGeneration
-          ? generateUavTtxQuestionBank(uavItems as never[], config.timePerQuestionSec)
-          : [];
-        if (fromUav.length > 0) {
-          const ids = new Set(fromUav.map((q) => q.id));
-          setQuestionPool([...fromUav, ...dbPool.filter((q) => !ids.has(q.id))]);
-        } else {
-          setQuestionPool(dbPool);
-        }
         setTestConfig(config);
 
         if (payload.hasOrphanAttempt) {
@@ -130,51 +154,12 @@ export default function TestsPage() {
           if (cancelled) return;
           setMessage("Итоговая попытка была прервана (обновление/закрытие/выход) и засчитана как НЕ СДАЛ.");
         }
-        const mapped = (payload.results || []).map((r) => ({
-          id: String(r.id),
-          userId: String(r.user_id),
-          type: r.type === "final" ? "final" : "trial",
-          status: r.status === "passed" ? "passed" : "failed",
-          score: Number(r.score || 0),
-          createdAt: String(r.created_at),
-        })) as TestResult[];
-        setResults(mapped);
+        await refresh();
       } catch {
         if (cancelled) return;
-        try {
-          await seedDefaultQuestionsIfEmpty();
-          const [uavItems, dbPool, config] = await Promise.all([
-            fetchUavItems(),
-            fetchActiveQuestionPool(),
-            fetchTestConfig(),
-          ]);
-          if (cancelled) return;
-          const fromUav = config.uavAutoGeneration
-            ? generateUavTtxQuestionBank(uavItems, config.timePerQuestionSec)
-            : [];
-          if (fromUav.length > 0) {
-            const ids = new Set(fromUav.map((q) => q.id));
-            setQuestionPool([...fromUav, ...dbPool.filter((q) => !ids.has(q.id))]);
-          } else {
-            setQuestionPool(dbPool);
-          }
-          setTestConfig(config);
-
-          const orphanAttempt = await loadFinalAttempt(session.id);
-          if (cancelled) return;
-          if (orphanAttempt) {
-            await forceFailFinalAttempt(session.id);
-            if (!cancelled) {
-              setMessage("Итоговая попытка была прервана (обновление/закрытие/выход) и засчитана как НЕ СДАЛ.");
-            }
-          }
-          await refresh();
-          setBootstrapError("");
-        } catch {
-          if (!cancelled) {
-            setBootstrapError("Не удалось загрузить тесты. Проверьте интернет.");
-          }
-        }
+        setBootstrapError("Не удалось быстро загрузить настройки тестов. Используются значения по умолчанию.");
+        setTestConfig(DEFAULT_TEST_CONFIG);
+        await refresh();
       } finally {
         if (!cancelled) setIsBootstrapping(false);
       }
@@ -355,7 +340,12 @@ export default function TestsPage() {
   };
 
   const onTrial = async () => {
-    if (questionPool.length === 0) {
+    const pool = await ensureQuestionPoolLoaded();
+    if (!pool) {
+      setMessage("Не удалось подготовить вопросы. Проверьте интернет.");
+      return;
+    }
+    if (pool.length === 0) {
       setMessage(
         testConfig.uavAutoGeneration
           ? "Нет карточек БПЛА с ТТХ и нет активных вопросов в банке. Заполните справочник БПЛА или добавьте вопросы в админке."
@@ -364,7 +354,7 @@ export default function TestsPage() {
       return;
     }
     const randomQuestions = applySessionTimeLimits(
-      pickRandomQuestions(questionPool, testConfig.trialQuestionCount),
+      pickRandomQuestions(pool, testConfig.trialQuestionCount),
       testConfig.timePerQuestionSec,
     );
     const first = randomQuestions[0];
@@ -380,7 +370,12 @@ export default function TestsPage() {
   };
 
   const startFinal = async () => {
-    if (questionPool.length === 0) {
+    const pool = await ensureQuestionPoolLoaded();
+    if (!pool) {
+      setMessage("Не удалось подготовить вопросы. Проверьте интернет.");
+      return;
+    }
+    if (pool.length === 0) {
       setMessage(
         testConfig.uavAutoGeneration
           ? "Нет карточек БПЛА с ТТХ и нет активных вопросов в банке. Заполните справочник БПЛА или добавьте вопросы в админке."
@@ -389,7 +384,7 @@ export default function TestsPage() {
       return;
     }
     const randomQuestions = applySessionTimeLimits(
-      pickRandomQuestions(questionPool, testConfig.finalQuestionCount),
+      pickRandomQuestions(pool, testConfig.finalQuestionCount),
       testConfig.timePerQuestionSec,
     );
     const first = randomQuestions[0];
@@ -419,7 +414,7 @@ export default function TestsPage() {
         <h1 className="page-title">Тестирование</h1>
         <p className="page-subtitle">
           {testConfig.uavAutoGeneration
-            ? "В тест попадают вопросы из ТТХ карточек БПЛА (обновляются при каждом заходе на страницу) и активные вопросы из банка администратора."
+            ? "В тест попадают вопросы из ТТХ карточек БПЛА и активные вопросы из банка администратора."
             : "Используются только вопросы из банка в «Админ / Тесты»."}{" "}
           Случайная выборка. На каждый вопрос — <strong>{testConfig.timePerQuestionSec}</strong> сек (задаётся в админке).
         </p>
@@ -433,6 +428,7 @@ export default function TestsPage() {
         </article>
       )}
       {!isBootstrapping && !!bootstrapError && <p className="page-subtitle">{bootstrapError}</p>}
+      {isPoolLoading && <p className="page-subtitle">Подготавливаем вопросы для запуска теста...</p>}
 
       <div className="tests-page-main">
       <div className="grid grid-two">
@@ -443,7 +439,7 @@ export default function TestsPage() {
               Без штрафов за выход. Можно проходить многократно. После ответа или истечения времени показывается подсветка
               верного варианта.
             </p>
-            <button className="btn btn-primary" type="button" onClick={onTrial} disabled={isBootstrapping || !!bootstrapError}>
+            <button className="btn btn-primary" type="button" onClick={onTrial} disabled={isBootstrapping || isPoolLoading}>
               Начать пробный тест
             </button>
           </div>
@@ -455,7 +451,7 @@ export default function TestsPage() {
               При обновлении страницы, закрытии вкладки или выходе попытка засчитывается как не сдал.
             </p>
             {activeTest !== "final" && (
-              <button className="btn btn-primary" type="button" onClick={startFinal} disabled={isBootstrapping || !!bootstrapError}>
+              <button className="btn btn-primary" type="button" onClick={startFinal} disabled={isBootstrapping || isPoolLoading}>
                 Начать итоговый тест
               </button>
             )}
@@ -534,7 +530,9 @@ export default function TestsPage() {
               </div>
             </article>
           ))}
-          {!isBootstrapping && !results.length && <p className="page-subtitle">Попыток пока нет.</p>}
+          {isHistoryLoading && <p className="page-subtitle">Загрузка истории попыток...</p>}
+          {!isHistoryLoading && !!historyError && <p className="page-subtitle">{historyError}</p>}
+          {!isHistoryLoading && !historyError && !results.length && <p className="page-subtitle">Попыток пока нет.</p>}
         </div>
       </div>
     </section>
