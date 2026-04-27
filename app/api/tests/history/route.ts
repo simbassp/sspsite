@@ -13,27 +13,31 @@ export async function GET() {
   if (!session) return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
   try {
     const supabase = getServerSupabaseServiceClient();
-    let query = await supabase
+    const primaryQ = await supabase
       .from("test_results")
       .select("id,user_id,type,status,score,created_at")
       .eq("user_id", session.id)
       .order("created_at", { ascending: false })
       .limit(20);
-    if (query.error && isMissingColumnError(query.error.message)) {
-      query = await supabase
+    let queryRows: unknown[] = (primaryQ.data as unknown[]) || [];
+    let queryError: string | null = primaryQ.error?.message || null;
+    if (primaryQ.error && isMissingColumnError(primaryQ.error.message)) {
+      const legacyQ = await supabase
         .from("test_results")
         .select("id,user_id,test_type,status,score,created_at")
         .eq("user_id", session.id)
         .order("created_at", { ascending: false })
         .limit(20);
+      queryRows = (legacyQ.data as unknown[]) || [];
+      queryError = legacyQ.error?.message || null;
     }
-    if (query.error) {
+    if (queryError) {
       if (process.env.NODE_ENV !== "production") {
-        console.debug("[api/tests/history] query error", { userId: session.id, message: query.error.message });
+        console.debug("[api/tests/history] query error", { userId: session.id, message: queryError });
       }
-      return Response.json({ ok: false, error: query.error.message }, { status: 500 });
+      return Response.json({ ok: false, error: queryError }, { status: 500 });
     }
-    const rows = ((query.data || []) as Array<Record<string, unknown>>).map((r) => ({
+    const rows = (queryRows as Array<Record<string, unknown>>).map((r) => ({
       id: r.id,
       user_id: r.user_id,
       type: r.type ?? r.test_type,
