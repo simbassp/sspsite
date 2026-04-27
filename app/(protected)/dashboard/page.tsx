@@ -152,7 +152,17 @@ export default function DashboardPage() {
       <div style={{ position: "absolute", top: 10, right: 10, display: "grid", gap: 6, justifyItems: "end" }}>
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end", maxWidth: 170 }}>
           {top.map(([emoji, count]) => (
-            <span key={`${cardKey}-${emoji}`} className="label" style={{ fontSize: 12, background: "#12131a", borderRadius: 999, padding: "2px 8px" }}>
+            <span
+              key={`${cardKey}-${emoji}`}
+              className="label"
+              style={{
+                fontSize: 12,
+                background: "var(--panel)",
+                border: "1px solid var(--line)",
+                borderRadius: 999,
+                padding: "2px 8px",
+              }}
+            >
               {emoji} {count}
             </span>
           ))}

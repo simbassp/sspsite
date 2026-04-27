@@ -72,6 +72,10 @@ export function canManageContent(session: SessionLike) {
   return permissions.news || permissions.tests || permissions.uav || permissions.counteraction;
 }
 
+export function canViewOnline(session: SessionLike) {
+  return resolvePermissions(session).online;
+}
+
 export function canAccessAdminPanel(session: SessionLike) {
   return canManageContent(session) || canManageUsers(session) || canManageResults(session);
 }
