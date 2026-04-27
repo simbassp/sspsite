@@ -41,6 +41,8 @@ export default function ProfilePage() {
   const [isInviteLoading, setIsInviteLoading] = useState(false);
   const [profileNameInput, setProfileNameInput] = useState(() => session?.name ?? "");
   const [profileCallsignInput, setProfileCallsignInput] = useState(() => session?.callsign ?? "");
+  const [onlineNames, setOnlineNames] = useState<string[]>([]);
+  const [onlineError, setOnlineError] = useState("");
 
   useEffect(() => {
     if (!session) return;
@@ -92,6 +94,31 @@ export default function ProfilePage() {
         if (!cancelled) setInitialLoadError("Не удалось загрузить часть данных профиля. Попробуйте обновить страницу.");
       } finally {
         if (!cancelled) setIsInitialLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [session]);
+
+  useEffect(() => {
+    if (!session) return;
+    if (session.role !== "admin" && session.permissions.online !== true) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await fetch("/api/presence/online", { cache: "no-store" });
+        const payload = (await response.json()) as { ok?: boolean; names?: unknown; error?: string };
+        if (!response.ok || payload.ok !== true || !Array.isArray(payload.names)) {
+          if (!cancelled) setOnlineError(payload.error || "online_load_failed");
+          return;
+        }
+        if (!cancelled) {
+          setOnlineError("");
+          setOnlineNames(payload.names.map((x) => String(x)));
+        }
+      } catch {
+        if (!cancelled) setOnlineError("online_load_failed");
       }
     })();
     return () => {
@@ -270,6 +297,20 @@ export default function ProfilePage() {
       <h1 className="page-title">Профиль</h1>
       {isInitialLoading && <p className="page-subtitle">Загружаем профиль...</p>}
       {!!initialLoadError && <p className="page-subtitle">{initialLoadError}</p>}
+      {(session.role === "admin" || session.permissions.online === true) && (
+        <article className="card" style={{ marginBottom: 12 }}>
+          <div className="card-body">
+            <p className="label">Пользователи онлайн</p>
+            <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
+              {onlineNames.length > 0
+                ? onlineNames.join(", ")
+                : onlineError
+                  ? "Не удалось загрузить онлайн-статус."
+                  : "Сейчас никого нет онлайн"}
+            </p>
+          </div>
+        </article>
+      )}
       <article className="card">
         <div className="card-body">
           <h3>{profileNameInput || session.name}</h3>
