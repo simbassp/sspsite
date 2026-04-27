@@ -381,25 +381,43 @@ export default function TestsPage() {
     const questions = activeQuestionsRef.current;
     const correct = questions.reduce((acc, q) => acc + (finalAnswers[q.id] === q.correctIndex ? 1 : 0), 0);
     const score = Math.round((correct / Math.max(questions.length, 1)) * 100);
+    const messageText =
+      type === "trial"
+        ? `Пробный тест завершен: ${score}%.`
+        : `Итоговый тест завершен: ${score}%. Статус: ${score >= 80 ? "СДАЛ" : "НЕ СДАЛ"}.`;
 
-    if (type === "trial") {
-      await createTrialResult(session.id, score);
-      setMessage(`Пробный тест завершен: ${score}%.`);
-    } else {
-      const passed = score >= 80;
-      await finishFinalAttempt(session.id, score, passed);
-      setMessage(`Итоговый тест завершен: ${score}%. Статус: ${passed ? "СДАЛ" : "НЕ СДАЛ"}.`);
-    }
-
+    // Снимаем активный тест сразу, чтобы не было повторной обработки последнего вопроса.
     setActiveTest(null);
+    activeTestRef.current = null;
     setQuestionIndex(0);
+    questionIndexRef.current = 0;
     setAnswers({});
+    answersRef.current = {};
     setSelectedQuestions([]);
+    activeQuestionsRef.current = [];
+    currentQuestionRef.current = undefined;
     setTimeLeft(0);
     setTrialFeedback(null);
     setIsTestStarted(false);
     setIsAnswering(false);
-    await refresh();
+    if (trialRevealTimerRef.current) {
+      clearTimeout(trialRevealTimerRef.current);
+      trialRevealTimerRef.current = null;
+    }
+
+    try {
+      if (type === "trial") {
+        await createTrialResult(session.id, score);
+      } else {
+        const passed = score >= 80;
+        await finishFinalAttempt(session.id, score, passed);
+      }
+      setMessage(messageText);
+    } catch {
+      setMessage(messageText);
+    } finally {
+      await refresh();
+    }
   }
 
   function completeTrialAfterReveal() {
@@ -627,23 +645,31 @@ export default function TestsPage() {
                 Начать вопрос
               </button>
             )}
-            <h3 style={{ marginTop: 8 }}>{currentQuestion.text}</h3>
-            <div className="form" style={{ marginTop: 10 }}>
-              {currentQuestion.options.map((option, index) => (
-                <button
-                  className={trialOptionClassName(index)}
-                  type="button"
-                  key={`${currentQuestion.id}-${index}-${option}`}
-                  disabled={!isTestStarted || (activeTest === "trial" && !!trialFeedback) || (activeTest === "final" && isAnswering)}
-                  onClick={() => {
-                    if (activeTest === "trial") void onTrialOptionClick(index);
-                    else void submitFinalAnswer(index);
-                  }}
-                >
-                  {option}
-                </button>
-              ))}
-            </div>
+            {isTestStarted ? (
+              <>
+                <h3 style={{ marginTop: 8 }}>{currentQuestion.text}</h3>
+                <div className="form" style={{ marginTop: 10 }}>
+                  {currentQuestion.options.map((option, index) => (
+                    <button
+                      className={trialOptionClassName(index)}
+                      type="button"
+                      key={`${currentQuestion.id}-${index}-${option}`}
+                      disabled={(activeTest === "trial" && !!trialFeedback) || (activeTest === "final" && isAnswering)}
+                      onClick={() => {
+                        if (activeTest === "trial") void onTrialOptionClick(index);
+                        else void submitFinalAnswer(index);
+                      }}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p className="page-subtitle" style={{ marginTop: 8 }}>
+                Вопрос будет показан после нажатия «Начать вопрос».
+              </p>
+            )}
           </div>
         </article>
       )}

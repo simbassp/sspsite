@@ -213,20 +213,40 @@ export default function AdminUsersPage() {
                         <button
                           className="btn btn-primary"
                           type="button"
-                          onClick={() => {
+                          onClick={async () => {
                             const nextPermissions = getDraftPermissions(user);
-                            patchLocal(user.id, {
-                              permissions: nextPermissions,
-                              canManageContent:
-                                nextPermissions.news ||
-                                nextPermissions.tests ||
-                                nextPermissions.uav ||
-                                nextPermissions.counteraction,
-                            });
-                            setInfo(
-                              "Права сохранены. Чтобы у пользователя появилась кнопка \"Управление\", ему нужно выйти и войти снова.",
+                            const nextCanManageContent =
+                              nextPermissions.news ||
+                              nextPermissions.tests ||
+                              nextPermissions.uav ||
+                              nextPermissions.counteraction;
+                            setUsers((prev) =>
+                              prev.map((item) =>
+                                item.id === user.id
+                                  ? {
+                                      ...item,
+                                      permissions: { ...nextPermissions },
+                                      canManageContent: nextCanManageContent,
+                                    }
+                                  : item,
+                              ),
                             );
-                            window.alert("Права сохранены.");
+                            if (patchTimersRef.current[user.id]) {
+                              clearTimeout(patchTimersRef.current[user.id]);
+                              delete patchTimersRef.current[user.id];
+                            }
+                            try {
+                              await patchUser(user.id, {
+                                permissions: nextPermissions,
+                                canManageContent: nextCanManageContent,
+                              });
+                              setInfo(
+                                "Права сохранены. Чтобы у пользователя появилась кнопка \"Управление\", ему нужно выйти и войти снова.",
+                              );
+                              window.alert("Права сохранены.");
+                            } catch {
+                              setInfo("Не удалось сохранить права. Проверьте интернет и повторите.");
+                            }
                           }}
                         >
                           Сохранить права
