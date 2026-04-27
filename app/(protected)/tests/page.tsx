@@ -6,18 +6,12 @@ import { formatDate } from "@/lib/format";
 import {
   beginFinalAttempt,
   createTrialResult,
-  fetchActiveQuestionPool,
-  fetchTestConfig,
-  fetchUserResults,
   finishFinalAttempt,
   forceFailFinalAttempt,
-  loadFinalAttempt,
   persistFinalAttempt,
-  seedDefaultQuestionsIfEmpty,
 } from "@/lib/tests-repository";
 import { DEFAULT_TEST_CONFIG } from "@/lib/test-config";
 import { generateUavTtxQuestionBank } from "@/lib/uav-test-generator";
-import { fetchUavItems } from "@/lib/uav-repository";
 import { TestConfig, TestQuestion, TestResult } from "@/lib/types";
 
 const TRIAL_FEEDBACK_MS = 2600;
@@ -51,6 +45,8 @@ export default function TestsPage() {
   const [timeLeft, setTimeLeft] = useState(0);
   const [isAnswering, setIsAnswering] = useState(false);
   const [trialFeedback, setTrialFeedback] = useState<TrialFeedback | null>(null);
+  const [isBootstrapping, setIsBootstrapping] = useState(true);
+  const [bootstrapError, setBootstrapError] = useState("");
 
   const isAnsweringRef = useRef(false);
   isAnsweringRef.current = isAnswering;
@@ -73,24 +69,48 @@ export default function TestsPage() {
 
   const refresh = async () => {
     if (!session) return;
-    const all = await fetchUserResults(session.id);
-    setResults(all);
+    try {
+      const response = await fetch("/api/tests/history", { cache: "no-store" });
+      const payload = (await response.json()) as { ok?: boolean; rows?: Array<Record<string, unknown>> };
+      if (!response.ok || !payload.ok || !Array.isArray(payload.rows)) return;
+      const mapped = payload.rows.map((r) => ({
+        id: String(r.id),
+        userId: String(r.user_id),
+        type: r.type === "final" ? "final" : "trial",
+        status: r.status === "passed" ? "passed" : "failed",
+        score: Number(r.score || 0),
+        createdAt: String(r.created_at),
+      })) as TestResult[];
+      setResults(mapped);
+    } catch {}
   };
 
   useEffect(() => {
     if (!session) return;
     let cancelled = false;
     (async () => {
+      setIsBootstrapping(true);
+      setBootstrapError("");
       try {
-        await seedDefaultQuestionsIfEmpty();
-        const [uavItems, dbPool, config] = await Promise.all([
-          fetchUavItems(),
-          fetchActiveQuestionPool(),
-          fetchTestConfig(),
-        ]);
+        const response = await fetch("/api/tests/bootstrap", { cache: "no-store" });
+        const payload = (await response.json()) as {
+          ok?: boolean;
+          error?: string;
+          config?: TestConfig;
+          questionPool?: TestQuestion[];
+          uavItems?: unknown[];
+          results?: Array<Record<string, unknown>>;
+          hasOrphanAttempt?: boolean;
+        };
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "tests_bootstrap_failed");
+        }
         if (cancelled) return;
+        const config = payload.config || DEFAULT_TEST_CONFIG;
+        const dbPool = Array.isArray(payload.questionPool) ? payload.questionPool : [];
+        const uavItems = Array.isArray(payload.uavItems) ? payload.uavItems : [];
         const fromUav = config.uavAutoGeneration
-          ? generateUavTtxQuestionBank(uavItems, config.timePerQuestionSec)
+          ? generateUavTtxQuestionBank(uavItems as never[], config.timePerQuestionSec)
           : [];
         if (fromUav.length > 0) {
           const ids = new Set(fromUav.map((q) => q.id));
@@ -100,19 +120,25 @@ export default function TestsPage() {
         }
         setTestConfig(config);
 
-        const orphanAttempt = await loadFinalAttempt(session.id);
-        if (cancelled) return;
-        if (orphanAttempt) {
+        if (payload.hasOrphanAttempt) {
           await forceFailFinalAttempt(session.id);
           if (cancelled) return;
           setMessage("Итоговая попытка была прервана (обновление/закрытие/выход) и засчитана как НЕ СДАЛ.");
         }
-        const all = await fetchUserResults(session.id);
-        if (cancelled) return;
-        setResults(all);
+        const mapped = (payload.results || []).map((r) => ({
+          id: String(r.id),
+          userId: String(r.user_id),
+          type: r.type === "final" ? "final" : "trial",
+          status: r.status === "passed" ? "passed" : "failed",
+          score: Number(r.score || 0),
+          createdAt: String(r.created_at),
+        })) as TestResult[];
+        setResults(mapped);
       } catch {
         if (cancelled) return;
-        setMessage("Не удалось полностью загрузить данные тестов. Проверьте интернет и обновите страницу.");
+        setBootstrapError("Не удалось загрузить тесты. Проверьте интернет и нажмите «Повторить».");
+      } finally {
+        if (!cancelled) setIsBootstrapping(false);
       }
     })();
     return () => {
@@ -361,6 +387,24 @@ export default function TestsPage() {
         </p>
       </div>
 
+      {isBootstrapping && (
+        <article className="card" style={{ marginTop: 12 }}>
+          <div className="card-body">
+            <p className="page-subtitle">Загрузка тестовых данных...</p>
+          </div>
+        </article>
+      )}
+      {!isBootstrapping && !!bootstrapError && (
+        <article className="card" style={{ marginTop: 12 }}>
+          <div className="card-body form">
+            <p className="page-subtitle">{bootstrapError}</p>
+            <button className="btn" type="button" onClick={() => window.location.reload()}>
+              Повторить
+            </button>
+          </div>
+        </article>
+      )}
+
       <div className="tests-page-main">
       <div className="grid grid-two">
         <article className="card">
@@ -370,7 +414,7 @@ export default function TestsPage() {
               Без штрафов за выход. Можно проходить многократно. После ответа или истечения времени показывается подсветка
               верного варианта.
             </p>
-            <button className="btn btn-primary" type="button" onClick={onTrial}>
+            <button className="btn btn-primary" type="button" onClick={onTrial} disabled={isBootstrapping || !!bootstrapError}>
               Начать пробный тест
             </button>
           </div>
@@ -382,7 +426,7 @@ export default function TestsPage() {
               При обновлении страницы, закрытии вкладки или выходе попытка засчитывается как не сдал.
             </p>
             {activeTest !== "final" && (
-              <button className="btn btn-primary" type="button" onClick={startFinal}>
+              <button className="btn btn-primary" type="button" onClick={startFinal} disabled={isBootstrapping || !!bootstrapError}>
                 Начать итоговый тест
               </button>
             )}
@@ -461,7 +505,7 @@ export default function TestsPage() {
               </div>
             </article>
           ))}
-          {!results.length && <p className="page-subtitle">Попыток пока нет.</p>}
+          {!isBootstrapping && !results.length && <p className="page-subtitle">Попыток пока нет.</p>}
         </div>
       </div>
     </section>

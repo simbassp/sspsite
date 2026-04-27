@@ -2,8 +2,6 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
-
 type CountsPayload = { active_users?: unknown; news_count?: unknown };
 
 function parseCounts(raw: unknown): { active: number; news: number } | null {
@@ -26,30 +24,17 @@ export default function DashboardPage() {
     (async () => {
       setIsLoading(true);
       setLoadError("");
-      if (!isSupabaseConfigured) {
-        setActiveUserCount(null);
-        setNewsCount(null);
-        if (!cancelled) setIsLoading(false);
-        return;
-      }
       try {
-        const supabase = getSupabaseBrowserClient();
-        const { data, error } = await supabase.rpc("home_stats_counts");
+        const response = await fetch("/api/home-stats", { cache: "no-store" });
+        const payload = (await response.json()) as { ok?: boolean; error?: string } & CountsPayload;
         if (cancelled) return;
-        if (error) {
-          const msg = (error.message || "").toLowerCase();
-          const missingFn =
-            msg.includes("does not exist") || msg.includes("unknown") || error.code === "42883" || msg.includes("function");
-          setLoadError(
-            missingFn
-              ? "На сервере БД нужно один раз выполнить SQL из supabase/migrations/20260426120000_home_stats_counts.sql (или конец supabase/schema.sql), затем обновить страницу."
-              : `Не удалось загрузить сводку: ${error.message}`,
-          );
+        if (!response.ok || payload.ok !== true) {
+          setLoadError(`Не удалось загрузить сводку${payload.error ? `: ${payload.error}` : ""}`);
           setActiveUserCount(null);
           setNewsCount(null);
           return;
         }
-        const parsed = parseCounts(data);
+        const parsed = parseCounts(payload);
         if (!parsed) {
           setLoadError("Некорректный ответ сервера.");
           setActiveUserCount(null);

@@ -4,12 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { readClientSession } from "@/lib/client-auth";
 import { formatDate } from "@/lib/format";
 import { isSupabaseConfigured } from "@/lib/supabase";
-import { fetchUserResults } from "@/lib/tests-repository";
 import {
   createInviteCode,
   disableInviteCode,
   fetchCurrentAuthEmail,
-  fetchInviteCodes,
   InviteCodeRecord,
   persistSession,
   removeInviteCode,
@@ -51,14 +49,43 @@ export default function ProfilePage() {
       setIsInitialLoading(true);
       setInitialLoadError("");
       try {
-        const [nextRows, emailResult] = await Promise.all([fetchUserResults(session.id), fetchCurrentAuthEmail()]);
+        const response = await fetch("/api/profile/bootstrap", { cache: "no-store" });
+        const payload = (await response.json()) as {
+          ok?: boolean;
+          error?: string;
+          email?: string;
+          results?: Array<Record<string, unknown>>;
+          inviteCodes?: Array<Record<string, unknown>>;
+        };
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "profile_bootstrap_failed");
+        }
         if (cancelled) return;
-        setRows(nextRows);
-        if (emailResult.ok) setEmailInput(emailResult.email);
+        const mappedRows = (payload.results || []).map((r) => ({
+          id: String(r.id),
+          userId: String(r.user_id),
+          type: r.type === "final" ? "final" : "trial",
+          status: r.status === "passed" ? "passed" : "failed",
+          score: Number(r.score || 0),
+          createdAt: String(r.created_at),
+        })) as TestResult[];
+        setRows(mappedRows);
+        if (typeof payload.email === "string" && payload.email) {
+          setEmailInput(payload.email);
+        } else {
+          const emailResult = await fetchCurrentAuthEmail();
+          if (!cancelled && emailResult.ok) setEmailInput(emailResult.email);
+        }
         if (session.role === "admin") {
           setIsInviteLoading(true);
-          const codes = await fetchInviteCodes();
-          if (!cancelled) setInviteCodes(codes);
+          const mappedInvites = (payload.inviteCodes || []).map((x) => ({
+            code: String(x.code),
+            isActive: Boolean(x.is_active),
+            maxUses: x.max_uses === null || x.max_uses === undefined ? null : Number(x.max_uses),
+            usedCount: Number(x.used_count || 0),
+            createdAt: String(x.created_at || ""),
+          })) as InviteCodeRecord[];
+          if (!cancelled) setInviteCodes(mappedInvites);
           if (!cancelled) setIsInviteLoading(false);
         }
       } catch {
@@ -91,8 +118,17 @@ export default function ProfilePage() {
 
   const refreshInvites = async () => {
     if (session.role !== "admin") return;
-    const next = await fetchInviteCodes();
-    setInviteCodes(next);
+    const response = await fetch("/api/profile/bootstrap", { cache: "no-store" });
+    const payload = (await response.json()) as { ok?: boolean; inviteCodes?: Array<Record<string, unknown>> };
+    if (!response.ok || !payload.ok || !Array.isArray(payload.inviteCodes)) return;
+    const mapped = payload.inviteCodes.map((x) => ({
+      code: String(x.code),
+      isActive: Boolean(x.is_active),
+      maxUses: x.max_uses === null || x.max_uses === undefined ? null : Number(x.max_uses),
+      usedCount: Number(x.used_count || 0),
+      createdAt: String(x.created_at || ""),
+    })) as InviteCodeRecord[];
+    setInviteCodes(mapped);
   };
 
   const onCreateInvite = async () => {

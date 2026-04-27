@@ -73,22 +73,25 @@ export async function fetchNews(limit = 40, forceRefresh = false): Promise<NewsI
   }
 
   try {
-    const supabase = getSupabaseBrowserClient();
-    const { data, error } = await withTimeoutAndRetry(
+    const api = await withTimeoutAndRetry(
       () =>
-        supabase
-          .from("news")
-          .select("id,title,body,text,content,priority,author,created_at")
-          .order("created_at", { ascending: false })
-          .limit(safeLimit),
+        fetch(`/api/news?limit=${safeLimit}`, {
+          method: "GET",
+          cache: "no-store",
+          headers: { "cache-control": "no-store" },
+        }),
       7000,
       1,
       "fetch_news_timeout",
     );
-    if (error || !data) {
+    if (!api.ok) {
       return listNews().slice(0, safeLimit);
     }
-    const mapped = (data as NewsRow[]).map(mapNewsRow);
+    const payload = (await api.json()) as { ok?: boolean; rows?: NewsRow[] };
+    if (!payload.ok || !Array.isArray(payload.rows)) {
+      return listNews().slice(0, safeLimit);
+    }
+    const mapped = payload.rows.map(mapNewsRow);
     writeNewsCache(mapped);
     return mapped;
   } catch {

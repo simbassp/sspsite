@@ -829,21 +829,25 @@ export async function fetchUsers() {
   }
 
   try {
-    const supabase = getSupabaseBrowserClient();
-    const { data, error } = await withTimeoutAndRetry(
+    const api = await withTimeoutAndRetry(
       () =>
-        supabase
-          .from("app_users")
-          .select("*")
-          .order("created_at", { ascending: false }),
+        fetch("/api/admin/users/list", {
+          method: "GET",
+          cache: "no-store",
+          headers: { "cache-control": "no-store" },
+        }),
       7000,
       1,
       "fetch_users_timeout",
     );
-    if (error || !data) {
+    if (!api.ok) {
       return listUsers();
     }
-    const list = (data as UserRow[]).map(toUserRecord);
+    const payload = (await api.json()) as { ok?: boolean; rows?: UserRow[] };
+    if (!payload.ok || !Array.isArray(payload.rows)) {
+      return listUsers();
+    }
+    const list = payload.rows.map(toUserRecord);
     replaceAllUsersInLocalCache(list);
     return list;
   } catch {

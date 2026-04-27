@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { fetchAllResults } from "@/lib/tests-repository";
-import { fetchUsers } from "@/lib/users-repository";
 import { TestResult, UserRecord } from "@/lib/types";
 
 type Filter = "all" | "passed" | "failed" | "not_started";
@@ -20,10 +18,48 @@ export default function AdminResultsPage() {
       setIsLoading(true);
       setLoadError("");
       try {
-        const [nextUsers, nextResults] = await Promise.all([fetchUsers(), fetchAllResults()]);
+        const response = await fetch("/api/admin/results/bootstrap", { cache: "no-store" });
+        const payload = (await response.json()) as {
+          ok?: boolean;
+          error?: string;
+          users?: Array<Record<string, unknown>>;
+          results?: Array<Record<string, unknown>>;
+        };
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "admin_results_bootstrap_failed");
+        }
         if (cancelled) return;
-        setUsers(nextUsers.filter((u) => u.role === "employee"));
-        setResults(nextResults.filter((r) => r.type === "final"));
+        const nextUsers = (payload.users || [])
+          .map((u) => ({
+            id: String(u.id),
+            role: u.role === "admin" ? "admin" : "employee",
+            name: String(u.name || ""),
+            callsign: String(u.callsign || ""),
+            login: "",
+            password: "",
+            position: "Специалист",
+            canManageContent: false,
+            permissions: {
+              news: false,
+              tests: false,
+              results: false,
+              uav: false,
+              counteraction: false,
+              users: false,
+            },
+            status: u.status === "inactive" ? "inactive" : "active",
+          }))
+          .filter((u) => u.role === "employee") as UserRecord[];
+        const nextResults = (payload.results || []).map((r) => ({
+          id: String(r.id),
+          userId: String(r.user_id),
+          type: r.type === "final" ? "final" : "trial",
+          status: r.status === "passed" ? "passed" : "failed",
+          score: Number(r.score || 0),
+          createdAt: String(r.created_at || ""),
+        })) as TestResult[];
+        setUsers(nextUsers);
+        setResults(nextResults);
       } catch {
         if (cancelled) return;
         setLoadError("Не удалось получить данные результатов. Попробуйте обновить страницу.");
