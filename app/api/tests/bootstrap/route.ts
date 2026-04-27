@@ -27,6 +27,14 @@ export async function GET() {
       .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
       .eq("id", 1)
       .maybeSingle();
+    if (configQ.error && isMissingColumnError(configQ.error.message)) {
+      configQ = await supabase
+        .from("test_settings")
+        .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    }
     if (!configQ.error && !configQ.data) {
       configQ = await supabase
         .from("test_settings")

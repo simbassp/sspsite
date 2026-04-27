@@ -30,6 +30,14 @@ async function readCurrentConfig(supabase: ReturnType<typeof getServerSupabaseSe
     .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
     .eq("id", 1)
     .maybeSingle();
+  if (q.error && isMissingColumnError(q.error.message)) {
+    q = await supabase
+      .from("test_settings")
+      .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+  }
   if (q.error || !q.data) {
     q = await supabase
       .from("test_settings")
@@ -88,6 +96,41 @@ export async function POST(request: Request) {
         .upsert(withoutUpdatedAt, { onConflict: "id" })
         .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
         .single();
+    }
+
+    if (saveQ.error && isMissingColumnError(saveQ.error.message)) {
+      const noIdPayload = {
+        trial_question_count: input.trialQuestionCount,
+        final_question_count: input.finalQuestionCount,
+        time_per_question_sec: input.timePerQuestionSec,
+        uav_auto_generation: input.uavAutoGeneration,
+      };
+      let updated = await supabase
+        .from("test_settings")
+        .update(noIdPayload)
+        .gt("trial_question_count", -1)
+        .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
+        .limit(1);
+      if ((updated.error || !updated.data || updated.data.length === 0) && isMissingColumnError(updated.error?.message)) {
+        updated = await supabase
+          .from("test_settings")
+          .insert(noIdPayload)
+          .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
+          .limit(1);
+      }
+      if (!updated.error && updated.data && updated.data.length > 0) {
+        const row = updated.data[0];
+        return Response.json({
+          ok: true,
+          config: {
+            trialQuestionCount: Number(row.trial_question_count ?? input.trialQuestionCount),
+            finalQuestionCount: Number(row.final_question_count ?? input.finalQuestionCount),
+            timePerQuestionSec: Number(row.time_per_question_sec ?? input.timePerQuestionSec),
+            uavAutoGeneration:
+              typeof row.uav_auto_generation === "boolean" ? row.uav_auto_generation : input.uavAutoGeneration,
+          },
+        });
+      }
     }
 
     if (saveQ.error && isMissingColumnError(saveQ.error.message)) {
