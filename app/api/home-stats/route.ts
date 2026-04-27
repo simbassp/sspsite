@@ -45,7 +45,7 @@ export async function GET() {
       .order("created_at", { ascending: false })
       .limit(1);
 
-    const reactionsQ = await supabase.from("dashboard_reactions").select("card_key,emoji");
+    const reactionsQ = await supabase.from("dashboard_reactions").select("card_key,emoji,user_id");
 
     const reactionCounts: Record<string, Record<string, number>> = {
       newcomer: {},
@@ -53,13 +53,23 @@ export async function GET() {
       promoted: {},
       commander: {},
     };
+    const myReactions: Record<string, string | null> = {
+      newcomer: null,
+      departed: null,
+      promoted: null,
+      commander: null,
+    };
 
     if (!reactionsQ.error && Array.isArray(reactionsQ.data)) {
       for (const row of reactionsQ.data) {
         const cardKey = String((row as { card_key?: unknown }).card_key || "");
         const emoji = String((row as { emoji?: unknown }).emoji || "");
+        const userId = String((row as { user_id?: unknown }).user_id || "");
         if (!reactionCounts[cardKey] || !emoji) continue;
         reactionCounts[cardKey][emoji] = (reactionCounts[cardKey][emoji] || 0) + 1;
+        if (userId === session.id) {
+          myReactions[cardKey] = emoji;
+        }
       }
     }
 
@@ -99,6 +109,7 @@ export async function GET() {
         commander: { name: "Владислав", callsign: "Клиган" },
       },
       reactions: reactionCounts,
+      my_reactions: myReactions,
     });
   } catch (error) {
     return Response.json(

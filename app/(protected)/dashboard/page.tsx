@@ -22,6 +22,7 @@ type HomePayload = {
     commander?: Highlight;
   };
   reactions?: Record<string, Record<string, number>>;
+  my_reactions?: Record<string, string | null>;
 };
 
 type DashboardData = {
@@ -34,6 +35,7 @@ type DashboardData = {
     commander: Highlight;
   };
   reactions: Record<string, Record<string, number>>;
+  myReactions: Record<string, string | null>;
 };
 
 function parseDashboardData(raw: unknown): DashboardData | null {
@@ -52,6 +54,7 @@ function parseDashboardData(raw: unknown): DashboardData | null {
       commander: o.highlights?.commander ?? null,
     },
     reactions: o.reactions ?? { newcomer: {}, departed: {}, promoted: {}, commander: {} },
+    myReactions: o.my_reactions ?? { newcomer: null, departed: null, promoted: null, commander: null },
   };
 }
 
@@ -73,6 +76,12 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [isReacting, setIsReacting] = useState<string>("");
+  const [myReactions, setMyReactions] = useState<Record<string, string | null>>({
+    newcomer: null,
+    departed: null,
+    promoted: null,
+    commander: null,
+  });
 
   const refresh = async () => {
     setIsLoading(true);
@@ -98,6 +107,7 @@ export default function DashboardPage() {
       setNewsCount(parsed.news);
       setHighlights(parsed.highlights);
       setReactions(parsed.reactions);
+      setMyReactions(parsed.myReactions);
     } catch {
       setLoadError("Часть данных не загрузилась. Проверьте интернет и обновите страницу.");
       setActiveUserCount(null);
@@ -134,25 +144,51 @@ export default function DashboardPage() {
     }
   };
 
-  const renderReactions = (cardKey: "newcomer" | "departed" | "promoted" | "commander") => (
-    <div style={{ position: "absolute", top: 10, right: 10, display: "flex", gap: 6, flexWrap: "wrap", maxWidth: 180 }}>
-      {emojis.map((emoji) => {
-        const count = reactions[cardKey]?.[emoji] || 0;
-        return (
+  const renderReactions = (cardKey: "newcomer" | "departed" | "promoted" | "commander") => {
+    const top = Object.entries(reactions[cardKey] || {}).sort((a, b) => b[1] - a[1]).slice(0, 3);
+    const current = myReactions[cardKey] || "";
+    return (
+      <div style={{ position: "absolute", top: 10, right: 10, display: "grid", gap: 6, justifyItems: "end" }}>
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end", maxWidth: 170 }}>
+          {top.map(([emoji, count]) => (
+            <span key={`${cardKey}-${emoji}`} className="label" style={{ fontSize: 12, background: "#12131a", borderRadius: 999, padding: "2px 8px" }}>
+              {emoji} {count}
+            </span>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 6 }}>
+          <select
+            value={current}
+            onChange={(e) => {
+              const value = e.target.value;
+              if (!value) return;
+              void react(cardKey, value);
+            }}
+            disabled={isReacting.length > 0}
+            className="input"
+            style={{ width: 72, height: 30, padding: "4px 6px", fontSize: 14 }}
+            aria-label="Выбрать реакцию"
+          >
+            <option value="">🙂</option>
+            {emojis.map((emoji) => (
+              <option key={`${cardKey}-select-${emoji}`} value={emoji}>
+                {emoji}
+              </option>
+            ))}
+          </select>
           <button
-            key={`${cardKey}-${emoji}`}
             type="button"
             className="btn"
-            onClick={() => void react(cardKey, emoji)}
-            disabled={isReacting.length > 0}
-            style={{ padding: "2px 8px", fontSize: 12 }}
+            onClick={() => (current ? void react(cardKey, current) : undefined)}
+            disabled={!current || isReacting.length > 0}
+            style={{ padding: "4px 8px", fontSize: 12 }}
           >
-            {emoji} {count}
+            Снять
           </button>
-        );
-      })}
-    </div>
-  );
+        </div>
+      </div>
+    );
+  };
 
   return (
     <section>

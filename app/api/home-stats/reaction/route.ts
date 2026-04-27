@@ -19,24 +19,34 @@ export async function POST(request: Request) {
     }
 
     const supabase = getServerSupabaseServiceClient();
-    const existing = await supabase
+    const existingAny = await supabase
       .from("dashboard_reactions")
-      .select("id")
+      .select("id,emoji")
       .eq("card_key", cardKey)
-      .eq("emoji", emoji)
       .eq("user_id", session.id)
-      .maybeSingle();
+      .limit(10);
 
-    if (existing.error) {
-      return Response.json({ ok: false, error: existing.error.message || "reaction_read_failed" }, { status: 500 });
+    if (existingAny.error) {
+      return Response.json({ ok: false, error: existingAny.error.message || "reaction_read_failed" }, { status: 500 });
     }
 
-    if (existing.data?.id) {
-      const removeQ = await supabase.from("dashboard_reactions").delete().eq("id", existing.data.id);
-      if (removeQ.error) {
-        return Response.json({ ok: false, error: removeQ.error.message || "reaction_delete_failed" }, { status: 500 });
+    const existingRows = Array.isArray(existingAny.data) ? existingAny.data : [];
+    const sameReaction = existingRows.find((r) => String((r as { emoji?: unknown }).emoji || "") === emoji);
+
+    if (sameReaction) {
+      const deleteSame = await supabase.from("dashboard_reactions").delete().eq("id", sameReaction.id);
+      if (deleteSame.error) {
+        return Response.json({ ok: false, error: deleteSame.error.message || "reaction_delete_failed" }, { status: 500 });
       }
       return Response.json({ ok: true, active: false });
+    }
+
+    if (existingRows.length > 0) {
+      const ids = existingRows.map((r) => r.id);
+      const clearQ = await supabase.from("dashboard_reactions").delete().in("id", ids);
+      if (clearQ.error) {
+        return Response.json({ ok: false, error: clearQ.error.message || "reaction_clear_failed" }, { status: 500 });
+      }
     }
 
     const insertQ = await supabase
