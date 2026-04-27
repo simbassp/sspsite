@@ -18,6 +18,7 @@ export interface UserPermissions {
   uav: boolean;
   counteraction: boolean;
   users: boolean;
+  online: boolean;
 }
 
 export interface SessionUser {
@@ -34,6 +35,7 @@ export interface UserRecord extends SessionUser {
   login: string;
   password: string;
   status: UserStatus;
+  isOnline?: boolean;
 }
 
 export interface NewsItem {

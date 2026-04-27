@@ -38,6 +38,7 @@ function defaultPermissions(user: Partial<UserRecord>): UserPermissions {
     uav: isAdmin || legacyContent,
     counteraction: isAdmin || legacyContent,
     users: isAdmin,
+    online: isAdmin,
   };
 }
 
@@ -144,6 +145,7 @@ export function registerEmployee(payload: {
       uav: false,
       counteraction: false,
       users: false,
+      online: false,
     },
     status: "active",
   };

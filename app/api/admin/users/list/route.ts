@@ -20,7 +20,7 @@ export async function GET() {
     const primaryQ = await supabase
       .from("app_users")
       .select(
-        "id,auth_user_id,login,name,callsign,position,can_manage_content,can_manage_news,can_manage_tests,can_manage_results,can_manage_uav,can_manage_counteraction,can_manage_users,role,status",
+        "id,auth_user_id,login,name,callsign,position,can_manage_content,can_manage_news,can_manage_tests,can_manage_results,can_manage_uav,can_manage_counteraction,can_manage_users,can_view_online,is_online,role,status",
       )
       .order("created_at", { ascending: false })
       .limit(1000);
@@ -29,7 +29,7 @@ export async function GET() {
     if (primaryQ.error && isMissingColumnError(primaryQ.error.message)) {
       const fallbackQ = await supabase
         .from("app_users")
-        .select("id,name,callsign,position,role,status,can_manage_content")
+        .select("id,name,callsign,position,role,status,can_manage_content,is_online")
         .limit(1000);
       rows = (fallbackQ.data || []) as Array<Record<string, unknown>>;
       queryError = fallbackQ.error?.message || null;
@@ -49,6 +49,8 @@ export async function GET() {
       can_manage_uav: r.can_manage_uav ?? undefined,
       can_manage_counteraction: r.can_manage_counteraction ?? undefined,
       can_manage_users: r.can_manage_users ?? false,
+      can_view_online: r.can_view_online ?? false,
+      is_online: r.is_online ?? false,
       role: r.role === "admin" ? "admin" : "employee",
       status: r.status === "inactive" ? "inactive" : "active",
     }));

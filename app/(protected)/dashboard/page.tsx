@@ -23,6 +23,7 @@ type HomePayload = {
   };
   reactions?: Record<string, Record<string, number>>;
   my_reactions?: Record<string, string | null>;
+  reaction_scope?: string;
 };
 
 type DashboardData = {
@@ -176,15 +177,6 @@ export default function DashboardPage() {
               </option>
             ))}
           </select>
-          <button
-            type="button"
-            className="btn"
-            onClick={() => (current ? void react(cardKey, current) : undefined)}
-            disabled={!current || isReacting.length > 0}
-            style={{ padding: "4px 8px", fontSize: 12 }}
-          >
-            Снять
-          </button>
         </div>
       </div>
     );

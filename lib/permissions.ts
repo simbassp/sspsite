@@ -9,6 +9,7 @@ const emptyPermissions: UserPermissions = {
   uav: false,
   counteraction: false,
   users: false,
+  online: false,
 };
 
 function allPermissions(): UserPermissions {
@@ -19,6 +20,7 @@ function allPermissions(): UserPermissions {
     uav: true,
     counteraction: true,
     users: true,
+    online: true,
   };
 }
 

@@ -23,6 +23,7 @@ type ProfileRow = {
   can_manage_uav?: boolean;
   can_manage_counteraction?: boolean;
   can_manage_users?: boolean;
+  can_view_online?: boolean;
   status: "active" | "inactive";
 };
 
@@ -207,6 +208,7 @@ export async function POST(request: Request) {
           uav: true,
           counteraction: true,
           users: true,
+          online: true,
         }
       : hasGranularContentPermissions
         ? {
@@ -216,6 +218,7 @@ export async function POST(request: Request) {
             uav: profile.can_manage_uav === true,
             counteraction: profile.can_manage_counteraction === true,
             users: profile.can_manage_users === true,
+            online: profile.can_view_online === true,
           }
         : {
             news: profile.can_manage_content === true,
@@ -224,6 +227,7 @@ export async function POST(request: Request) {
             uav: profile.can_manage_content === true,
             counteraction: profile.can_manage_content === true,
             users: profile.can_manage_users === true,
+            online: profile.can_view_online === true,
           };
 
   return NextResponse.json({

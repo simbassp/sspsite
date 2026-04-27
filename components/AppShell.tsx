@@ -49,6 +49,14 @@ export function AppShell({ session, children }: AppShellProps) {
       window.removeEventListener("offline", sync);
     };
   }, []);
+
+  useEffect(() => {
+    void fetch("/api/presence", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ online: true }),
+    }).catch(() => undefined);
+  }, []);
   const visibleAdminLinks = [
     ...(canEditUsers ? [{ href: "/admin/users", label: "Пользователи" }] : []),
     ...(canManageResults(session) ? [{ href: "/admin/results", label: "Результаты" }] : []),

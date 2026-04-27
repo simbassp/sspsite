@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getPositions } from "@/lib/storage";
+import { readClientSession } from "@/lib/client-auth";
 import { fetchUsers, patchUser, removeUser } from "@/lib/users-repository";
 import { UserRecord } from "@/lib/types";
 
@@ -12,9 +13,11 @@ const permissionOptions = [
   { key: "uav", label: "БПЛА" },
   { key: "counteraction", label: "Противодействие" },
   { key: "users", label: "Редактирование и удаление пользователей" },
+  { key: "online", label: "Показывать кто онлайн" },
 ] as const;
 
 export default function AdminUsersPage() {
+  const session = useMemo(() => readClientSession(), []);
   const positions = useMemo(() => getPositions(), []);
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [query, setQuery] = useState("");
@@ -78,11 +81,25 @@ export default function AdminUsersPage() {
     const matchesStatus = status === "all" ? true : item.status === status;
     return matchesText && matchesStatus;
   });
+  const canSeeOnlineList = session?.role === "admin" || session?.permissions?.online === true;
+  const onlineUsers = users.filter((u) => u.isOnline === true && u.status === "active");
 
   return (
     <section>
       <h1 className="page-title">Админ / Пользователи</h1>
       <p className="page-subtitle">Поиск и фильтрация сотрудников для работы с количеством 100+ пользователей.</p>
+      {canSeeOnlineList && (
+        <div className="card" style={{ marginTop: 10 }}>
+          <div className="card-body">
+            <p className="label">Пользователи онлайн</p>
+            <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
+              {onlineUsers.length > 0
+                ? onlineUsers.map((u) => `${u.name} ${u.callsign}`).join(", ")
+                : "Сейчас никого нет онлайн"}
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-two">
         <input

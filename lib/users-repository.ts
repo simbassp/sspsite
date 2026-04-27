@@ -29,6 +29,8 @@ type UserRow = {
   can_manage_uav?: boolean;
   can_manage_counteraction?: boolean;
   can_manage_users?: boolean;
+  can_view_online?: boolean;
+  is_online?: boolean;
   role: "employee" | "admin";
   status: "active" | "inactive";
 };
@@ -85,6 +87,7 @@ function defaultPermissionsFromLegacy(row: {
     uav: isAdmin || legacyContent,
     counteraction: isAdmin || legacyContent,
     users: isAdmin,
+    online: isAdmin,
   };
 }
 
@@ -97,6 +100,7 @@ function normalizePermissions(input: {
   can_manage_uav?: boolean;
   can_manage_counteraction?: boolean;
   can_manage_users?: boolean;
+  can_view_online?: boolean;
   permissions?: Partial<UserPermissions> | undefined;
 }) {
   const fallback = defaultPermissionsFromLegacy(input);
@@ -109,6 +113,7 @@ function normalizePermissions(input: {
     ...(input.can_manage_uav !== undefined ? { uav: input.can_manage_uav === true } : {}),
     ...(input.can_manage_counteraction !== undefined ? { counteraction: input.can_manage_counteraction === true } : {}),
     ...(input.can_manage_users !== undefined ? { users: input.can_manage_users === true } : {}),
+    ...(input.can_view_online !== undefined ? { online: input.can_view_online === true } : {}),
   };
   if (input.role === "admin") {
     return {
@@ -118,6 +123,7 @@ function normalizePermissions(input: {
       uav: true,
       counteraction: true,
       users: true,
+      online: true,
     } satisfies UserPermissions;
   }
   return merged satisfies UserPermissions;
@@ -142,6 +148,7 @@ function toUserRecord(row: UserRow): UserRecord {
     login: row.login,
     status: row.status,
     password: "",
+    isOnline: row.is_online === true,
   };
 }
 
@@ -368,6 +375,11 @@ export async function loginUser(login: string, password: string) {
         refresh_token: serverResult.auth.refreshToken,
       })
       .catch(() => undefined);
+    await fetch("/api/presence", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ online: true }),
+    }).catch(() => undefined);
     return { ok: true as const, session: normalizeSessionUser(serverResult.session) };
   }
 
@@ -459,6 +471,12 @@ export async function loginUser(login: string, password: string) {
   if (!loginTrim.includes("@") && successfulEmail) {
     cacheEmailForLogin(loginTrim, successfulEmail);
   }
+
+  await fetch("/api/presence", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ online: true }),
+  }).catch(() => undefined);
 
   return { ok: true as const, session: toSessionUser(row) };
 }
@@ -883,6 +901,7 @@ export async function patchUser(
     ...(nextPermissions !== undefined ? { can_manage_uav: nextPermissions.uav } : {}),
     ...(nextPermissions !== undefined ? { can_manage_counteraction: nextPermissions.counteraction } : {}),
     ...(nextPermissions !== undefined ? { can_manage_users: nextPermissions.users } : {}),
+    ...(nextPermissions !== undefined ? { can_view_online: nextPermissions.online } : {}),
   };
   const prevUser = listUsers().find((u) => u.id === userId) || null;
 
@@ -918,6 +937,7 @@ export async function patchUser(
       ...(nextPermissions !== undefined ? { can_manage_uav: nextPermissions.uav } : {}),
       ...(nextPermissions !== undefined ? { can_manage_counteraction: nextPermissions.counteraction } : {}),
       ...(nextPermissions !== undefined ? { can_manage_users: nextPermissions.users } : {}),
+      ...(nextPermissions !== undefined ? { can_view_online: nextPermissions.online } : {}),
     };
     const withoutResults = await supabase.from("app_users").update(granularWithoutResultsPayload).eq("id", userId);
     if (!withoutResults.error) {
@@ -1008,6 +1028,11 @@ export async function removeUser(userId: string) {
 }
 
 export async function logoutUser() {
+  await fetch("/api/presence", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ online: false }),
+  }).catch(() => undefined);
   document.cookie = clearSessionCookie();
   document.cookie = `${SESSION_COOKIE}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`;
   if (typeof window !== "undefined") {
