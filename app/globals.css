@@ -509,23 +509,25 @@ html[data-theme="dark"] .select option {
   word-break: break-word;
 }
 
-/* Первые 6 карточек: две колонки на узком экране (вложенные .grid дают одну колонку — используем display:contents). */
-@media (max-width: 1023px) {
-  .dashboard-home-summary {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-    align-items: stretch;
-  }
+/* Секции главной (6 сводных карточек + сетка быстрых ссылок): одинаковый зазор, без схлопывания margin */
+.dashboard-page__stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
 
-  .dashboard-home-summary > .grid.grid-two {
-    display: contents;
-  }
+/* Шесть сводных карточек — одна сетка 2×3. align-items: start — высота строки по контенту (не тянуть «командира» под высоту блока с должностью). */
+.dashboard-home-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 12px;
+  row-gap: 12px;
+  align-items: start;
+  grid-auto-rows: min-content;
+}
 
-  .dashboard-home-summary .card-body {
-    padding: 10px 11px;
-  }
-
+/* Компактная типографика только на узком экране; padding карточек — как у остального сайта (16px). */
+@media (max-width: 819px) {
   .dashboard-home-summary .label {
     font-size: 11px;
   }
@@ -545,11 +547,6 @@ html[data-theme="dark"] .select option {
     font-size: 11px;
     margin-top: 6px !important;
     margin-bottom: 0 !important;
-  }
-
-  .dashboard-home-summary .stat-value {
-    font-size: 22px;
-    margin-top: 4px;
   }
 }
 

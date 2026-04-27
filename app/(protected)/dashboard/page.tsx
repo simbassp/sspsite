@@ -13,8 +13,6 @@ type Highlight = {
 type HomePayload = {
   ok?: boolean;
   error?: string;
-  active_users?: unknown;
-  news_count?: unknown;
   highlights?: {
     newcomer?: Highlight;
     departed?: Highlight;
@@ -24,8 +22,6 @@ type HomePayload = {
 };
 
 type DashboardData = {
-  active: number;
-  news: number;
   highlights: {
     newcomer: Highlight;
     departed: Highlight;
@@ -37,12 +33,8 @@ type DashboardData = {
 function parseDashboardData(raw: unknown): DashboardData | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as HomePayload;
-  const a = o.active_users;
-  const n = o.news_count;
-  if (typeof a !== "number" || typeof n !== "number") return null;
+  if (!o.highlights || typeof o.highlights !== "object") return null;
   return {
-    active: a,
-    news: n,
     highlights: {
       newcomer: o.highlights?.newcomer ?? null,
       departed: o.highlights?.departed ?? null,
@@ -53,8 +45,6 @@ function parseDashboardData(raw: unknown): DashboardData | null {
 }
 
 export default function DashboardPage() {
-  const [activeUserCount, setActiveUserCount] = useState<number | null>(null);
-  const [newsCount, setNewsCount] = useState<number | null>(null);
   const [highlights, setHighlights] = useState<DashboardData["highlights"]>({
     newcomer: null,
     departed: null,
@@ -73,24 +63,16 @@ export default function DashboardPage() {
       if (!response.ok || payload.ok !== true) {
         const normalized = (payload.error || "").replace("supabse", "supabase");
         setLoadError(`Не удалось загрузить сводку${normalized ? `: ${normalized}` : ""}`);
-        setActiveUserCount(null);
-        setNewsCount(null);
         return;
       }
       const parsed = parseDashboardData(payload);
       if (!parsed) {
         setLoadError("Некорректный ответ сервера.");
-        setActiveUserCount(null);
-        setNewsCount(null);
         return;
       }
-      setActiveUserCount(parsed.active);
-      setNewsCount(parsed.news);
       setHighlights(parsed.highlights);
     } catch {
       setLoadError("Часть данных не загрузилась. Проверьте интернет и обновите страницу.");
-      setActiveUserCount(null);
-      setNewsCount(null);
     } finally {
       setIsLoading(false);
     }
@@ -113,8 +95,8 @@ export default function DashboardPage() {
       {isLoading && <p className="page-subtitle">Загружаем данные…</p>}
       {loadError && <p className="page-subtitle">{loadError}</p>}
 
-      <div className="dashboard-home-summary">
-        <div className="grid grid-two">
+      <div className="dashboard-page__stack">
+        <div className="dashboard-home-summary">
           <div className="card dashboard-highlight-card">
             <div className="card-body">
               <p className="label">Наш новый товарищ</p>
@@ -152,63 +134,48 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="grid grid-two">
-          <div className="card">
+        <div className="grid grid-two dashboard-quick-links">
+          <Link href="/news" className="card">
             <div className="card-body">
-              <p className="label">Активных учётных записей</p>
-              <p className="stat-value">{activeUserCount === null ? "—" : activeUserCount}</p>
+              <h3>Новости</h3>
+              <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
+                Важные сообщения и уведомления.
+              </p>
             </div>
-          </div>
-          <div className="card">
+          </Link>
+          <Link href="/counteraction" className="card">
             <div className="card-body">
-              <p className="label">Новостей в ленте</p>
-              <p className="stat-value">{newsCount === null ? "—" : newsCount}</p>
+              <h3>Противодействие</h3>
+              <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
+                Каталог карточек со структурированными ТТХ.
+              </p>
             </div>
-          </div>
+          </Link>
+          <Link href="/uav" className="card">
+            <div className="card-body">
+              <h3>ТТХ БПЛА</h3>
+              <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
+                Отдельные карточки и детальные страницы.
+              </p>
+            </div>
+          </Link>
+          <Link href="/tests" className="card">
+            <div className="card-body">
+              <h3>Тесты</h3>
+              <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
+                Пробный мягкий режим и строгий итоговый.
+              </p>
+            </div>
+          </Link>
+          <Link href="/profile" className="card" style={{ gridColumn: "1 / -1" }}>
+            <div className="card-body">
+              <h3>Профиль</h3>
+              <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
+                Ваши данные и личные результаты тестов.
+              </p>
+            </div>
+          </Link>
         </div>
-      </div>
-
-      <div className="grid grid-two" style={{ marginTop: 12 }}>
-        <Link href="/news" className="card">
-          <div className="card-body">
-            <h3>Новости</h3>
-            <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
-              Важные сообщения и уведомления.
-            </p>
-          </div>
-        </Link>
-        <Link href="/counteraction" className="card">
-          <div className="card-body">
-            <h3>Противодействие</h3>
-            <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
-              Каталог карточек со структурированными ТТХ.
-            </p>
-          </div>
-        </Link>
-        <Link href="/uav" className="card">
-          <div className="card-body">
-            <h3>ТТХ БПЛА</h3>
-            <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
-              Отдельные карточки и детальные страницы.
-            </p>
-          </div>
-        </Link>
-        <Link href="/tests" className="card">
-          <div className="card-body">
-            <h3>Тесты</h3>
-            <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
-              Пробный мягкий режим и строгий итоговый.
-            </p>
-          </div>
-        </Link>
-        <Link href="/profile" className="card" style={{ gridColumn: "1 / -1" }}>
-          <div className="card-body">
-            <h3>Профиль</h3>
-            <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
-              Ваши данные и личные результаты тестов.
-            </p>
-          </div>
-        </Link>
       </div>
     </section>
   );

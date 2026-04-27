@@ -42,6 +42,7 @@ export default function ProfilePage() {
   const [profileNameInput, setProfileNameInput] = useState(() => session?.name ?? "");
   const [profileCallsignInput, setProfileCallsignInput] = useState(() => session?.callsign ?? "");
   const [onlineNames, setOnlineNames] = useState<string[]>([]);
+  const [totalUsers, setTotalUsers] = useState<number | null>(null);
   const [onlineError, setOnlineError] = useState("");
 
   useEffect(() => {
@@ -108,7 +109,12 @@ export default function ProfilePage() {
     (async () => {
       try {
         const response = await fetch("/api/presence/online", { cache: "no-store" });
-        const payload = (await response.json()) as { ok?: boolean; names?: unknown; error?: string };
+        const payload = (await response.json()) as {
+          ok?: boolean;
+          names?: unknown;
+          total_users?: unknown;
+          error?: string;
+        };
         if (!response.ok || payload.ok !== true || !Array.isArray(payload.names)) {
           if (!cancelled) setOnlineError(payload.error || "online_load_failed");
           return;
@@ -116,6 +122,7 @@ export default function ProfilePage() {
         if (!cancelled) {
           setOnlineError("");
           setOnlineNames(payload.names.map((x) => String(x)));
+          setTotalUsers(typeof payload.total_users === "number" ? payload.total_users : null);
         }
       } catch {
         if (!cancelled) setOnlineError("online_load_failed");
@@ -300,13 +307,17 @@ export default function ProfilePage() {
       {(session.role === "admin" || session.permissions.online === true) && (
         <article className="card" style={{ marginBottom: 12 }}>
           <div className="card-body">
-            <p className="label">Пользователи онлайн</p>
+            <p className="label">Пользователи и активность</p>
             <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
+              Всего пользователей: {totalUsers !== null ? totalUsers : "—"}
+            </p>
+            <p className="page-subtitle" style={{ marginTop: 10, marginBottom: 0 }}>
+              Онлайн
               {onlineNames.length > 0
-                ? onlineNames.join(", ")
+                ? `: ${onlineNames.join(", ")}`
                 : onlineError
-                  ? "Не удалось загрузить онлайн-статус."
-                  : "Сейчас никого нет онлайн"}
+                  ? ": не удалось загрузить список."
+                  : ": сейчас никого нет."}
             </p>
           </div>
         </article>

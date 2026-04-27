@@ -16,20 +16,25 @@ export async function GET() {
 
   try {
     const supabase = getServerSupabaseServiceClient();
-    const q = await supabase
-      .from("app_users")
-      .select("name,callsign,is_online,status")
-      .eq("is_online", true)
-      .eq("status", "active")
-      .gte("last_seen_at", staleBefore)
-      .order("name", { ascending: true })
-      .limit(200);
+    const [q, countQ] = await Promise.all([
+      supabase
+        .from("app_users")
+        .select("name,callsign,is_online,status")
+        .eq("is_online", true)
+        .eq("status", "active")
+        .gte("last_seen_at", staleBefore)
+        .order("name", { ascending: true })
+        .limit(200),
+      supabase.from("app_users").select("id", { count: "exact", head: true }).eq("status", "active"),
+    ]);
     if (q.error) return Response.json({ ok: false, error: q.error.message || "presence_online_failed" }, { status: 500 });
 
     const names = (q.data || [])
       .map((row) => `${String(row.name || "").trim()} ${String(row.callsign || "").trim()}`.trim())
       .filter(Boolean);
-    return Response.json({ ok: true, names });
+    const totalUsers =
+      countQ.error || countQ.count === null || countQ.count === undefined ? null : Number(countQ.count);
+    return Response.json({ ok: true, names, total_users: totalUsers });
   } catch (error) {
     return Response.json(
       { ok: false, error: error instanceof Error ? error.message : "presence_online_exception" },
