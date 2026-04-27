@@ -14,13 +14,19 @@ async function resolveUserIdsForHistory(
 ) {
   const ids = new Set<string>([sessionId]);
   try {
-    let byAppId = await supabase.from("app_users").select("id,auth_user_id").eq("id", sessionId).limit(1);
-    if (byAppId.error && isMissingColumnError(byAppId.error.message)) {
-      byAppId = await supabase.from("app_users").select("id").eq("id", sessionId).limit(1);
+    const byAppIdPrimary = await supabase.from("app_users").select("id,auth_user_id").eq("id", sessionId).limit(1);
+    let byAppIdRows: Array<Record<string, unknown>> = (byAppIdPrimary.data || []) as Array<Record<string, unknown>>;
+    let byAppIdError: string | null = byAppIdPrimary.error?.message || null;
+    if (byAppIdPrimary.error && isMissingColumnError(byAppIdPrimary.error.message)) {
+      const byAppIdLegacy = await supabase.from("app_users").select("id").eq("id", sessionId).limit(1);
+      byAppIdRows = (byAppIdLegacy.data || []) as Array<Record<string, unknown>>;
+      byAppIdError = byAppIdLegacy.error?.message || null;
     }
-    for (const row of (byAppId.data || []) as Array<Record<string, unknown>>) {
-      if (row.id) ids.add(String(row.id));
-      if (row.auth_user_id) ids.add(String(row.auth_user_id));
+    if (!byAppIdError) {
+      for (const row of byAppIdRows) {
+        if (row.id) ids.add(String(row.id));
+        if (row.auth_user_id) ids.add(String(row.auth_user_id));
+      }
     }
   } catch {}
   try {
