@@ -139,6 +139,11 @@ a {
     /* Set dynamically from #mobile-app-header height in uav/page.tsx */
     top: var(--uav-sticky-below-header, calc(128px + env(safe-area-inset-top, 0px)));
   }
+
+  /* Prevent auto-scrolled cards from hiding under sticky mobile header */
+  .tests-page .card {
+    scroll-margin-top: calc(150px + env(safe-area-inset-top, 0px));
+  }
 }
 
 @media (min-width: 820px) {
