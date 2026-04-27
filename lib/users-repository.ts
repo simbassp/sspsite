@@ -875,10 +875,31 @@ export async function fetchUsers() {
 
 export async function patchUser(
   userId: string,
-  patch: Partial<Pick<UserRecord, "name" | "callsign" | "position" | "status" | "canManageContent" | "permissions">>,
+  patch: Partial<
+    Pick<UserRecord, "name" | "callsign" | "position" | "status" | "canManageContent" | "permissions" | "role">
+  >,
 ) {
+  const patchForLocalCache: Partial<
+    Pick<UserRecord, "name" | "callsign" | "position" | "status" | "canManageContent" | "permissions" | "role">
+  > =
+    patch.role === "admin"
+      ? {
+          ...patch,
+          permissions: {
+            news: true,
+            tests: true,
+            results: true,
+            uav: true,
+            counteraction: true,
+            users: true,
+            online: true,
+          },
+          canManageContent: true,
+        }
+      : patch;
+
   if (!isSupabaseConfigured) {
-    updateUser(userId, patch);
+    updateUser(userId, patchForLocalCache);
     return;
   }
 
@@ -888,6 +909,25 @@ export async function patchUser(
     nextPermissions !== undefined
       ? nextPermissions.news || nextPermissions.tests || nextPermissions.uav || nextPermissions.counteraction
       : patch.canManageContent;
+
+  const adminGrantDb = {
+    can_manage_content: true,
+    can_manage_news: true,
+    can_manage_tests: true,
+    can_manage_results: true,
+    can_manage_uav: true,
+    can_manage_counteraction: true,
+    can_manage_users: true,
+    can_view_online: true,
+  } as const;
+
+  const roleFragment =
+    patch.role !== undefined
+      ? {
+          role: patch.role,
+          ...(patch.role === "admin" ? adminGrantDb : {}),
+        }
+      : {};
 
   const payload = {
     ...(patch.name !== undefined ? { name: patch.name } : {}),
@@ -902,6 +942,7 @@ export async function patchUser(
     ...(nextPermissions !== undefined ? { can_manage_counteraction: nextPermissions.counteraction } : {}),
     ...(nextPermissions !== undefined ? { can_manage_users: nextPermissions.users } : {}),
     ...(nextPermissions !== undefined ? { can_view_online: nextPermissions.online } : {}),
+    ...roleFragment,
   };
   const prevUser = listUsers().find((u) => u.id === userId) || null;
 
@@ -938,10 +979,11 @@ export async function patchUser(
       ...(nextPermissions !== undefined ? { can_manage_counteraction: nextPermissions.counteraction } : {}),
       ...(nextPermissions !== undefined ? { can_manage_users: nextPermissions.users } : {}),
       ...(nextPermissions !== undefined ? { can_view_online: nextPermissions.online } : {}),
+      ...roleFragment,
     };
     const withoutResults = await supabase.from("app_users").update(granularWithoutResultsPayload).eq("id", userId);
     if (!withoutResults.error) {
-      updateUser(userId, patch);
+      updateUser(userId, patchForLocalCache);
       await maybeLogPromotion();
       return;
     }
@@ -952,30 +994,38 @@ export async function patchUser(
       ...(patch.position !== undefined ? { position: patch.position } : {}),
       ...(patch.status !== undefined ? { status: patch.status } : {}),
       ...(nextCanManageContent !== undefined ? { can_manage_content: nextCanManageContent } : {}),
+      ...roleFragment,
     };
     const fallback = await supabase.from("app_users").update(legacyPayload).eq("id", userId);
     if (fallback.error) {
-      updateUser(userId, patch);
+      updateUser(userId, patchForLocalCache);
       return;
     }
-    updateUser(userId, patch);
+    updateUser(userId, patchForLocalCache);
     await maybeLogPromotion();
   } else {
-    updateUser(userId, patch);
+    updateUser(userId, patchForLocalCache);
     await maybeLogPromotion();
   }
 }
 
 const REMOVE_USER_TIMEOUT_MS = 15000;
 
-export async function removeUser(userId: string) {
+export async function removeUser(userId: string): Promise<
+  { ok: true } | { ok: true; warning: string } | { ok: false; error: string }
+> {
+  const targetPrecheck = listUsers().find((u) => u.id === userId) || null;
+  if (targetPrecheck?.role === "admin") {
+    return { ok: false, error: "Удаление учётной записи администратора запрещено." };
+  }
+
   if (!isSupabaseConfigured) {
     deleteUser(userId);
     return { ok: true as const };
   }
 
   const supabase = getSupabaseBrowserClient();
-  const targetUser = listUsers().find((u) => u.id === userId) || null;
+  const targetUser = targetPrecheck;
   let serverWarning: string | undefined;
 
   try {

@@ -7,5 +7,5 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (!canAccessAdminPanel(session)) {
     redirect("/dashboard");
   }
-  return <>{children}</>;
+  return <div className="admin-shell">{children}</div>;
 }

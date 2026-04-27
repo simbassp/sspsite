@@ -177,7 +177,7 @@ export function replaceAllUsersInLocalCache(nextUsers: UserRecord[]) {
 
 export function updateUser(
   userId: string,
-  patch: Partial<Pick<UserRecord, "name" | "callsign" | "position" | "status" | "canManageContent" | "permissions">>,
+  patch: Partial<Pick<UserRecord, "name" | "callsign" | "position" | "status" | "canManageContent" | "permissions" | "role">>,
 ) {
   const data = readData();
   data.users = data.users.map((user) => {

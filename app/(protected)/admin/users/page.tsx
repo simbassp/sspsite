@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { readClientSession } from "@/lib/client-auth";
 import { getPositions } from "@/lib/storage";
 import { fetchUsers, patchUser, removeUser } from "@/lib/users-repository";
-import { UserRecord } from "@/lib/types";
+import { Role, UserRecord } from "@/lib/types";
 
 const permissionOptions = [
   { key: "news", label: "Новости" },
@@ -15,7 +16,19 @@ const permissionOptions = [
   { key: "online", label: "Показывать кто онлайн" },
 ] as const;
 
+const fullAdminPermissions = {
+  news: true,
+  tests: true,
+  results: true,
+  uav: true,
+  counteraction: true,
+  users: true,
+  online: true,
+} as const satisfies UserRecord["permissions"];
+
 export default function AdminUsersPage() {
+  const session = useMemo(() => readClientSession(), []);
+  const canGrantAdminRole = session?.role === "admin";
   const positions = useMemo(() => getPositions(), []);
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [query, setQuery] = useState("");
@@ -39,7 +52,9 @@ export default function AdminUsersPage() {
 
   const patchLocal = (
     userId: string,
-    patch: Partial<Pick<UserRecord, "name" | "callsign" | "position" | "status" | "canManageContent" | "permissions">>,
+    patch: Partial<
+      Pick<UserRecord, "name" | "callsign" | "position" | "status" | "canManageContent" | "permissions">
+    >,
   ) => {
     setUsers((prev) =>
       prev.map((item) => {
@@ -51,10 +66,10 @@ export default function AdminUsersPage() {
           permissions: nextPermissions,
           canManageContent:
             patch.canManageContent ??
-              (nextPermissions.news ||
-                nextPermissions.tests ||
-                nextPermissions.uav ||
-                nextPermissions.counteraction),
+            (nextPermissions.news ||
+              nextPermissions.tests ||
+              nextPermissions.uav ||
+              nextPermissions.counteraction),
         };
       }),
     );
@@ -65,6 +80,57 @@ export default function AdminUsersPage() {
       patchUser(userId, patch).catch(() => setInfo("Не удалось синхронизировать изменения."));
       delete patchTimersRef.current[userId];
     }, 350);
+  };
+
+  const applyRoleChange = async (user: UserRecord, nextRole: Role) => {
+    if (!canGrantAdminRole || user.role === nextRole) return;
+    if (user.role === "admin" && nextRole === "employee") {
+      const ok = window.confirm(
+        `Снять роль администратора с ${user.name} (@${user.login})? Сохранятся отдельные права в базе, если они были.`,
+      );
+      if (!ok) return;
+    } else if (nextRole === "admin") {
+      const ok = window.confirm(
+        `Назначить пользователя ${user.name} администратором? У него будет полный доступ ко всем разделам после следующего входа.`,
+      );
+      if (!ok) return;
+    }
+
+    setUsers((prev) =>
+      prev.map((item) => {
+        if (item.id !== user.id) return item;
+        if (nextRole === "admin") {
+          return {
+            ...item,
+            role: "admin",
+            permissions: { ...fullAdminPermissions },
+            canManageContent: true,
+          };
+        }
+        return { ...item, role: "employee" };
+      }),
+    );
+
+    try {
+      if (nextRole === "admin") {
+        await patchUser(user.id, {
+          role: "admin",
+          permissions: { ...fullAdminPermissions },
+          canManageContent: true,
+        });
+      } else {
+        await patchUser(user.id, { role: "employee" });
+      }
+      setInfo(
+        nextRole === "admin"
+          ? "Назначен администратор. Чтобы интерфейс обновился, пользователю нужно выйти и войти снова."
+          : "Роль изменена на «Сотрудник».",
+      );
+      await refresh();
+    } catch {
+      setInfo("Не удалось изменить роль. Обновите страницу.");
+      await refresh();
+    }
   };
 
   useEffect(() => {
@@ -81,11 +147,13 @@ export default function AdminUsersPage() {
   });
 
   return (
-    <section>
+    <section className="admin-users-page">
       <h1 className="page-title">Админ / Пользователи</h1>
-      <p className="page-subtitle">Поиск и фильтрация сотрудников для работы с количеством 100+ пользователей.</p>
+      <p className="page-subtitle admin-users-page__lead">
+        Поиск и фильтрация. Роль «Администратор» может назначить только действующий администратор.
+      </p>
 
-      <div className="grid grid-two">
+      <div className="grid grid-two admin-users-page__filters">
         <input
           className="input"
           placeholder="Поиск по имени, позывному, логину"
@@ -98,20 +166,35 @@ export default function AdminUsersPage() {
           <option value="inactive">Деактивированные</option>
         </select>
       </div>
-      {info && <p className="page-subtitle">{info}</p>}
+      {info && <p className="page-subtitle admin-users-page__info">{info}</p>}
 
-      <div className="list" style={{ marginTop: 12 }}>
+      <div className="list admin-users-page__list">
         {visible.map((user) => (
-          <article className="card" key={user.id}>
+          <article className="card admin-users-page__card" key={user.id}>
             <div className="card-body">
-              <div className="meta">
+              <div className="meta admin-users-page__meta">
                 <span className={`pill ${user.status === "active" ? "pill-green" : "pill-yellow"}`}>
                   {user.status === "active" ? "Активен" : "Деактивирован"}
                 </span>
-                <span>@{user.login}</span>
+                <span className="admin-users-page__login">@{user.login}</span>
+                {canGrantAdminRole ? (
+                  <select
+                    className="select admin-users-page__role"
+                    value={user.role}
+                    onChange={(e) => void applyRoleChange(user, e.target.value as Role)}
+                    aria-label="Роль пользователя"
+                  >
+                    <option value="employee">Сотрудник</option>
+                    <option value="admin">Администратор</option>
+                  </select>
+                ) : (
+                  <span className={`pill ${user.role === "admin" ? "pill-green" : ""}`}>
+                    {user.role === "admin" ? "Админ" : "Сотрудник"}
+                  </span>
+                )}
               </div>
 
-              <div className="grid grid-two" style={{ marginTop: 10 }}>
+              <div className="admin-users-page__fields">
                 <input className="input" value={user.name} onChange={(e) => patchLocal(user.id, { name: e.target.value })} />
                 <input
                   className="input"
@@ -139,9 +222,12 @@ export default function AdminUsersPage() {
                     setPermissionsTargetId((prev) => (prev === user.id ? null : user.id));
                   }}
                 >
-                  {permissionsTargetId === user.id ? "Закрыть права" : "Выдать права"}
+                  {permissionsTargetId === user.id ? "Закрыть права" : "Права"}
                 </button>
-                <div style={{ display: "flex", gap: 8 }}>
+              </div>
+
+              <div className="admin-users-page__actions">
+                {user.role !== "admin" && (
                   <button
                     className="btn btn-danger"
                     type="button"
@@ -156,44 +242,50 @@ export default function AdminUsersPage() {
                       let remoteWarning: string | undefined;
                       try {
                         const result = await removeUser(userId);
+                        if (!result.ok) {
+                          setInfo(result.error);
+                          setDeletingId(null);
+                          return;
+                        }
                         if ("warning" in result && result.warning) {
                           remoteWarning = result.warning;
                         }
                       } catch (e) {
                         hadError = e instanceof Error ? e : new Error(String(e));
-                      } finally {
-                        try {
-                          const next = await fetchUsers();
-                          setUsers(next);
-                          if (hadError) {
-                            setInfo(hadError.message);
-                          } else if (next.some((u) => u.id === userId)) {
-                            setInfo(
-                              "В базе запись public.app_users не снялась. Откройте Supabase → SQL, выполните скрипт из файла supabase/migrations/20260426150000_admin_delete_user_app_first.sql, затем снова нажмите «Удалить».",
-                            );
-                          } else if (remoteWarning) {
-                            setInfo(remoteWarning);
-                          } else {
-                            setInfo("Пользователь удалён.");
-                          }
-                        } catch {
-                          setInfo("Сервер не ответил при обновлении списка — обновите страницу вручную.");
+                      }
+                      try {
+                        const next = await fetchUsers();
+                        setUsers(next);
+                        if (hadError) {
+                          setInfo(hadError.message);
+                        } else if (next.some((u) => u.id === userId)) {
+                          setInfo(
+                            "В базе запись public.app_users не снялась. Откройте Supabase → SQL, выполните скрипт из файла supabase/migrations/20260426150000_admin_delete_user_app_first.sql, затем снова нажмите «Удалить».",
+                          );
+                        } else if (remoteWarning) {
+                          setInfo(remoteWarning);
+                        } else {
+                          setInfo("Пользователь удалён.");
                         }
+                      } catch {
+                        setInfo("Сервер не ответил при обновлении списка — обновите страницу вручную.");
+                      } finally {
                         setDeletingId(null);
                       }
                     }}
                   >
                     {deletingId === user.id ? "Удаляем…" : "Удалить"}
                   </button>
-                </div>
+                )}
               </div>
+
               {permissionsTargetId === user.id && (
-                <div className="card" style={{ marginTop: 10 }}>
+                <div className="card admin-users-page__permissions">
                   <div className="card-body">
-                    <h3 style={{ marginBottom: 8 }}>Права доступа</h3>
-                    <div className="form">
+                    <h3 className="admin-users-page__perm-title">Права доступа</h3>
+                    <div className="form admin-users-page__perm-form">
                       {permissionOptions.map((item) => (
-                        <label key={`${user.id}-${item.key}`} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <label key={`${user.id}-${item.key}`} className="admin-users-page__perm-row">
                           <input
                             type="checkbox"
                             checked={getDraftPermissions(user)[item.key]}
@@ -254,7 +346,7 @@ export default function AdminUsersPage() {
                         </button>
                       )}
                       {user.role === "admin" && (
-                        <p className="page-subtitle" style={{ marginBottom: 0 }}>
+                        <p className="page-subtitle admin-users-page__perm-hint">
                           У администратора полный доступ по всем разделам.
                         </p>
                       )}
