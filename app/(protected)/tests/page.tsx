@@ -707,18 +707,24 @@ export default function TestsPage() {
                 }
                 style={{ marginTop: 10 }}
                 title={
-                  finalTest != null && finalTest.attemptsExhausted && !finalTest.hasPassedFinal
-                    ? "Попытки итогового теста израсходованы. Нужен сброс попыток администратором."
-                    : finalTest != null && !finalTest.canStartFinal && !finalTest.hasPassedFinal
-                      ? "Сейчас нельзя начать итоговый тест."
-                      : undefined
+                  finalTest != null && finalTest.hasPassedFinal
+                    ? "Итоговый тест уже успешно сдан в текущем окне попыток."
+                    : finalTest != null && finalTest.attemptsExhausted
+                      ? "Попытки итогового теста израсходованы. Нужен сброс попыток администратором."
+                      : finalTest != null && !finalTest.canStartFinal
+                        ? "Сейчас нельзя начать итоговый тест."
+                        : undefined
                 }
               >
-                {finalTest != null && finalTest.attemptsExhausted && !finalTest.hasPassedFinal
-                  ? "Попытки закончились — недоступно"
-                  : finalTest != null && !finalTest.canStartFinal && !finalTest.hasPassedFinal
-                    ? "Недоступно — нет попыток"
-                    : "Начать итоговый тест"}
+                {finalTest == null
+                  ? "Начать итоговый тест"
+                  : finalTest.hasPassedFinal
+                    ? "Итоговый тест уже сдан"
+                    : finalTest.attemptsExhausted
+                      ? "Попытки закончились — недоступно"
+                      : !finalTest.canStartFinal
+                        ? "Недоступно — нет попыток"
+                        : "Начать итоговый тест"}
               </button>
             )}
           </div>

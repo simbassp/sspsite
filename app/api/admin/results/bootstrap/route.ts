@@ -132,28 +132,29 @@ export async function GET(req: Request) {
       .filter((u) => u.role === "employee" || u.role === "admin")
       .map((user) => {
         const userFinals = finalsByUser.get(user.id) ?? [];
-        const hasPassedFinal = userFinals.some((r) => r.status === "passed");
-        const sortedDesc = [...userFinals].sort(
+        const from = user.final_test_counting_from ?? null;
+        const finalsSince = from
+          ? userFinals.filter((r) => new Date(r.created_at).getTime() >= new Date(from).getTime())
+          : userFinals;
+        const hasPassedFinal = finalsSince.some((r) => r.status === "passed");
+        const sortedDesc = [...finalsSince].sort(
           (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
         );
         const latestFinal = sortedDesc[0];
         const latestFinalAt = latestFinal?.created_at ?? null;
 
-        const from = user.final_test_counting_from ?? null;
-        const finalsSince = from
-          ? userFinals.filter((r) => new Date(r.created_at).getTime() >= new Date(from).getTime())
-          : userFinals;
         const usedFinalAttempts = finalsSince.length;
 
         const qt = latestFinal?.questions_total ?? null;
         const qc = latestFinal?.questions_correct ?? null;
 
-        /** Кнопка сброса для админа, пока итоговый тест не сдан (можно обнулить окно попыток в любой момент). */
-        const showResetAttempts = viewerIsAdmin && !hasPassedFinal;
+        /** Сброс: для чужих карточек — если в текущем окне нет зачёта; себе админ может сбросить всегда. */
+        const showResetAttempts =
+          viewerIsAdmin && (!hasPassedFinal || session.id === user.id);
 
         let statusLabel: "passed" | "failed" | "not_started";
         if (hasPassedFinal) statusLabel = "passed";
-        else if (userFinals.length > 0) statusLabel = "failed";
+        else if (finalsSince.length > 0) statusLabel = "failed";
         else statusLabel = "not_started";
 
         return {

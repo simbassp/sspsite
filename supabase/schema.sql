@@ -244,7 +244,7 @@ as $$
   select exists (
     select 1
     from public.registration_invites i
-    where i.code = trim(p_code)
+    where upper(trim(i.code)) = upper(trim(coalesce(p_code, '')))
       and i.is_active = true
       and (i.max_uses is null or i.used_count < i.max_uses)
   );
@@ -264,7 +264,7 @@ declare
 begin
   update public.registration_invites
   set used_count = used_count + 1
-  where code = trim(p_code)
+  where upper(trim(code)) = upper(trim(coalesce(p_code, '')))
     and is_active = true
     and (max_uses is null or used_count < max_uses);
 

@@ -34,24 +34,29 @@ export async function computeFinalTestSummary(supabase: SupabaseClient, userId: 
 
   const usedAttempts = countRes.count ?? 0;
 
-  let passedRes = await supabase
+  /** «Сдал» только в текущем окне попыток: после сброса админом старый зачёт не блокирует старт. */
+  let passedQuery = supabase
     .from("test_results")
     .select("id")
     .in("user_id", tiedIds)
     .eq("type", "final")
-    .eq("status", "passed")
-    .limit(1)
-    .maybeSingle();
+    .eq("status", "passed");
+  if (countingFrom) {
+    passedQuery = passedQuery.gte("created_at", countingFrom);
+  }
+  let passedRes = await passedQuery.limit(1).maybeSingle();
 
   if (passedRes.error && isMissingColumnError(passedRes.error.message)) {
-    passedRes = await supabase
+    let legacyPassed = supabase
       .from("test_results")
       .select("id")
       .in("user_id", tiedIds)
       .eq("test_type", "final")
-      .eq("status", "passed")
-      .limit(1)
-      .maybeSingle();
+      .eq("status", "passed");
+    if (countingFrom) {
+      legacyPassed = legacyPassed.gte("created_at", countingFrom);
+    }
+    passedRes = await legacyPassed.limit(1).maybeSingle();
   }
 
   const hasPassedFinal = Boolean(passedRes.data);
