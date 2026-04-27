@@ -28,13 +28,14 @@ async function readCurrentConfig(supabase: ReturnType<typeof getServerSupabaseSe
   let q = await supabase
     .from("test_settings")
     .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
-    .eq("id", 1)
+    .order("updated_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
-  if (q.error && isMissingColumnError(q.error.message)) {
+  if ((q.error || !q.data) && isMissingColumnError(q.error?.message)) {
     q = await supabase
       .from("test_settings")
       .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
-      .order("updated_at", { ascending: false })
+      .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
   }
@@ -42,7 +43,7 @@ async function readCurrentConfig(supabase: ReturnType<typeof getServerSupabaseSe
     q = await supabase
       .from("test_settings")
       .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
-      .order("updated_at", { ascending: false })
+      .eq("id", 1)
       .limit(1)
       .maybeSingle();
   }
@@ -111,7 +112,13 @@ export async function POST(request: Request) {
         .gt("trial_question_count", -1)
         .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
         .limit(1);
-      if ((updated.error || !updated.data || updated.data.length === 0) && isMissingColumnError(updated.error?.message)) {
+      if (!updated.error && (!updated.data || updated.data.length === 0)) {
+        updated = await supabase
+          .from("test_settings")
+          .insert(noIdPayload)
+          .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
+          .limit(1);
+      } else if ((updated.error || !updated.data || updated.data.length === 0) && isMissingColumnError(updated.error?.message)) {
         updated = await supabase
           .from("test_settings")
           .insert(noIdPayload)

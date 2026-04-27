@@ -25,21 +25,22 @@ export async function GET() {
     let configQ = await supabase
       .from("test_settings")
       .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
-      .eq("id", 1)
+      .order("updated_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
-    if (configQ.error && isMissingColumnError(configQ.error.message)) {
+    if ((configQ.error || !configQ.data) && isMissingColumnError(configQ.error?.message)) {
       configQ = await supabase
         .from("test_settings")
         .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
-        .order("updated_at", { ascending: false })
+        .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
     }
-    if (!configQ.error && !configQ.data) {
+    if (configQ.error || !configQ.data) {
       configQ = await supabase
         .from("test_settings")
         .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
-        .order("updated_at", { ascending: false })
+        .eq("id", 1)
         .limit(1)
         .maybeSingle();
     }
