@@ -653,6 +653,45 @@ export async function registerUser(payload: {
     };
   }
 
+  const confirmRegistrationCreated = async () => {
+    // Если сетевой ответ потерялся/таймаутнул, проверяем фактический результат:
+    // 1) пробуем повторный signUp: "already registered" считаем успехом
+    // 2) пробуем вход с теми же данными: если вход прошел, аккаунт точно создан
+    try {
+      const retry = await Promise.race([
+        supabase.auth.signUp({
+          email: payload.email,
+          password: payload.password,
+          options: { data: { login: payload.login } },
+        }),
+        new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error("register_recheck_timeout")), 8000);
+        }),
+      ]);
+      const retryErr = retry.error?.message?.toLowerCase() ?? "";
+      if (retryErr.includes("already registered") || retryErr.includes("already been registered")) {
+        return true;
+      }
+    } catch {}
+
+    try {
+      const authTry = await Promise.race([
+        supabase.auth.signInWithPassword({
+          email: payload.email,
+          password: payload.password,
+        }),
+        new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error("register_signin_recheck_timeout")), 8000);
+        }),
+      ]);
+      if (authTry.data?.user) {
+        await supabase.auth.signOut().catch(() => undefined);
+        return true;
+      }
+    } catch {}
+    return false;
+  };
+
   let data: { user?: unknown } | null = null;
   let error: { message: string } | null = null;
   try {
@@ -677,10 +716,28 @@ export async function registerUser(payload: {
     data = result.data as { user?: unknown };
     error = result.error as { message: string } | null;
   } catch {
+    const createdAnyway = await confirmRegistrationCreated();
+    if (createdAnyway) {
+      await supabase.auth.signOut().catch(() => undefined);
+      return { ok: true as const };
+    }
     return { ok: false as const, error: "Сервер регистрации не отвечает. Повторите попытку через 10-20 секунд." };
   }
 
   if (error) {
+    const low = error.message.toLowerCase();
+    if (
+      low.includes("network") ||
+      low.includes("timeout") ||
+      low.includes("fetch") ||
+      low.includes("temporarily unavailable")
+    ) {
+      const createdAnyway = await confirmRegistrationCreated();
+      if (createdAnyway) {
+        await supabase.auth.signOut().catch(() => undefined);
+        return { ok: true as const };
+      }
+    }
     return { ok: false as const, error: mapAuthErrorMessage(error.message) };
   }
 
