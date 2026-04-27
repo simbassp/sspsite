@@ -9,11 +9,17 @@ type QuestionRow = {
   text: string;
   options: string[];
   correct_index: number;
-  time_limit_sec: number;
+  time_limit_sec?: number;
   order_index: number;
-  is_active: boolean;
+  is_active?: boolean;
+  active?: boolean;
   created_at: string;
 };
+
+function isMissingColumnError(message: string | undefined) {
+  const m = (message || "").toLowerCase();
+  return m.includes("column") && m.includes("does not exist");
+}
 
 export async function GET() {
   const session = await getServerSession();
@@ -22,25 +28,33 @@ export async function GET() {
   try {
     const supabase = getServerSupabaseServiceClient();
     const t0 = Date.now();
-    const [questionsQ, uavQ] = await Promise.all([
-      supabase
+    const uavQ = supabase
+      .from("catalog_items")
+      .select("id,title,category,summary,image,specs,details")
+      .eq("kind", "uav")
+      .order("created_at", { ascending: false })
+      .limit(200);
+
+    let questionsQ = await supabase
+      .from("test_questions")
+      .select("id,type,text,options,correct_index,time_limit_sec,order_index,is_active,created_at")
+      .eq("is_active", true)
+      .order("order_index", { ascending: true })
+      .limit(2000);
+    if (questionsQ.error && isMissingColumnError(questionsQ.error.message)) {
+      questionsQ = await supabase
         .from("test_questions")
-        .select("id,type,text,options,correct_index,time_limit_sec,order_index,is_active,created_at")
-        .eq("is_active", true)
+        .select("id,type,text,options,correct_index,order_index,active,created_at")
+        .eq("active", true)
         .order("order_index", { ascending: true })
-        .limit(2000),
-      supabase
-        .from("catalog_items")
-        .select("id,title,category,summary,image,specs,details")
-        .eq("kind", "uav")
-        .order("created_at", { ascending: false })
-        .limit(200),
-    ]);
+        .limit(2000);
+    }
+    const uavRes = await uavQ;
     const t1 = Date.now();
 
-    if (questionsQ.error || uavQ.error) {
+    if (questionsQ.error || uavRes.error) {
       return Response.json(
-        { ok: false, error: questionsQ.error?.message || uavQ.error?.message || "tests_pool_failed" },
+        { ok: false, error: questionsQ.error?.message || uavRes.error?.message || "tests_pool_failed" },
         { status: 500 },
       );
     }
@@ -51,16 +65,16 @@ export async function GET() {
       text: q.text,
       options: q.options,
       correctIndex: q.correct_index,
-      timeLimitSec: q.time_limit_sec,
+      timeLimitSec: Number(q.time_limit_sec ?? 10),
       order: q.order_index,
-      isActive: q.is_active,
+      isActive: Boolean(q.is_active ?? q.active ?? true),
       createdAt: q.created_at,
     }));
 
     return Response.json({
       ok: true,
       questionPool: mappedQuestions,
-      uavItems: uavQ.data || [],
+      uavItems: uavRes.data || [],
       timingsMs: {
         poolQuery: t1 - t0,
       },

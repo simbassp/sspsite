@@ -42,9 +42,10 @@ type TestQuestionRow = {
   text: string;
   options: string[];
   correct_index: number;
-  time_limit_sec: number;
+  time_limit_sec?: number;
   order_index: number;
-  is_active: boolean;
+  is_active?: boolean;
+  active?: boolean;
   created_at: string;
 };
 
@@ -54,6 +55,11 @@ type TestConfigRow = {
   time_per_question_sec?: number | null;
   uav_auto_generation?: boolean | null;
 };
+
+function isMissingColumnError(message: string | undefined) {
+  const m = (message || "").toLowerCase();
+  return m.includes("column") && m.includes("does not exist");
+}
 
 function mapResult(row: TestResultRow): TestResult {
   return {
@@ -82,9 +88,9 @@ function mapQuestion(row: TestQuestionRow): TestQuestion {
     text: row.text,
     options: row.options,
     correctIndex: row.correct_index,
-    timeLimitSec: row.time_limit_sec,
+    timeLimitSec: Number(row.time_limit_sec ?? 10),
     order: row.order_index,
-    isActive: row.is_active,
+    isActive: Boolean(row.is_active ?? row.active ?? true),
     createdAt: row.created_at,
   };
 }
@@ -311,7 +317,7 @@ export async function fetchActiveQuestionPool() {
   }
   try {
     const supabase = getSupabaseBrowserClient();
-    const { data, error } = await withTimeoutAndRetry(
+    let { data, error } = await withTimeoutAndRetry(
       () =>
         supabase
           .from("test_questions")
@@ -322,6 +328,21 @@ export async function fetchActiveQuestionPool() {
       1,
       "fetch_questions_timeout",
     );
+    if (error && isMissingColumnError(error.message)) {
+      const legacyRes = await withTimeoutAndRetry(
+        () =>
+          supabase
+            .from("test_questions")
+            .select("id,type,text,options,correct_index,order_index,active,created_at")
+            .eq("active", true)
+            .order("order_index", { ascending: true }),
+        7000,
+        1,
+        "fetch_questions_legacy_timeout",
+      );
+      data = legacyRes.data as unknown;
+      error = legacyRes.error as { message: string } | null;
+    }
     if (error || !data) {
       return listTestQuestions().filter((q) => q.isActive).sort((a, b) => a.order - b.order);
     }
@@ -432,7 +453,7 @@ export async function fetchTestConfig() {
   }
   try {
     const supabase = getSupabaseBrowserClient();
-    const { data, error } = await withTimeoutAndRetry(
+    let { data, error } = await withTimeoutAndRetry(
       () =>
         supabase
           .from("test_settings")
@@ -443,6 +464,21 @@ export async function fetchTestConfig() {
       1,
       "fetch_test_config_timeout",
     );
+    if (error && isMissingColumnError(error.message)) {
+      const legacyRes = await withTimeoutAndRetry(
+        () =>
+          supabase
+            .from("test_settings")
+            .select("trial_question_count,final_question_count")
+            .eq("id", 1)
+            .maybeSingle(),
+        6000,
+        1,
+        "fetch_test_config_legacy_timeout",
+      );
+      data = legacyRes.data as unknown;
+      error = legacyRes.error as { message: string } | null;
+    }
     if (error || !data) {
       return getTestConfig();
     }
