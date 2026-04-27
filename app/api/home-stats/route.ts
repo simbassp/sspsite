@@ -45,40 +45,11 @@ export async function GET() {
       .order("created_at", { ascending: false })
       .limit(1);
 
-    const reactionCounts: Record<string, Record<string, number>> = {
-      newcomer: {},
-      departed: {},
-      promoted: {},
-      commander: {},
-    };
-    const myReactions: Record<string, string | null> = {
-      newcomer: null,
-      departed: null,
-      promoted: null,
-      commander: null,
-    };
-
     const newest = Array.isArray(newestQ.data) ? newestQ.data[0] : null;
     const left = Array.isArray(leftQ.data) ? leftQ.data[0] : null;
-    const scopeKey = `${newest?.created_at ?? "none"}|${left?.created_at ?? "none"}`;
-    let reactionsQ = await supabase.from("dashboard_reactions").select("card_key,emoji,user_id").eq("scope_key", scopeKey);
-    if (reactionsQ.error && isMissingColumnError(reactionsQ.error.message)) {
-      reactionsQ = await supabase.from("dashboard_reactions").select("card_key,emoji,user_id");
-    }
     const promoted = Array.isArray(promotedQ.data) ? promotedQ.data[0] : null;
     const leftPayload = (left?.payload || {}) as Record<string, unknown>;
     const promotedPayload = (promoted?.payload || {}) as Record<string, unknown>;
-
-    if (!reactionsQ.error && Array.isArray(reactionsQ.data)) {
-      for (const row of reactionsQ.data) {
-        const cardKey = String((row as { card_key?: unknown }).card_key || "");
-        const emoji = String((row as { emoji?: unknown }).emoji || "");
-        const userId = String((row as { user_id?: unknown }).user_id || "");
-        if (!reactionCounts[cardKey] || !emoji) continue;
-        reactionCounts[cardKey][emoji] = (reactionCounts[cardKey][emoji] || 0) + 1;
-        if (userId === session.id) myReactions[cardKey] = emoji;
-      }
-    }
 
     return Response.json({
       ok: true,
@@ -109,9 +80,6 @@ export async function GET() {
           : null,
         commander: { name: "Владислав", callsign: "Клиган" },
       },
-      reactions: reactionCounts,
-      my_reactions: myReactions,
-      reaction_scope: scopeKey,
     });
   } catch (error) {
     return Response.json(

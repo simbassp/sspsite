@@ -21,9 +21,6 @@ type HomePayload = {
     promoted?: Highlight;
     commander?: Highlight;
   };
-  reactions?: Record<string, Record<string, number>>;
-  my_reactions?: Record<string, string | null>;
-  reaction_scope?: string;
 };
 
 type DashboardData = {
@@ -35,8 +32,6 @@ type DashboardData = {
     promoted: Highlight;
     commander: Highlight;
   };
-  reactions: Record<string, Record<string, number>>;
-  myReactions: Record<string, string | null>;
 };
 
 function parseDashboardData(raw: unknown): DashboardData | null {
@@ -54,8 +49,6 @@ function parseDashboardData(raw: unknown): DashboardData | null {
       promoted: o.highlights?.promoted ?? null,
       commander: o.highlights?.commander ?? null,
     },
-    reactions: o.reactions ?? { newcomer: {}, departed: {}, promoted: {}, commander: {} },
-    myReactions: o.my_reactions ?? { newcomer: null, departed: null, promoted: null, commander: null },
   };
 }
 
@@ -68,21 +61,8 @@ export default function DashboardPage() {
     promoted: null,
     commander: { name: "Владислав", callsign: "Клиган" },
   });
-  const [reactions, setReactions] = useState<Record<string, Record<string, number>>>({
-    newcomer: {},
-    departed: {},
-    promoted: {},
-    commander: {},
-  });
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
-  const [isReacting, setIsReacting] = useState<string>("");
-  const [myReactions, setMyReactions] = useState<Record<string, string | null>>({
-    newcomer: null,
-    departed: null,
-    promoted: null,
-    commander: null,
-  });
 
   const refresh = async () => {
     setIsLoading(true);
@@ -107,8 +87,6 @@ export default function DashboardPage() {
       setActiveUserCount(parsed.active);
       setNewsCount(parsed.news);
       setHighlights(parsed.highlights);
-      setReactions(parsed.reactions);
-      setMyReactions(parsed.myReactions);
     } catch {
       setLoadError("Часть данных не загрузилась. Проверьте интернет и обновите страницу.");
       setActiveUserCount(null);
@@ -129,69 +107,6 @@ export default function DashboardPage() {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const emojis = ["👍", "🔥", "👏", "🫡", "❤️"];
-  const react = async (cardKey: "newcomer" | "departed" | "promoted" | "commander", emoji: string) => {
-    if (isReacting) return;
-    setIsReacting(`${cardKey}:${emoji}`);
-    try {
-      await fetch("/api/home-stats/reaction", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ cardKey, emoji }),
-      });
-      await refresh();
-    } finally {
-      setIsReacting("");
-    }
-  };
-
-  const renderReactions = (cardKey: "newcomer" | "departed" | "promoted" | "commander") => {
-    const top = Object.entries(reactions[cardKey] || {}).sort((a, b) => b[1] - a[1]).slice(0, 3);
-    const current = myReactions[cardKey] || "";
-    return (
-      <div style={{ position: "absolute", top: 10, right: 10, display: "grid", gap: 6, justifyItems: "end" }}>
-        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end", maxWidth: 170 }}>
-          {top.map(([emoji, count]) => (
-            <span
-              key={`${cardKey}-${emoji}`}
-              className="label"
-              style={{
-                fontSize: 12,
-                background: "var(--panel)",
-                border: "1px solid var(--line)",
-                borderRadius: 999,
-                padding: "2px 8px",
-              }}
-            >
-              {emoji} {count}
-            </span>
-          ))}
-        </div>
-        <div style={{ display: "flex", gap: 6 }}>
-          <select
-            value={current}
-            onChange={(e) => {
-              const value = e.target.value;
-              if (!value) return;
-              void react(cardKey, value);
-            }}
-            disabled={isReacting.length > 0}
-            className="input"
-            style={{ width: 72, height: 30, padding: "4px 6px", fontSize: 14 }}
-            aria-label="Выбрать реакцию"
-          >
-            <option value="">🙂</option>
-            {emojis.map((emoji) => (
-              <option key={`${cardKey}-select-${emoji}`} value={emoji}>
-                {emoji}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-    );
-  };
-
   return (
     <section className="dashboard-page">
       <h1 className="page-title">Главная</h1>
@@ -200,8 +115,7 @@ export default function DashboardPage() {
 
       <div className="dashboard-home-summary">
         <div className="grid grid-two">
-          <div className="card" style={{ position: "relative" }}>
-            {renderReactions("newcomer")}
+          <div className="card dashboard-highlight-card">
             <div className="card-body">
               <p className="label">Наш новый товарищ</p>
               <h3 className="dashboard-highlight-name">
@@ -209,8 +123,7 @@ export default function DashboardPage() {
               </h3>
             </div>
           </div>
-          <div className="card" style={{ position: "relative" }}>
-            {renderReactions("departed")}
+          <div className="card dashboard-highlight-card">
             <div className="card-body">
               <p className="label">Нас покинул</p>
               <h3 className="dashboard-highlight-name">
@@ -218,22 +131,20 @@ export default function DashboardPage() {
               </h3>
             </div>
           </div>
-          <div className="card" style={{ position: "relative" }}>
-            {renderReactions("promoted")}
+          <div className="card dashboard-highlight-card">
             <div className="card-body">
               <p className="label">В повышении должности</p>
               <h3 className="dashboard-highlight-name">
                 {highlights.promoted ? `${highlights.promoted.name} ${highlights.promoted.callsign}` : "Нет записей"}
               </h3>
               {highlights.promoted?.position ? (
-                <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
+                <p className="page-subtitle dashboard-highlight-card__extra">
                   Новая должность: {highlights.promoted.position}
                 </p>
               ) : null}
             </div>
           </div>
-          <div className="card" style={{ position: "relative" }}>
-            {renderReactions("commander")}
+          <div className="card dashboard-highlight-card">
             <div className="card-body">
               <p className="label">Наш командир</p>
               <h3 className="dashboard-highlight-name">Владислав Клиган</h3>

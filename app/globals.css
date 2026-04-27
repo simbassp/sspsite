@@ -498,10 +498,15 @@ html[data-theme="dark"] .select option {
   font-size: 18px;
 }
 
+.dashboard-highlight-card__extra {
+  margin: 0;
+}
+
 .dashboard-highlight-name {
   margin-top: 10px;
   margin-bottom: 0;
   font-size: 24px;
+  word-break: break-word;
 }
 
 /* Первые 6 карточек: две колонки на узком экране (вложенные .grid дают одну колонку — используем display:contents). */
@@ -528,7 +533,12 @@ html[data-theme="dark"] .select option {
   .dashboard-home-summary .dashboard-highlight-name {
     font-size: 15px;
     line-height: 1.3;
-    margin-top: 6px;
+  }
+
+  .dashboard-home-summary .dashboard-highlight-card__extra.page-subtitle {
+    font-size: 11px;
+    margin-top: 4px !important;
+    margin-bottom: 0 !important;
   }
 
   .dashboard-home-summary .page-subtitle {
