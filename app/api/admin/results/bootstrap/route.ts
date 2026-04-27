@@ -10,6 +10,16 @@ function isMissingColumnError(message: string | undefined) {
   return m.includes("column") && m.includes("does not exist");
 }
 
+/** Строка пользователя после primary/fallback-select (поле окна попыток может отсутствовать в legacy-схеме). */
+type AppUserListRow = {
+  id: string;
+  name: string;
+  callsign: string;
+  role: string;
+  status: string;
+  final_test_counting_from?: string | null;
+};
+
 function rangeStartIso(range: string): Date | null {
   const now = new Date();
   if (range === "today") {
@@ -42,12 +52,12 @@ export async function GET(req: Request) {
       .select("id,name,callsign,role,status,final_test_counting_from")
       .limit(1000);
 
-    let usersRows = usersPrimary.data;
+    let usersRows: AppUserListRow[] | null = usersPrimary.data as AppUserListRow[] | null;
     let usersErr = usersPrimary.error;
 
     if (usersErr && isMissingColumnError(usersErr.message)) {
       const usersFallback = await supabase.from("app_users").select("id,name,callsign,role,status").limit(1000);
-      usersRows = usersFallback.data;
+      usersRows = usersFallback.data as AppUserListRow[] | null;
       usersErr = usersFallback.error;
     }
 
@@ -55,14 +65,7 @@ export async function GET(req: Request) {
       return Response.json({ ok: false, error: usersErr?.message || "users_failed" }, { status: 500 });
     }
 
-    const users = usersRows as Array<{
-      id: string;
-      name: string;
-      callsign: string;
-      role: string;
-      status: string;
-      final_test_counting_from?: string | null;
-    }>;
+    const users = usersRows;
 
     let resultsPrimary = await supabase
       .from("test_results")
@@ -71,7 +74,9 @@ export async function GET(req: Request) {
       .order("created_at", { ascending: false })
       .limit(8000);
 
-    let resultsRows = resultsPrimary.data;
+    let resultsRows: Array<Record<string, unknown>> | null = resultsPrimary.data as Array<
+      Record<string, unknown>
+    > | null;
     let resultsErr = resultsPrimary.error;
 
     if (resultsErr && isMissingColumnError(resultsErr.message)) {
@@ -81,7 +86,7 @@ export async function GET(req: Request) {
         .eq("type", "final")
         .order("created_at", { ascending: false })
         .limit(8000);
-      resultsRows = resultsMid.data;
+      resultsRows = resultsMid.data as Array<Record<string, unknown>> | null;
       resultsErr = resultsMid.error;
     }
 
@@ -92,7 +97,7 @@ export async function GET(req: Request) {
         .eq("test_type", "final")
         .order("created_at", { ascending: false })
         .limit(8000);
-      resultsRows = resultsLegacy.data;
+      resultsRows = resultsLegacy.data as Array<Record<string, unknown>> | null;
       resultsErr = resultsLegacy.error;
     }
 
@@ -100,7 +105,7 @@ export async function GET(req: Request) {
       return Response.json({ ok: false, error: resultsErr.message || "results_failed" }, { status: 500 });
     }
 
-    const finalRows = ((resultsRows || []) as Array<Record<string, unknown>>)
+    const finalRows = (resultsRows || [])
       .filter((r) => (r.type ?? r.test_type) === "final")
       .map((r) => ({
         id: String(r.id),
