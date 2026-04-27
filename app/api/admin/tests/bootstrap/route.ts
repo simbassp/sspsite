@@ -4,6 +4,11 @@ import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 
 export const runtime = "nodejs";
 
+function isMissingColumnError(message: string | undefined) {
+  const m = (message || "").toLowerCase();
+  return m.includes("column") && m.includes("does not exist");
+}
+
 export async function GET() {
   const session = await getServerSession();
   if (!session || !canManageTests(session)) {
@@ -12,7 +17,7 @@ export async function GET() {
 
   try {
     const supabase = getServerSupabaseServiceClient();
-    const [resultsQ, questionsQ, configQ] = await Promise.all([
+    const [resultsQ, questionsQ] = await Promise.all([
       supabase
         .from("test_results")
         .select("id,user_id,type,status,score,created_at")
@@ -24,12 +29,34 @@ export async function GET() {
         .order("type", { ascending: true })
         .order("order_index", { ascending: true })
         .limit(2000),
-      supabase
-        .from("test_settings")
-        .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
-        .eq("id", 1)
-        .maybeSingle(),
     ]);
+
+    let configQ = await supabase
+      .from("test_settings")
+      .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
+      .eq("id", 1)
+      .maybeSingle();
+    if (configQ.error && isMissingColumnError(configQ.error.message)) {
+      configQ = await supabase
+        .from("test_settings")
+        .select("trial_question_count,final_question_count,time_per_question_sec")
+        .eq("id", 1)
+        .maybeSingle();
+    }
+    if (configQ.error && isMissingColumnError(configQ.error.message)) {
+      configQ = await supabase
+        .from("test_settings")
+        .select("trial_question_count,final_question_count,uav_auto_generation")
+        .eq("id", 1)
+        .maybeSingle();
+    }
+    if (configQ.error && isMissingColumnError(configQ.error.message)) {
+      configQ = await supabase
+        .from("test_settings")
+        .select("trial_question_count,final_question_count")
+        .eq("id", 1)
+        .maybeSingle();
+    }
 
     if (resultsQ.error || questionsQ.error || configQ.error) {
       return Response.json(

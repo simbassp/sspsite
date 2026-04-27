@@ -30,6 +30,20 @@ export async function GET() {
     if (configQ.error && isMissingColumnError(configQ.error.message)) {
       configQ = await supabase
         .from("test_settings")
+        .select("trial_question_count,final_question_count,time_per_question_sec")
+        .eq("id", 1)
+        .maybeSingle();
+    }
+    if (configQ.error && isMissingColumnError(configQ.error.message)) {
+      configQ = await supabase
+        .from("test_settings")
+        .select("trial_question_count,final_question_count,uav_auto_generation")
+        .eq("id", 1)
+        .maybeSingle();
+    }
+    if (configQ.error && isMissingColumnError(configQ.error.message)) {
+      configQ = await supabase
+        .from("test_settings")
         .select("trial_question_count,final_question_count")
         .eq("id", 1)
         .maybeSingle();

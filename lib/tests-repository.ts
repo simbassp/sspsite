@@ -555,19 +555,49 @@ export async function fetchTestConfig() {
       "fetch_test_config_timeout",
     );
     if (error && isMissingColumnError(error.message)) {
-      const legacyRes = await withTimeoutAndRetry(
+      const partialTimeRes = await withTimeoutAndRetry(
         () =>
           supabase
             .from("test_settings")
-            .select("trial_question_count,final_question_count")
+            .select("trial_question_count,final_question_count,time_per_question_sec")
             .eq("id", 1)
             .maybeSingle(),
         6000,
         1,
-        "fetch_test_config_legacy_timeout",
+        "fetch_test_config_partial_time_timeout",
       );
-      data = legacyRes.data as unknown;
-      error = legacyRes.error as { message: string } | null;
+      data = partialTimeRes.data as unknown;
+      error = partialTimeRes.error as { message: string } | null;
+      if (error && isMissingColumnError(error.message)) {
+        const partialUavRes = await withTimeoutAndRetry(
+          () =>
+            supabase
+              .from("test_settings")
+              .select("trial_question_count,final_question_count,uav_auto_generation")
+              .eq("id", 1)
+              .maybeSingle(),
+          6000,
+          1,
+          "fetch_test_config_partial_uav_timeout",
+        );
+        data = partialUavRes.data as unknown;
+        error = partialUavRes.error as { message: string } | null;
+      }
+      if (error && isMissingColumnError(error.message)) {
+        const legacyRes = await withTimeoutAndRetry(
+          () =>
+            supabase
+              .from("test_settings")
+              .select("trial_question_count,final_question_count")
+              .eq("id", 1)
+              .maybeSingle(),
+          6000,
+          1,
+          "fetch_test_config_legacy_timeout",
+        );
+        data = legacyRes.data as unknown;
+        error = legacyRes.error as { message: string } | null;
+      }
     }
     if (error || !data) {
       return getTestConfig();
@@ -612,6 +642,20 @@ export async function saveTestConfig(config: TestConfig) {
       .from("test_settings")
       .upsert(payloadWithoutUpdatedAt, { onConflict: "id" })
       .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
+      .single();
+  }
+
+  if (saveRes.error && isMissingColumnError(saveRes.error.message)) {
+    const payloadWithoutUav = {
+      id: 1,
+      trial_question_count: normalized.trialQuestionCount,
+      final_question_count: normalized.finalQuestionCount,
+      time_per_question_sec: normalized.timePerQuestionSec,
+    };
+    saveRes = await supabase
+      .from("test_settings")
+      .upsert(payloadWithoutUav, { onConflict: "id" })
+      .select("trial_question_count,final_question_count,time_per_question_sec")
       .single();
   }
 
