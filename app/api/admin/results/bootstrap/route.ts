@@ -1,3 +1,4 @@
+import { effectiveFinalCountingFromUtc } from "@/lib/final-effective-counting";
 import { FINAL_TEST_MAX_ATTEMPTS } from "@/lib/final-test-constants";
 import { canManageResults } from "@/lib/permissions";
 import { getServerSession } from "@/lib/server-auth";
@@ -132,10 +133,10 @@ export async function GET(req: Request) {
       .filter((u) => u.role === "employee" || u.role === "admin")
       .map((user) => {
         const userFinals = finalsByUser.get(user.id) ?? [];
-        const from = user.final_test_counting_from ?? null;
-        const finalsSince = from
-          ? userFinals.filter((r) => new Date(r.created_at).getTime() >= new Date(from).getTime())
-          : userFinals;
+        const from = effectiveFinalCountingFromUtc(user.final_test_counting_from ?? null);
+        const finalsSince = userFinals.filter(
+          (r) => new Date(r.created_at).getTime() >= new Date(from).getTime(),
+        );
         const hasPassedFinal = finalsSince.some((r) => r.status === "passed");
         const sortedDesc = [...finalsSince].sort(
           (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),

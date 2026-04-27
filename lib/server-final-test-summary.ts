@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { effectiveFinalCountingFromUtc } from "@/lib/final-effective-counting";
 import { FINAL_TEST_MAX_ATTEMPTS } from "@/lib/final-test-constants";
 import { isMissingColumnError, resolveFinalUserContext } from "@/lib/server-final-user-context";
 
@@ -8,55 +9,49 @@ export async function computeFinalTestSummary(supabase: SupabaseClient, userId: 
 
   const ctx = await resolveFinalUserContext(supabase, userId);
   const tiedIds = ctx.linkedUserIds.length ? ctx.linkedUserIds : [userId];
-  const countingFrom = ctx.final_test_counting_from;
+  const countingFrom = effectiveFinalCountingFromUtc(ctx.final_test_counting_from);
 
   let countQuery = supabase
     .from("test_results")
     .select("id", { count: "exact", head: true })
     .in("user_id", tiedIds)
-    .eq("type", "final");
-  if (countingFrom) {
-    countQuery = countQuery.gte("created_at", countingFrom);
-  }
+    .eq("type", "final")
+    .gte("created_at", countingFrom);
+
   let countRes = await countQuery;
 
   if (countRes.error && isMissingColumnError(countRes.error.message)) {
-    let legacyQ = supabase
+    countRes = await supabase
       .from("test_results")
       .select("id", { count: "exact", head: true })
       .in("user_id", tiedIds)
-      .eq("test_type", "final");
-    if (countingFrom) {
-      legacyQ = legacyQ.gte("created_at", countingFrom);
-    }
-    countRes = await legacyQ;
+      .eq("test_type", "final")
+      .gte("created_at", countingFrom);
   }
 
   const usedAttempts = countRes.count ?? 0;
 
-  /** «Сдал» только в текущем окне попыток: после сброса админом старый зачёт не блокирует старт. */
+  /** «Сдал» только в текущем окне попыток (после сброса и/или с 1-го числа месяца). */
   let passedQuery = supabase
     .from("test_results")
     .select("id")
     .in("user_id", tiedIds)
     .eq("type", "final")
-    .eq("status", "passed");
-  if (countingFrom) {
-    passedQuery = passedQuery.gte("created_at", countingFrom);
-  }
+    .eq("status", "passed")
+    .gte("created_at", countingFrom);
+
   let passedRes = await passedQuery.limit(1).maybeSingle();
 
   if (passedRes.error && isMissingColumnError(passedRes.error.message)) {
-    let legacyPassed = supabase
+    passedRes = await supabase
       .from("test_results")
       .select("id")
       .in("user_id", tiedIds)
       .eq("test_type", "final")
-      .eq("status", "passed");
-    if (countingFrom) {
-      legacyPassed = legacyPassed.gte("created_at", countingFrom);
-    }
-    passedRes = await legacyPassed.limit(1).maybeSingle();
+      .eq("status", "passed")
+      .gte("created_at", countingFrom)
+      .limit(1)
+      .maybeSingle();
   }
 
   const hasPassedFinal = Boolean(passedRes.data);

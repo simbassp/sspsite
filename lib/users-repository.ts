@@ -308,8 +308,30 @@ async function validateInviteCode(code: string) {
 async function resolveInviteCodeForRegistration(inputCode: string) {
   const trimmed = inputCode.trim();
   if (!trimmed) return "";
-  // Keep registration snappy on mobile: try only raw and uppercase.
-  const variants = Array.from(new Set([trimmed, trimmed.toUpperCase()]));
+
+  if (typeof window !== "undefined") {
+    try {
+      const res = await fetch("/api/register/validate-invite", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ code: trimmed }),
+        cache: "no-store",
+      });
+      const payload = (await res.json()) as {
+        ok?: boolean;
+        valid?: boolean;
+        canonicalCode?: string;
+        serverCheckSkipped?: boolean;
+      };
+      if (res.ok && payload.ok && payload.valid && typeof payload.canonicalCode === "string" && payload.canonicalCode) {
+        return payload.canonicalCode.trim();
+      }
+    } catch {
+      /* пробуем RPC ниже */
+    }
+  }
+
+  const variants = Array.from(new Set([trimmed, trimmed.toUpperCase(), trimmed.toLowerCase()]));
   for (const variant of variants) {
     const valid = await validateInviteCode(variant);
     if (valid) return variant;

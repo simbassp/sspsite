@@ -1,3 +1,4 @@
+import { effectiveFinalCountingFromUtc } from "@/lib/final-effective-counting";
 import { FINAL_TEST_MAX_ATTEMPTS } from "@/lib/final-test-constants";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
@@ -12,7 +13,7 @@ export async function GET() {
     const supabase = getServerSupabaseServiceClient();
     const ctx = await resolveFinalUserContext(supabase, session.id);
     const userIds = ctx.linkedUserIds;
-    const countingFrom = ctx.final_test_counting_from;
+    const countingFrom = effectiveFinalCountingFromUtc(ctx.final_test_counting_from);
 
     let queryRows: unknown[] = [];
     let queryError: string | null = null;
@@ -75,10 +76,7 @@ export async function GET() {
 
     const finalsInWindow = normalized
       .filter((r) => r.type === "final")
-      .filter((r) => {
-        if (!countingFrom) return true;
-        return new Date(String(r.created_at)).getTime() >= new Date(countingFrom).getTime();
-      })
+      .filter((r) => new Date(String(r.created_at)).getTime() >= new Date(countingFrom).getTime())
       .sort((a, b) => new Date(String(a.created_at)).getTime() - new Date(String(b.created_at)).getTime());
 
     const idxById = new Map<string, number>();
