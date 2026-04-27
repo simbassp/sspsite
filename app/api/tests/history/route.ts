@@ -8,15 +8,43 @@ function isMissingColumnError(message: string | undefined) {
   return m.includes("column") && m.includes("does not exist");
 }
 
+async function resolveUserIdsForHistory(
+  supabase: ReturnType<typeof getServerSupabaseServiceClient>,
+  sessionId: string,
+) {
+  const ids = new Set<string>([sessionId]);
+  try {
+    let byAppId = await supabase.from("app_users").select("id,auth_user_id").eq("id", sessionId).limit(1);
+    if (byAppId.error && isMissingColumnError(byAppId.error.message)) {
+      byAppId = await supabase.from("app_users").select("id").eq("id", sessionId).limit(1);
+    }
+    for (const row of (byAppId.data || []) as Array<Record<string, unknown>>) {
+      if (row.id) ids.add(String(row.id));
+      if (row.auth_user_id) ids.add(String(row.auth_user_id));
+    }
+  } catch {}
+  try {
+    const byAuthId = await supabase.from("app_users").select("id,auth_user_id").eq("auth_user_id", sessionId).limit(1);
+    if (!byAuthId.error) {
+      for (const row of (byAuthId.data || []) as Array<Record<string, unknown>>) {
+        if (row.id) ids.add(String(row.id));
+        if (row.auth_user_id) ids.add(String(row.auth_user_id));
+      }
+    }
+  } catch {}
+  return Array.from(ids);
+}
+
 export async function GET() {
   const session = await getServerSession();
   if (!session) return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
   try {
     const supabase = getServerSupabaseServiceClient();
+    const userIds = await resolveUserIdsForHistory(supabase, session.id);
     const primaryQ = await supabase
       .from("test_results")
       .select("id,user_id,type,status,score,created_at")
-      .eq("user_id", session.id)
+      .in("user_id", userIds)
       .order("created_at", { ascending: false })
       .limit(20);
     let queryRows: unknown[] = (primaryQ.data as unknown[]) || [];
@@ -25,7 +53,7 @@ export async function GET() {
       const legacyQ = await supabase
         .from("test_results")
         .select("id,user_id,test_type,status,score,created_at")
-        .eq("user_id", session.id)
+        .in("user_id", userIds)
         .order("created_at", { ascending: false })
         .limit(20);
       queryRows = (legacyQ.data as unknown[]) || [];
@@ -46,7 +74,7 @@ export async function GET() {
       created_at: r.created_at,
     }));
     if (process.env.NODE_ENV !== "production") {
-      console.debug("[api/tests/history] ok", { userId: session.id, count: rows.length });
+      console.debug("[api/tests/history] ok", { userId: session.id, candidates: userIds, count: rows.length });
     }
     return Response.json({ ok: true, rows });
   } catch (error) {

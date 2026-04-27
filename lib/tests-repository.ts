@@ -62,6 +62,30 @@ function isMissingColumnError(message: string | undefined) {
   return m.includes("column") && m.includes("does not exist");
 }
 
+async function resolveHistoryUserIds(supabase: ReturnType<typeof getSupabaseBrowserClient>, userId: string) {
+  const ids = new Set<string>([userId]);
+  try {
+    let byAppId = await supabase.from("app_users").select("id,auth_user_id").eq("id", userId).limit(1);
+    if (byAppId.error && isMissingColumnError(byAppId.error.message)) {
+      byAppId = await supabase.from("app_users").select("id").eq("id", userId).limit(1);
+    }
+    for (const row of (byAppId.data || []) as Array<Record<string, unknown>>) {
+      if (row.id) ids.add(String(row.id));
+      if (row.auth_user_id) ids.add(String(row.auth_user_id));
+    }
+  } catch {}
+  try {
+    const byAuthId = await supabase.from("app_users").select("id,auth_user_id").eq("auth_user_id", userId).limit(1);
+    if (!byAuthId.error) {
+      for (const row of (byAuthId.data || []) as Array<Record<string, unknown>>) {
+        if (row.id) ids.add(String(row.id));
+        if (row.auth_user_id) ids.add(String(row.auth_user_id));
+      }
+    }
+  } catch {}
+  return Array.from(ids);
+}
+
 function mapResult(row: TestResultRow): TestResult {
   return {
     id: row.id,
@@ -113,12 +137,13 @@ export async function fetchUserResults(userId: string) {
   }
   try {
     const supabase = getSupabaseBrowserClient();
+    const userIds = await resolveHistoryUserIds(supabase, userId);
     let { data, error } = await withTimeoutAndRetry(
       () =>
         supabase
           .from("test_results")
           .select("id,user_id,type,status,score,created_at")
-          .eq("user_id", userId)
+          .in("user_id", userIds)
           .order("created_at", { ascending: false }),
       7000,
       1,
@@ -130,7 +155,7 @@ export async function fetchUserResults(userId: string) {
           supabase
             .from("test_results")
             .select("id,user_id,test_type,status,score,created_at")
-            .eq("user_id", userId)
+            .in("user_id", userIds)
             .order("created_at", { ascending: false }),
         7000,
         1,
