@@ -6,7 +6,6 @@ import {
   fetchAdminQuestionBank,
   fetchTestConfig,
   saveAdminQuestion,
-  saveTestConfig,
   seedDefaultQuestionsIfEmpty,
 } from "@/lib/tests-repository";
 import { DEFAULT_TEST_CONFIG, normalizeTestConfig } from "@/lib/test-config";
@@ -187,7 +186,31 @@ export default function AdminTestsPage() {
     setMessage("");
     setIsSavingConfig(true);
     try {
-      const nextConfig = await saveTestConfig(normalizeTestConfig(config));
+      const response = await fetch("/api/admin/tests/config", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(normalizeTestConfig(config)),
+      });
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        error?: string;
+        config?: {
+          trialQuestionCount?: unknown;
+          finalQuestionCount?: unknown;
+          timePerQuestionSec?: unknown;
+          uavAutoGeneration?: unknown;
+        };
+      };
+      if (!response.ok || payload.ok !== true || !payload.config) {
+        setMessage(payload.error || "Не удалось сохранить настройки.");
+        return;
+      }
+      const nextConfig = normalizeTestConfig({
+        trialQuestionCount: Number(payload.config.trialQuestionCount ?? config.trialQuestionCount),
+        finalQuestionCount: Number(payload.config.finalQuestionCount ?? config.finalQuestionCount),
+        timePerQuestionSec: Number(payload.config.timePerQuestionSec ?? config.timePerQuestionSec),
+        uavAutoGeneration: payload.config.uavAutoGeneration !== false,
+      });
       setConfig(nextConfig);
       setMessage("Настройки тестов сохранены.");
     } finally {
