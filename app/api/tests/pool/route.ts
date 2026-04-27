@@ -35,31 +35,35 @@ export async function GET() {
       .order("created_at", { ascending: false })
       .limit(200);
 
-    let questionsQ = await supabase
+    const questionsPrimaryQ = await supabase
       .from("test_questions")
       .select("id,type,text,options,correct_index,time_limit_sec,order_index,is_active,created_at")
       .eq("is_active", true)
       .order("order_index", { ascending: true })
       .limit(2000);
-    if (questionsQ.error && isMissingColumnError(questionsQ.error.message)) {
-      questionsQ = await supabase
+    let questionsData: unknown[] = (questionsPrimaryQ.data as unknown[]) || [];
+    let questionsError: string | null = questionsPrimaryQ.error?.message || null;
+    if (questionsPrimaryQ.error && isMissingColumnError(questionsPrimaryQ.error.message)) {
+      const questionsLegacyQ = await supabase
         .from("test_questions")
         .select("id,type,text,options,correct_index,order_index,active,created_at")
         .eq("active", true)
         .order("order_index", { ascending: true })
         .limit(2000);
+      questionsData = (questionsLegacyQ.data as unknown[]) || [];
+      questionsError = questionsLegacyQ.error?.message || null;
     }
     const uavRes = await uavQ;
     const t1 = Date.now();
 
-    if (questionsQ.error || uavRes.error) {
+    if (questionsError || uavRes.error) {
       return Response.json(
-        { ok: false, error: questionsQ.error?.message || uavRes.error?.message || "tests_pool_failed" },
+        { ok: false, error: questionsError || uavRes.error?.message || "tests_pool_failed" },
         { status: 500 },
       );
     }
 
-    const mappedQuestions = ((questionsQ.data || []) as QuestionRow[]).map((q) => ({
+    const mappedQuestions = (questionsData as QuestionRow[]).map((q) => ({
       id: q.id,
       type: q.type,
       text: q.text,
