@@ -99,6 +99,7 @@ export default function RegisterPage() {
             <input
               type="email"
               className="input"
+              placeholder="user@mail.ru"
               value={form.email}
               onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
               required
@@ -107,6 +108,7 @@ export default function RegisterPage() {
             <label className="label">Персональный код приглашения</label>
             <input
               className="input"
+              placeholder="Выдаёт администратор"
               value={form.inviteCode}
               onChange={(e) => setForm((p) => ({ ...p, inviteCode: e.target.value }))}
               required
@@ -115,6 +117,7 @@ export default function RegisterPage() {
             <label className="label">Логин</label>
             <input
               className="input"
+              placeholder="Например: Simba, на английском"
               value={form.login}
               onChange={(e) => setForm((p) => ({ ...p, login: e.target.value }))}
               required
@@ -123,6 +126,7 @@ export default function RegisterPage() {
             <label className="label">Имя</label>
             <input
               className="input"
+              placeholder="Например: Иван, на русском"
               value={form.name}
               onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
               required
@@ -131,6 +135,7 @@ export default function RegisterPage() {
             <label className="label">Позывной</label>
             <input
               className="input"
+              placeholder="Например: Симба, на русском"
               value={form.callsign}
               onChange={(e) => setForm((p) => ({ ...p, callsign: e.target.value }))}
               required
@@ -140,6 +145,7 @@ export default function RegisterPage() {
             <input
               type="password"
               className="input"
+              placeholder="Внимательно заполняйте пароль"
               value={form.password}
               onChange={(e) => {
                 setForm((p) => ({ ...p, password: e.target.value }));
