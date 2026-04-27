@@ -9,6 +9,7 @@ import {
   canManageCounteraction,
   canManageNews,
   canManageResults,
+  canResetTestResults,
   canManageTests,
   canManageUav,
   canManageUsers,
@@ -118,7 +119,9 @@ export function AppShell({ session, children }: AppShellProps) {
   }, []);
   const visibleAdminLinks = [
     ...(canEditUsers ? [{ href: "/admin/users", label: "Пользователи" }] : []),
-    ...(canManageResults(session) ? [{ href: "/admin/results", label: "Результаты" }] : []),
+    ...(canManageResults(session) || canResetTestResults(session)
+      ? [{ href: "/admin/results", label: "Результаты" }]
+      : []),
     ...(canManageTests(session) ? [{ href: "/admin/tests", label: "Тесты" }] : []),
     ...(canManageNews(session) ? [{ href: "/admin/news", label: "Новости" }] : []),
     ...(canManageCounteraction(session) ? [{ href: "/admin/counteraction", label: "Противодействие" }] : []),

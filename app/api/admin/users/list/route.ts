@@ -30,7 +30,7 @@ export async function GET() {
     const primaryQ = await supabase
       .from("app_users")
       .select(
-        "id,auth_user_id,login,name,callsign,position,can_manage_content,can_manage_news,can_manage_tests,can_manage_results,can_manage_uav,can_manage_counteraction,can_manage_users,can_view_online,is_online,last_seen_at,role,status",
+        "id,auth_user_id,login,name,callsign,position,can_manage_content,can_manage_news,can_manage_tests,can_manage_results,can_manage_uav,can_manage_counteraction,can_manage_users,can_reset_test_results,can_view_online,is_online,last_seen_at,role,status",
       )
       .order("created_at", { ascending: false })
       .limit(1000);
@@ -61,6 +61,7 @@ export async function GET() {
       can_manage_uav: r.can_manage_uav ?? undefined,
       can_manage_counteraction: r.can_manage_counteraction ?? undefined,
       can_manage_users: r.can_manage_users ?? false,
+      can_reset_test_results: r.can_reset_test_results ?? undefined,
       can_view_online: r.can_view_online ?? false,
       is_online: onlineFromFlagOnly ? r.is_online === true : effectiveOnlineStrict(r.is_online, r.last_seen_at),
       role: r.role === "admin" ? "admin" : "employee",

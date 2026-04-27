@@ -35,6 +35,7 @@ alter table if exists public.app_users add column if not exists can_manage_resul
 alter table if exists public.app_users add column if not exists can_manage_uav boolean not null default false;
 alter table if exists public.app_users add column if not exists can_manage_counteraction boolean not null default false;
 alter table if exists public.app_users add column if not exists can_manage_users boolean not null default false;
+alter table if exists public.app_users add column if not exists can_reset_test_results boolean not null default false;
 
 create table if not exists public.news (
   id uuid primary key default gen_random_uuid(),

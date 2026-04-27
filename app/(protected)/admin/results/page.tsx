@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { readClientSession } from "@/lib/client-auth";
+import { canResetTestResults } from "@/lib/permissions";
 import { FINAL_TEST_MAX_ATTEMPTS } from "@/lib/final-test-constants";
 import { formatDateTime } from "@/lib/format";
 
@@ -37,7 +38,7 @@ type BootstrapPayload = {
 
 export default function AdminResultsPage() {
   const session = readClientSession();
-  const viewerIsAdmin = session?.role === "admin";
+  const viewerCanReset = session ? canResetTestResults(session) : false;
 
   const [range, setRange] = useState<DateRange>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -78,7 +79,7 @@ export default function AdminResultsPage() {
   }, [summaries, statusFilter]);
 
   const onResetAttempts = async (userId: string) => {
-    if (!viewerIsAdmin) return;
+    if (!viewerCanReset) return;
     const confirmed = window.confirm("Сбросить попытки итогового теста для этого пользователя?");
     if (!confirmed) return;
     setResetBusyId(userId);
@@ -118,7 +119,7 @@ export default function AdminResultsPage() {
     <section>
       <h1 className="page-title">Админ / Результаты тестов</h1>
 
-      {viewerIsAdmin && lastResetAudit && (
+      {viewerCanReset && lastResetAudit && (
         <p className="page-subtitle" style={{ marginBottom: 10, fontSize: 11 }}>
           Последний сброс попыток: {formatDateTime(lastResetAudit.created_at)} — {lastResetAudit.admin_name} →{" "}
           {lastResetAudit.target_name}

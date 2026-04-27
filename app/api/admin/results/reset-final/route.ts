@@ -1,3 +1,4 @@
+import { canResetTestResults } from "@/lib/permissions";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 
@@ -10,7 +11,7 @@ function isMissingColumnError(message: string | undefined) {
 
 export async function POST(req: Request) {
   const session = await getServerSession();
-  if (!session || session.role !== "admin") {
+  if (!session || !canResetTestResults(session)) {
     return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
   }
 

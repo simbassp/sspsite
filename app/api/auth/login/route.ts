@@ -23,6 +23,7 @@ type ProfileRow = {
   can_manage_uav?: boolean;
   can_manage_counteraction?: boolean;
   can_manage_users?: boolean;
+  can_reset_test_results?: boolean;
   can_view_online?: boolean;
   status: "active" | "inactive";
 };
@@ -197,6 +198,7 @@ export async function POST(request: Request) {
     profile.can_manage_results,
     profile.can_manage_uav,
     profile.can_manage_counteraction,
+    profile.can_reset_test_results,
   ].some((value) => typeof value === "boolean");
 
   const permissions =
@@ -205,6 +207,7 @@ export async function POST(request: Request) {
           news: true,
           tests: true,
           results: true,
+          resetResults: true,
           uav: true,
           counteraction: true,
           users: true,
@@ -214,7 +217,8 @@ export async function POST(request: Request) {
         ? {
             news: profile.can_manage_news === true,
             tests: profile.can_manage_tests === true,
-          results: profile.can_manage_results === true,
+            results: profile.can_manage_results === true,
+            resetResults: profile.can_reset_test_results === true,
             uav: profile.can_manage_uav === true,
             counteraction: profile.can_manage_counteraction === true,
             users: profile.can_manage_users === true,
@@ -224,6 +228,7 @@ export async function POST(request: Request) {
             news: profile.can_manage_content === true,
             tests: profile.can_manage_content === true,
             results: profile.can_manage_content === true,
+            resetResults: false,
             uav: profile.can_manage_content === true,
             counteraction: profile.can_manage_content === true,
             users: profile.can_manage_users === true,

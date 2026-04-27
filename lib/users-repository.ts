@@ -29,6 +29,7 @@ type UserRow = {
   can_manage_uav?: boolean;
   can_manage_counteraction?: boolean;
   can_manage_users?: boolean;
+  can_reset_test_results?: boolean;
   can_view_online?: boolean;
   is_online?: boolean;
   role: "employee" | "admin";
@@ -84,6 +85,7 @@ function defaultPermissionsFromLegacy(row: {
     news: isAdmin || legacyContent,
     tests: isAdmin || legacyContent,
     results: isAdmin || legacyContent,
+    resetResults: isAdmin,
     uav: isAdmin || legacyContent,
     counteraction: isAdmin || legacyContent,
     users: isAdmin,
@@ -100,6 +102,7 @@ function normalizePermissions(input: {
   can_manage_uav?: boolean;
   can_manage_counteraction?: boolean;
   can_manage_users?: boolean;
+  can_reset_test_results?: boolean;
   can_view_online?: boolean;
   permissions?: Partial<UserPermissions> | undefined;
 }) {
@@ -110,6 +113,7 @@ function normalizePermissions(input: {
     ...(input.can_manage_news !== undefined ? { news: input.can_manage_news === true } : {}),
     ...(input.can_manage_tests !== undefined ? { tests: input.can_manage_tests === true } : {}),
     ...(input.can_manage_results !== undefined ? { results: input.can_manage_results === true } : {}),
+    ...(input.can_reset_test_results !== undefined ? { resetResults: input.can_reset_test_results === true } : {}),
     ...(input.can_manage_uav !== undefined ? { uav: input.can_manage_uav === true } : {}),
     ...(input.can_manage_counteraction !== undefined ? { counteraction: input.can_manage_counteraction === true } : {}),
     ...(input.can_manage_users !== undefined ? { users: input.can_manage_users === true } : {}),
@@ -120,6 +124,7 @@ function normalizePermissions(input: {
       news: true,
       tests: true,
       results: true,
+      resetResults: true,
       uav: true,
       counteraction: true,
       users: true,
@@ -911,6 +916,7 @@ export async function patchUser(
             news: true,
             tests: true,
             results: true,
+            resetResults: true,
             uav: true,
             counteraction: true,
             users: true,
@@ -941,6 +947,7 @@ export async function patchUser(
     can_manage_counteraction: true,
     can_manage_users: true,
     can_view_online: true,
+    can_reset_test_results: true,
   } as const;
 
   const roleFragment =
@@ -964,6 +971,7 @@ export async function patchUser(
     ...(nextPermissions !== undefined ? { can_manage_counteraction: nextPermissions.counteraction } : {}),
     ...(nextPermissions !== undefined ? { can_manage_users: nextPermissions.users } : {}),
     ...(nextPermissions !== undefined ? { can_view_online: nextPermissions.online } : {}),
+    ...(nextPermissions !== undefined ? { can_reset_test_results: nextPermissions.resetResults } : {}),
     ...roleFragment,
   };
   const prevUser = listUsers().find((u) => u.id === userId) || null;

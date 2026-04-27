@@ -6,6 +6,7 @@ const emptyPermissions: UserPermissions = {
   news: false,
   tests: false,
   results: false,
+  resetResults: false,
   uav: false,
   counteraction: false,
   users: false,
@@ -17,6 +18,7 @@ function allPermissions(): UserPermissions {
     news: true,
     tests: true,
     results: true,
+    resetResults: true,
     uav: true,
     counteraction: true,
     users: true,
@@ -59,6 +61,11 @@ export function canManageResults(session: SessionLike) {
   return resolvePermissions(session).results;
 }
 
+/** Сброс попыток итогового теста (окно final_test_counting_from). */
+export function canResetTestResults(session: SessionLike) {
+  return resolvePermissions(session).resetResults;
+}
+
 export function canManageUav(session: SessionLike) {
   return resolvePermissions(session).uav;
 }
@@ -77,5 +84,10 @@ export function canViewOnline(session: SessionLike) {
 }
 
 export function canAccessAdminPanel(session: SessionLike) {
-  return canManageContent(session) || canManageUsers(session) || canManageResults(session);
+  return (
+    canManageContent(session) ||
+    canManageUsers(session) ||
+    canManageResults(session) ||
+    canResetTestResults(session)
+  );
 }

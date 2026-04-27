@@ -1,6 +1,6 @@
 import { effectiveFinalCountingFromUtc } from "@/lib/final-effective-counting";
 import { FINAL_TEST_MAX_ATTEMPTS } from "@/lib/final-test-constants";
-import { canManageResults } from "@/lib/permissions";
+import { canManageResults, canResetTestResults } from "@/lib/permissions";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 
@@ -37,13 +37,14 @@ function rangeStartIso(range: string): Date | null {
 
 export async function GET(req: Request) {
   const session = await getServerSession();
-  if (!session || !canManageResults(session)) {
+  if (!session || (!canManageResults(session) && !canResetTestResults(session))) {
     return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
   }
 
   const url = new URL(req.url);
   const range = url.searchParams.get("range") || "all";
   const viewerIsAdmin = session.role === "admin";
+  const viewerCanResetAttempts = canResetTestResults(session);
 
   try {
     const supabase = getServerSupabaseServiceClient();
@@ -149,9 +150,9 @@ export async function GET(req: Request) {
         const qt = latestFinal?.questions_total ?? null;
         const qc = latestFinal?.questions_correct ?? null;
 
-        /** Сброс: для чужих карточек — если в текущем окне нет зачёта; себе админ может сбросить всегда. */
+        /** Сброс: право «Сброс результатов»; себе можно сбросить даже при зачёте в окне. */
         const showResetAttempts =
-          viewerIsAdmin && (!hasPassedFinal || session.id === user.id);
+          viewerCanResetAttempts && (!hasPassedFinal || session.id === user.id);
 
         let statusLabel: "passed" | "failed" | "not_started";
         if (hasPassedFinal) statusLabel = "passed";
@@ -186,7 +187,7 @@ export async function GET(req: Request) {
       target_callsign: string;
     } | null = null;
 
-    if (viewerIsAdmin) {
+    if (viewerCanResetAttempts || viewerIsAdmin) {
       const auditQ = await supabase
         .from("final_attempt_reset_events")
         .select("created_at,target_user_id,admin_user_id")
@@ -220,6 +221,7 @@ export async function GET(req: Request) {
     return Response.json({
       ok: true,
       viewerIsAdmin,
+      viewerCanResetAttempts,
       range,
       summaries,
       lastResetAudit,

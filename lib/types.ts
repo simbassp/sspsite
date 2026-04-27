@@ -15,6 +15,8 @@ export interface UserPermissions {
   news: boolean;
   tests: boolean;
   results: boolean;
+  /** Сброс окна попыток итогового теста (отдельно от просмотра результатов). */
+  resetResults: boolean;
   uav: boolean;
   counteraction: boolean;
   users: boolean;
