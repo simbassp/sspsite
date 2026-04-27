@@ -267,6 +267,12 @@ a {
   color: #fff;
 }
 
+.btn-primary:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+  filter: grayscale(0.25);
+}
+
 .btn-danger {
   border-color: color-mix(in srgb, var(--bad) 55%, transparent);
   color: #ffb2b2;
@@ -318,6 +324,29 @@ html[data-theme="dark"] .select option {
 .chip.active {
   border-color: rgba(255, 82, 82, 0.24);
   background: rgba(207, 46, 46, 0.15);
+}
+
+html[data-theme="dark"] .chip:not(.active) {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: var(--text);
+}
+
+html[data-theme="dark"] .chip:not(.active):hover {
+  background: rgba(255, 255, 255, 0.11);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.tests-history-card {
+  border-left: 4px solid transparent;
+}
+
+.tests-history-card--passed {
+  border-left-color: var(--ok);
+}
+
+.tests-history-card--failed {
+  border-left-color: var(--bad);
 }
 
 .list {

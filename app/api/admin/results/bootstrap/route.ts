@@ -147,8 +147,8 @@ export async function GET(req: Request) {
         const qt = latestFinal?.questions_total ?? null;
         const qc = latestFinal?.questions_correct ?? null;
 
-        const showResetAttempts =
-          viewerIsAdmin && !hasPassedFinal && usedFinalAttempts >= FINAL_TEST_MAX_ATTEMPTS;
+        /** Кнопка сброса для админа, пока итоговый тест не сдан (можно обнулить окно попыток в любой момент). */
+        const showResetAttempts = viewerIsAdmin && !hasPassedFinal;
 
         let statusLabel: "passed" | "failed" | "not_started";
         if (hasPassedFinal) statusLabel = "passed";

@@ -1,63 +1,18 @@
 import { FINAL_TEST_MAX_ATTEMPTS } from "@/lib/final-test-constants";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
+import { isMissingColumnError, resolveFinalUserContext } from "@/lib/server-final-user-context";
 
 export const runtime = "nodejs";
-
-function isMissingColumnError(message: string | undefined) {
-  const m = (message || "").toLowerCase();
-  return m.includes("column") && m.includes("does not exist");
-}
-
-async function resolveUserIdsForHistory(
-  supabase: ReturnType<typeof getServerSupabaseServiceClient>,
-  sessionId: string,
-) {
-  const ids = new Set<string>([sessionId]);
-  try {
-    const byAppIdPrimary = await supabase.from("app_users").select("id,auth_user_id").eq("id", sessionId).limit(1);
-    let byAppIdRows: Array<Record<string, unknown>> = (byAppIdPrimary.data || []) as Array<Record<string, unknown>>;
-    let byAppIdError: string | null = byAppIdPrimary.error?.message || null;
-    if (byAppIdPrimary.error && isMissingColumnError(byAppIdPrimary.error.message)) {
-      const byAppIdLegacy = await supabase.from("app_users").select("id").eq("id", sessionId).limit(1);
-      byAppIdRows = (byAppIdLegacy.data || []) as Array<Record<string, unknown>>;
-      byAppIdError = byAppIdLegacy.error?.message || null;
-    }
-    if (!byAppIdError) {
-      for (const row of byAppIdRows) {
-        if (row.id) ids.add(String(row.id));
-        if (row.auth_user_id) ids.add(String(row.auth_user_id));
-      }
-    }
-  } catch {}
-  try {
-    const byAuthId = await supabase.from("app_users").select("id,auth_user_id").eq("auth_user_id", sessionId).limit(1);
-    if (!byAuthId.error) {
-      for (const row of (byAuthId.data || []) as Array<Record<string, unknown>>) {
-        if (row.id) ids.add(String(row.id));
-        if (row.auth_user_id) ids.add(String(row.auth_user_id));
-      }
-    }
-  } catch {}
-  return Array.from(ids);
-}
 
 export async function GET() {
   const session = await getServerSession();
   if (!session) return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
   try {
     const supabase = getServerSupabaseServiceClient();
-    const userIds = await resolveUserIdsForHistory(supabase, session.id);
-
-    let countingFrom: string | null = null;
-    const countingQ = await supabase.from("app_users").select("final_test_counting_from").eq("id", session.id).maybeSingle();
-    if (!countingQ.error && countingQ.data) {
-      countingFrom =
-        (countingQ.data as { final_test_counting_from?: string | null }).final_test_counting_from ?? null;
-    }
-    if (countingQ.error && isMissingColumnError(countingQ.error.message)) {
-      countingFrom = null;
-    }
+    const ctx = await resolveFinalUserContext(supabase, session.id);
+    const userIds = ctx.linkedUserIds;
+    const countingFrom = ctx.final_test_counting_from;
 
     let queryRows: unknown[] = [];
     let queryError: string | null = null;

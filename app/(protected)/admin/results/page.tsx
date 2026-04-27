@@ -189,9 +189,13 @@ export default function AdminResultsPage() {
               <h3>
                 {row.name} ({row.callsign})
               </h3>
-              <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
+              <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 Статус:{" "}
-                {row.status === "passed" ? "Сдал" : row.status === "failed" ? "Не сдал" : "Не проходил"}
+                <span
+                  className={`pill ${row.status === "passed" ? "pill-green" : row.status === "failed" ? "pill-red" : "pill-yellow"}`}
+                >
+                  {row.status === "passed" ? "Сдал" : row.status === "failed" ? "Не сдал" : "Не проходил"}
+                </span>
               </p>
               {row.status !== "not_started" && (
                 <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0 }}>

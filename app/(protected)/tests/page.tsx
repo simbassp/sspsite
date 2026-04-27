@@ -564,7 +564,7 @@ export default function TestsPage() {
     }
     if (finalTest && !finalTest.canStartFinal) {
       setMessage(
-        "Вы исчерпали 3 попытки итогового теста. Обратитесь к администратору для сброса попыток.",
+        "Итоговый тест недоступен: попытки израсходованы. Обратитесь к администратору для сброса попыток.",
       );
       return;
     }
@@ -667,7 +667,17 @@ export default function TestsPage() {
                   Доступно {FINAL_TEST_MAX_ATTEMPTS} попытки. Если итоговый тест не сдан за {FINAL_TEST_MAX_ATTEMPTS}{" "}
                   попытки, доступ будет заблокирован до сброса попыток администратором.
                 </p>
+                {finalTest.attemptsExhausted && !finalTest.hasPassedFinal && (
+                  <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0, color: "var(--muted)" }}>
+                    Итоговый тест недоступен — попытки израсходованы. Для продолжения нужен сброс попыток администратором.
+                  </p>
+                )}
               </>
+            )}
+            {!finalTest && !isBootstrapping && (
+              <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0, color: "var(--muted)" }}>
+                Не удалось загрузить сводку по попыткам. Обновите страницу.
+              </p>
             )}
             {activeTest !== "final" && (
               <button
@@ -678,12 +688,15 @@ export default function TestsPage() {
                   isBootstrapping ||
                   isPoolLoading ||
                   !isConfigLoaded ||
-                  finalTest?.hasPassedFinal === true ||
-                  finalTest?.attemptsExhausted === true
+                  finalTest == null ||
+                  finalTest.hasPassedFinal ||
+                  !finalTest.canStartFinal
                 }
                 style={{ marginTop: 10 }}
               >
-                Начать итоговый тест
+                {finalTest != null && !finalTest.canStartFinal && !finalTest.hasPassedFinal
+                  ? "Недоступно — нет попыток"
+                  : "Начать итоговый тест"}
               </button>
             )}
           </div>
@@ -774,16 +787,27 @@ export default function TestsPage() {
                 : Math.round((result.score / 100) * Math.max(total, 1));
             const attemptMax = FINAL_TEST_MAX_ATTEMPTS;
             const attemptIdx = result.finalAttemptIndex;
+            const passed = result.status === "passed";
             return (
-              <article className="card" key={result.id}>
+              <article
+                className={`card tests-history-card tests-history-card--${passed ? "passed" : "failed"}`}
+                key={result.id}
+              >
                 <div className="card-body">
-                  <h3>{result.type === "final" ? "Итоговый тест" : "Пробный тест"}</h3>
+                  <h3 style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    {result.type === "final" ? "Итоговый тест" : "Пробный тест"}{" "}
+                    <span className={`pill ${passed ? "pill-green" : "pill-red"}`}>
+                      {passed ? "Сдал" : "Не сдал"}
+                    </span>
+                  </h3>
                   <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0 }}>
-                    {result.status === "passed" ? "Сдал" : "Не сдал"} — {result.score}% ({correct}/{total})
+                    Результат: {result.score}% ({correct}/{total})
                   </p>
                   {result.type === "final" && attemptIdx != null && (
                     <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0 }}>
-                      Попытка: {attemptIdx} / {attemptMax}
+                      <span className={`pill ${passed ? "pill-green" : "pill-red"}`} style={{ fontSize: 11 }}>
+                        Попытка {attemptIdx} / {attemptMax}
+                      </span>
                     </p>
                   )}
                   <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
