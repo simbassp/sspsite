@@ -92,6 +92,25 @@ async function resolveHistoryUserIds(supabase: ReturnType<typeof getSupabaseBrow
   return Array.from(ids);
 }
 
+async function insertTestResultCompat(
+  supabase: ReturnType<typeof getSupabaseBrowserClient>,
+  payload: { user_id: string; type: "trial" | "final"; status: "passed" | "failed"; score: number },
+) {
+  const primary = await supabase.from("test_results").insert(payload);
+  if (!primary.error) return { error: null as null | { message: string } };
+  if (!isMissingColumnError(primary.error.message)) {
+    return { error: primary.error as { message: string } };
+  }
+  const legacy = await supabase.from("test_results").insert({
+    user_id: payload.user_id,
+    test_type: payload.type,
+    status: payload.status,
+    score: payload.score,
+  });
+  if (!legacy.error) return { error: null as null | { message: string } };
+  return { error: legacy.error as { message: string } };
+}
+
 function mapResult(row: TestResultRow): TestResult {
   return {
     id: row.id,
@@ -210,7 +229,7 @@ export async function createTrialResult(userId: string, score: number) {
     return;
   }
   const supabase = getSupabaseBrowserClient();
-  const { error } = await supabase.from("test_results").insert({
+  const { error } = await insertTestResultCompat(supabase, {
     user_id: userId,
     type: "trial",
     status: score >= 60 ? "passed" : "failed",
@@ -296,7 +315,7 @@ export async function finishFinalAttempt(userId: string, score: number, passed: 
     return;
   }
   const supabase = getSupabaseBrowserClient();
-  const insert = await supabase.from("test_results").insert({
+  const insert = await insertTestResultCompat(supabase, {
     user_id: userId,
     type: "final",
     status: passed ? "passed" : "failed",
@@ -325,7 +344,7 @@ export async function forceFailFinalAttempt(userId: string) {
 
   if (!existing) return;
 
-  const insert = await supabase.from("test_results").insert({
+  const insert = await insertTestResultCompat(supabase, {
     user_id: userId,
     type: "final",
     status: "failed",
