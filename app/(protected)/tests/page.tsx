@@ -87,6 +87,8 @@ export default function TestsPage() {
   const trialRevealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const completeTrialAfterRevealRef = useRef<() => void>(() => {});
   const testCardRef = useRef<HTMLDivElement | null>(null);
+  /** Одноразовое уведомление в блоке сообщений при исчерпании попыток итога. */
+  const finalAttemptsExhaustedBannerRef = useRef(false);
 
   answersRef.current = answers;
   questionIndexRef.current = questionIndex;
@@ -106,6 +108,17 @@ export default function TestsPage() {
       /* ignore */
     }
   }, [session]);
+
+  useEffect(() => {
+    if (!finalTest || finalTest.hasPassedFinal || !finalTest.attemptsExhausted) return;
+    if (finalAttemptsExhaustedBannerRef.current) return;
+    finalAttemptsExhaustedBannerRef.current = true;
+    setMessage((prev) =>
+      prev.trim()
+        ? prev
+        : "Попытки итогового теста израсходованы. Обратитесь к администратору для сброса попыток.",
+    );
+  }, [finalTest]);
 
   const refresh = async () => {
     if (!session) return;
@@ -693,10 +706,19 @@ export default function TestsPage() {
                   !finalTest.canStartFinal
                 }
                 style={{ marginTop: 10 }}
+                title={
+                  finalTest != null && finalTest.attemptsExhausted && !finalTest.hasPassedFinal
+                    ? "Попытки итогового теста израсходованы. Нужен сброс попыток администратором."
+                    : finalTest != null && !finalTest.canStartFinal && !finalTest.hasPassedFinal
+                      ? "Сейчас нельзя начать итоговый тест."
+                      : undefined
+                }
               >
-                {finalTest != null && !finalTest.canStartFinal && !finalTest.hasPassedFinal
-                  ? "Недоступно — нет попыток"
-                  : "Начать итоговый тест"}
+                {finalTest != null && finalTest.attemptsExhausted && !finalTest.hasPassedFinal
+                  ? "Попытки закончились — недоступно"
+                  : finalTest != null && !finalTest.canStartFinal && !finalTest.hasPassedFinal
+                    ? "Недоступно — нет попыток"
+                    : "Начать итоговый тест"}
               </button>
             )}
           </div>

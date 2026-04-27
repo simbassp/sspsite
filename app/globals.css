@@ -326,6 +326,13 @@ html[data-theme="dark"] .select option {
   background: rgba(207, 46, 46, 0.15);
 }
 
+html[data-theme="dark"] .chip.active {
+  border-color: rgba(255, 140, 140, 0.55);
+  background: rgba(230, 72, 72, 0.42);
+  color: #ffffff;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+}
+
 html[data-theme="dark"] .chip:not(.active) {
   background: rgba(255, 255, 255, 0.07);
   border-color: rgba(255, 255, 255, 0.16);
@@ -347,6 +354,26 @@ html[data-theme="dark"] .chip:not(.active):hover {
 
 .tests-history-card--failed {
   border-left-color: var(--bad);
+}
+
+.tests-history-card--pending {
+  border-left-color: var(--warn);
+}
+
+.admin-results-card {
+  border-left: 4px solid transparent;
+}
+
+.admin-results-card--passed {
+  border-left-color: var(--ok);
+}
+
+.admin-results-card--failed {
+  border-left-color: var(--bad);
+}
+
+.admin-results-card--not_started {
+  border-left-color: var(--warn);
 }
 
 .list {

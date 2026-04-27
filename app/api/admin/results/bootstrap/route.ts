@@ -127,8 +127,9 @@ export async function GET(req: Request) {
 
     const cutoff = rangeStartIso(range);
 
+    /** Сотрудники и администраторы — админ видит себя и может сбросить себе попытки. */
     const summaries = users
-      .filter((u) => u.role === "employee")
+      .filter((u) => u.role === "employee" || u.role === "admin")
       .map((user) => {
         const userFinals = finalsByUser.get(user.id) ?? [];
         const hasPassedFinal = userFinals.some((r) => r.status === "passed");

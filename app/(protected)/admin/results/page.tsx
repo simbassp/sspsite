@@ -184,7 +184,10 @@ export default function AdminResultsPage() {
 
       <div className="list" style={{ marginTop: 12 }}>
         {visible.map((row) => (
-          <article className="card" key={row.userId}>
+          <article
+            className={`card admin-results-card admin-results-card--${row.status}`}
+            key={row.userId}
+          >
             <div className="card-body">
               <h3>
                 {row.name} ({row.callsign})
