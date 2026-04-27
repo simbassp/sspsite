@@ -1,6 +1,5 @@
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
-import { generateUavTtxQuestionBank } from "@/lib/uav-test-generator";
 
 export const runtime = "nodejs";
 
@@ -11,7 +10,7 @@ type ConfigRow = {
   uav_auto_generation: boolean | null;
 };
 
-export async function GET(request: Request) {
+export async function GET() {
   const session = await getServerSession();
   if (!session) return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
 
@@ -27,47 +26,10 @@ export async function GET(request: Request) {
 
     const orphanQ = await supabase.from("final_attempts").select("user_id").eq("user_id", session.id).maybeSingle();
     const t2 = Date.now();
-    const profileHeavy = new URL(request.url).searchParams.get("profile") === "1";
-
-    let t3 = t2;
-    let t4 = t2;
-    let t5 = t2;
-    let t6 = t2;
-    let t7 = t2;
-    if (profileHeavy) {
-      const questionsQ = await supabase
-        .from("test_questions")
-        .select("id,type,text,options,correct_index,time_limit_sec,order_index,is_active,created_at")
-        .eq("is_active", true)
-        .order("order_index", { ascending: true })
-        .limit(2000);
-      t3 = Date.now();
-      const uavQ = await supabase
-        .from("catalog_items")
-        .select("id,title,category,summary,image,specs,details")
-        .eq("kind", "uav")
-        .order("created_at", { ascending: false })
-        .limit(200);
-      t4 = Date.now();
-      if (!questionsQ.error && !uavQ.error) {
-        const cfgLocal = (configQ.data || {}) as Partial<ConfigRow>;
-        if (Boolean(cfgLocal.uav_auto_generation ?? true)) {
-          generateUavTtxQuestionBank((uavQ.data || []) as never[], Number(cfgLocal.time_per_question_sec ?? 10));
-        }
-      }
-      t5 = Date.now();
-      await supabase
-        .from("test_results")
-        .select("id,user_id,type,status,score,created_at")
-        .eq("user_id", session.id)
-        .order("created_at", { ascending: false })
-        .limit(20);
-      t6 = Date.now();
-      await supabase.from("final_attempts").select("user_id").eq("user_id", session.id).maybeSingle();
-      t7 = Date.now();
-    }
-
     if (configQ.error) {
+      if (process.env.NODE_ENV !== "production") {
+        console.debug("[api/tests/bootstrap] config error", configQ.error.message);
+      }
       return Response.json(
         {
           ok: false,
@@ -78,6 +40,14 @@ export async function GET(request: Request) {
     }
 
     const cfg = (configQ.data || {}) as Partial<ConfigRow>;
+    if (process.env.NODE_ENV !== "production") {
+      console.debug("[api/tests/bootstrap] ok", {
+        userId: session.id,
+        hasSettings: Boolean(configQ.data),
+        hasOrphanAttempt: Boolean(orphanQ.data?.user_id),
+        timingsMs: { testSettings: t1 - t0, orphanAttempt: t2 - t1, total: t2 - t0 },
+      });
+    }
 
     return Response.json({
       ok: true,
@@ -91,12 +61,6 @@ export async function GET(request: Request) {
       timingsMs: {
         testSettings: t1 - t0,
         orphanAttempt: t2 - t1,
-        manualQuestions: profileHeavy ? t3 - t2 : 0,
-        uavCards: profileHeavy ? t4 - t3 : 0,
-        generation: profileHeavy ? t5 - t4 : 0,
-        history: profileHeavy ? t6 - t5 : 0,
-        finalStatus: profileHeavy ? t7 - t6 : 0,
-        profileMode: profileHeavy,
         total: t2 - t0,
       },
     });
