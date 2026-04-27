@@ -24,6 +24,31 @@ function normalizeInput(body: Body) {
   return { trialQuestionCount: trial, finalQuestionCount: final, timePerQuestionSec: time, uavAutoGeneration: uav };
 }
 
+async function readCurrentConfig(supabase: ReturnType<typeof getServerSupabaseServiceClient>) {
+  let q = await supabase
+    .from("test_settings")
+    .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
+    .eq("id", 1)
+    .maybeSingle();
+  if (q.error || !q.data) {
+    q = await supabase
+      .from("test_settings")
+      .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+  }
+  if ((q.error || !q.data) && isMissingColumnError(q.error?.message)) {
+    q = await supabase
+      .from("test_settings")
+      .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+  }
+  return q;
+}
+
 export async function POST(request: Request) {
   const session = await getServerSession();
   if (!session || !canManageTests(session)) {
@@ -103,14 +128,16 @@ export async function POST(request: Request) {
     }
 
     if (saveQ.error) return Response.json({ ok: false, error: saveQ.error.message || "save_config_failed" }, { status: 500 });
+    const currentQ = await readCurrentConfig(supabase);
+    const current = currentQ.data || saveQ.data;
     return Response.json({
       ok: true,
       config: {
-        trialQuestionCount: Number(saveQ.data?.trial_question_count ?? input.trialQuestionCount),
-        finalQuestionCount: Number(saveQ.data?.final_question_count ?? input.finalQuestionCount),
-        timePerQuestionSec: Number(saveQ.data?.time_per_question_sec ?? input.timePerQuestionSec),
+        trialQuestionCount: Number(current?.trial_question_count ?? input.trialQuestionCount),
+        finalQuestionCount: Number(current?.final_question_count ?? input.finalQuestionCount),
+        timePerQuestionSec: Number(current?.time_per_question_sec ?? input.timePerQuestionSec),
         uavAutoGeneration:
-          typeof saveQ.data?.uav_auto_generation === "boolean" ? saveQ.data.uav_auto_generation : input.uavAutoGeneration,
+          typeof current?.uav_auto_generation === "boolean" ? current.uav_auto_generation : input.uavAutoGeneration,
       },
     });
   } catch (error) {
