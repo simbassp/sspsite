@@ -29,7 +29,8 @@ export default function DashboardPage() {
         const payload = (await response.json()) as { ok?: boolean; error?: string } & CountsPayload;
         if (cancelled) return;
         if (!response.ok || payload.ok !== true) {
-          setLoadError(`Не удалось загрузить сводку${payload.error ? `: ${payload.error}` : ""}`);
+          const normalized = (payload.error || "").replace("supabse", "supabase");
+          setLoadError(`Не удалось загрузить сводку${normalized ? `: ${normalized}` : ""}`);
           setActiveUserCount(null);
           setNewsCount(null);
           return;

@@ -4,7 +4,7 @@ import { getServerSession } from "@/lib/server-auth";
 
 const contentLinks = [
   { href: "/admin/news", title: "Новости", text: "Добавление и публикация служебных сообщений.", access: canManageNews },
-  { href: "/admin/counteraction", title: "Защита", text: "Добавление и редактирование карточек противодействия.", access: canManageCounteraction },
+  { href: "/admin/counteraction", title: "Противодействие", text: "Добавление и редактирование карточек противодействия.", access: canManageCounteraction },
   { href: "/admin/uav", title: "БПЛА", text: "Управление каталогом БПЛА и ТТХ-страницами.", access: canManageUav },
   { href: "/admin/tests", title: "Тесты", text: "Контур контроля пробного и итогового тестов.", access: canManageTests },
   { href: "/admin/results", title: "Результаты", text: "Мониторинг прохождения и статусов тестирования.", access: canManageResults },

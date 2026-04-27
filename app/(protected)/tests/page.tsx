@@ -6,12 +6,17 @@ import { formatDate } from "@/lib/format";
 import {
   beginFinalAttempt,
   createTrialResult,
+  fetchActiveQuestionPool,
+  fetchTestConfig,
   finishFinalAttempt,
   forceFailFinalAttempt,
+  loadFinalAttempt,
   persistFinalAttempt,
+  seedDefaultQuestionsIfEmpty,
 } from "@/lib/tests-repository";
 import { DEFAULT_TEST_CONFIG } from "@/lib/test-config";
 import { generateUavTtxQuestionBank } from "@/lib/uav-test-generator";
+import { fetchUavItems } from "@/lib/uav-repository";
 import { TestConfig, TestQuestion, TestResult } from "@/lib/types";
 
 const TRIAL_FEEDBACK_MS = 2600;
@@ -136,7 +141,40 @@ export default function TestsPage() {
         setResults(mapped);
       } catch {
         if (cancelled) return;
-        setBootstrapError("Не удалось загрузить тесты. Проверьте интернет и нажмите «Повторить».");
+        try {
+          await seedDefaultQuestionsIfEmpty();
+          const [uavItems, dbPool, config] = await Promise.all([
+            fetchUavItems(),
+            fetchActiveQuestionPool(),
+            fetchTestConfig(),
+          ]);
+          if (cancelled) return;
+          const fromUav = config.uavAutoGeneration
+            ? generateUavTtxQuestionBank(uavItems, config.timePerQuestionSec)
+            : [];
+          if (fromUav.length > 0) {
+            const ids = new Set(fromUav.map((q) => q.id));
+            setQuestionPool([...fromUav, ...dbPool.filter((q) => !ids.has(q.id))]);
+          } else {
+            setQuestionPool(dbPool);
+          }
+          setTestConfig(config);
+
+          const orphanAttempt = await loadFinalAttempt(session.id);
+          if (cancelled) return;
+          if (orphanAttempt) {
+            await forceFailFinalAttempt(session.id);
+            if (!cancelled) {
+              setMessage("Итоговая попытка была прервана (обновление/закрытие/выход) и засчитана как НЕ СДАЛ.");
+            }
+          }
+          await refresh();
+          setBootstrapError("");
+        } catch {
+          if (!cancelled) {
+            setBootstrapError("Не удалось загрузить тесты. Проверьте интернет.");
+          }
+        }
       } finally {
         if (!cancelled) setIsBootstrapping(false);
       }
@@ -394,16 +432,7 @@ export default function TestsPage() {
           </div>
         </article>
       )}
-      {!isBootstrapping && !!bootstrapError && (
-        <article className="card" style={{ marginTop: 12 }}>
-          <div className="card-body form">
-            <p className="page-subtitle">{bootstrapError}</p>
-            <button className="btn" type="button" onClick={() => window.location.reload()}>
-              Повторить
-            </button>
-          </div>
-        </article>
-      )}
+      {!isBootstrapping && !!bootstrapError && <p className="page-subtitle">{bootstrapError}</p>}
 
       <div className="tests-page-main">
       <div className="grid grid-two">
