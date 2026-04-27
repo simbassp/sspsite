@@ -16,6 +16,15 @@ type QuestionRow = {
   created_at: string;
 };
 
+type LegacyQuestionRow = {
+  id: string;
+  type?: "trial" | "final";
+  text: string;
+  options: string[];
+  correct_index?: number;
+  created_at: string;
+};
+
 function isMissingColumnError(message: string | undefined) {
   const m = (message || "").toLowerCase();
   return m.includes("column") && m.includes("does not exist");
@@ -53,27 +62,50 @@ export async function GET() {
       questionsData = (questionsLegacyQ.data as unknown[]) || [];
       questionsError = questionsLegacyQ.error?.message || null;
     }
+    if (questionsError && isMissingColumnError(questionsError)) {
+      const questionsMinimalQ = await supabase
+        .from("test_questions")
+        .select("id,type,text,options,correct_index,created_at")
+        .limit(2000);
+      questionsData = (questionsMinimalQ.data as unknown[]) || [];
+      questionsError = questionsMinimalQ.error?.message || null;
+    }
     const uavRes = await uavQ;
     const t1 = Date.now();
 
-    if (questionsError || uavRes.error) {
+    if (uavRes.error) {
       return Response.json(
-        { ok: false, error: questionsError || uavRes.error?.message || "tests_pool_failed" },
+        { ok: false, error: uavRes.error?.message || "tests_pool_failed" },
         { status: 500 },
       );
     }
 
-    const mappedQuestions = (questionsData as QuestionRow[]).map((q) => ({
-      id: q.id,
-      type: q.type,
-      text: q.text,
-      options: q.options,
-      correctIndex: q.correct_index,
-      timeLimitSec: Number(q.time_limit_sec ?? 10),
-      order: q.order_index,
-      isActive: Boolean(q.is_active ?? q.active ?? true),
-      createdAt: q.created_at,
-    }));
+    let mappedQuestions: Array<Record<string, unknown>> = [];
+    if (!questionsError) {
+      mappedQuestions = (questionsData as QuestionRow[]).map((q, index) => ({
+        id: q.id,
+        type: q.type,
+        text: q.text,
+        options: q.options,
+        correctIndex: q.correct_index,
+        timeLimitSec: Number(q.time_limit_sec ?? 10),
+        order: Number(q.order_index ?? index + 1),
+        isActive: Boolean(q.is_active ?? q.active ?? true),
+        createdAt: q.created_at,
+      }));
+    } else if (isMissingColumnError(questionsError)) {
+      mappedQuestions = (questionsData as LegacyQuestionRow[]).map((q, index) => ({
+        id: q.id,
+        type: q.type === "final" ? "final" : "trial",
+        text: q.text,
+        options: q.options,
+        correctIndex: Number(q.correct_index ?? 0),
+        timeLimitSec: 10,
+        order: index + 1,
+        isActive: true,
+        createdAt: q.created_at,
+      }));
+    }
 
     return Response.json({
       ok: true,

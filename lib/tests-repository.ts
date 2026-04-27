@@ -23,7 +23,8 @@ import { FinalAttemptState, TestConfig, TestQuestion, TestResult, TestType } fro
 type TestResultRow = {
   id: string;
   user_id: string;
-  type: "trial" | "final";
+  type?: "trial" | "final";
+  test_type?: "trial" | "final";
   status: "passed" | "failed";
   score: number;
   created_at: string;
@@ -65,7 +66,7 @@ function mapResult(row: TestResultRow): TestResult {
   return {
     id: row.id,
     userId: row.user_id,
-    type: row.type,
+    type: (row.type ?? row.test_type) === "final" ? "final" : "trial",
     status: row.status,
     score: row.score,
     createdAt: row.created_at,
@@ -112,7 +113,7 @@ export async function fetchUserResults(userId: string) {
   }
   try {
     const supabase = getSupabaseBrowserClient();
-    const { data, error } = await withTimeoutAndRetry(
+    let { data, error } = await withTimeoutAndRetry(
       () =>
         supabase
           .from("test_results")
@@ -123,6 +124,21 @@ export async function fetchUserResults(userId: string) {
       1,
       "fetch_user_results_timeout",
     );
+    if (error && isMissingColumnError(error.message)) {
+      const legacyRes = await withTimeoutAndRetry(
+        () =>
+          supabase
+            .from("test_results")
+            .select("id,user_id,test_type,status,score,created_at")
+            .eq("user_id", userId)
+            .order("created_at", { ascending: false }),
+        7000,
+        1,
+        "fetch_user_results_legacy_timeout",
+      );
+      data = legacyRes.data as unknown;
+      error = legacyRes.error as { message: string } | null;
+    }
     if (error || !data) {
       return listTestResults().filter((r) => r.userId === userId);
     }
@@ -342,6 +358,30 @@ export async function fetchActiveQuestionPool() {
       );
       data = legacyRes.data as unknown;
       error = legacyRes.error as { message: string } | null;
+    }
+    if (error && isMissingColumnError(error.message)) {
+      const minimalRes = await withTimeoutAndRetry(
+        () => supabase.from("test_questions").select("id,type,text,options,correct_index,created_at").limit(2000),
+        7000,
+        1,
+        "fetch_questions_minimal_timeout",
+      );
+      data = minimalRes.data as unknown;
+      error = minimalRes.error as { message: string } | null;
+      if (!error && Array.isArray(data)) {
+        const mapped = (data as Array<Record<string, unknown>>).map((row, index) => ({
+          id: String(row.id),
+          type: row.type === "final" ? "final" : "trial",
+          text: String(row.text || ""),
+          options: Array.isArray(row.options) ? (row.options as string[]) : [],
+          correctIndex: Number(row.correct_index ?? 0),
+          timeLimitSec: 10,
+          order: index + 1,
+          isActive: true,
+          createdAt: String(row.created_at || new Date().toISOString()),
+        })) as TestQuestion[];
+        return mapped;
+      }
     }
     if (error || !data) {
       return listTestQuestions().filter((q) => q.isActive).sort((a, b) => a.order - b.order);
