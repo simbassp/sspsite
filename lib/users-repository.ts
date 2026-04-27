@@ -884,6 +884,27 @@ export async function patchUser(
     ...(nextPermissions !== undefined ? { can_manage_counteraction: nextPermissions.counteraction } : {}),
     ...(nextPermissions !== undefined ? { can_manage_users: nextPermissions.users } : {}),
   };
+  const prevUser = listUsers().find((u) => u.id === userId) || null;
+
+  const maybeLogPromotion = async () => {
+    if (patch.position === undefined || !prevUser || prevUser.position === patch.position || patch.status === "inactive") {
+      return;
+    }
+    try {
+      await supabase.from("dashboard_events").insert({
+        kind: "position_promoted",
+        payload: {
+          user_id: userId,
+          name: patch.name ?? prevUser.name,
+          callsign: patch.callsign ?? prevUser.callsign,
+          position: patch.position,
+        },
+      });
+    } catch {
+      // Event logging must not break user updates.
+    }
+  };
+
   const { error } = await supabase.from("app_users").update(payload).eq("id", userId);
   if (error) {
     const granularWithoutResultsPayload = {
@@ -901,6 +922,7 @@ export async function patchUser(
     const withoutResults = await supabase.from("app_users").update(granularWithoutResultsPayload).eq("id", userId);
     if (!withoutResults.error) {
       updateUser(userId, patch);
+      await maybeLogPromotion();
       return;
     }
     // Backward-compatible fallback for older schemas without granular permission columns.
@@ -914,9 +936,13 @@ export async function patchUser(
     const fallback = await supabase.from("app_users").update(legacyPayload).eq("id", userId);
     if (fallback.error) {
       updateUser(userId, patch);
+      return;
     }
+    updateUser(userId, patch);
+    await maybeLogPromotion();
   } else {
     updateUser(userId, patch);
+    await maybeLogPromotion();
   }
 }
 
@@ -929,6 +955,7 @@ export async function removeUser(userId: string) {
   }
 
   const supabase = getSupabaseBrowserClient();
+  const targetUser = listUsers().find((u) => u.id === userId) || null;
   let serverWarning: string | undefined;
 
   try {
@@ -954,6 +981,21 @@ export async function removeUser(userId: string) {
   } finally {
     // Всегда чистим локальный кэш, иначе «фантомы» остаются в UI при сбоях/зависаниях RPC
     deleteUser(userId);
+  }
+
+  if (targetUser) {
+    try {
+      await supabase.from("dashboard_events").insert({
+        kind: "user_deleted",
+        payload: {
+          user_id: targetUser.id,
+          name: targetUser.name,
+          callsign: targetUser.callsign,
+        },
+      });
+    } catch {
+      // Event logging must not break deletion flow.
+    }
   }
 
   if (serverWarning) {
