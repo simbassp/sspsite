@@ -69,6 +69,12 @@ export interface TestResult {
   status: TestStatus;
   score: number;
   createdAt: string;
+  /** Всего вопросов в попытке (если известно). */
+  questionsTotal?: number | null;
+  /** Верных ответов (если известно). */
+  questionsCorrect?: number | null;
+  /** Номер итоговой попытки в текущем окне (1…MAX). Только для type === \"final\". */
+  finalAttemptIndex?: number | null;
 }
 
 export interface TestQuestion {

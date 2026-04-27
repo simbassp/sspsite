@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { readClientSession } from "@/lib/client-auth";
-import { formatDate } from "@/lib/format";
+import { FINAL_TEST_MAX_ATTEMPTS } from "@/lib/final-test-constants";
+import { formatDateTime } from "@/lib/format";
 import {
   beginFinalAttempt,
   createTrialResult,
@@ -38,6 +39,14 @@ function applySessionTimeLimits(questions: TestQuestion[], sec: number): TestQue
 
 type TrialFeedback = { chosen: number | null; correct: number };
 
+type FinalTestSummary = {
+  maxAttempts: number;
+  usedAttempts: number;
+  hasPassedFinal: boolean;
+  canStartFinal: boolean;
+  attemptsExhausted: boolean;
+};
+
 export default function TestsPage() {
   const session = useMemo(() => readClientSession(), []);
   const [isHydrated, setIsHydrated] = useState(false);
@@ -59,6 +68,7 @@ export default function TestsPage() {
   const [historyError, setHistoryError] = useState("");
   const [isPoolLoading, setIsPoolLoading] = useState(false);
   const [isTestStarted, setIsTestStarted] = useState(false);
+  const [finalTest, setFinalTest] = useState<FinalTestSummary | null>(null);
 
   useEffect(() => {
     setIsHydrated(true);
@@ -84,6 +94,19 @@ export default function TestsPage() {
   currentQuestionRef.current = selectedQuestions[questionIndex];
   activeTestRef.current = activeTest;
 
+  const reloadFinalSummary = useCallback(async () => {
+    if (!session) return;
+    try {
+      const res = await fetch("/api/tests/final-summary", { cache: "no-store" });
+      const payload = (await res.json()) as { ok?: boolean; finalTest?: FinalTestSummary };
+      if (payload.ok && payload.finalTest) {
+        setFinalTest(payload.finalTest);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [session]);
+
   const refresh = async () => {
     if (!session) return;
     setIsHistoryLoading(true);
@@ -99,16 +122,23 @@ export default function TestsPage() {
         setResults(fallbackRows);
         setHistoryError("");
         setIsHistoryLoading(false);
+        void reloadFinalSummary();
         return;
       }
-      const mapped = payload.rows.map((r) => ({
-        id: String(r.id),
-        userId: String(r.user_id),
-        type: r.type === "final" ? "final" : "trial",
-        status: r.status === "passed" ? "passed" : "failed",
-        score: Number(r.score || 0),
-        createdAt: String(r.created_at),
-      })) as TestResult[];
+      const mapped = payload.rows.map((r) => {
+        const n = Number(r.final_attempt_index);
+        return {
+          id: String(r.id),
+          userId: String(r.user_id),
+          type: r.type === "final" ? "final" : "trial",
+          status: r.status === "passed" ? "passed" : "failed",
+          score: Number(r.score || 0),
+          createdAt: String(r.created_at),
+          questionsTotal: r.questions_total != null ? Number(r.questions_total) : undefined,
+          questionsCorrect: r.questions_correct != null ? Number(r.questions_correct) : undefined,
+          finalAttemptIndex: Number.isFinite(n) && n > 0 ? n : undefined,
+        };
+      }) as TestResult[];
       setResults(mapped);
     } catch {
       if (process.env.NODE_ENV !== "production") {
@@ -123,6 +153,7 @@ export default function TestsPage() {
       }
     } finally {
       setIsHistoryLoading(false);
+      void reloadFinalSummary();
     }
   };
 
@@ -212,6 +243,7 @@ export default function TestsPage() {
           config?: TestConfig;
           hasOrphanAttempt?: boolean;
           timingsMs?: Record<string, number>;
+          finalTest?: FinalTestSummary | null;
         };
         if (!response.ok || !payload.ok) {
           throw new Error(payload.error || "tests_bootstrap_failed");
@@ -223,6 +255,11 @@ export default function TestsPage() {
         const config = payload.config || DEFAULT_TEST_CONFIG;
         setTestConfig(config);
         setIsConfigLoaded(true);
+        if (payload.finalTest) {
+          setFinalTest(payload.finalTest);
+        } else {
+          void reloadFinalSummary();
+        }
 
         if (payload.hasOrphanAttempt) {
           try {
@@ -235,7 +272,7 @@ export default function TestsPage() {
             }
           }
         }
-        void refresh();
+        await refresh();
       } catch (error) {
         if (cancelled) return;
         if (process.env.NODE_ENV !== "production") {
@@ -284,7 +321,7 @@ export default function TestsPage() {
     return () => {
       cancelled = true;
     };
-  }, [session]);
+  }, [session, reloadFinalSummary]);
 
   const activeQuestions = selectedQuestions;
   const currentQuestion = activeQuestions[questionIndex];
@@ -405,12 +442,14 @@ export default function TestsPage() {
       trialRevealTimerRef.current = null;
     }
 
+    const qTotal = questions.length;
+    const meta = { questionsTotal: qTotal, questionsCorrect: correct };
     try {
       if (type === "trial") {
-        await createTrialResult(session.id, score);
+        await createTrialResult(session.id, score, meta);
       } else {
         const passed = score >= 80;
-        await finishFinalAttempt(session.id, score, passed);
+        await finishFinalAttempt(session.id, score, passed, meta);
       }
       setMessage(messageText);
     } catch {
@@ -519,6 +558,16 @@ export default function TestsPage() {
   };
 
   const startFinal = async () => {
+    if (finalTest?.hasPassedFinal) {
+      setMessage("Итоговый тест уже успешно сдан.");
+      return;
+    }
+    if (finalTest && !finalTest.canStartFinal) {
+      setMessage(
+        "Вы исчерпали 3 попытки итогового теста. Обратитесь к администратору для сброса попыток.",
+      );
+      return;
+    }
     const pool = await ensureQuestionPoolLoaded();
     if (!pool) {
       setMessage("Не удалось подготовить вопросы. Проверьте интернет.");
@@ -607,8 +656,33 @@ export default function TestsPage() {
             <p className="page-subtitle" style={{ marginTop: 8 }}>
               При обновлении страницы, закрытии вкладки или выходе попытка засчитывается как не сдал.
             </p>
+            {finalTest && (
+              <>
+                <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
+                  {finalTest.attemptsExhausted && !finalTest.hasPassedFinal
+                    ? `Попытки исчерпаны: ${finalTest.usedAttempts} / ${FINAL_TEST_MAX_ATTEMPTS}`
+                    : `Попытки: ${finalTest.usedAttempts} / ${FINAL_TEST_MAX_ATTEMPTS}`}
+                </p>
+                <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
+                  Доступно {FINAL_TEST_MAX_ATTEMPTS} попытки. Если итоговый тест не сдан за {FINAL_TEST_MAX_ATTEMPTS}{" "}
+                  попытки, доступ будет заблокирован до сброса попыток администратором.
+                </p>
+              </>
+            )}
             {activeTest !== "final" && (
-              <button className="btn btn-primary" type="button" onClick={startFinal} disabled={isBootstrapping || isPoolLoading || !isConfigLoaded}>
+              <button
+                className="btn btn-primary"
+                type="button"
+                onClick={startFinal}
+                disabled={
+                  isBootstrapping ||
+                  isPoolLoading ||
+                  !isConfigLoaded ||
+                  finalTest?.hasPassedFinal === true ||
+                  finalTest?.attemptsExhausted === true
+                }
+                style={{ marginTop: 10 }}
+              >
                 Начать итоговый тест
               </button>
             )}
@@ -688,20 +762,37 @@ export default function TestsPage() {
           История попыток
         </h2>
         <div className="list tests-history">
-          {results.map((result) => (
-            <article className="card" key={result.id}>
-              <div className="card-body">
-                <h3>{result.type === "final" ? "Итоговый" : "Пробный"} тест</h3>
-                <div className="meta" style={{ marginTop: 8 }}>
-                  <span className={`pill ${result.status === "passed" ? "pill-green" : "pill-red"}`}>
-                    {result.status === "passed" ? "Сдал" : "Не сдал"}
-                  </span>
-                  <span>Результат: {result.score}%</span>
-                  <span>{formatDate(result.createdAt)}</span>
+          {results.map((result) => {
+            const defaultTotal =
+              result.type === "final" ? testConfig.finalQuestionCount : testConfig.trialQuestionCount;
+            const rawTotal = result.questionsTotal;
+            const total = rawTotal != null && Number.isFinite(rawTotal) ? rawTotal : defaultTotal;
+            const rawCorr = result.questionsCorrect;
+            const correct =
+              rawCorr != null && Number.isFinite(rawCorr)
+                ? rawCorr
+                : Math.round((result.score / 100) * Math.max(total, 1));
+            const attemptMax = FINAL_TEST_MAX_ATTEMPTS;
+            const attemptIdx = result.finalAttemptIndex;
+            return (
+              <article className="card" key={result.id}>
+                <div className="card-body">
+                  <h3>{result.type === "final" ? "Итоговый тест" : "Пробный тест"}</h3>
+                  <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0 }}>
+                    {result.status === "passed" ? "Сдал" : "Не сдал"} — {result.score}% ({correct}/{total})
+                  </p>
+                  {result.type === "final" && attemptIdx != null && (
+                    <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0 }}>
+                      Попытка: {attemptIdx} / {attemptMax}
+                    </p>
+                  )}
+                  <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
+                    {formatDateTime(result.createdAt)}
+                  </p>
                 </div>
-              </div>
-            </article>
-          ))}
+              </article>
+            );
+          })}
           {isHistoryLoading && <p className="page-subtitle">Загрузка истории попыток...</p>}
           {!isHistoryLoading && !!historyError && <p className="page-subtitle">{historyError}</p>}
           {!isHistoryLoading && !historyError && !results.length && <p className="page-subtitle">Попыток пока нет.</p>}

@@ -355,7 +355,12 @@ export function getFinalAttempt(userId: string) {
   return null;
 }
 
-export function completeFinalAttempt(userId: string, score: number, passed: boolean) {
+export function completeFinalAttempt(
+  userId: string,
+  score: number,
+  passed: boolean,
+  meta?: { questionsTotal: number; questionsCorrect: number },
+) {
   const data = readData();
   const result: TestResult = {
     id: uid("t"),
@@ -364,6 +369,12 @@ export function completeFinalAttempt(userId: string, score: number, passed: bool
     status: passed ? "passed" : "failed",
     score,
     createdAt: new Date().toISOString(),
+    ...(meta
+      ? {
+          questionsTotal: meta.questionsTotal,
+          questionsCorrect: meta.questionsCorrect,
+        }
+      : {}),
   };
   data.testResults.unshift(result);
   if (data.finalAttempt?.userId === userId) {
@@ -372,7 +383,11 @@ export function completeFinalAttempt(userId: string, score: number, passed: bool
   writeData(data);
 }
 
-export function addTrialResult(userId: string, score: number) {
+export function addTrialResult(
+  userId: string,
+  score: number,
+  meta?: { questionsTotal: number; questionsCorrect: number },
+) {
   const data = readData();
   data.testResults.unshift({
     id: uid("t"),
@@ -381,11 +396,17 @@ export function addTrialResult(userId: string, score: number) {
     status: score >= 60 ? "passed" : "failed",
     score,
     createdAt: new Date().toISOString(),
+    ...(meta
+      ? {
+          questionsTotal: meta.questionsTotal,
+          questionsCorrect: meta.questionsCorrect,
+        }
+      : {}),
   });
   writeData(data);
 }
 
-export function markFinalAttemptAsFailed(userId: string) {
+export function markFinalAttemptAsFailed(userId: string, meta?: { questionsTotal?: number }) {
   const data = readData();
   if (!data.finalAttempt || data.finalAttempt.userId !== userId) return;
   data.testResults.unshift({
@@ -395,6 +416,12 @@ export function markFinalAttemptAsFailed(userId: string) {
     status: "failed",
     score: 0,
     createdAt: new Date().toISOString(),
+    ...(meta?.questionsTotal != null
+      ? {
+          questionsTotal: meta.questionsTotal,
+          questionsCorrect: 0,
+        }
+      : {}),
   });
   data.finalAttempt = null;
   writeData(data);

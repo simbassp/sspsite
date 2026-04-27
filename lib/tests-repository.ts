@@ -29,6 +29,8 @@ type TestResultRow = {
   status: "passed" | "failed";
   score: number;
   created_at: string;
+  questions_total?: number | null;
+  questions_correct?: number | null;
 };
 
 type FinalAttemptRow = {
@@ -95,9 +97,30 @@ async function resolveHistoryUserIds(supabase: ReturnType<typeof getSupabaseBrow
 
 async function insertTestResultCompat(
   supabase: ReturnType<typeof getSupabaseBrowserClient>,
-  payload: { user_id: string; type: "trial" | "final"; status: "passed" | "failed"; score: number },
+  payload: {
+    user_id: string;
+    type: "trial" | "final";
+    status: "passed" | "failed";
+    score: number;
+    questions_total?: number;
+    questions_correct?: number;
+  },
 ) {
-  const primary = await supabase.from("test_results").insert(payload);
+  const base: Record<string, unknown> = {
+    user_id: payload.user_id,
+    type: payload.type,
+    status: payload.status,
+    score: payload.score,
+  };
+  if (payload.questions_total != null) base.questions_total = payload.questions_total;
+  if (payload.questions_correct != null) base.questions_correct = payload.questions_correct;
+
+  let primary = await supabase.from("test_results").insert(base);
+  if (primary.error && isMissingColumnError(primary.error.message) && ("questions_total" in base || "questions_correct" in base)) {
+    delete base.questions_total;
+    delete base.questions_correct;
+    primary = await supabase.from("test_results").insert(base);
+  }
   if (!primary.error) return { error: null as null | { message: string } };
   if (!isMissingColumnError(primary.error.message)) {
     return { error: primary.error as { message: string } };
@@ -120,6 +143,8 @@ function mapResult(row: TestResultRow): TestResult {
     status: row.status,
     score: row.score,
     createdAt: row.created_at,
+    questionsTotal: row.questions_total ?? undefined,
+    questionsCorrect: row.questions_correct ?? undefined,
   };
 }
 
@@ -168,7 +193,7 @@ export async function fetchUserResults(userId: string) {
       () =>
         supabase
           .from("test_results")
-          .select("id,user_id,type,status,score,created_at")
+          .select("id,user_id,type,status,score,created_at,questions_total,questions_correct")
           .in("user_id", userIds)
           .order("created_at", { ascending: false }),
       7000,
@@ -180,7 +205,7 @@ export async function fetchUserResults(userId: string) {
         () =>
           supabase
             .from("test_results")
-            .select("id,user_id,test_type,status,score,created_at")
+            .select("id,user_id,test_type,status,score,created_at,questions_total,questions_correct")
             .in("user_id", userIds)
             .order("created_at", { ascending: false }),
         7000,
@@ -205,16 +230,27 @@ export async function fetchAllResults() {
   }
   try {
     const supabase = getSupabaseBrowserClient();
-    const { data, error } = await withTimeoutAndRetry(
+    let { data, error } = await withTimeoutAndRetry(
       () =>
         supabase
           .from("test_results")
-          .select("id,user_id,type,status,score,created_at")
+          .select("id,user_id,type,status,score,created_at,questions_total,questions_correct")
           .order("created_at", { ascending: false }),
       7000,
       1,
       "fetch_all_results_timeout",
     );
+    if (error && isMissingColumnError(error.message)) {
+      const retry = await withTimeoutAndRetry(
+        () =>
+          supabase.from("test_results").select("id,user_id,type,status,score,created_at").order("created_at", { ascending: false }),
+        7000,
+        1,
+        "fetch_all_results_fallback_timeout",
+      );
+      data = retry.data as typeof data;
+      error = retry.error as typeof error;
+    }
     if (error || !data) {
       return listTestResults();
     }
@@ -224,9 +260,13 @@ export async function fetchAllResults() {
   }
 }
 
-export async function createTrialResult(userId: string, score: number) {
+export async function createTrialResult(
+  userId: string,
+  score: number,
+  meta?: { questionsTotal: number; questionsCorrect: number },
+) {
   if (!isSupabaseConfigured) {
-    addTrialResult(userId, score);
+    addTrialResult(userId, score, meta);
     return;
   }
   const supabase = getSupabaseBrowserClient();
@@ -235,9 +275,15 @@ export async function createTrialResult(userId: string, score: number) {
     type: "trial",
     status: score >= 60 ? "passed" : "failed",
     score,
+    ...(meta
+      ? {
+          questions_total: meta.questionsTotal,
+          questions_correct: meta.questionsCorrect,
+        }
+      : {}),
   });
   if (error) {
-    addTrialResult(userId, score);
+    addTrialResult(userId, score, meta);
   }
 }
 
@@ -310,9 +356,14 @@ export async function loadFinalAttempt(userId: string) {
   }
 }
 
-export async function finishFinalAttempt(userId: string, score: number, passed: boolean) {
+export async function finishFinalAttempt(
+  userId: string,
+  score: number,
+  passed: boolean,
+  meta?: { questionsTotal: number; questionsCorrect: number },
+) {
   if (!isSupabaseConfigured) {
-    completeFinalAttempt(userId, score, passed);
+    completeFinalAttempt(userId, score, passed, meta);
     return;
   }
   const supabase = getSupabaseBrowserClient();
@@ -321,10 +372,16 @@ export async function finishFinalAttempt(userId: string, score: number, passed: 
     type: "final",
     status: passed ? "passed" : "failed",
     score,
+    ...(meta
+      ? {
+          questions_total: meta.questionsTotal,
+          questions_correct: meta.questionsCorrect,
+        }
+      : {}),
   });
 
   if (insert.error) {
-    completeFinalAttempt(userId, score, passed);
+    completeFinalAttempt(userId, score, passed, meta);
     return;
   }
 
@@ -337,19 +394,22 @@ export async function forceFailFinalAttempt(userId: string) {
     return;
   }
   const supabase = getSupabaseBrowserClient();
-  const { data: existing } = await supabase
-    .from("final_attempts")
-    .select("user_id")
-    .eq("user_id", userId)
-    .maybeSingle();
+  const [{ data: existing }, { data: cfgRow }] = await Promise.all([
+    supabase.from("final_attempts").select("user_id").eq("user_id", userId).maybeSingle(),
+    supabase.from("test_settings").select("final_question_count").eq("id", 1).maybeSingle(),
+  ]);
 
   if (!existing) return;
+
+  const questionsTotal = Math.max(1, Number((cfgRow as { final_question_count?: number } | null)?.final_question_count ?? 15));
 
   const insert = await insertTestResultCompat(supabase, {
     user_id: userId,
     type: "final",
     status: "failed",
     score: 0,
+    questions_total: questionsTotal,
+    questions_correct: 0,
   });
 
   if (insert.error) {

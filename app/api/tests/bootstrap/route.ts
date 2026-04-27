@@ -1,3 +1,4 @@
+import { computeFinalTestSummary } from "@/lib/server-final-test-summary";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 
@@ -90,13 +91,26 @@ export async function GET() {
       );
     }
 
+    let finalTestSummary: Awaited<ReturnType<typeof computeFinalTestSummary>> | null = null;
+    try {
+      finalTestSummary = await computeFinalTestSummary(supabase, session.id);
+    } catch {
+      finalTestSummary = null;
+    }
+    const t3 = Date.now();
+
     const cfg = (configQ.data || {}) as Partial<ConfigRow>;
     if (process.env.NODE_ENV !== "production") {
       console.debug("[api/tests/bootstrap] ok", {
         userId: session.id,
         hasSettings: Boolean(configQ.data),
         hasOrphanAttempt: Boolean(orphanQ.data?.user_id),
-        timingsMs: { testSettings: t1 - t0, orphanAttempt: t2 - t1, total: t2 - t0 },
+        timingsMs: {
+          testSettings: t1 - t0,
+          orphanAttempt: t2 - t1,
+          finalSummaryMs: t3 - t2,
+          total: t3 - t0,
+        },
       });
     }
 
@@ -112,8 +126,10 @@ export async function GET() {
       timingsMs: {
         testSettings: t1 - t0,
         orphanAttempt: t2 - t1,
-        total: t2 - t0,
+        finalSummaryMs: t3 - t2,
+        total: t3 - t0,
       },
+      finalTest: finalTestSummary,
     });
   } catch (error) {
     return Response.json(

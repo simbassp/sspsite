@@ -1,125 +1,182 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { TestResult, UserRecord } from "@/lib/types";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { readClientSession } from "@/lib/client-auth";
+import { FINAL_TEST_MAX_ATTEMPTS } from "@/lib/final-test-constants";
+import { formatDateTime } from "@/lib/format";
 
-type Filter = "all" | "passed" | "failed" | "not_started";
+type DateRange = "all" | "today" | "7d" | "30d";
+type StatusFilter = "all" | "passed" | "failed" | "not_started";
+
+type UserSummary = {
+  userId: string;
+  name: string;
+  callsign: string;
+  status: "passed" | "failed" | "not_started";
+  scorePercent: number | null;
+  questionsCorrect: number | null;
+  questionsTotal: number | null;
+  latestFinalAt: string | null;
+  usedFinalAttempts: number;
+  maxFinalAttempts: number;
+  showResetAttempts: boolean;
+};
+
+type BootstrapPayload = {
+  ok?: boolean;
+  error?: string;
+  viewerIsAdmin?: boolean;
+  summaries?: UserSummary[];
+  lastResetAudit?: {
+    created_at: string;
+    admin_name: string;
+    target_name: string;
+    target_callsign: string;
+  } | null;
+};
 
 export default function AdminResultsPage() {
-  const [filter, setFilter] = useState<Filter>("all");
-  const [users, setUsers] = useState<UserRecord[]>([]);
-  const [results, setResults] = useState<TestResult[]>([]);
+  const session = readClientSession();
+  const viewerIsAdmin = session?.role === "admin";
+
+  const [range, setRange] = useState<DateRange>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [summaries, setSummaries] = useState<UserSummary[]>([]);
+  const [lastResetAudit, setLastResetAudit] = useState<BootstrapPayload["lastResetAudit"]>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [resetBusyId, setResetBusyId] = useState<string | null>(null);
+  const [resetMessage, setResetMessage] = useState("");
+
+  const load = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError("");
+    try {
+      const response = await fetch(`/api/admin/results/bootstrap?range=${encodeURIComponent(range)}`, {
+        cache: "no-store",
+      });
+      const payload = (await response.json()) as BootstrapPayload;
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error || "admin_results_bootstrap_failed");
+      }
+      setSummaries(Array.isArray(payload.summaries) ? payload.summaries : []);
+      setLastResetAudit(payload.lastResetAudit ?? null);
+    } catch {
+      setLoadError("Не удалось получить данные результатов. Попробуйте обновить страницу.");
+      setSummaries([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [range]);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setIsLoading(true);
-      setLoadError("");
-      try {
-        const response = await fetch("/api/admin/results/bootstrap", { cache: "no-store" });
-        const payload = (await response.json()) as {
-          ok?: boolean;
-          error?: string;
-          users?: Array<Record<string, unknown>>;
-          results?: Array<Record<string, unknown>>;
-        };
-        if (!response.ok || !payload.ok) {
-          throw new Error(payload.error || "admin_results_bootstrap_failed");
-        }
-        if (cancelled) return;
-        const nextUsers = (payload.users || [])
-          .map((u) => ({
-            id: String(u.id),
-            role: u.role === "admin" ? "admin" : "employee",
-            name: String(u.name || ""),
-            callsign: String(u.callsign || ""),
-            login: "",
-            password: "",
-            position: "Специалист",
-            canManageContent: false,
-            permissions: {
-              news: false,
-              tests: false,
-              results: false,
-              uav: false,
-              counteraction: false,
-              users: false,
-            },
-            status: u.status === "inactive" ? "inactive" : "active",
-          }))
-          .filter((u) => u.role === "employee") as UserRecord[];
-        const nextResults = (payload.results || []).map((r) => ({
-          id: String(r.id),
-          userId: String(r.user_id),
-          type: r.type === "final" ? "final" : "trial",
-          status: r.status === "passed" ? "passed" : "failed",
-          score: Number(r.score || 0),
-          createdAt: String(r.created_at || ""),
-        })) as TestResult[];
-        setUsers(nextUsers);
-        setResults(nextResults);
-      } catch {
-        if (cancelled) return;
-        setLoadError("Не удалось получить данные результатов. Попробуйте обновить страницу.");
-      } finally {
-        if (!cancelled) setIsLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    void load();
+  }, [load]);
 
-  const rows = useMemo<
-    Array<{ id: string; name: string; callsign: string; status: Filter; score: number | null; date: string | null }>
-  >(() => {
-    const latestByUserId = new Map<string, TestResult>();
-    for (const result of results) {
-      if (!latestByUserId.has(result.userId)) {
-        latestByUserId.set(result.userId, result);
+  const visible = useMemo(() => {
+    return summaries.filter((s) => (statusFilter === "all" ? true : s.status === statusFilter));
+  }, [summaries, statusFilter]);
+
+  const onResetAttempts = async (userId: string) => {
+    if (!viewerIsAdmin) return;
+    const confirmed = window.confirm("Сбросить попытки итогового теста для этого пользователя?");
+    if (!confirmed) return;
+    setResetBusyId(userId);
+    setResetMessage("");
+    try {
+      const response = await fetch("/api/admin/results/reset-final", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ targetUserId: userId }),
+      });
+      const payload = (await response.json()) as { ok?: boolean; error?: string };
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error || "reset_failed");
       }
+      setResetMessage("Попытки сброшены.");
+      await load();
+    } catch {
+      setResetMessage("Не удалось сбросить попытки.");
+    } finally {
+      setResetBusyId(null);
     }
-    return users.map((user) => {
-      const latest = latestByUserId.get(user.id);
-      if (!latest) {
-        return { id: user.id, name: user.name, callsign: user.callsign, status: "not_started" as const, score: null, date: null };
-      }
-      return {
-        id: user.id,
-        name: user.name,
-        callsign: user.callsign,
-        status: latest.status === "passed" ? ("passed" as const) : ("failed" as const),
-        score: latest.score,
-        date: latest.createdAt,
-      };
-    });
-  }, [results, users]);
+  };
 
-  const visible = rows.filter((row) => (filter === "all" ? true : row.status === filter));
+  const fractionLabel = (s: UserSummary) => {
+    const qt = s.questionsTotal;
+    const qc = s.questionsCorrect;
+    if (qt != null && qc != null && qt > 0) {
+      return `${qc} / ${qt}`;
+    }
+    if (s.scorePercent != null) {
+      return `${s.scorePercent}%`;
+    }
+    return "—";
+  };
 
   return (
     <section>
       <h1 className="page-title">Админ / Результаты тестов</h1>
-      <p className="page-subtitle">Быстрые фильтры по статусам прохождения итогового теста.</p>
+
+      {viewerIsAdmin && lastResetAudit && (
+        <p className="page-subtitle" style={{ marginBottom: 10, fontSize: 11 }}>
+          Последний сброс попыток: {formatDateTime(lastResetAudit.created_at)} — {lastResetAudit.admin_name} →{" "}
+          {lastResetAudit.target_name}
+        </p>
+      )}
+
+      <p className="page-subtitle">Фильтр по дате последней попытки и статусу итогового теста.</p>
       {isLoading && <p className="page-subtitle">Загружаем результаты…</p>}
       {loadError && <p className="page-subtitle">{loadError}</p>}
+      {!!resetMessage && <p className="page-subtitle">{resetMessage}</p>}
 
-      <div className="chips">
-        <button className={`chip ${filter === "all" ? "active" : ""}`} type="button" onClick={() => setFilter("all")}>
+      <div className="chips" style={{ marginBottom: 8 }}>
+        <span className="label" style={{ width: "100%", marginBottom: 4 }}>
+          Период
+        </span>
+        <button className={`chip ${range === "today" ? "active" : ""}`} type="button" onClick={() => setRange("today")}>
+          Сегодня
+        </button>
+        <button className={`chip ${range === "7d" ? "active" : ""}`} type="button" onClick={() => setRange("7d")}>
+          За 7 дней
+        </button>
+        <button className={`chip ${range === "30d" ? "active" : ""}`} type="button" onClick={() => setRange("30d")}>
+          За 30 дней
+        </button>
+        <button className={`chip ${range === "all" ? "active" : ""}`} type="button" onClick={() => setRange("all")}>
           Все
         </button>
-        <button className={`chip ${filter === "passed" ? "active" : ""}`} type="button" onClick={() => setFilter("passed")}>
+      </div>
+
+      <div className="chips">
+        <span className="label" style={{ width: "100%", marginBottom: 4 }}>
+          Статус
+        </span>
+        <button
+          className={`chip ${statusFilter === "all" ? "active" : ""}`}
+          type="button"
+          onClick={() => setStatusFilter("all")}
+        >
+          Все
+        </button>
+        <button
+          className={`chip ${statusFilter === "passed" ? "active" : ""}`}
+          type="button"
+          onClick={() => setStatusFilter("passed")}
+        >
           Сдал
         </button>
-        <button className={`chip ${filter === "failed" ? "active" : ""}`} type="button" onClick={() => setFilter("failed")}>
+        <button
+          className={`chip ${statusFilter === "failed" ? "active" : ""}`}
+          type="button"
+          onClick={() => setStatusFilter("failed")}
+        >
           Не сдал
         </button>
         <button
-          className={`chip ${filter === "not_started" ? "active" : ""}`}
+          className={`chip ${statusFilter === "not_started" ? "active" : ""}`}
           type="button"
-          onClick={() => setFilter("not_started")}
+          onClick={() => setStatusFilter("not_started")}
         >
           Не проходил
         </button>
@@ -127,16 +184,38 @@ export default function AdminResultsPage() {
 
       <div className="list" style={{ marginTop: 12 }}>
         {visible.map((row) => (
-          <article className="card" key={row.id}>
+          <article className="card" key={row.userId}>
             <div className="card-body">
-              <h3>{row.name}</h3>
-              <div className="meta" style={{ marginTop: 8 }}>
-                <span>{row.callsign}</span>
-                {row.status === "passed" && <span className="pill pill-green">Сдал</span>}
-                {row.status === "failed" && <span className="pill pill-red">Не сдал</span>}
-                {row.status === "not_started" && <span className="pill pill-yellow">Не проходил</span>}
-                {row.score !== null && <span>{row.score}%</span>}
-              </div>
+              <h3>
+                {row.name} ({row.callsign})
+              </h3>
+              <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
+                Статус:{" "}
+                {row.status === "passed" ? "Сдал" : row.status === "failed" ? "Не сдал" : "Не проходил"}
+              </p>
+              {row.status !== "not_started" && (
+                <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0 }}>
+                  Результат:{" "}
+                  {row.scorePercent != null ? `${row.scorePercent}% (${fractionLabel(row)})` : fractionLabel(row)}
+                </p>
+              )}
+              <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0 }}>
+                Попытки: {row.usedFinalAttempts} / {row.maxFinalAttempts ?? FINAL_TEST_MAX_ATTEMPTS}
+              </p>
+              <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0 }}>
+                Последняя попытка: {row.latestFinalAt ? formatDateTime(row.latestFinalAt) : "—"}
+              </p>
+              {row.showResetAttempts && (
+                <button
+                  className="btn"
+                  type="button"
+                  style={{ marginTop: 10 }}
+                  disabled={resetBusyId === row.userId}
+                  onClick={() => void onResetAttempts(row.userId)}
+                >
+                  {resetBusyId === row.userId ? "Сброс…" : "Сбросить попытки"}
+                </button>
+              )}
             </div>
           </article>
         ))}
