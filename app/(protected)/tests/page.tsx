@@ -58,6 +58,7 @@ export default function TestsPage() {
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState("");
   const [isPoolLoading, setIsPoolLoading] = useState(false);
+  const [isTestStarted, setIsTestStarted] = useState(false);
 
   useEffect(() => {
     setIsHydrated(true);
@@ -75,6 +76,7 @@ export default function TestsPage() {
   const activeTestRef = useRef<"trial" | "final" | null>(null);
   const trialRevealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const completeTrialAfterRevealRef = useRef<() => void>(() => {});
+  const testCardRef = useRef<HTMLDivElement | null>(null);
 
   answersRef.current = answers;
   questionIndexRef.current = questionIndex;
@@ -301,6 +303,14 @@ export default function TestsPage() {
   }, [currentQuestion?.id]);
 
   useEffect(() => {
+    if (!activeTest || !currentQuestion) return;
+    const timer = window.setTimeout(() => {
+      testCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
+    return () => window.clearTimeout(timer);
+  }, [activeTest, currentQuestion?.id]);
+
+  useEffect(() => {
     if (!session || activeTest !== "final") return;
     const onExit = () => void forceFailFinalAttempt(session.id);
 
@@ -313,13 +323,13 @@ export default function TestsPage() {
   }, [activeTest, session]);
 
   useEffect(() => {
-    if (!currentQuestion || !activeTest) return;
+    if (!isTestStarted || !currentQuestion || !activeTest) return;
     expireHandledForQuestionIdRef.current = null;
     setTimeLeft(Math.max(1, currentQuestion.timeLimitSec));
-  }, [currentQuestion?.id, activeTest]);
+  }, [currentQuestion?.id, activeTest, isTestStarted]);
 
   useEffect(() => {
-    if (!activeTest || !currentQuestion || trialFeedback) return;
+    if (!isTestStarted || !activeTest || !currentQuestion || trialFeedback) return;
     const id = window.setInterval(() => {
       setTimeLeft((prev) => {
         const qNow = currentQuestionRef.current;
@@ -356,7 +366,7 @@ export default function TestsPage() {
       });
     }, 1000);
     return () => window.clearInterval(id);
-  }, [activeTest, currentQuestion?.id, trialFeedback]);
+  }, [activeTest, currentQuestion?.id, trialFeedback, isTestStarted]);
 
   if (!isHydrated) {
     return <p className="page-subtitle">Загрузка тестов...</p>;
@@ -387,6 +397,7 @@ export default function TestsPage() {
     setSelectedQuestions([]);
     setTimeLeft(0);
     setTrialFeedback(null);
+    setIsTestStarted(false);
     setIsAnswering(false);
     await refresh();
   }
@@ -420,7 +431,7 @@ export default function TestsPage() {
     const q = currentQuestionRef.current;
     const idx = questionIndexRef.current;
     const list = activeQuestionsRef.current;
-    if (!at || at !== "final" || !q || isAnsweringRef.current) return;
+    if (!isTestStarted || !at || at !== "final" || !q || isAnsweringRef.current) return;
     setIsAnswering(true);
     const nextAnswers = { ...answersRef.current, [q.id]: optionIndex };
     answersRef.current = nextAnswers;
@@ -445,7 +456,7 @@ export default function TestsPage() {
 
   const onTrialOptionClick = (optionIndex: number) => {
     const q = currentQuestionRef.current;
-    if (!q || activeTestRef.current !== "trial" || trialFeedback || isAnswering) return;
+    if (!isTestStarted || !q || activeTestRef.current !== "trial" || trialFeedback || isAnswering) return;
     setIsAnswering(true);
     setTrialFeedback({ chosen: optionIndex, correct: q.correctIndex });
     const nextAnswers = { ...answersRef.current, [q.id]: optionIndex };
@@ -480,6 +491,7 @@ export default function TestsPage() {
     expireHandledForQuestionIdRef.current = null;
     setTrialFeedback(null);
     setActiveTest("trial");
+    setIsTestStarted(false);
     setSelectedQuestions(randomQuestions);
     setQuestionIndex(0);
     setAnswers({});
@@ -511,12 +523,20 @@ export default function TestsPage() {
     expireHandledForQuestionIdRef.current = null;
     setTrialFeedback(null);
     setActiveTest("final");
+    setIsTestStarted(false);
     setSelectedQuestions(randomQuestions);
     setQuestionIndex(0);
     setAnswers({});
     answersRef.current = {};
     if (first) setTimeLeft(Math.max(1, first.timeLimitSec));
     setMessage(`Итоговый тест запущен: ${randomQuestions.length} случайных вопросов. Режим строгий.`);
+  };
+
+  const onStartCurrentTest = () => {
+    if (!currentQuestion || !activeTest) return;
+    expireHandledForQuestionIdRef.current = null;
+    setTimeLeft(Math.max(1, currentQuestion.timeLimitSec));
+    setIsTestStarted(true);
   };
 
   const trialOptionClassName = (index: number) => {
@@ -579,13 +599,15 @@ export default function TestsPage() {
       </div>
 
       {activeTest && currentQuestion && (
-        <article className="card" style={{ marginTop: 12 }}>
+        <article className="card" style={{ marginTop: 12 }} ref={testCardRef}>
           <div className="card-body">
             <p className="label">
               {activeTest === "final" ? "Итоговый" : "Пробный"} вопрос {questionIndex + 1} / {activeQuestions.length}
             </p>
             <p className="page-subtitle" style={{ marginTop: 8 }}>
-              {activeTest === "trial" && trialFeedback ? (
+              {!isTestStarted ? (
+                <>Нажмите кнопку ниже, чтобы начать вопрос. Таймер стартует после нажатия.</>
+              ) : activeTest === "trial" && trialFeedback ? (
                 <>
                   {trialFeedback.chosen === null
                     ? "Время вышло. Правильный ответ подсвечен."
@@ -600,6 +622,11 @@ export default function TestsPage() {
                 </>
               )}
             </p>
+            {!isTestStarted && (
+              <button className="btn btn-primary" type="button" onClick={onStartCurrentTest} style={{ marginTop: 8 }}>
+                Начать вопрос
+              </button>
+            )}
             <h3 style={{ marginTop: 8 }}>{currentQuestion.text}</h3>
             <div className="form" style={{ marginTop: 10 }}>
               {currentQuestion.options.map((option, index) => (
@@ -607,7 +634,7 @@ export default function TestsPage() {
                   className={trialOptionClassName(index)}
                   type="button"
                   key={`${currentQuestion.id}-${index}-${option}`}
-                  disabled={(activeTest === "trial" && !!trialFeedback) || (activeTest === "final" && isAnswering)}
+                  disabled={!isTestStarted || (activeTest === "trial" && !!trialFeedback) || (activeTest === "final" && isAnswering)}
                   onClick={() => {
                     if (activeTest === "trial") void onTrialOptionClick(index);
                     else void submitFinalAnswer(index);
