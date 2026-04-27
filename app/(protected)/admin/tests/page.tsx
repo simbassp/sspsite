@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import {
   deleteAdminQuestion,
   fetchAdminQuestionBank,
-  fetchAllResults,
   fetchTestConfig,
   saveAdminQuestion,
   saveTestConfig,
@@ -39,18 +38,67 @@ export default function AdminTestsPage() {
   const [draft, setDraft] = useState<DraftQuestion>(initialDraft);
   const [message, setMessage] = useState("");
   const [isEditingTimeLimit, setIsEditingTimeLimit] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     (async () => {
-      await seedDefaultQuestionsIfEmpty();
-      const [allResults, allQuestions, testConfig] = await Promise.all([
-        fetchAllResults(),
-        fetchAdminQuestionBank(),
-        fetchTestConfig(),
-      ]);
-      setResults(allResults);
-      setQuestions(allQuestions);
-      setConfig(testConfig);
+      setIsLoading(true);
+      setLoadError("");
+      try {
+        await seedDefaultQuestionsIfEmpty();
+        const response = await fetch("/api/admin/tests/bootstrap", { cache: "no-store" });
+        const payload = (await response.json()) as {
+          ok?: boolean;
+          error?: string;
+          results?: Array<Record<string, unknown>>;
+          questions?: Array<Record<string, unknown>>;
+          config?: Record<string, unknown> | null;
+        };
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "admin_tests_bootstrap_failed");
+        }
+        setResults(
+          (payload.results || []).map((r) => ({
+            id: String(r.id),
+            userId: String(r.user_id),
+            type: r.type === "final" ? "final" : "trial",
+            status: r.status === "passed" ? "passed" : "failed",
+            score: Number(r.score || 0),
+            createdAt: String(r.created_at || ""),
+          })) as TestResult[],
+        );
+        setQuestions(
+          (payload.questions || []).map((q) => ({
+            id: String(q.id),
+            type: q.type === "trial" ? "trial" : "final",
+            text: String(q.text || ""),
+            options: Array.isArray(q.options) ? (q.options as string[]) : [],
+            correctIndex: Number(q.correct_index || 0),
+            timeLimitSec: Number(q.time_limit_sec || 10),
+            order: Number(q.order_index || 1),
+            isActive: Boolean(q.is_active),
+            createdAt: String(q.created_at || ""),
+          })) as TestQuestion[],
+        );
+        if (payload.config) {
+          setConfig(
+            normalizeTestConfig({
+              trialQuestionCount: Number(payload.config.trial_question_count ?? DEFAULT_TEST_CONFIG.trialQuestionCount),
+              finalQuestionCount: Number(payload.config.final_question_count ?? DEFAULT_TEST_CONFIG.finalQuestionCount),
+              timePerQuestionSec: Number(payload.config.time_per_question_sec ?? DEFAULT_TEST_CONFIG.timePerQuestionSec),
+              uavAutoGeneration: Boolean(payload.config.uav_auto_generation ?? DEFAULT_TEST_CONFIG.uavAutoGeneration),
+            }),
+          );
+        } else {
+          const testConfig = await fetchTestConfig();
+          setConfig(testConfig);
+        }
+      } catch {
+        setLoadError("Не удалось загрузить админские данные тестов. Попробуйте снова.");
+      } finally {
+        setIsLoading(false);
+      }
     })();
   }, []);
 
@@ -144,6 +192,15 @@ export default function AdminTestsPage() {
   return (
     <section>
       <h1 className="page-title">Админ / Тесты</h1>
+      {isLoading && <p className="page-subtitle">Загружаем данные...</p>}
+      {!isLoading && !!loadError && (
+        <div className="form" style={{ marginBottom: 12 }}>
+          <p className="page-subtitle">{loadError}</p>
+          <button className="btn" type="button" onClick={() => window.location.reload()}>
+            Повторить
+          </button>
+        </div>
+      )}
       <p className="page-subtitle">
         Ниже — настройки тестов (время на вопрос, генерация из БПЛА, число вопросов) и ручной банк вопросов в БД.
         При включённой генерации вопросы по ТТХ пересобираются при каждом заходе сотрудника на «Тестирование» и

@@ -55,19 +55,30 @@ export default function AdminCounteractionPage() {
   const [draft, setDraft] = useState<DraftCounteraction>(emptyDraft);
   const [message, setMessage] = useState("");
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const sortedItems = useMemo(() => [...items].sort((a, b) => a.title.localeCompare(b.title)), [items]);
 
   const refresh = async () => {
-    const list = await fetchCounteractionItems();
-    setItems(list);
+    setIsLoading(true);
+    setLoadError("");
+    try {
+      const list = await fetchCounteractionItems();
+      setItems(list);
+    } catch {
+      setLoadError("Не удалось загрузить карточки противодействия. Попробуйте снова.");
+      setItems([]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => {
     let active = true;
-    fetchCounteractionItems().then((list) => {
-      if (active) setItems(list);
+    void refresh().then(() => {
+      if (!active) return;
     });
     return () => {
       active = false;
@@ -164,6 +175,15 @@ export default function AdminCounteractionPage() {
     <section>
       <h1 className="page-title">Управление / Противодействие</h1>
       <p className="page-subtitle">Добавление и редактирование карточек противодействия.</p>
+      {isLoading && <p className="page-subtitle">Загрузка...</p>}
+      {!isLoading && !!loadError && (
+        <div className="form" style={{ marginBottom: 12 }}>
+          <p className="page-subtitle">{loadError}</p>
+          <button className="btn" type="button" onClick={() => void refresh()}>
+            Повторить
+          </button>
+        </div>
+      )}
 
       <article className="card">
         <div className="card-body">
@@ -295,7 +315,7 @@ export default function AdminCounteractionPage() {
             </div>
           </article>
         ))}
-        {!sortedItems.length && <p className="page-subtitle">Пока нет карточек противодействия.</p>}
+        {!isLoading && !loadError && !sortedItems.length && <p className="page-subtitle">Пока нет карточек противодействия.</p>}
       </div>
     </section>
   );

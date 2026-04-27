@@ -235,7 +235,24 @@ export async function deleteUavItem(itemId: string) {
 }
 
 export async function fetchCounteractionItems() {
-  return fetchCatalogItems("counteraction", listCounteraction);
+  try {
+    const response = await withTimeoutAndRetry(
+      () =>
+        fetch("/api/counteraction", {
+          cache: "no-store",
+          headers: { "cache-control": "no-store" },
+        }),
+      7000,
+      1,
+      "fetch_counteraction_items_timeout",
+    );
+    if (!response.ok) return fetchCatalogItems("counteraction", listCounteraction);
+    const payload = (await response.json()) as { ok?: boolean; items?: CatalogItem[] };
+    if (!payload.ok || !Array.isArray(payload.items)) return fetchCatalogItems("counteraction", listCounteraction);
+    return payload.items;
+  } catch {
+    return fetchCatalogItems("counteraction", listCounteraction);
+  }
 }
 
 export async function fetchCounteractionById(itemId: string) {

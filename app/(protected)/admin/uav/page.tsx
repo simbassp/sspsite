@@ -66,6 +66,8 @@ export default function AdminUavPage() {
   const [draft, setDraft] = useState<DraftUav>(emptyDraft);
   const [message, setMessage] = useState("");
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const sortedItems = useMemo(() => [...items].sort((a, b) => a.title.localeCompare(b.title)), [items]);
@@ -73,8 +75,17 @@ export default function AdminUavPage() {
   const categorySelectValue = isPresetCategory ? draft.category.trim() : otherCategoryValue;
 
   const refresh = async () => {
-    const list = await fetchUavItems();
-    setItems(list);
+    setIsLoading(true);
+    setLoadError("");
+    try {
+      const list = await fetchUavItems();
+      setItems(list);
+    } catch {
+      setLoadError("Не удалось загрузить карточки БПЛА. Попробуйте снова.");
+      setItems([]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -181,6 +192,15 @@ export default function AdminUavPage() {
     <section>
       <h1 className="page-title">Админ / БПЛА</h1>
       <p className="page-subtitle">Добавление и редактирование БПЛА: изображение, 6 ТТХ и тип двигателя.</p>
+      {isLoading && <p className="page-subtitle">Загрузка...</p>}
+      {!isLoading && !!loadError && (
+        <div className="form" style={{ marginBottom: 12 }}>
+          <p className="page-subtitle">{loadError}</p>
+          <button className="btn" type="button" onClick={() => void refresh()}>
+            Повторить
+          </button>
+        </div>
+      )}
 
       <article className="card">
         <div className="card-body">
@@ -349,6 +369,7 @@ export default function AdminUavPage() {
             </div>
           </article>
         ))}
+        {!isLoading && !loadError && !sortedItems.length && <p className="page-subtitle">Пока нет карточек БПЛА.</p>}
       </div>
     </section>
   );

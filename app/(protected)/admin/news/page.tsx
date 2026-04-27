@@ -12,15 +12,26 @@ export default function AdminNewsPage() {
   const [body, setBody] = useState("");
   const [priority, setPriority] = useState<"high" | "normal">("normal");
   const [info, setInfo] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+
+  const refresh = async (force = false) => {
+    setIsLoading(true);
+    setLoadError("");
+    try {
+      const rows = await fetchNews(40, force);
+      setNews(rows);
+    } catch {
+      setLoadError("Не удалось загрузить новости. Попробуйте снова.");
+      setNews([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    fetchNews().then((rows) => setNews(rows));
+    void refresh();
   }, []);
-
-  const refresh = async () => {
-    const rows = await fetchNews();
-    setNews(rows);
-  };
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -69,6 +80,15 @@ export default function AdminNewsPage() {
       </div>
 
       <div className="list" style={{ marginTop: 12 }}>
+        {isLoading && <p className="page-subtitle">Загрузка...</p>}
+        {!isLoading && !!loadError && (
+          <div className="form">
+            <p className="page-subtitle">{loadError}</p>
+            <button className="btn" type="button" onClick={() => void refresh(true)}>
+              Повторить
+            </button>
+          </div>
+        )}
         {news.map((item) => (
           <article className="card" key={item.id}>
             <div className="card-body">
@@ -79,6 +99,7 @@ export default function AdminNewsPage() {
             </div>
           </article>
         ))}
+        {!isLoading && !loadError && !news.length && <p className="page-subtitle">Новостей пока нет.</p>}
       </div>
     </section>
   );
