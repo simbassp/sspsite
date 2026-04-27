@@ -49,7 +49,7 @@ export async function GET() {
     }
 
     let email = "";
-    const authUserId = profileRow?.auth_user_id || null;
+    const authUserId = typeof profileRow?.auth_user_id === "string" ? profileRow.auth_user_id : null;
     if (authUserId) {
       try {
         const authInfo = await supabase.auth.admin.getUserById(authUserId);
