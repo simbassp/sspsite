@@ -68,7 +68,8 @@ export type InviteCodeRecord = {
 
 const LOCAL_INVITES_KEY = "ssp_local_invites_v1";
 const LOGIN_EMAIL_CACHE_KEY = "ssp_login_email_cache_v1";
-const LOGIN_SERVER_TIMEOUT_MS = 12000;
+/** Должен покрывать худший случай /api/auth/login: параллельный RPC + token + профиль на медленном канале. */
+const LOGIN_SERVER_TIMEOUT_MS = 26000;
 const LOGIN_RESOLVE_TIMEOUT_MS = 5000;
 const LOGIN_AUTH_TIMEOUT_MS = 12000;
 const LOGIN_PROFILE_TIMEOUT_MS = 8000;

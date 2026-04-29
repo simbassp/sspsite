@@ -142,40 +142,46 @@ export async function POST(request: Request) {
   }
 
   const baseUrl = normalizeSupabaseUrl(supabaseUrl);
-  const emailCandidates: string[] = [];
-  if (login.includes("@")) {
-    emailCandidates.push(login);
-  } else {
-    emailCandidates.push(`${login}@ssp.local`);
-  }
 
   let authUserId = "";
   let accessToken = "";
   let refreshToken = "";
   let lastError = "Неверный логин/пароль.";
 
-  for (const email of emailCandidates) {
-    const signIn = await signInWithEmail(baseUrl, supabaseAnonKey, email, password);
+  if (login.includes("@")) {
+    const signIn = await signInWithEmail(baseUrl, supabaseAnonKey, login, password);
     if (!signIn.ok) {
-      lastError = signIn.error;
-      continue;
+      return NextResponse.json({ ok: false, error: signIn.error });
     }
     authUserId = signIn.data.user?.id ?? "";
     accessToken = signIn.data.access_token;
     refreshToken = signIn.data.refresh_token;
-    break;
-  }
+  } else {
+    const fakeEmail = `${login}@ssp.local`;
+    const [resolved, signInFake] = await Promise.all([
+      resolveEmail(baseUrl, supabaseAnonKey, login),
+      signInWithEmail(baseUrl, supabaseAnonKey, fakeEmail, password),
+    ]);
 
-  if ((!authUserId || !accessToken || !refreshToken) && !login.includes("@")) {
-    const resolved = await resolveEmail(baseUrl, supabaseAnonKey, login);
-    if (resolved && !emailCandidates.includes(resolved)) {
-      const signIn = await signInWithEmail(baseUrl, supabaseAnonKey, resolved, password);
-      if (signIn.ok) {
-        authUserId = signIn.data.user?.id ?? "";
-        accessToken = signIn.data.access_token;
-        refreshToken = signIn.data.refresh_token;
-      } else {
-        lastError = signIn.error;
+    if (signInFake.ok) {
+      authUserId = signInFake.data.user?.id ?? "";
+      accessToken = signInFake.data.access_token;
+      refreshToken = signInFake.data.refresh_token;
+    } else {
+      lastError = signInFake.error;
+      const resolvedTrim = typeof resolved === "string" ? resolved.trim() : "";
+      if (
+        resolvedTrim &&
+        resolvedTrim.toLowerCase() !== fakeEmail.toLowerCase()
+      ) {
+        const signInResolved = await signInWithEmail(baseUrl, supabaseAnonKey, resolvedTrim, password);
+        if (signInResolved.ok) {
+          authUserId = signInResolved.data.user?.id ?? "";
+          accessToken = signInResolved.data.access_token;
+          refreshToken = signInResolved.data.refresh_token;
+        } else {
+          lastError = signInResolved.error;
+        }
       }
     }
   }
