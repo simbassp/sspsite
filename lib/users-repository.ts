@@ -1063,6 +1063,7 @@ export async function patchUser(
           name: patch.name ?? prevUser.name,
           callsign: patch.callsign ?? prevUser.callsign,
           position: patch.position,
+          previous_position: prevUser.position,
         },
       });
     } catch {

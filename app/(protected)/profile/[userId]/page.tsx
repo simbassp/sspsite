@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { readClientSession } from "@/lib/client-auth";
 import { formatDateTime } from "@/lib/format";
+import { getPositionBadgeClass } from "@/lib/position-ui";
 import { canManageUsers } from "@/lib/permissions";
 import { TestResult } from "@/lib/types";
 
@@ -215,12 +216,6 @@ export default function ProfileUserInspectPage() {
     </svg>
   );
 
-  const ShieldIcon = ({ color, size = 14 }: { color: string; size?: number }) => (
-    <svg viewBox="0 0 24 24" aria-hidden="true" style={{ ...iconStroke(color), width: size, height: size }}>
-      <path d="M12 3l7 3v6c0 4.2-2.8 7.8-7 9-4.2-1.2-7-4.8-7-9V6l7-3z" />
-    </svg>
-  );
-
   const StatusDotIcon = ({ online }: { online: boolean }) => (
     <svg viewBox="0 0 16 16" width={10} height={10} aria-hidden="true" style={{ display: "block", flexShrink: 0 }}>
       <circle cx="8" cy="8" r="5" fill={online ? "var(--ok)" : "var(--muted)"} />
@@ -242,11 +237,6 @@ export default function ProfileUserInspectPage() {
       </section>
     );
   }
-
-  const roleLabel =
-    inspectUser?.role === "admin"
-      ? "Администратор"
-      : inspectUser?.position?.trim() || "Специалист";
 
   return (
     <section className="profile-page">
@@ -290,9 +280,11 @@ export default function ProfileUserInspectPage() {
                       </span>
                     ) : null}
                   </p>
-                  <div className="profile-role-badge">
-                    <ShieldIcon color="currentColor" size={16} />
-                    {roleLabel}
+                  <div
+                    className={`admin-users-position-badge ${getPositionBadgeClass(inspectUser.position)}`}
+                    title="Должность"
+                  >
+                    {inspectUser.position}
                   </div>
                 </div>
                 <div className="profile-hero-divider" aria-hidden="true" />

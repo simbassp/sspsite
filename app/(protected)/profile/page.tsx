@@ -19,6 +19,7 @@ import {
   updateCurrentUserPassword,
   updateCurrentUserPasswordWithOldPassword,
 } from "@/lib/users-repository";
+import { getPositionBadgeClass } from "@/lib/position-ui";
 import { TestResult } from "@/lib/types";
 
 export default function ProfilePage() {
@@ -493,12 +494,6 @@ export default function ProfilePage() {
     </svg>
   );
 
-  const ShieldIcon = ({ color, size = 14 }: { color: string; size?: number }) => (
-    <svg viewBox="0 0 24 24" aria-hidden="true" style={{ ...iconStroke(color), width: size, height: size }}>
-      <path d="M12 3l7 3v6c0 4.2-2.8 7.8-7 9-4.2-1.2-7-4.8-7-9V6l7-3z" />
-    </svg>
-  );
-
   const LockIcon = ({ color, size = 20 }: { color: string; size?: number }) => (
     <svg
       viewBox="0 0 24 24"
@@ -592,8 +587,6 @@ export default function ProfilePage() {
     </svg>
   );
 
-  const roleLabel = session.role === "admin" ? "Администратор" : session.position || "Специалист";
-
   const ListIcon = ({ color }: { color: string }) => (
     <svg viewBox="0 0 24 24" aria-hidden="true" style={iconStroke(color)}>
       <line x1="9" y1="7" x2="20" y2="7" />
@@ -647,9 +640,11 @@ export default function ProfilePage() {
                 Позывной:{" "}
                 <strong>{(profileCallsignInput || session.callsign || "").trim() || "—"}</strong>
               </p>
-              <div className="profile-role-badge">
-                <ShieldIcon color="currentColor" size={16} />
-                {roleLabel}
+              <div
+                className={`admin-users-position-badge ${getPositionBadgeClass(session.position)}`}
+                title="Должность"
+              >
+                {session.position}
               </div>
             </div>
             <div className="profile-hero-divider" aria-hidden="true" />

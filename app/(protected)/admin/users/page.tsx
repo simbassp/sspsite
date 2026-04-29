@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { readClientSession } from "@/lib/client-auth";
+import { POSITION_OPTIONS, getPositionBadgeClass } from "@/lib/position-ui";
 import { fetchUsers, patchUser, removeUser } from "@/lib/users-repository";
-import { Role, UserRecord } from "@/lib/types";
+import type { Position, Role, UserRecord } from "@/lib/types";
 
 const permissionOptions = [
   { key: "news", label: "Новости" },
@@ -40,6 +41,9 @@ export default function AdminUsersPage() {
   const [permissionsTargetId, setPermissionsTargetId] = useState<string | null>(null);
   const [permissionDrafts, setPermissionDrafts] = useState<Record<string, UserRecord["permissions"]>>({});
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [positionEditUser, setPositionEditUser] = useState<UserRecord | null>(null);
+  const [positionDraft, setPositionDraft] = useState<Position | "">("");
+  const [positionSaving, setPositionSaving] = useState(false);
   const permissionEditorRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -50,6 +54,27 @@ export default function AdminUsersPage() {
     const next = await fetchUsers();
     setUsers(next);
     if (force) setPage(1);
+  };
+
+  const savePositionChange = async () => {
+    if (!positionEditUser || !positionDraft) return;
+    if (positionDraft === positionEditUser.position) {
+      setPositionEditUser(null);
+      return;
+    }
+    setPositionSaving(true);
+    setInfo("");
+    try {
+      await patchUser(positionEditUser.id, { position: positionDraft });
+      setInfo("Должность обновлена. На главной появится запись о смене должности.");
+      await refresh();
+      setPositionEditUser(null);
+    } catch {
+      setInfo("Не удалось сохранить должность. Обновите страницу.");
+      await refresh(true);
+    } finally {
+      setPositionSaving(false);
+    }
   };
 
   const getDraftPermissions = (user: UserRecord) => permissionDrafts[user.id] ?? user.permissions;
@@ -115,15 +140,7 @@ export default function AdminUsersPage() {
     return `${words[0][0] || ""}${words[1][0] || ""}`.toUpperCase();
   };
   const getAvatarColor = (user: UserRecord) => palette[hash(`${user.name}:${user.login}`) % palette.length];
-  const getPositionBadgeClass = (position: string) => {
-    const normalized = position.trim().toLowerCase();
-    if (normalized === "младший специалист") return "is-junior";
-    if (normalized === "специалист") return "is-specialist";
-    if (normalized === "ведущий специалист") return "is-lead";
-    if (normalized === "главный специалист") return "is-chief";
-    if (normalized === "командир взвода") return "is-commander";
-    return "is-default";
-  };
+
   const getPermissionsSummary = (user: UserRecord) => {
     const labels = permissionOptions
       .filter((opt) => user.permissions[opt.key])
@@ -313,9 +330,23 @@ export default function AdminUsersPage() {
                       <span className={`admin-users-role-text ${user.role === "admin" ? "is-admin" : "is-employee"}`}>
                         {user.role === "admin" ? "Администратор" : "Сотрудник"}
                       </span>
-                      <div className={`admin-users-position-badge ${getPositionBadgeClass(user.position)}`}>
+                      <button
+                        type="button"
+                        className={`admin-users-position-badge ${getPositionBadgeClass(user.position)} admin-users-position-badge--editable`}
+                        title="Изменить должность"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setPositionEditUser(user);
+                          setPositionDraft(
+                            (POSITION_OPTIONS as readonly string[]).includes(user.position.trim())
+                              ? (user.position as Position)
+                              : "Специалист",
+                          );
+                        }}
+                      >
                         {user.position}
-                      </div>
+                      </button>
                     </div>
                   </td>
                   <td>
@@ -393,9 +424,23 @@ export default function AdminUsersPage() {
                     <span className={`admin-users-role-text ${user.role === "admin" ? "is-admin" : "is-employee"}`}>
                       {user.role === "admin" ? "Администратор" : "Сотрудник"}
                     </span>
-                    <div className={`admin-users-position-badge ${getPositionBadgeClass(user.position)}`}>
+                    <button
+                      type="button"
+                      className={`admin-users-position-badge ${getPositionBadgeClass(user.position)} admin-users-position-badge--editable`}
+                      title="Изменить должность"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setPositionEditUser(user);
+                        setPositionDraft(
+                          (POSITION_OPTIONS as readonly string[]).includes(user.position.trim())
+                            ? (user.position as Position)
+                            : "Специалист",
+                        );
+                      }}
+                    >
                       {user.position}
-                    </div>
+                    </button>
                   </div>
                   <p className="admin-users-perms-text">{getPermissionsSummary(user)}</p>
                   <div className="admin-users-table__actions admin-users-mobile-actions">
@@ -463,6 +508,63 @@ export default function AdminUsersPage() {
           </div>
         </div>
       </div>
+
+      {positionEditUser && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="position-edit-title"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+            zIndex: 1000,
+          }}
+        >
+          <article className="card" style={{ width: "min(420px, 100%)" }} onClick={(e) => e.stopPropagation()}>
+            <div className="card-body">
+              <h3 id="position-edit-title">Смена должности</h3>
+              <p className="page-subtitle" style={{ marginTop: 8 }}>
+                {positionEditUser.name} (@{positionEditUser.login})
+              </p>
+              <label className="label">Должность</label>
+              <select
+                className="select"
+                value={positionDraft}
+                onChange={(e) => setPositionDraft(e.target.value as Position)}
+              >
+                {POSITION_OPTIONS.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+              <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
+                <button
+                  className="btn btn-primary"
+                  type="button"
+                  disabled={positionSaving || !positionDraft}
+                  onClick={() => void savePositionChange()}
+                >
+                  {positionSaving ? "Сохранение..." : "Сохранить"}
+                </button>
+                <button
+                  className="btn"
+                  type="button"
+                  disabled={positionSaving}
+                  onClick={() => setPositionEditUser(null)}
+                >
+                  Отмена
+                </button>
+              </div>
+            </div>
+          </article>
+        </div>
+      )}
     </section>
   );
 }
