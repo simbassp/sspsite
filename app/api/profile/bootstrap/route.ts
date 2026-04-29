@@ -16,7 +16,7 @@ export async function GET() {
     const supabase = getServerSupabaseServiceClient();
     const resultsPrimaryQ = await supabase
       .from("test_results")
-      .select("id,user_id,type,status,score,created_at")
+      .select("id,user_id,type,status,score,created_at,started_at,finished_at,duration_seconds,is_completed,questions_total,questions_correct")
       .eq("user_id", session.id)
       .order("created_at", { ascending: false })
       .limit(20);
@@ -25,7 +25,7 @@ export async function GET() {
     if (resultsPrimaryQ.error && isMissingColumnError(resultsPrimaryQ.error.message)) {
       const resultsLegacyQ = await supabase
         .from("test_results")
-        .select("id,user_id,test_type,status,score,created_at")
+        .select("id,user_id,test_type,status,score,created_at,questions_total,questions_correct")
         .eq("user_id", session.id)
         .order("created_at", { ascending: false })
         .limit(20);
@@ -67,16 +67,6 @@ export async function GET() {
       if (!invitesQ.error) inviteCodes = invitesQ.data || [];
     }
 
-    let config: Record<string, unknown> | null = null;
-    const configQ = await supabase
-      .from("test_settings")
-      .select("final_question_count,time_per_question_sec")
-      .eq("id", 1)
-      .maybeSingle();
-    if (!configQ.error && configQ.data) {
-      config = configQ.data as Record<string, unknown>;
-    }
-
     return Response.json({
       ok: true,
       email,
@@ -87,11 +77,14 @@ export async function GET() {
         status: r.status,
         score: r.score,
         created_at: r.created_at,
+        started_at: r.started_at ?? null,
+        finished_at: r.finished_at ?? null,
+        duration_seconds: r.duration_seconds ?? null,
+        is_completed: r.is_completed ?? null,
         questions_total: r.questions_total ?? null,
         questions_correct: r.questions_correct ?? null,
       })),
       inviteCodes,
-      config,
     });
   } catch (error) {
     return Response.json(

@@ -29,6 +29,10 @@ type TestResultRow = {
   status: "passed" | "failed";
   score: number;
   created_at: string;
+  started_at?: string | null;
+  finished_at?: string | null;
+  duration_seconds?: number | null;
+  is_completed?: boolean | null;
   questions_total?: number | null;
   questions_correct?: number | null;
 };
@@ -105,6 +109,10 @@ async function insertTestResultCompat(
     type: "trial" | "final";
     status: "passed" | "failed";
     score: number;
+    started_at?: string;
+    finished_at?: string;
+    duration_seconds?: number;
+    is_completed?: boolean;
     questions_total?: number;
     questions_correct?: number;
   },
@@ -115,13 +123,21 @@ async function insertTestResultCompat(
     status: payload.status,
     score: payload.score,
   };
+  if (payload.started_at) base.started_at = payload.started_at;
+  if (payload.finished_at) base.finished_at = payload.finished_at;
+  if (payload.duration_seconds != null) base.duration_seconds = payload.duration_seconds;
+  if (payload.is_completed != null) base.is_completed = payload.is_completed;
   if (payload.questions_total != null) base.questions_total = payload.questions_total;
   if (payload.questions_correct != null) base.questions_correct = payload.questions_correct;
 
   let primary = await supabase.from("test_results").insert(base);
-  if (primary.error && isMissingColumnError(primary.error.message) && ("questions_total" in base || "questions_correct" in base)) {
-    delete base.questions_total;
-    delete base.questions_correct;
+  for (let i = 0; i < 10; i += 1) {
+    if (!primary.error || !isMissingColumnError(primary.error.message)) break;
+    const m = (primary.error.message || "").match(/Could not find the '([^']+)' column|column ["`]?([^"'`\s]+)["`]? does not exist/i);
+    const missing = (m?.[1] || m?.[2] || "").trim();
+    if (!missing) break;
+    if (!Object.prototype.hasOwnProperty.call(base, missing)) break;
+    delete base[missing];
     primary = await supabase.from("test_results").insert(base);
   }
   if (!primary.error) return { error: null as null | { message: string } };
@@ -146,6 +162,10 @@ function mapResult(row: TestResultRow): TestResult {
     status: row.status,
     score: row.score,
     createdAt: row.created_at,
+    startedAt: row.started_at ?? null,
+    finishedAt: row.finished_at ?? null,
+    durationSeconds: row.duration_seconds ?? null,
+    isCompleted: row.is_completed ?? null,
     questionsTotal: row.questions_total ?? undefined,
     questionsCorrect: row.questions_correct ?? undefined,
   };
@@ -311,7 +331,13 @@ export async function fetchAllResults() {
 export async function createTrialResult(
   userId: string,
   score: number,
-  meta?: { questionsTotal: number; questionsCorrect: number },
+  meta?: {
+    questionsTotal: number;
+    questionsCorrect: number;
+    startedAt?: string;
+    finishedAt?: string;
+    durationSeconds?: number;
+  },
 ) {
   if (!isSupabaseConfigured) {
     addTrialResult(userId, score, meta);
@@ -325,6 +351,10 @@ export async function createTrialResult(
     score,
     ...(meta
       ? {
+          started_at: meta.startedAt,
+          finished_at: meta.finishedAt,
+          duration_seconds: meta.durationSeconds,
+          is_completed: true,
           questions_total: meta.questionsTotal,
           questions_correct: meta.questionsCorrect,
         }

@@ -80,6 +80,14 @@ export interface TestResult {
   status: TestStatus;
   score: number;
   createdAt: string;
+  /** Время начала попытки (если сохраняется в БД). */
+  startedAt?: string | null;
+  /** Время завершения попытки (если сохраняется в БД). */
+  finishedAt?: string | null;
+  /** Фактическая длительность попытки в секундах. */
+  durationSeconds?: number | null;
+  /** Признак завершённой попытки (если хранится в БД). */
+  isCompleted?: boolean | null;
   /** Всего вопросов в попытке (если известно). */
   questionsTotal?: number | null;
   /** Верных ответов (если известно). */

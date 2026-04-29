@@ -88,6 +88,7 @@ export default function TestsPage() {
   const activeTestRef = useRef<"trial" | "final" | null>(null);
   const trialRevealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const completeTrialAfterRevealRef = useRef<() => void>(() => {});
+  const trialStartedAtRef = useRef<string | null>(null);
   const testCardRef = useRef<HTMLDivElement | null>(null);
   /** Одноразовое уведомление в блоке сообщений при исчерпании попыток итога. */
   const finalAttemptsExhaustedBannerRef = useRef(false);
@@ -391,6 +392,9 @@ export default function TestsPage() {
       if (startCountdown === 1) {
         setStartCountdown(null);
         setIsTestStarted(true);
+        if (activeTestRef.current === "trial" && !trialStartedAtRef.current) {
+          trialStartedAtRef.current = new Date().toISOString();
+        }
         setTimeLeft(Math.max(1, currentQuestionRef.current?.timeLimitSec ?? 1));
       } else {
         setStartCountdown((prev) => (prev == null ? null : prev - 1));
@@ -477,7 +481,23 @@ export default function TestsPage() {
     }
 
     const qTotal = questions.length;
-    const meta = { questionsTotal: qTotal, questionsCorrect: correct };
+    const nowIso = new Date().toISOString();
+    const trialStartedAt = type === "trial" ? trialStartedAtRef.current : null;
+    const trialDurationSeconds =
+      type === "trial" && trialStartedAt
+        ? Math.max(1, Math.round((new Date(nowIso).getTime() - new Date(trialStartedAt).getTime()) / 1000))
+        : undefined;
+    const meta = {
+      questionsTotal: qTotal,
+      questionsCorrect: correct,
+      ...(type === "trial"
+        ? {
+            startedAt: trialStartedAt || undefined,
+            finishedAt: nowIso,
+            durationSeconds: trialDurationSeconds,
+          }
+        : {}),
+    };
     try {
       if (type === "trial") {
         await createTrialResult(session.id, score, meta);
@@ -489,6 +509,9 @@ export default function TestsPage() {
     } catch {
       setMessage(messageText);
     } finally {
+      if (type === "trial") {
+        trialStartedAtRef.current = null;
+      }
       await refresh();
     }
   }
@@ -588,6 +611,7 @@ export default function TestsPage() {
     setAnswers({});
     answersRef.current = {};
     if (first) setTimeLeft(Math.max(1, first.timeLimitSec));
+    trialStartedAtRef.current = null;
     setMessage(`Пробный тест запущен: ${randomQuestions.length} случайных вопросов.`);
   };
 

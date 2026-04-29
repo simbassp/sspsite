@@ -47,8 +47,6 @@ export default function ProfilePage() {
   const [isOnline, setIsOnline] = useState(true);
   const [fieldError, setFieldError] = useState<{ name?: string; callsign?: string }>({});
   const [isResettingStats, setIsResettingStats] = useState(false);
-  const [finalQuestionCount, setFinalQuestionCount] = useState(15);
-  const [timePerQuestionSec, setTimePerQuestionSec] = useState(10);
   const canManageInvites = session?.role === "admin" || session?.permissions.users === true;
 
   useEffect(() => {
@@ -76,7 +74,6 @@ export default function ProfilePage() {
           email?: string;
           results?: Array<Record<string, unknown>>;
           inviteCodes?: Array<Record<string, unknown>>;
-          config?: Record<string, unknown> | null;
         };
         if (!response.ok || !payload.ok) {
           throw new Error(payload.error || "profile_bootstrap_failed");
@@ -89,6 +86,11 @@ export default function ProfilePage() {
           status: r.status === "passed" ? "passed" : "failed",
           score: Number(r.score || 0),
           createdAt: String(r.created_at),
+          startedAt: r.started_at ? String(r.started_at) : null,
+          finishedAt: r.finished_at ? String(r.finished_at) : null,
+          durationSeconds:
+            r.duration_seconds === null || r.duration_seconds === undefined ? null : Number(r.duration_seconds),
+          isCompleted: r.is_completed === null || r.is_completed === undefined ? null : Boolean(r.is_completed),
           questionsTotal: r.questions_total === null || r.questions_total === undefined ? null : Number(r.questions_total),
           questionsCorrect:
             r.questions_correct === null || r.questions_correct === undefined ? null : Number(r.questions_correct),
@@ -113,12 +115,6 @@ export default function ProfilePage() {
           })) as InviteCodeRecord[];
           if (!cancelled) setInviteCodes(mappedInvites);
           if (!cancelled) setIsInviteLoading(false);
-        }
-        if (payload.config) {
-          const nextFinalCount = Number(payload.config.final_question_count ?? 15);
-          const nextTimePerQuestion = Number(payload.config.time_per_question_sec ?? 10);
-          setFinalQuestionCount(Number.isFinite(nextFinalCount) && nextFinalCount > 0 ? nextFinalCount : 15);
-          setTimePerQuestionSec(Number.isFinite(nextTimePerQuestion) && nextTimePerQuestion >= 5 ? nextTimePerQuestion : 10);
         }
       } catch {
         if (!cancelled) setInitialLoadError("Не удалось загрузить часть данных профиля. Попробуйте обновить страницу.");
@@ -149,15 +145,21 @@ export default function ProfilePage() {
     const passed = trialRows.filter((r) => r.status === "passed").length;
     const successRate = total ? Math.round((passed / total) * 100) : 0;
     const lastAttempt = trialRows[0] ?? null;
-    const averageQuestions =
-      total > 0
-        ? Math.round(
-            trialRows.reduce((acc, item) => acc + Number(item.questionsTotal ?? finalQuestionCount), 0) / total,
-          )
-        : null;
-    const averageTimeSec = averageQuestions ? averageQuestions * timePerQuestionSec : null;
+    const completedWithDuration = trialRows.filter(
+      (item) =>
+        item.isCompleted !== false &&
+        item.durationSeconds != null &&
+        Number.isFinite(Number(item.durationSeconds)) &&
+        Number(item.durationSeconds) > 0,
+    );
+    const averageTimeSec = completedWithDuration.length
+      ? Math.round(
+          completedWithDuration.reduce((acc, item) => acc + Number(item.durationSeconds || 0), 0) /
+            completedWithDuration.length,
+        )
+      : null;
     return { total, passed, successRate, averageTimeSec, lastAttempt };
-  }, [rows, session, finalQuestionCount, timePerQuestionSec]);
+  }, [rows, session]);
 
   const attemptMeta = useMemo(() => {
     const byType = new Map<"trial" | "final", TestResult[]>();
@@ -403,6 +405,11 @@ export default function ProfilePage() {
           status: r.status === "passed" ? "passed" : "failed",
           score: Number(r.score || 0),
           createdAt: String(r.created_at),
+          startedAt: r.started_at ? String(r.started_at) : null,
+          finishedAt: r.finished_at ? String(r.finished_at) : null,
+          durationSeconds:
+            r.duration_seconds === null || r.duration_seconds === undefined ? null : Number(r.duration_seconds),
+          isCompleted: r.is_completed === null || r.is_completed === undefined ? null : Boolean(r.is_completed),
           questionsTotal: r.questions_total === null || r.questions_total === undefined ? null : Number(r.questions_total),
           questionsCorrect:
             r.questions_correct === null || r.questions_correct === undefined ? null : Number(r.questions_correct),
@@ -761,7 +768,7 @@ export default function ProfilePage() {
                       <span style={iconBubble("rgba(234, 179, 8, 0.14)")}>
                         <ClockIcon color="#b88319" />
                       </span>
-                      {stats.averageTimeSec !== null ? `${stats.averageTimeSec} сек` : "—"}
+                      {stats.averageTimeSec !== null ? `${stats.averageTimeSec} сек` : "Нет данных"}
                     </p>
                   </div>
                 </div>
