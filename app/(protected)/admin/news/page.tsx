@@ -12,6 +12,7 @@ import {
   updateNews,
 } from "@/lib/news-repository";
 import { applyMarkupToSelection, isUpdateNews, NewsBody } from "@/lib/news-text";
+import { isPlaceholderNewsAuthor } from "@/lib/news-author";
 import { NewsItem } from "@/lib/types";
 
 export default function AdminNewsPage() {
@@ -60,7 +61,7 @@ export default function AdminNewsPage() {
           title,
           body,
           priority,
-          author: [session?.name, session?.callsign].filter(Boolean).join(" ").trim() || "Редактор",
+          author: "",
           textStyle,
         });
     if (!result.ok) {
@@ -236,7 +237,7 @@ export default function AdminNewsPage() {
                   {item.priority === "high" ? "Важно" : isUpdateNews(item) ? "Update" : "Новость"}
                 </span>
                 <span>{formatDate(item.createdAt)}</span>
-                <span>{item.author || "Редактор"}</span>
+                {item.author && !isPlaceholderNewsAuthor(item.author) ? <span>{item.author}</span> : null}
                 {item.authorPosition ? (
                   <span className={`admin-users-position-badge ${getPositionBadgeClass(item.authorPosition)}`}>
                     {item.authorPosition}

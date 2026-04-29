@@ -1,8 +1,9 @@
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 import { canManageNews } from "@/lib/permissions";
+import { isPlaceholderNewsAuthor } from "@/lib/news-author";
 import { seedData } from "@/lib/seed";
-import { NewsTextStyle } from "@/lib/types";
+import { NewsTextStyle, SessionUser } from "@/lib/types";
 
 export const runtime = "nodejs";
 
@@ -76,6 +77,32 @@ function isMissingColumn(message: string, column: string) {
   );
 }
 
+async function resolveNewsAuthorForInsert(
+  supabase: ReturnType<typeof getServerSupabaseServiceClient>,
+  session: SessionUser,
+): Promise<{ author: string; author_position: string | null; created_by: string }> {
+  let name = (session.name || "").trim();
+  let callsign = (session.callsign || "").trim();
+  let position = (session.position || "").trim();
+
+  if (!name && !callsign && session.id) {
+    const { data, error } = await supabase.from("app_users").select("name,callsign,position").eq("id", session.id).maybeSingle();
+    if (!error && data && typeof data === "object") {
+      const r = data as Record<string, unknown>;
+      if (typeof r.name === "string" && r.name.trim()) name = r.name.trim();
+      if (typeof r.callsign === "string" && r.callsign.trim()) callsign = r.callsign.trim();
+      if (!position && typeof r.position === "string" && r.position.trim()) position = r.position.trim();
+    }
+  }
+
+  const label = [name, callsign].filter(Boolean).join(" ").trim() || name || callsign;
+  return {
+    author: label || "Пользователь",
+    author_position: position || null,
+    created_by: session.id,
+  };
+}
+
 export async function GET(request: Request) {
   const session = await getServerSession();
   if (!session) return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
@@ -97,12 +124,20 @@ export async function GET(request: Request) {
     if (!rows.length) return Response.json({ ok: true, rows: fallbackSeedRows(limit), degraded: true });
     const mapped = normalizeNewsRows(rows);
 
-    const missingAuthorRows = rows.filter((row, idx) => !mapped[idx]?.author);
+    const needsAuthorEnrichment = (idx: number) => isPlaceholderNewsAuthor(mapped[idx]?.author ?? "");
+
     const candidateUserIds = Array.from(
       new Set(
-        missingAuthorRows
-          .map((row) => row.created_by ?? row.author_id ?? row.user_id ?? row.created_by_user_id)
-          .filter((value): value is string => typeof value === "string" && value.trim().length > 0),
+        rows.flatMap((row, idx) => {
+          if (!needsAuthorEnrichment(idx)) return [];
+          const id =
+            (typeof row.created_by === "string" && row.created_by.trim()) ||
+            (typeof row.author_id === "string" && row.author_id.trim()) ||
+            (typeof row.user_id === "string" && row.user_id.trim()) ||
+            (typeof row.created_by_user_id === "string" && row.created_by_user_id.trim()) ||
+            "";
+          return id ? [id] : [];
+        }),
       ),
     );
 
@@ -129,13 +164,13 @@ export async function GET(request: Request) {
     }
 
     const withAuthorFallback = mapped.map((item, idx) => {
-      if (item.author) return item;
+      if (!needsAuthorEnrichment(idx)) return item;
       const row = rows[idx];
       const candidateId =
-        (typeof row.created_by === "string" && row.created_by) ||
-        (typeof row.author_id === "string" && row.author_id) ||
-        (typeof row.user_id === "string" && row.user_id) ||
-        (typeof row.created_by_user_id === "string" && row.created_by_user_id) ||
+        (typeof row.created_by === "string" && row.created_by.trim()) ||
+        (typeof row.author_id === "string" && row.author_id.trim()) ||
+        (typeof row.user_id === "string" && row.user_id.trim()) ||
+        (typeof row.created_by_user_id === "string" && row.created_by_user_id.trim()) ||
         "";
       if (!candidateId) return item;
       const user = usersMap.get(candidateId);
@@ -169,7 +204,6 @@ export async function POST(request: Request) {
     const text = String(body.body || "").trim();
     const priority = body.priority === "high" ? "high" : "normal";
     const kind = body.kind === "update" ? "update" : "news";
-    const author = String(body.author || session.name || session.callsign || "Редактор").trim();
     const textStyle = normalizeNewsTextStyle(body.textStyle);
     const formatPayload = { ...textStyle, kind } as const;
 
@@ -178,13 +212,33 @@ export async function POST(request: Request) {
     }
 
     const supabase = getServerSupabaseServiceClient();
+    const resolvedAuthor = await resolveNewsAuthorForInsert(supabase, session);
+    const author = resolvedAuthor.author;
+    const author_position = resolvedAuthor.author_position;
+    const created_by = resolvedAuthor.created_by;
+
     let insertQ = await supabase.from("news").insert({
       title,
       body: text,
       priority,
       author,
       format: formatPayload,
+      author_position,
+      created_by,
     });
+    if (
+      insertQ.error &&
+      (isMissingColumn(insertQ.error.message || "", "author_position") ||
+        isMissingColumn(insertQ.error.message || "", "created_by"))
+    ) {
+      insertQ = await supabase.from("news").insert({
+        title,
+        body: text,
+        priority,
+        author,
+        format: formatPayload,
+      });
+    }
     if (insertQ.error && isMissingColumn(insertQ.error.message || "", "priority")) {
       insertQ = await supabase.from("news").insert({
         title,

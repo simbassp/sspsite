@@ -6,6 +6,7 @@ import { formatDate } from "@/lib/format";
 import { canManageNews } from "@/lib/permissions";
 import { applyMarkupToSelection, isUpdateNews, NewsBody } from "@/lib/news-text";
 import { deleteNews, fetchNews, normalizeNewsTextStyle, updateNews } from "@/lib/news-repository";
+import { isPlaceholderNewsAuthor } from "@/lib/news-author";
 import { NewsItem } from "@/lib/types";
 
 export default function NewsPage() {
@@ -228,7 +229,7 @@ export default function NewsPage() {
                   {item.priority === "high" ? "Важно" : isUpdateNews(item) ? "Update" : "Новость"}
                 </span>
                 <span>{formatDate(item.createdAt)}</span>
-                <span>{item.author || "Редактор"}</span>
+                {item.author && !isPlaceholderNewsAuthor(item.author) ? <span>{item.author}</span> : null}
                 {item.authorPosition ? (
                   <span className={`admin-users-position-badge ${getPositionBadgeClass(item.authorPosition)}`}>
                     {item.authorPosition}
