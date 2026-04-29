@@ -109,6 +109,32 @@ export async function POST(request: Request) {
         ? await supabase.from("test_questions").update(legacy).eq("question_id", id)
         : await supabase.from("test_questions").insert(legacy);
     },
+    async () => {
+      const legacyTextAnswers = {
+        test_type: base.type,
+        question: base.text,
+        answers: JSON.stringify(base.options),
+        correct_answer: base.correct_index,
+        active: base.is_active,
+        order: base.order_index,
+      };
+      return id
+        ? await supabase.from("test_questions").update(legacyTextAnswers).eq("question_id", id)
+        : await supabase.from("test_questions").insert(legacyTextAnswers);
+    },
+    async () => {
+      const legacyCorrectText = {
+        test_type: base.type,
+        question: base.text,
+        answers: JSON.stringify(base.options),
+        correct_answer: String(base.options[base.correct_index] ?? ""),
+        active: base.is_active,
+        order: base.order_index,
+      };
+      return id
+        ? await supabase.from("test_questions").update(legacyCorrectText).eq("question_id", id)
+        : await supabase.from("test_questions").insert(legacyCorrectText);
+    },
   ];
 
   const errors: string[] = [];

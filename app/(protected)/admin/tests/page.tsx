@@ -179,9 +179,15 @@ export default function AdminTestsPage() {
         isActive: draft.isActive,
       }),
     });
-    const payload = (await response.json()) as { ok?: boolean; error?: string; questions?: TestQuestion[] };
+    const payload = (await response.json()) as {
+      ok?: boolean;
+      error?: string;
+      details?: string[];
+      questions?: TestQuestion[];
+    };
     if (!response.ok || !payload.ok) {
-      setMessage(`Не удалось сохранить в базе: ${payload.error || "ошибка сохранения"}`);
+      const details = Array.isArray(payload.details) && payload.details.length ? ` | ${payload.details.join(" | ")}` : "";
+      setMessage(`Не удалось сохранить в базе: ${payload.error || "ошибка сохранения"}${details}`);
       return;
     }
     setMessage(draft.id ? "Вопрос обновлен." : "Вопрос добавлен.");
