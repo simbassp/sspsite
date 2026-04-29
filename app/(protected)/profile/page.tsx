@@ -486,18 +486,113 @@ export default function ProfilePage() {
       display: "block",
     }) as const;
 
-  const UserIcon = ({ color }: { color: string }) => (
-    <svg viewBox="0 0 24 24" aria-hidden="true" style={iconStroke(color)}>
+  const UserIcon = ({ color, size = 14 }: { color: string; size?: number }) => (
+    <svg viewBox="0 0 24 24" aria-hidden="true" style={{ ...iconStroke(color), width: size, height: size }}>
       <circle cx="12" cy="8" r="4" />
       <path d="M4 20c1.8-3.6 4.2-5 8-5s6.2 1.4 8 5" />
     </svg>
   );
 
-  const ShieldIcon = ({ color }: { color: string }) => (
-    <svg viewBox="0 0 24 24" aria-hidden="true" style={iconStroke(color)}>
+  const ShieldIcon = ({ color, size = 14 }: { color: string; size?: number }) => (
+    <svg viewBox="0 0 24 24" aria-hidden="true" style={{ ...iconStroke(color), width: size, height: size }}>
       <path d="M12 3l7 3v6c0 4.2-2.8 7.8-7 9-4.2-1.2-7-4.8-7-9V6l7-3z" />
     </svg>
   );
+
+  const LockIcon = ({ color, size = 20 }: { color: string; size?: number }) => (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      aria-hidden="true"
+      style={{
+        display: "block",
+        color,
+        stroke: "currentColor",
+        fill: "none",
+        strokeWidth: 2,
+        strokeLinecap: "round",
+        strokeLinejoin: "round",
+      }}
+    >
+      <rect x="5" y="11" width="14" height="10" rx="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  );
+
+  const MailIcon = ({ color = "currentColor", size = 18 }: { color?: string; size?: number }) => (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      aria-hidden="true"
+      style={{
+        display: "block",
+        color,
+        stroke: "currentColor",
+        fill: "none",
+        strokeWidth: 2,
+        strokeLinecap: "round",
+        strokeLinejoin: "round",
+      }}
+    >
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="m3 7 9 6 9-6" />
+    </svg>
+  );
+
+  const TrashIcon = ({ color = "currentColor", size = 18 }: { color?: string; size?: number }) => (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      aria-hidden="true"
+      style={{
+        display: "block",
+        color,
+        stroke: "currentColor",
+        fill: "none",
+        strokeWidth: 2,
+        strokeLinecap: "round",
+        strokeLinejoin: "round",
+      }}
+    >
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <line x1="10" y1="11" x2="10" y2="17" />
+      <line x1="14" y1="11" x2="14" y2="17" />
+    </svg>
+  );
+
+  const WarningTriangleIcon = ({ color, size = 28 }: { color: string; size?: number }) => (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      aria-hidden="true"
+      style={{
+        display: "block",
+        color,
+        stroke: "currentColor",
+        fill: "none",
+        strokeWidth: 2,
+        strokeLinecap: "round",
+        strokeLinejoin: "round",
+      }}
+    >
+      <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+      <line x1="12" y1="9" x2="12" y2="13" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
+    </svg>
+  );
+
+  const StatusDotIcon = ({ online }: { online: boolean }) => (
+    <svg viewBox="0 0 16 16" width={10} height={10} aria-hidden="true" style={{ display: "block", flexShrink: 0 }}>
+      <circle cx="8" cy="8" r="5" fill={online ? "var(--ok)" : "var(--muted)"} />
+    </svg>
+  );
+
+  const roleLabel = session.role === "admin" ? "Администратор" : session.position || "Специалист";
 
   const ListIcon = ({ color }: { color: string }) => (
     <svg viewBox="0 0 24 24" aria-hidden="true" style={iconStroke(color)}>
@@ -539,64 +634,28 @@ export default function ProfilePage() {
       {isInitialLoading && <p className="page-subtitle">Загружаем профиль...</p>}
       {!!initialLoadError && <p className="page-subtitle">{initialLoadError}</p>}
 
-      <article className="card">
+      <article className="card profile-hero-card">
         <div className="card-body">
-          <h3>Пользовательский профиль</h3>
-          <div className="grid" style={{ marginTop: 10, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
-            <div>
-              <p className="label">Пользователь</p>
-              <p
-                style={{
-                  fontWeight: 700,
-                  marginTop: 6,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 12,
-                  flexWrap: "wrap",
-                }}
-              >
-                <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                  <span style={iconBubble("rgba(196, 43, 43, 0.10)")}>
-                    <UserIcon color="#c42b2b" />
-                  </span>
-                  {profileNameInput || session.name}
-                </span>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                  <span className="label" style={{ margin: 0 }}>
-                    Позывной
-                  </span>
-                  <span style={{ fontWeight: 800 }}>
-                    {(profileCallsignInput || session.callsign || "").trim() || "—"}
-                  </span>
-                </span>
-              </p>
+          <div className="profile-hero">
+            <div className="profile-hero-avatar" aria-hidden="true">
+              <UserIcon color="#c42b2b" size={36} />
             </div>
-            <div>
-              <p className="label">Роль</p>
-              <p style={{ fontWeight: 700, marginTop: 6, display: "flex", alignItems: "center" }}>
-                <span style={iconBubble("rgba(59, 130, 246, 0.12)")}>
-                  <ShieldIcon color="#3b82f6" />
-                </span>
-                {session.role === "admin" ? "Администратор" : session.position || "Специалист"}
-              </p>
+            <div className="profile-hero-main">
+              <p className="profile-hero-kicker">Пользовательский профиль</p>
+              <p className="profile-hero-name">{profileNameInput || session.name}</p>
+              <div className="profile-role-badge">
+                <ShieldIcon color="currentColor" size={16} />
+                {roleLabel}
+              </div>
             </div>
-            <div>
-              <p className="label">Статус</p>
-              <p style={{ fontWeight: 700, marginTop: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                <span
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: 999,
-                    background: isOnline ? "var(--ok)" : "var(--muted)",
-                    display: "inline-block",
-                  }}
-                />
+            <div className="profile-hero-divider" aria-hidden="true" />
+            <div className="profile-hero-status">
+              <p className="label" style={{ margin: 0 }}>
+                Статус
+              </p>
+              <p className="profile-hero-status-value">
+                <StatusDotIcon online={isOnline} />
                 {isOnline ? "Онлайн" : "Офлайн"}
-                <button className="btn" type="button" onClick={() => void onResetStats()} disabled={isResettingStats}>
-                  {isResettingStats ? "Сбрасываю..." : "Сброс статистики"}
-                </button>
               </p>
             </div>
           </div>
@@ -607,62 +666,99 @@ export default function ProfilePage() {
         <div className="card-body">
           <h3>Настройки аккаунта</h3>
           <p className="page-subtitle" style={{ marginTop: 8 }}>
-            Здесь можно обновить почту и пароль для входа.
+            Здесь можно обновить данные профиля и параметры входа.
           </p>
 
           <div className="form" style={{ marginTop: 10 }}>
-            <div className="grid grid-two">
-              <div>
-                <label className="label">Имя</label>
-                <input
-                  className="input"
-                  value={profileNameInput}
-                  onChange={(e) => setProfileNameInput(e.target.value)}
-                  placeholder="Ваше имя"
-                />
-                {!!fieldError.name && (
-                  <p className="page-subtitle" style={{ marginTop: 4, marginBottom: 0, color: "var(--bad)" }}>
-                    {fieldError.name}
-                  </p>
-                )}
+            <section className="profile-settings-section">
+              <h4 className="profile-settings-section-title">
+                <UserIcon color="currentColor" size={20} />
+                Личные данные
+              </h4>
+              <div className="grid grid-two">
+                <div>
+                  <label className="label">Имя</label>
+                  <input
+                    className="input"
+                    value={profileNameInput}
+                    onChange={(e) => setProfileNameInput(e.target.value)}
+                    placeholder="Ваше имя"
+                  />
+                  {!!fieldError.name && (
+                    <p className="page-subtitle" style={{ marginTop: 4, marginBottom: 0, color: "var(--bad)" }}>
+                      {fieldError.name}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className="label">Позывной</label>
+                  <input
+                    className="input"
+                    value={profileCallsignInput}
+                    onChange={(e) => setProfileCallsignInput(e.target.value)}
+                    placeholder="Ваш позывной"
+                  />
+                  {!!fieldError.callsign && (
+                    <p className="page-subtitle" style={{ marginTop: 4, marginBottom: 0, color: "var(--bad)" }}>
+                      {fieldError.callsign}
+                    </p>
+                  )}
+                </div>
               </div>
-              <div>
-                <label className="label">Позывной</label>
-                <input
-                  className="input"
-                  value={profileCallsignInput}
-                  onChange={(e) => setProfileCallsignInput(e.target.value)}
-                  placeholder="Ваш позывной"
-                />
-                {!!fieldError.callsign && (
-                  <p className="page-subtitle" style={{ marginTop: 4, marginBottom: 0, color: "var(--bad)" }}>
-                    {fieldError.callsign}
-                  </p>
-                )}
+              <button className="btn btn-primary profile-save-btn" type="button" onClick={() => void onSaveProfile()}>
+                Сохранить профиль
+              </button>
+            </section>
+
+            <section className="profile-settings-section">
+              <h4 className="profile-settings-section-title">
+                <LockIcon color="currentColor" size={20} />
+                Данные входа
+              </h4>
+              <label className="label">Email для входа</label>
+              <input
+                className="input"
+                type="email"
+                value={emailInput || "не определен"}
+                readOnly
+                placeholder="name@example.com"
+              />
+              <div className="profile-login-row">
+                <button className="btn profile-btn-with-icon" type="button" onClick={() => setEmailModalOpen(true)}>
+                  <MailIcon size={18} />
+                  Сменить почту
+                </button>
+                <button className="btn profile-btn-with-icon" type="button" onClick={() => setPasswordModalOpen(true)}>
+                  <LockIcon color="currentColor" size={18} />
+                  Сменить пароль
+                </button>
               </div>
-            </div>
-            <button className="btn" type="button" onClick={() => void onSaveProfile()}>
-              Сохранить профиль
-            </button>
-
-            <label className="label">Email для входа</label>
-            <input
-              className="input"
-              type="email"
-              value={emailInput || "не определен"}
-              readOnly
-              placeholder="name@example.com"
-            />
-            <button className="btn" type="button" onClick={() => setEmailModalOpen(true)}>
-              Сменить почту
-            </button>
-
-            <button className="btn btn-primary" type="button" onClick={() => setPasswordModalOpen(true)}>
-              Сменить пароль
-            </button>
+            </section>
 
             {settingsMessage && <p className="page-subtitle">{settingsMessage}</p>}
           </div>
+        </div>
+      </article>
+
+      <article className="card profile-danger-card" style={{ marginTop: 12 }}>
+        <div className="card-body profile-danger-inner">
+          <div className="profile-danger-copy">
+            <WarningTriangleIcon color="var(--accent)" size={28} />
+            <div>
+              <h4>Опасные действия</h4>
+              <p>Эти действия необратимы. Пожалуйста, будьте осторожны.</p>
+            </div>
+          </div>
+          <button
+            className="btn profile-danger-btn profile-btn-with-icon"
+            type="button"
+            onClick={() => void onResetStats()}
+            disabled={isResettingStats}
+            aria-busy={isResettingStats}
+          >
+            <TrashIcon size={18} />
+            {isResettingStats ? "Сбрасываю..." : "Сбросить статистику"}
+          </button>
         </div>
       </article>
 
