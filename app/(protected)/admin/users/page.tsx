@@ -190,7 +190,7 @@ export default function AdminUsersPage() {
                         {getInitials(user)}
                       </span>
                       <span>
-                        <strong>{user.name || "Без имени"}</strong>
+                        <strong>{user.name || "Без имени"}{user.callsign ? `, ${user.callsign}` : ""}</strong>
                         <small>@{user.login}</small>
                       </span>
                     </div>
@@ -335,7 +335,7 @@ export default function AdminUsersPage() {
                       {getInitials(user)}
                     </span>
                     <span>
-                      <strong>{user.name || "Без имени"}</strong>
+                      <strong>{user.name || "Без имени"}{user.callsign ? `, ${user.callsign}` : ""}</strong>
                       <small>@{user.login}</small>
                     </span>
                   </div>
