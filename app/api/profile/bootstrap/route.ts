@@ -67,6 +67,16 @@ export async function GET() {
       if (!invitesQ.error) inviteCodes = invitesQ.data || [];
     }
 
+    let config: Record<string, unknown> | null = null;
+    const configQ = await supabase
+      .from("test_settings")
+      .select("final_question_count,time_per_question_sec")
+      .eq("id", 1)
+      .maybeSingle();
+    if (!configQ.error && configQ.data) {
+      config = configQ.data as Record<string, unknown>;
+    }
+
     return Response.json({
       ok: true,
       email,
@@ -77,8 +87,11 @@ export async function GET() {
         status: r.status,
         score: r.score,
         created_at: r.created_at,
+        questions_total: r.questions_total ?? null,
+        questions_correct: r.questions_correct ?? null,
       })),
       inviteCodes,
+      config,
     });
   } catch (error) {
     return Response.json(

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { readClientSession } from "@/lib/client-auth";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatDateTime } from "@/lib/format";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import {
   createInviteCode,
@@ -44,9 +44,11 @@ export default function ProfilePage() {
   const [isInviteLoading, setIsInviteLoading] = useState(false);
   const [profileNameInput, setProfileNameInput] = useState(() => session?.name ?? "");
   const [profileCallsignInput, setProfileCallsignInput] = useState(() => session?.callsign ?? "");
-  const [showAllAttempts, setShowAllAttempts] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const [fieldError, setFieldError] = useState<{ name?: string; callsign?: string }>({});
+  const [isResettingStats, setIsResettingStats] = useState(false);
+  const [finalQuestionCount, setFinalQuestionCount] = useState(15);
+  const [timePerQuestionSec, setTimePerQuestionSec] = useState(10);
   const canManageInvites = session?.role === "admin" || session?.permissions.users === true;
 
   useEffect(() => {
@@ -74,6 +76,7 @@ export default function ProfilePage() {
           email?: string;
           results?: Array<Record<string, unknown>>;
           inviteCodes?: Array<Record<string, unknown>>;
+          config?: Record<string, unknown> | null;
         };
         if (!response.ok || !payload.ok) {
           throw new Error(payload.error || "profile_bootstrap_failed");
@@ -111,6 +114,12 @@ export default function ProfilePage() {
           if (!cancelled) setInviteCodes(mappedInvites);
           if (!cancelled) setIsInviteLoading(false);
         }
+        if (payload.config) {
+          const nextFinalCount = Number(payload.config.final_question_count ?? 15);
+          const nextTimePerQuestion = Number(payload.config.time_per_question_sec ?? 10);
+          setFinalQuestionCount(Number.isFinite(nextFinalCount) && nextFinalCount > 0 ? nextFinalCount : 15);
+          setTimePerQuestionSec(Number.isFinite(nextTimePerQuestion) && nextTimePerQuestion >= 5 ? nextTimePerQuestion : 10);
+        }
       } catch {
         if (!cancelled) setInitialLoadError("Не удалось загрузить часть данных профиля. Попробуйте обновить страницу.");
       } finally {
@@ -135,12 +144,37 @@ export default function ProfilePage() {
 
   const stats = useMemo(() => {
     if (!session) return { total: 0, passed: 0, successRate: 0, averageTimeSec: null as number | null, lastAttempt: null as TestResult | null };
-    const total = rows.length;
-    const passed = rows.filter((r) => r.status === "passed").length;
+    const trialRows = rows.filter((r) => r.type === "trial");
+    const total = trialRows.length;
+    const passed = trialRows.filter((r) => r.status === "passed").length;
     const successRate = total ? Math.round((passed / total) * 100) : 0;
-    const lastAttempt = rows[0] ?? null;
-    return { total, passed, successRate, averageTimeSec: null, lastAttempt };
-  }, [rows, session]);
+    const lastAttempt = trialRows[0] ?? null;
+    const averageQuestions =
+      total > 0
+        ? Math.round(
+            trialRows.reduce((acc, item) => acc + Number(item.questionsTotal ?? finalQuestionCount), 0) / total,
+          )
+        : null;
+    const averageTimeSec = averageQuestions ? averageQuestions * timePerQuestionSec : null;
+    return { total, passed, successRate, averageTimeSec, lastAttempt };
+  }, [rows, session, finalQuestionCount, timePerQuestionSec]);
+
+  const attemptMeta = useMemo(() => {
+    const byType = new Map<"trial" | "final", TestResult[]>();
+    for (const row of rows) {
+      const list = byType.get(row.type) || [];
+      list.push(row);
+      byType.set(row.type, list);
+    }
+    const totalByType = new Map<"trial" | "final", number>();
+    const indexById = new Map<string, number>();
+    for (const [type, list] of byType.entries()) {
+      const asc = [...list].sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt));
+      totalByType.set(type, asc.length);
+      asc.forEach((item, idx) => indexById.set(item.id, idx + 1));
+    }
+    return { totalByType, indexById };
+  }, [rows]);
 
   if (!sessionResolved) {
     return <p className="page-subtitle">Загружаем профиль...</p>;
@@ -336,7 +370,52 @@ export default function ProfilePage() {
     setSettingsMessage("Профиль сохранён");
   };
 
-  const visibleAttempts = showAllAttempts ? rows : rows.slice(0, 5);
+  const visibleAttempts = rows;
+  const onResetStats = async () => {
+    if (isResettingStats) return;
+    if (
+      !window.confirm(
+        "Сбросить статистику профиля? Итоговые попытки (лимит и окно итогового теста) НЕ будут сброшены.",
+      )
+    ) {
+      return;
+    }
+    setIsResettingStats(true);
+    setSettingsMessage("");
+    try {
+      const response = await fetch("/api/profile/reset-stats", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+      });
+      const payload = (await response.json()) as { ok?: boolean; error?: string };
+      if (!response.ok || !payload.ok) {
+        setSettingsMessage(payload.error || "Не удалось сбросить статистику.");
+        return;
+      }
+      setSettingsMessage("Статистика профиля сброшена (без сброса итоговых попыток).");
+      const refreshed = await fetch("/api/profile/bootstrap", { cache: "no-store" });
+      const refreshedPayload = (await refreshed.json()) as { ok?: boolean; results?: Array<Record<string, unknown>> };
+      if (refreshed.ok && refreshedPayload.ok && Array.isArray(refreshedPayload.results)) {
+        const mappedRows = refreshedPayload.results.map((r) => ({
+          id: String(r.id),
+          userId: String(r.user_id),
+          type: r.type === "final" ? "final" : "trial",
+          status: r.status === "passed" ? "passed" : "failed",
+          score: Number(r.score || 0),
+          createdAt: String(r.created_at),
+          questionsTotal: r.questions_total === null || r.questions_total === undefined ? null : Number(r.questions_total),
+          questionsCorrect:
+            r.questions_correct === null || r.questions_correct === undefined ? null : Number(r.questions_correct),
+          finalAttemptIndex:
+            r.final_attempt_index === null || r.final_attempt_index === undefined ? null : Number(r.final_attempt_index),
+        })) as TestResult[];
+        setRows(mappedRows.sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)));
+      }
+    } finally {
+      setIsResettingStats(false);
+    }
+  };
+
   const iconBubble = (bg: string) =>
     ({
       width: 28,
@@ -440,7 +519,7 @@ export default function ProfilePage() {
             </div>
             <div>
               <p className="label">Статус</p>
-              <p style={{ fontWeight: 700, marginTop: 6, display: "flex", alignItems: "center", gap: 8 }}>
+              <p style={{ fontWeight: 700, marginTop: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 <span
                   style={{
                     width: 8,
@@ -451,6 +530,9 @@ export default function ProfilePage() {
                   }}
                 />
                 {isOnline ? "Онлайн" : "Офлайн"}
+                <button className="btn" type="button" onClick={() => void onResetStats()} disabled={isResettingStats}>
+                  {isResettingStats ? "Сбрасываю..." : "Сброс статистики"}
+                </button>
               </p>
             </div>
           </div>
@@ -690,7 +772,7 @@ export default function ProfilePage() {
                       <span style={iconBubble("rgba(168, 85, 247, 0.14)")}>
                         <CalendarIcon color="#8b5cf6" />
                       </span>
-                      {stats.lastAttempt ? formatDate(stats.lastAttempt.createdAt) : "—"}
+                      {stats.lastAttempt ? formatDateTime(stats.lastAttempt.createdAt) : "—"}
                     </p>
                   </div>
                 </div>
@@ -731,13 +813,14 @@ export default function ProfilePage() {
                 {visibleAttempts.map((item) => {
                   const statusText = item.status === "passed" ? "Сдан" : "Не сдан";
                   const testName = item.type === "final" ? "Итоговый тест" : "Пробный тест";
-                  const finalAttempt = item.type === "final" ? item.finalAttemptIndex : null;
-                  const attemptText = finalAttempt ? `${finalAttempt} из 3` : item.type === "trial" ? "—" : "—";
-                  const dateText = formatDate(item.createdAt);
+                  const totalByType = attemptMeta.totalByType.get(item.type) ?? 0;
+                  const currentIndex = attemptMeta.indexById.get(item.id) ?? 0;
+                  const attemptText = totalByType > 0 && currentIndex > 0 ? `${currentIndex} из ${totalByType}` : "—";
+                  const dateText = formatDateTime(item.createdAt);
                   return (
                     <article className="card" key={item.id}>
                       <div className="card-body">
-                        <div className="grid" style={{ gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 10 }}>
+                        <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10 }}>
                           <div>
                             <p className="label">Тест</p>
                             <p style={{ marginTop: 6, fontWeight: 700 }}>{testName}</p>
@@ -755,7 +838,7 @@ export default function ProfilePage() {
                           </div>
                           <div>
                             <p className="label">Дата и время</p>
-                            <p style={{ marginTop: 6, fontWeight: 700 }}>{dateText}</p>
+                            <p style={{ marginTop: 6, fontWeight: 700, wordBreak: "break-word" }}>{dateText}</p>
                           </div>
                         </div>
                       </div>
@@ -763,11 +846,6 @@ export default function ProfilePage() {
                   );
                 })}
               </div>
-              {rows.length > 5 && (
-                <button className="btn" style={{ marginTop: 10 }} type="button" onClick={() => setShowAllAttempts((v) => !v)}>
-                  {showAllAttempts ? "Скрыть" : "Показать все"}
-                </button>
-              )}
             </>
           )}
         </div>
