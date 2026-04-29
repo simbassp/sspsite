@@ -32,6 +32,12 @@ function normalizeNewsKind(input: unknown): "news" | "update" {
 }
 
 function normalizeNewsRows(rows: Array<Record<string, unknown>>) {
+  const resolveAuthorText = (row: Record<string, unknown>) => {
+    if (typeof row.author === "string" && row.author.trim()) return row.author.trim();
+    if (typeof row.author_name === "string" && row.author_name.trim()) return row.author_name.trim();
+    if (typeof row.publisher_name === "string" && row.publisher_name.trim()) return row.publisher_name.trim();
+    return "";
+  };
   return rows.map((row) => ({
     id: row.id,
     title: row.title,
@@ -40,7 +46,7 @@ function normalizeNewsRows(rows: Array<Record<string, unknown>>) {
     content: row.content ?? row.body ?? row.text ?? "",
     priority: row.priority === "high" ? "high" : "normal",
     kind: normalizeNewsKind(row.format),
-    author: typeof row.author === "string" ? row.author : "",
+    author: resolveAuthorText(row),
     created_at: row.created_at,
     format: normalizeNewsTextStyle(row.format),
   }));
@@ -86,9 +92,55 @@ export async function GET(request: Request) {
       }
       return Response.json({ ok: false, error: q.error.message || "news_query_failed" }, { status: 500 });
     }
-    const rows: unknown[] = (q.data as unknown[]) || [];
+    const rows: Array<Record<string, unknown>> = ((q.data as unknown[]) || []) as Array<Record<string, unknown>>;
     if (!rows.length) return Response.json({ ok: true, rows: fallbackSeedRows(limit), degraded: true });
-    return Response.json({ ok: true, rows: normalizeNewsRows(rows as Array<Record<string, unknown>>) });
+    const mapped = normalizeNewsRows(rows);
+
+    const missingAuthorRows = rows.filter((row, idx) => !mapped[idx]?.author);
+    const candidateUserIds = Array.from(
+      new Set(
+        missingAuthorRows
+          .map((row) => row.created_by ?? row.author_id ?? row.user_id ?? row.created_by_user_id)
+          .filter((value): value is string => typeof value === "string" && value.trim().length > 0),
+      ),
+    );
+
+    if (!candidateUserIds.length) {
+      return Response.json({ ok: true, rows: mapped });
+    }
+
+    const usersQ = await supabase.from("app_users").select("id,name,callsign").in("id", candidateUserIds);
+    if (usersQ.error || !Array.isArray(usersQ.data)) {
+      return Response.json({ ok: true, rows: mapped });
+    }
+
+    const usersMap = new Map<string, { name: string; callsign: string }>();
+    for (const user of usersQ.data as Array<Record<string, unknown>>) {
+      const id = typeof user.id === "string" ? user.id : "";
+      if (!id) continue;
+      usersMap.set(id, {
+        name: typeof user.name === "string" ? user.name.trim() : "",
+        callsign: typeof user.callsign === "string" ? user.callsign.trim() : "",
+      });
+    }
+
+    const withAuthorFallback = mapped.map((item, idx) => {
+      if (item.author) return item;
+      const row = rows[idx];
+      const candidateId =
+        (typeof row.created_by === "string" && row.created_by) ||
+        (typeof row.author_id === "string" && row.author_id) ||
+        (typeof row.user_id === "string" && row.user_id) ||
+        (typeof row.created_by_user_id === "string" && row.created_by_user_id) ||
+        "";
+      if (!candidateId) return item;
+      const user = usersMap.get(candidateId);
+      if (!user) return item;
+      const authorText = `${user.name}${user.callsign ? ` ${user.callsign}` : ""}`.trim();
+      return { ...item, author: authorText };
+    });
+
+    return Response.json({ ok: true, rows: withAuthorFallback });
   } catch (error) {
     return Response.json({ ok: true, rows: fallbackSeedRows(limit), degraded: true });
   }
