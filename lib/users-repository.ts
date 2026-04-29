@@ -68,8 +68,8 @@ export type InviteCodeRecord = {
 
 const LOCAL_INVITES_KEY = "ssp_local_invites_v1";
 const LOGIN_EMAIL_CACHE_KEY = "ssp_login_email_cache_v1";
-/** Полная цепочка: resolve + до 2× token + профиль (по 10s каждый шаг к Supabase). */
-const LOGIN_SERVER_TIMEOUT_MS = 42000;
+/** Одна попытка /api/auth/login: RPC + token + профиль; не обрывать раньше типичного ответа Supabase на LTE. */
+const LOGIN_SERVER_TIMEOUT_MS = 55000;
 const LOGIN_RESOLVE_TIMEOUT_MS = 5000;
 const LOGIN_AUTH_TIMEOUT_MS = 12000;
 const LOGIN_PROFILE_TIMEOUT_MS = 8000;
@@ -168,95 +168,63 @@ function mapInvite(row: InviteCodeRow): InviteCodeRecord {
   };
 }
 
-function isClearCredentialOrPolicyError(error: string): boolean {
-  const e = error.trim().toLowerCase();
-  if (e.includes("неверный логин") || (e.includes("неверный") && e.includes("пароль"))) return true;
-  if (e.includes("деактивирован")) return true;
-  if (e.includes("не подтвержден")) return true;
-  if (e.includes("слишком много попыток")) return true;
-  if (e.includes("не найден в app_users")) return true;
-  return false;
-}
-
-function shouldAutoRetryLoginFailure(first: ServerLoginSuccess | ServerLoginError | null): boolean {
-  if (first === null) return true;
-  if (first.ok) return false;
-  if (isClearCredentialOrPolicyError(first.error)) return false;
-  const e = first.error.toLowerCase();
-  if (e.includes("слишком долго")) return true;
-  if (e.includes("некорректный ответ")) return true;
-  if (e.includes("временно недоступен")) return true;
-  return false;
-}
-
 async function loginViaServer(login: string, password: string): Promise<ServerLoginSuccess | ServerLoginError | null> {
   if (typeof window === "undefined") return null;
 
-  const singleAttempt = async (): Promise<ServerLoginSuccess | ServerLoginError | null> => {
-    try {
-      const response = (await Promise.race([
-        fetch("/api/auth/login", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ login, password }),
-          cache: "no-store",
-        }),
-        new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error("request_timeout")), LOGIN_SERVER_TIMEOUT_MS);
-        }),
-      ])) as Response;
+  try {
+    const response = (await Promise.race([
+      fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ login, password }),
+        cache: "no-store",
+      }),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("request_timeout")), LOGIN_SERVER_TIMEOUT_MS);
+      }),
+    ])) as Response;
 
-      const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
-      if (!contentType.includes("application/json")) {
-        return null;
-      }
-
-      let payload: ServerLoginSuccess | ServerLoginError | null = null;
-      try {
-        payload = (await response.json()) as ServerLoginSuccess | ServerLoginError;
-      } catch {
-        payload = null;
-      }
-
-      if (!response.ok) {
-        if ([404, 405, 500, 502, 503, 504].includes(response.status)) {
-          return null;
-        }
-        return {
-          ok: false,
-          error:
-            payload && "error" in payload && payload.error
-              ? payload.error
-              : `Сервер авторизации вернул ошибку (${response.status}).`,
-        };
-      }
-      if (!payload || !("ok" in payload) || payload.ok !== true) {
-        return {
-          ok: false,
-          error: "Некорректный ответ сервера авторизации. Повторите попытку.",
-        };
-      }
-      return payload;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "";
-      if (message === "request_timeout") {
-        return {
-          ok: false,
-          error: "Сервер авторизации отвечает слишком долго. Попробуйте снова.",
-        };
-      }
+    const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+    if (!contentType.includes("application/json")) {
       return null;
     }
-  };
 
-  const first = await singleAttempt();
-  if (first?.ok === true) return first;
-  if (first && !first.ok && isClearCredentialOrPolicyError(first.error)) return first;
-  if (!shouldAutoRetryLoginFailure(first)) return first;
+    let payload: ServerLoginSuccess | ServerLoginError | null = null;
+    try {
+      payload = (await response.json()) as ServerLoginSuccess | ServerLoginError;
+    } catch {
+      payload = null;
+    }
 
-  await new Promise((r) => setTimeout(r, 600));
-  const second = await singleAttempt();
-  return second ?? first;
+    if (!response.ok) {
+      if ([404, 405, 500, 502, 503, 504].includes(response.status)) {
+        return null;
+      }
+      return {
+        ok: false,
+        error:
+          payload && "error" in payload && payload.error
+            ? payload.error
+            : `Сервер авторизации вернул ошибку (${response.status}).`,
+      };
+    }
+    if (!payload || !("ok" in payload) || payload.ok !== true) {
+      return {
+        ok: false,
+        error: "Некорректный ответ сервера авторизации. Повторите попытку.",
+      };
+    }
+    return payload;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message === "request_timeout") {
+      return {
+        ok: false,
+        error: "request_timeout",
+      };
+    }
+    return null;
+  }
 }
 
 function readLocalInvites(): InviteCodeRecord[] {

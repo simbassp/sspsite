@@ -2,12 +2,20 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useState } from "react";
+import type { CSSProperties } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { SESSION_COOKIE } from "@/lib/seed";
+import { mapLoginErrorForDisplay } from "@/lib/login-ui";
 import { loginUser, persistSession, requestPasswordReset } from "@/lib/users-repository";
 
-/** Две попытки loginViaServer (см. LOGIN_SERVER_TIMEOUT_MS) + пауза между ними. */
-const AUTH_REQUEST_TIMEOUT_MS = 90000;
+/** Запас над одной попыткой loginViaServer (LOGIN_SERVER_TIMEOUT_MS ≈ 55s). */
+const AUTH_REQUEST_TIMEOUT_MS = 62000;
+
+const progressLines = (elapsedSec: number) => {
+  if (elapsedSec < 3) return "Входим...";
+  if (elapsedSec < 10) return "Подключаемся к серверу...";
+  return "Соединение медленное, продолжаем попытку...";
+};
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -24,6 +32,18 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: 
   });
 }
 
+const spinnerStyle: CSSProperties = {
+  display: "inline-block",
+  width: 14,
+  height: 14,
+  marginRight: 8,
+  verticalAlign: "middle",
+  border: "2px solid rgba(255,255,255,0.35)",
+  borderTopColor: "currentColor",
+  borderRadius: "50%",
+  animation: "login-spin 0.7s linear infinite",
+};
+
 export default function LoginPage() {
   const router = useRouter();
   const [login, setLogin] = useState("");
@@ -34,6 +54,39 @@ export default function LoginPage() {
   const [requestResetMode, setRequestResetMode] = useState(false);
   const [isSendingReset, setIsSendingReset] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
+
+  const inFlightRef = useRef(false);
+  const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const startedAtRef = useRef(0);
+
+  const clearProgressTimer = () => {
+    if (progressTimerRef.current) {
+      clearInterval(progressTimerRef.current);
+      progressTimerRef.current = null;
+    }
+  };
+
+  const startProgress = () => {
+    clearProgressTimer();
+    startedAtRef.current = Date.now();
+    setInfo(progressLines(0));
+    progressTimerRef.current = setInterval(() => {
+      const elapsed = (Date.now() - startedAtRef.current) / 1000;
+      setInfo(progressLines(elapsed));
+    }, 400);
+  };
+
+  useEffect(() => {
+    const sync = () => setIsOnline(typeof navigator !== "undefined" ? navigator.onLine : true);
+    sync();
+    window.addEventListener("online", sync);
+    window.addEventListener("offline", sync);
+    return () => {
+      window.removeEventListener("online", sync);
+      window.removeEventListener("offline", sync);
+    };
+  }, []);
 
   useEffect(() => {
     if (!showDebug || typeof window === "undefined") return;
@@ -51,7 +104,6 @@ export default function LoginPage() {
   }, [showDebug]);
 
   useEffect(() => {
-    // If a stale session still exists when login page opens, mark presence as offline.
     if (typeof document === "undefined") return;
     const hasSessionCookie = document.cookie
       .split(";")
@@ -67,32 +119,54 @@ export default function LoginPage() {
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (isSubmitting) return;
+    if (isSubmitting || inFlightRef.current) return;
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      setError(mapLoginErrorForDisplay("", "network"));
+      setInfo("");
+      return;
+    }
+
+    inFlightRef.current = true;
+    setIsSubmitting(true);
     setError("");
     setInfo("");
-    setIsSubmitting(true);
+    startProgress();
+
     try {
-      setInfo("Проверяем доступ к серверу...");
       const result = await withTimeout(loginUser(login.trim(), password), AUTH_REQUEST_TIMEOUT_MS, "request_timeout");
       if (!result.ok) {
+        clearProgressTimer();
         setInfo("");
-        setError(result.error);
+        if (result.error === "request_timeout") {
+          setError(mapLoginErrorForDisplay("", "timeout"));
+        } else {
+          setError(mapLoginErrorForDisplay(result.error, "api"));
+        }
         return;
       }
 
-      setInfo("");
+      setInfo("Загружаем профиль...");
+      clearProgressTimer();
       persistSession(result.session);
       router.push("/dashboard");
-    } catch (error) {
+    } catch (err) {
+      clearProgressTimer();
       setInfo("");
-      const message = error instanceof Error ? error.message : "";
+      const message = err instanceof Error ? err.message : "";
       if (message === "request_timeout") {
-        setError("Сервер отвечает слишком долго. Проверьте интернет и попробуйте снова.");
+        setError(mapLoginErrorForDisplay("", "timeout"));
       } else {
-        setError("Ошибка сети: не удалось связаться с сервером авторизации. Проверьте интернет и попробуйте снова.");
+        const isNetwork =
+          err instanceof TypeError ||
+          (err instanceof Error &&
+            (/fetch|network|failed to fetch|load failed|aborted/i.test(err.message) ||
+              err.message === "NetworkError"));
+        setError(mapLoginErrorForDisplay("", isNetwork ? "network" : "api"));
       }
     } finally {
+      clearProgressTimer();
       setIsSubmitting(false);
+      inFlightRef.current = false;
     }
   };
 
@@ -109,11 +183,15 @@ export default function LoginPage() {
   };
 
   const onRequestReset = async () => {
-    if (isSendingReset) return;
+    if (isSendingReset || inFlightRef.current) return;
     setError("");
     setInfo("");
     if (!login.trim()) {
       setError("Введите логин или email для отправки ссылки.");
+      return;
+    }
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      setError(mapLoginErrorForDisplay("", "network"));
       return;
     }
     setIsSendingReset(true);
@@ -123,31 +201,38 @@ export default function LoginPage() {
         AUTH_REQUEST_TIMEOUT_MS,
         "request_timeout",
       );
-      setIsSendingReset(false);
       if (!result.ok) {
-        setError(result.error);
+        setError(mapLoginErrorForDisplay(result.error, "api"));
         return;
       }
       setInfo("Ссылка на сброс отправлена на почту.");
     } catch (error) {
-      setIsSendingReset(false);
       const message = error instanceof Error ? error.message : "";
       if (message === "request_timeout") {
-        setError("Сервер отвечает слишком долго. Повторите попытку через несколько секунд.");
+        setError(mapLoginErrorForDisplay("", "timeout"));
       } else {
-        setError("Ошибка сети: не удалось отправить запрос на сброс. Проверьте интернет и попробуйте снова.");
+        setError(mapLoginErrorForDisplay("", "network"));
       }
+    } finally {
+      setIsSendingReset(false);
     }
   };
 
   return (
     <div className="auth-wrap">
+      <style dangerouslySetInnerHTML={{ __html: `@keyframes login-spin { to { transform: rotate(360deg); } }` }} />
       <div className="card auth-card">
         <div className="card-body">
           <h1 className="page-title">Вход в ССП ПВО</h1>
           <p className="page-subtitle">
             Платформа полностью закрыта. Для входа используйте выданные учетные данные.
           </p>
+
+          {!isOnline && (
+            <p style={{ color: "#d4a63a", fontSize: 13, marginBottom: 8 }}>
+              Нет подключения к интернету. Проверьте сеть и попробуйте снова.
+            </p>
+          )}
 
           {!requestResetMode ? (
             <form className="form" onSubmit={onSubmit}>
@@ -161,6 +246,8 @@ export default function LoginPage() {
                 value={login}
                 onChange={(e) => setLogin(e.target.value)}
                 required
+                disabled={isSubmitting}
+                autoComplete="username"
               />
 
               <label className="label" htmlFor="password">
@@ -173,14 +260,23 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                disabled={isSubmitting}
+                autoComplete="current-password"
               />
 
               {error && <p style={{ color: "#ff8d8d", fontSize: 13 }}>{error}</p>}
               {info && <p className="page-subtitle">{info}</p>}
               <button className="btn btn-primary" type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Входим..." : "Войти"}
+                {isSubmitting ? (
+                  <>
+                    <span style={spinnerStyle} aria-hidden />
+                    Входим...
+                  </>
+                ) : (
+                  "Войти"
+                )}
               </button>
-              <button className="btn" type="button" onClick={openRequestReset}>
+              <button className="btn" type="button" onClick={openRequestReset} disabled={isSubmitting}>
                 Забыли пароль?
               </button>
             </form>
@@ -202,20 +298,24 @@ export default function LoginPage() {
                 value={login}
                 onChange={(e) => setLogin(e.target.value)}
                 required
+                disabled={isSendingReset}
               />
               {error && <p style={{ color: "#ff8d8d", fontSize: 13 }}>{error}</p>}
               {info && <p className="page-subtitle">{info}</p>}
               <button className="btn btn-primary" type="submit" disabled={isSendingReset}>
                 {isSendingReset ? "Отправляем..." : "Отправить ссылку сброса"}
               </button>
-              <button className="btn" type="button" onClick={closeRequestReset}>
+              <button className="btn" type="button" onClick={closeRequestReset} disabled={isSendingReset}>
                 Назад ко входу
               </button>
             </form>
           )}
 
           <p className="page-subtitle" style={{ marginTop: 12, marginBottom: 0 }}>
-            Нет аккаунта? <Link href="/register">Регистрация сотрудника</Link>
+            Нет аккаунта?{" "}
+            <Link href="/register" prefetch={false}>
+              Регистрация сотрудника
+            </Link>
           </p>
           {!showDebug && (
             <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
