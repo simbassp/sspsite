@@ -59,6 +59,30 @@ async function listQuestions() {
   return { error: null as string | null, data: mapped };
 }
 
+async function resolveTestIdForInsert(supabase: ReturnType<typeof getServerSupabaseServiceClient>) {
+  const fromQuestions = await supabase
+    .from("test_questions")
+    .select("test_id")
+    .not("test_id", "is", null)
+    .limit(1)
+    .maybeSingle();
+  if (!fromQuestions.error && fromQuestions.data?.test_id != null) {
+    return fromQuestions.data.test_id;
+  }
+
+  const testsTable = await supabase.from("tests").select("id").limit(1).maybeSingle();
+  if (!testsTable.error && testsTable.data?.id != null) {
+    return testsTable.data.id;
+  }
+
+  const legacyTestsTable = await supabase.from("test").select("id").limit(1).maybeSingle();
+  if (!legacyTestsTable.error && legacyTestsTable.data?.id != null) {
+    return legacyTestsTable.data.id;
+  }
+
+  return null;
+}
+
 export async function GET() {
   const session = await getServerSession();
   if (!session || !canManageTests(session)) {
@@ -96,6 +120,7 @@ export async function POST(request: Request) {
     is_active: body.isActive !== false,
   };
   const id = body.id ? String(body.id) : null;
+  const resolvedTestId = await resolveTestIdForInsert(supabase);
 
   const minimal = { type: base.type, text: base.text, options: base.options, correct_index: base.correct_index };
   const legacy = {
@@ -119,6 +144,9 @@ export async function POST(request: Request) {
     { payload: base, updateKey: "id" },
     { payload: base, updateKey: "question_id" },
     { payload: minimal, updateKey: "id" },
+    { payload: { question: base.text, test_id: resolvedTestId }, updateKey: "id" },
+    { payload: { question: base.text, test_id: resolvedTestId }, updateKey: "question_id" },
+    { payload: { text: base.text, test_id: resolvedTestId }, updateKey: "id" },
     { payload: legacy, updateKey: "question_id" },
     { payload: legacyTextAnswers, updateKey: "question_id" },
     { payload: legacyCorrectText, updateKey: "question_id" },
@@ -129,9 +157,12 @@ export async function POST(request: Request) {
     const payload = { ...attempt.payload };
     for (let retry = 0; retry < 12; retry += 1) {
       if (!Object.keys(payload).length) break;
+      const normalizedPayload = Object.fromEntries(
+        Object.entries(payload).filter(([, value]) => value !== null && value !== undefined),
+      );
       const res = id
-        ? await supabase.from("test_questions").update(payload).eq(attempt.updateKey, id)
-        : await supabase.from("test_questions").insert(payload);
+        ? await supabase.from("test_questions").update(normalizedPayload).eq(attempt.updateKey, id)
+        : await supabase.from("test_questions").insert(normalizedPayload);
       if (!res.error) {
         const listed = await listQuestions();
         if (listed.error) return Response.json({ ok: true, saved: true, warning: listed.error });
