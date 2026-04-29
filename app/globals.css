@@ -304,6 +304,11 @@ html[data-theme="dark"] .select option {
   color: var(--muted);
 }
 
+.input-hint-danger::placeholder {
+  color: #d86a6a;
+  opacity: 1;
+}
+
 .chips {
   display: flex;
   gap: 8px;

@@ -114,33 +114,27 @@ export default function RegisterPage() {
               required
             />
 
-            <label className="label">
-              Логин <span style={{ color: "#d86a6a" }}>(на английском)</span>
-            </label>
+            <label className="label">Логин</label>
             <input
-              className="input"
+              className="input input-hint-danger"
               placeholder="Например: Simba (на английском)"
               value={form.login}
               onChange={(e) => setForm((p) => ({ ...p, login: e.target.value }))}
               required
             />
 
-            <label className="label">
-              Имя <span style={{ color: "#d86a6a" }}>(на русском)</span>
-            </label>
+            <label className="label">Имя</label>
             <input
-              className="input"
+              className="input input-hint-danger"
               placeholder="Например: Иван (на русском)"
               value={form.name}
               onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
               required
             />
 
-            <label className="label">
-              Позывной <span style={{ color: "#d86a6a" }}>(на русском)</span>
-            </label>
+            <label className="label">Позывной</label>
             <input
-              className="input"
+              className="input input-hint-danger"
               placeholder="Например: Симба (на русском)"
               value={form.callsign}
               onChange={(e) => setForm((p) => ({ ...p, callsign: e.target.value }))}

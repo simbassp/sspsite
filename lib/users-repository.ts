@@ -352,6 +352,22 @@ function canUseLocalFallback() {
 
 function mapAuthErrorMessage(raw: string) {
   const msg = raw.toLowerCase();
+  if (
+    msg.includes("app_users_login_key") ||
+    (msg.includes("duplicate key value") && msg.includes("login")) ||
+    msg.includes("duplicate login")
+  ) {
+    return "Логин уже занят. Укажите другой логин.";
+  }
+  if (
+    msg.includes("app_users_email_key") ||
+    (msg.includes("duplicate key value") && msg.includes("email")) ||
+    msg.includes("user already registered") ||
+    msg.includes("already been registered") ||
+    msg.includes("email already in use")
+  ) {
+    return "Пользователь с таким email уже зарегистрирован.";
+  }
   if (msg.includes("rate limit")) {
     return "Слишком много запросов на сброс. Подождите 60 секунд и попробуйте снова.";
   }
@@ -359,7 +375,7 @@ function mapAuthErrorMessage(raw: string) {
     return "Код приглашения недействителен или лимит использований исчерпан. Запросите у администратора новый код.";
   }
   if (msg.includes("database error saving new user")) {
-    return "Регистрация отклонена. Код приглашения недействителен или лимит кода исчерпан. Запросите у администратора новый код.";
+    return "Регистрация отклонена из-за конфликта данных. Проверьте логин и email, затем повторите попытку.";
   }
   return raw;
 }
@@ -685,6 +701,34 @@ export async function registerUser(payload: {
       ok: false as const,
       error: "Персональный код недействителен или лимит использований исчерпан. Запросите у администратора новый код.",
     };
+  }
+
+  // Best-effort precheck to show a clear message for duplicate logins.
+  try {
+    const { data: existingByLogin, error: existingByLoginError } = await supabase
+      .from("app_users")
+      .select("id")
+      .ilike("login", payload.login.trim())
+      .limit(1);
+    if (!existingByLoginError && Array.isArray(existingByLogin) && existingByLogin.length > 0) {
+      return { ok: false as const, error: "Логин уже занят. Укажите другой логин." };
+    }
+  } catch {
+    // Ignore precheck failures; signup error mapping below still handles conflicts.
+  }
+
+  // Best-effort precheck for duplicate emails when app_users stores email.
+  try {
+    const { data: existingByEmail, error: existingByEmailError } = await supabase
+      .from("app_users")
+      .select("id")
+      .ilike("email", payload.email.trim())
+      .limit(1);
+    if (!existingByEmailError && Array.isArray(existingByEmail) && existingByEmail.length > 0) {
+      return { ok: false as const, error: "Пользователь с таким email уже зарегистрирован." };
+    }
+  } catch {
+    // Ignore precheck failures; signup error mapping below still handles conflicts.
   }
 
   const confirmRegistrationCreated = async () => {
