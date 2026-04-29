@@ -59,28 +59,41 @@ async function listQuestions() {
   return { error: null as string | null, data: mapped };
 }
 
-async function resolveTestIdForInsert(supabase: ReturnType<typeof getServerSupabaseServiceClient>) {
+async function resolveTestIdCandidates(supabase: ReturnType<typeof getServerSupabaseServiceClient>) {
+  const candidates: unknown[] = [];
+  const push = (value: unknown) => {
+    if (value === null || value === undefined || value === "") return;
+    if (!candidates.some((v) => String(v) === String(value))) candidates.push(value);
+  };
+
   const fromQuestions = await supabase
     .from("test_questions")
     .select("test_id")
     .not("test_id", "is", null)
-    .limit(1)
-    .maybeSingle();
-  if (!fromQuestions.error && fromQuestions.data?.test_id != null) {
-    return fromQuestions.data.test_id;
+    .limit(10);
+  if (!fromQuestions.error) {
+    for (const row of (fromQuestions.data || []) as Array<Record<string, unknown>>) push(row.test_id);
   }
 
-  const testsTable = await supabase.from("tests").select("id").limit(1).maybeSingle();
-  if (!testsTable.error && testsTable.data?.id != null) {
-    return testsTable.data.id;
+  const fromResults = await supabase.from("test_results").select("test_id").not("test_id", "is", null).limit(10);
+  if (!fromResults.error) {
+    for (const row of (fromResults.data || []) as Array<Record<string, unknown>>) push(row.test_id);
   }
 
-  const legacyTestsTable = await supabase.from("test").select("id").limit(1).maybeSingle();
-  if (!legacyTestsTable.error && legacyTestsTable.data?.id != null) {
-    return legacyTestsTable.data.id;
+  const testsTable = await supabase.from("tests").select("id").limit(10);
+  if (!testsTable.error) {
+    for (const row of (testsTable.data || []) as Array<Record<string, unknown>>) push(row.id);
   }
 
-  return null;
+  const legacyTestsTable = await supabase.from("test").select("id").limit(10);
+  if (!legacyTestsTable.error) {
+    for (const row of (legacyTestsTable.data || []) as Array<Record<string, unknown>>) push(row.id);
+  }
+
+  push(1);
+  push("1");
+  push("00000000-0000-0000-0000-000000000000");
+  return candidates;
 }
 
 export async function GET() {
@@ -120,7 +133,7 @@ export async function POST(request: Request) {
     is_active: body.isActive !== false,
   };
   const id = body.id ? String(body.id) : null;
-  const resolvedTestId = await resolveTestIdForInsert(supabase);
+  const testIdCandidates = await resolveTestIdCandidates(supabase);
 
   const minimal = { type: base.type, text: base.text, options: base.options, correct_index: base.correct_index };
   const legacy = {
@@ -144,9 +157,9 @@ export async function POST(request: Request) {
     { payload: base, updateKey: "id" },
     { payload: base, updateKey: "question_id" },
     { payload: minimal, updateKey: "id" },
-    { payload: { question: base.text, test_id: resolvedTestId }, updateKey: "id" },
-    { payload: { question: base.text, test_id: resolvedTestId }, updateKey: "question_id" },
-    { payload: { text: base.text, test_id: resolvedTestId }, updateKey: "id" },
+    { payload: { question: base.text }, updateKey: "id" },
+    { payload: { question: base.text }, updateKey: "question_id" },
+    { payload: { text: base.text }, updateKey: "id" },
     { payload: legacy, updateKey: "question_id" },
     { payload: legacyTextAnswers, updateKey: "question_id" },
     { payload: legacyCorrectText, updateKey: "question_id" },
@@ -169,6 +182,22 @@ export async function POST(request: Request) {
         return Response.json({ ok: true, saved: true, questions: listed.data });
       }
       errors.push(res.error.message);
+      if (
+        !id &&
+        res.error.message.toLowerCase().includes("null value in column \"test_id\"") &&
+        !Object.prototype.hasOwnProperty.call(normalizedPayload, "test_id")
+      ) {
+        for (const candidate of testIdCandidates) {
+          const withTestId = { ...normalizedPayload, test_id: candidate };
+          const retryRes = await supabase.from("test_questions").insert(withTestId);
+          if (!retryRes.error) {
+            const listed = await listQuestions();
+            if (listed.error) return Response.json({ ok: true, saved: true, warning: listed.error });
+            return Response.json({ ok: true, saved: true, questions: listed.data });
+          }
+          errors.push(retryRes.error.message);
+        }
+      }
       const missingColumn = extractMissingColumn(res.error.message);
       if (!missingColumn) break;
       const removed = deleteKeyInsensitive(payload, missingColumn);
