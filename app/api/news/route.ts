@@ -53,6 +53,11 @@ function fallbackSeedRows(limit: number) {
   }));
 }
 
+function isMissingColumn(message: string, column: string) {
+  const lower = message.toLowerCase();
+  return lower.includes("column") && lower.includes(column.toLowerCase()) && lower.includes("does not exist");
+}
+
 export async function GET(request: Request) {
   const session = await getServerSession();
   if (!session) return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
@@ -71,6 +76,7 @@ export async function GET(request: Request) {
       return Response.json({ ok: false, error: q.error.message || "news_query_failed" }, { status: 500 });
     }
     const rows: unknown[] = (q.data as unknown[]) || [];
+    if (!rows.length) return Response.json({ ok: true, rows: fallbackSeedRows(limit), degraded: true });
     return Response.json({ ok: true, rows: normalizeNewsRows(rows as Array<Record<string, unknown>>) });
   } catch (error) {
     return Response.json({ ok: true, rows: fallbackSeedRows(limit), degraded: true });
@@ -132,6 +138,28 @@ export async function POST(request: Request) {
           text,
           priority,
           author,
+        });
+      }
+    }
+    if (insertQ.error && isMissingColumn(insertQ.error.message || "", "author")) {
+      insertQ = await supabase.from("news").insert({
+        title,
+        body: text,
+        priority,
+        format: textStyle,
+      });
+      if (insertQ.error && insertQ.error.message.toLowerCase().includes("format")) {
+        insertQ = await supabase.from("news").insert({
+          title,
+          body: text,
+          priority,
+        });
+      }
+      if (insertQ.error && insertQ.error.message.toLowerCase().includes("body")) {
+        insertQ = await supabase.from("news").insert({
+          title,
+          text,
+          priority,
         });
       }
     }

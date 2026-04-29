@@ -4,12 +4,13 @@ import { useEffect, useState } from "react";
 import { readClientSession } from "@/lib/client-auth";
 import { formatDate } from "@/lib/format";
 import { canManageNews } from "@/lib/permissions";
+import { isUpdateNews, NewsBody } from "@/lib/news-text";
 import { deleteNews, fetchNews, normalizeNewsTextStyle, updateNews } from "@/lib/news-repository";
 import { NewsItem } from "@/lib/types";
 
 export default function NewsPage() {
   const [news, setNews] = useState<NewsItem[]>([]);
-  const [filter, setFilter] = useState<"all" | "high">("all");
+  const [filter, setFilter] = useState<"all" | "high" | "update">("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
@@ -34,7 +35,11 @@ export default function NewsPage() {
     void load();
   }, []);
 
-  const visible = news.filter((item) => (filter === "all" ? true : item.priority === "high"));
+  const visible = news.filter((item) => {
+    if (filter === "high") return item.priority === "high";
+    if (filter === "update") return isUpdateNews(item);
+    return true;
+  });
 
   const onEdit = async (item: NewsItem) => {
     const nextTitle = window.prompt("Заголовок новости", item.title)?.trim();
@@ -75,6 +80,9 @@ export default function NewsPage() {
         <button className={`chip ${filter === "high" ? "active" : ""}`} onClick={() => setFilter("high")} type="button">
           Важные
         </button>
+        <button className={`chip ${filter === "update" ? "active" : ""}`} onClick={() => setFilter("update")} type="button">
+          Update
+        </button>
       </div>
       {info && (
         <p className="page-subtitle" style={{ marginTop: 10 }}>
@@ -112,10 +120,10 @@ export default function NewsPage() {
               <h3>{item.title}</h3>
               <div className="meta" style={{ marginTop: 8 }}>
                 <span className={`pill ${item.priority === "high" ? "pill-red" : ""}`}>
-                  {item.priority === "high" ? "Важно" : "Новость"}
+                  {item.priority === "high" ? "Важно" : isUpdateNews(item) ? "Update" : "Новость"}
                 </span>
                 <span>{formatDate(item.createdAt)}</span>
-                <span>{item.author}</span>
+                <span>{item.author || "Автор не указан"}</span>
               </div>
               {canEditNews && (
                 <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
@@ -141,7 +149,7 @@ export default function NewsPage() {
                   </button>
                 </div>
               )}
-              <p
+              <NewsBody
                 className="page-subtitle"
                 style={{
                   marginTop: 10,
@@ -151,9 +159,8 @@ export default function NewsPage() {
                   fontStyle: normalizeNewsTextStyle(item.textStyle).italic ? "italic" : "normal",
                   textDecoration: normalizeNewsTextStyle(item.textStyle).underline ? "underline" : "none",
                 }}
-              >
-                {item.body}
-              </p>
+                body={item.body}
+              />
             </div>
           </article>
         ))}

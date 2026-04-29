@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { readClientSession } from "@/lib/client-auth";
+import { formatDate } from "@/lib/format";
 import {
   createNews,
   DEFAULT_NEWS_TEXT_STYLE,
@@ -10,6 +11,7 @@ import {
   normalizeNewsTextStyle,
   updateNews,
 } from "@/lib/news-repository";
+import { applyMarkupToSelection, isUpdateNews, NewsBody } from "@/lib/news-text";
 import { NewsItem } from "@/lib/types";
 
 export default function AdminNewsPage() {
@@ -23,6 +25,8 @@ export default function AdminNewsPage() {
   const [info, setInfo] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [filter, setFilter] = useState<"all" | "high" | "update">("all");
+  const bodyRef = useRef<HTMLTextAreaElement | null>(null);
 
   const refresh = async (force = false) => {
     setIsLoading(true);
@@ -56,7 +60,7 @@ export default function AdminNewsPage() {
           title,
           body,
           priority,
-          author: session?.name || session?.callsign || "Редактор",
+          author: [session?.name, session?.callsign].filter(Boolean).join(" ").trim() || "Редактор",
           textStyle,
         });
     if (!result.ok) {
@@ -89,14 +93,48 @@ export default function AdminNewsPage() {
     await refresh(true);
   };
 
+  const applySelectionTag = (tag: "b" | "i" | "u") => {
+    const textarea = bodyRef.current;
+    if (!textarea) return;
+    const { selectionStart, selectionEnd, value } = textarea;
+    const next = applyMarkupToSelection({ value, start: selectionStart, end: selectionEnd, tag });
+    setBody(next.nextValue);
+    window.requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(next.caretStart, next.caretEnd);
+    });
+  };
+
+  const visibleNews = news.filter((item) => {
+    if (filter === "high") return item.priority === "high";
+    if (filter === "update") return isUpdateNews(item);
+    return true;
+  });
+
   return (
     <section>
       <h1 className="page-title">Админ / Новости</h1>
       <div className="card">
         <div className="card-body">
           <form className="form" onSubmit={onSubmit}>
+            <div className="chips" style={{ marginBottom: 4 }}>
+              <button className={`chip ${filter === "all" ? "active" : ""}`} onClick={() => setFilter("all")} type="button">
+                Все
+              </button>
+              <button className={`chip ${filter === "high" ? "active" : ""}`} onClick={() => setFilter("high")} type="button">
+                Важные
+              </button>
+              <button
+                className={`chip ${filter === "update" ? "active" : ""}`}
+                onClick={() => setFilter("update")}
+                type="button"
+              >
+                Update
+              </button>
+            </div>
             <input className="input" placeholder="Заголовок" value={title} onChange={(e) => setTitle(e.target.value)} required />
             <textarea
+              ref={bodyRef}
               className="input"
               placeholder="Текст новости"
               value={body}
@@ -104,6 +142,39 @@ export default function AdminNewsPage() {
               style={{ minHeight: 120 }}
               required
             />
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button className="btn" type="button" onClick={() => applySelectionTag("b")}>
+                Жирный
+              </button>
+              <button className="btn" type="button" onClick={() => applySelectionTag("i")}>
+                Курсив
+              </button>
+              <button className="btn" type="button" onClick={() => applySelectionTag("u")}>
+                Подчеркнутый
+              </button>
+            </div>
+            <div
+              className="card"
+              style={{ marginTop: 2, borderStyle: "dashed", borderColor: "var(--line)", background: "transparent" }}
+            >
+              <div className="card-body">
+                <p className="label" style={{ marginBottom: 8 }}>
+                  Предпросмотр
+                </p>
+                <NewsBody
+                  className="page-subtitle"
+                  style={{
+                    marginTop: 0,
+                    marginBottom: 0,
+                    fontSize: textStyle.fontSize,
+                    fontWeight: textStyle.bold ? 700 : 400,
+                    fontStyle: textStyle.italic ? "italic" : "normal",
+                    textDecoration: textStyle.underline ? "underline" : "none",
+                  }}
+                  body={body || "Текст новости"}
+                />
+              </div>
+            </div>
             <select className="select" value={priority} onChange={(e) => setPriority(e.target.value as typeof priority)}>
               <option value="normal">Обычная</option>
               <option value="high">Важная</option>
@@ -122,32 +193,7 @@ export default function AdminNewsPage() {
                   }
                 />
               </div>
-              <div style={{ display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap" }}>
-                <label className="label" style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  <input
-                    type="checkbox"
-                    checked={textStyle.bold}
-                    onChange={(e) => setTextStyle((prev) => ({ ...prev, bold: e.target.checked }))}
-                  />
-                  Жирный
-                </label>
-                <label className="label" style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  <input
-                    type="checkbox"
-                    checked={textStyle.italic}
-                    onChange={(e) => setTextStyle((prev) => ({ ...prev, italic: e.target.checked }))}
-                  />
-                  Курсив
-                </label>
-                <label className="label" style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  <input
-                    type="checkbox"
-                    checked={textStyle.underline}
-                    onChange={(e) => setTextStyle((prev) => ({ ...prev, underline: e.target.checked }))}
-                  />
-                  Подчеркнутый
-                </label>
-              </div>
+              <div />
             </div>
             <button className="btn btn-primary" type="submit">
               {editingId ? "Сохранить изменения" : "Опубликовать"}
@@ -182,10 +228,17 @@ export default function AdminNewsPage() {
             </button>
           </div>
         )}
-        {news.map((item) => (
+        {visibleNews.map((item) => (
           <article className="card" key={item.id}>
             <div className="card-body">
               <h3>{item.title}</h3>
+              <div className="meta" style={{ marginTop: 8 }}>
+                <span className={`pill ${item.priority === "high" ? "pill-red" : ""}`}>
+                  {item.priority === "high" ? "Важно" : isUpdateNews(item) ? "Update" : "Новость"}
+                </span>
+                <span>{formatDate(item.createdAt)}</span>
+                <span>{item.author || "Автор не указан"}</span>
+              </div>
               <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                 <button
                   className="btn"
@@ -208,7 +261,7 @@ export default function AdminNewsPage() {
                   🗑
                 </button>
               </div>
-              <p
+              <NewsBody
                 className="page-subtitle"
                 style={{
                   marginTop: 8,
@@ -218,9 +271,8 @@ export default function AdminNewsPage() {
                   fontStyle: normalizeNewsTextStyle(item.textStyle).italic ? "italic" : "normal",
                   textDecoration: normalizeNewsTextStyle(item.textStyle).underline ? "underline" : "none",
                 }}
-              >
-                {item.body}
-              </p>
+                body={item.body}
+              />
             </div>
           </article>
         ))}
