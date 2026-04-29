@@ -402,11 +402,6 @@ export async function loginUser(login: string, password: string) {
         refresh_token: serverResult.auth.refreshToken,
       })
       .catch(() => undefined);
-    await fetch("/api/presence", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ online: true }),
-    }).catch(() => undefined);
     return { ok: true as const, session: normalizeSessionUser(serverResult.session) };
   }
 
@@ -498,12 +493,6 @@ export async function loginUser(login: string, password: string) {
   if (!loginTrim.includes("@") && successfulEmail) {
     cacheEmailForLogin(loginTrim, successfulEmail);
   }
-
-  await fetch("/api/presence", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ online: true }),
-  }).catch(() => undefined);
 
   return { ok: true as const, session: toSessionUser(row) };
 }

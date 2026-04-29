@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
+import { SESSION_COOKIE } from "@/lib/seed";
 import { loginUser, persistSession, requestPasswordReset } from "@/lib/users-repository";
 
 const AUTH_REQUEST_TIMEOUT_MS = 18000;
@@ -50,6 +51,12 @@ export default function LoginPage() {
 
   useEffect(() => {
     // If a stale session still exists when login page opens, mark presence as offline.
+    if (typeof document === "undefined") return;
+    const hasSessionCookie = document.cookie
+      .split(";")
+      .map((part) => part.trim())
+      .some((part) => part.startsWith(`${SESSION_COOKIE}=`));
+    if (!hasSessionCookie) return;
     void fetch("/api/presence", {
       method: "POST",
       headers: { "content-type": "application/json" },
