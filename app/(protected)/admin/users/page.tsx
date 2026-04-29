@@ -307,7 +307,9 @@ export default function AdminUsersPage() {
                   </td>
                   <td>
                     <div className="admin-users-role-position">
-                      <span className="admin-users-role-text">{user.role === "admin" ? "Администратор" : "Сотрудник"}</span>
+                      <span className={`admin-users-role-text ${user.role === "admin" ? "is-admin" : "is-employee"}`}>
+                        {user.role === "admin" ? "Администратор" : "Сотрудник"}
+                      </span>
                       <div className={`admin-users-position-badge ${getPositionBadgeClass(user.position)}`}>
                         {user.position}
                       </div>
@@ -383,7 +385,9 @@ export default function AdminUsersPage() {
                     </span>
                   </div>
                   <div className="admin-users-role-position">
-                    <span className="admin-users-role-text">{user.role === "admin" ? "Администратор" : "Сотрудник"}</span>
+                    <span className={`admin-users-role-text ${user.role === "admin" ? "is-admin" : "is-employee"}`}>
+                      {user.role === "admin" ? "Администратор" : "Сотрудник"}
+                    </span>
                     <div className={`admin-users-position-badge ${getPositionBadgeClass(user.position)}`}>
                       {user.position}
                     </div>

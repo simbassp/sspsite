@@ -852,6 +852,11 @@ html[data-theme="dark"] .chip:not(.active):hover {
   line-height: 1.2;
 }
 
+.admin-users-role-text.is-admin {
+  color: #6d28d9 !important;
+  font-weight: 700;
+}
+
 .admin-users-perms-text {
   max-width: 260px;
   display: inline-block;
