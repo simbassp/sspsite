@@ -621,7 +621,7 @@ export async function saveAdminQuestion(question: {
 }) {
   if (!isSupabaseConfigured) {
     upsertTestQuestion({ ...question });
-    return true;
+    return { ok: true as const };
   }
   const supabase = getSupabaseBrowserClient();
   const fullPayload: Record<string, unknown> = {
@@ -634,13 +634,13 @@ export async function saveAdminQuestion(question: {
     is_active: question.isActive,
   };
   const fullPayloadWithId = question.id ? { ...fullPayload, id: question.id } : fullPayload;
-
-  // Основная попытка — с полным набором полей.
-  let upsertRes = await supabase.from("test_questions").upsert(fullPayloadWithId, { onConflict: "id" });
+  let writeRes = question.id
+    ? await supabase.from("test_questions").update(fullPayload).eq("id", question.id)
+    : await supabase.from("test_questions").insert(fullPayloadWithId);
 
   // Если схема БД старая и не знает какие‑то колонки (time_limit_sec / order_index / is_active),
   // пробуем более минимальный набор, который совместим с любой версией.
-  if (upsertRes.error && isMissingColumnError(upsertRes.error.message)) {
+  if (writeRes.error && isMissingColumnError(writeRes.error.message)) {
     const minimalPayload: Record<string, unknown> = {
       type: question.type,
       text: question.text,
@@ -648,9 +648,19 @@ export async function saveAdminQuestion(question: {
       correct_index: question.correctIndex,
     };
     const minimalPayloadWithId = question.id ? { ...minimalPayload, id: question.id } : minimalPayload;
-    upsertRes = await supabase.from("test_questions").upsert(minimalPayloadWithId, { onConflict: "id" });
+    writeRes = question.id
+      ? await supabase.from("test_questions").update(minimalPayload).eq("id", question.id)
+      : await supabase.from("test_questions").insert(minimalPayloadWithId);
   }
-  if (upsertRes.error && isMissingColumnError(upsertRes.error.message)) {
+  if (writeRes.error) {
+    const fullByQuestionId = question.id
+      ? await supabase.from("test_questions").update(fullPayload).eq("question_id", question.id)
+      : null;
+    if (fullByQuestionId && !fullByQuestionId.error) {
+      return { ok: true as const };
+    }
+  }
+  if (writeRes.error && isMissingColumnError(writeRes.error.message)) {
     const legacyPayload: Record<string, unknown> = {
       test_type: question.type,
       question: question.text,
@@ -659,15 +669,17 @@ export async function saveAdminQuestion(question: {
       active: question.isActive,
       order: question.order,
     };
-    const legacyPayloadWithId = question.id ? { ...legacyPayload, id: question.id } : legacyPayload;
-    upsertRes = await supabase.from("test_questions").upsert(legacyPayloadWithId, { onConflict: "id" });
+    const legacyPayloadWithId = question.id ? { ...legacyPayload, question_id: question.id } : legacyPayload;
+    writeRes = question.id
+      ? await supabase.from("test_questions").update(legacyPayload).eq("question_id", question.id)
+      : await supabase.from("test_questions").insert(legacyPayloadWithId);
   }
 
-  if (upsertRes.error) {
+  if (writeRes.error) {
     upsertTestQuestion({ ...question });
-    return false;
+    return { ok: false as const, error: writeRes.error.message };
   }
-  return true;
+  return { ok: true as const };
 }
 
 export async function deleteAdminQuestion(questionId: string) {

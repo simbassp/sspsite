@@ -174,8 +174,8 @@ export default function AdminTestsPage() {
       order: Math.max(1, currentOrder),
       isActive: draft.isActive,
     });
-    if (!saved) {
-      setMessage("Не удалось сохранить в базе. Проверьте права или схему таблицы test_questions.");
+    if (!saved.ok) {
+      setMessage(`Не удалось сохранить в базе: ${saved.error || "проверьте права или схему таблицы test_questions."}`);
       return;
     }
     setMessage(draft.id ? "Вопрос обновлен." : "Вопрос добавлен.");
