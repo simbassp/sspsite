@@ -47,6 +47,8 @@ export default function ProfilePage() {
   const [isOnline, setIsOnline] = useState(true);
   const [fieldError, setFieldError] = useState<{ name?: string; callsign?: string }>({});
   const [isResettingStats, setIsResettingStats] = useState(false);
+  const [showAllAttempts, setShowAllAttempts] = useState(false);
+  const [attemptsPage, setAttemptsPage] = useState(1);
   const canManageInvites = session?.role === "admin" || session?.permissions.users === true;
 
   useEffect(() => {
@@ -387,7 +389,27 @@ export default function ProfilePage() {
     setSettingsMessage("Профиль сохранён");
   };
 
-  const visibleAttempts = rows;
+  const ATTEMPTS_PER_PAGE = 10;
+  const attemptsTotalPages = Math.max(1, Math.ceil(rows.length / ATTEMPTS_PER_PAGE));
+  const safeAttemptsPage = Math.min(attemptsPage, attemptsTotalPages);
+  const pagedAttempts = rows.slice(
+    (safeAttemptsPage - 1) * ATTEMPTS_PER_PAGE,
+    safeAttemptsPage * ATTEMPTS_PER_PAGE,
+  );
+  const visibleAttempts = showAllAttempts ? pagedAttempts : rows.slice(0, 3);
+  const canExpandAttempts = rows.length > 3;
+  const canPaginateAttempts = showAllAttempts && attemptsTotalPages > 1;
+
+  useEffect(() => {
+    if (!showAllAttempts && attemptsPage !== 1) {
+      setAttemptsPage(1);
+      return;
+    }
+    if (attemptsPage > attemptsTotalPages) {
+      setAttemptsPage(attemptsTotalPages);
+    }
+  }, [attemptsPage, attemptsTotalPages, showAllAttempts]);
+
   const onResetStats = async () => {
     if (isResettingStats) return;
     if (
@@ -821,9 +843,23 @@ export default function ProfilePage() {
         <div className="card-body">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <h3>Последние попытки</h3>
-            <Link href="/tests" className="btn">
-              Перейти к тестам
-            </Link>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {canExpandAttempts && (
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => {
+                    setShowAllAttempts((prev) => !prev);
+                    setAttemptsPage(1);
+                  }}
+                >
+                  {showAllAttempts ? "Показать последние 3" : "Показать все"}
+                </button>
+              )}
+              <Link href="/tests" className="btn">
+                Перейти к тестам
+              </Link>
+            </div>
           </div>
           {!rows.length ? (
             <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
@@ -867,6 +903,53 @@ export default function ProfilePage() {
                   );
                 })}
               </div>
+              {canPaginateAttempts && (
+                <div
+                  style={{
+                    marginTop: 12,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <button
+                    className="btn"
+                    type="button"
+                    disabled={safeAttemptsPage <= 1}
+                    onClick={() => setAttemptsPage((prev) => Math.max(1, prev - 1))}
+                  >
+                    ‹
+                  </button>
+                  {Array.from({ length: attemptsTotalPages }, (_, idx) => idx + 1).map((pageNum) => (
+                    <button
+                      key={pageNum}
+                      className="btn"
+                      type="button"
+                      onClick={() => setAttemptsPage(pageNum)}
+                      style={
+                        pageNum === safeAttemptsPage
+                          ? {
+                              borderColor: "color-mix(in srgb, var(--accent) 55%, var(--line))",
+                              background: "color-mix(in srgb, var(--accent) 12%, var(--panel))",
+                            }
+                          : undefined
+                      }
+                    >
+                      {pageNum}
+                    </button>
+                  ))}
+                  <button
+                    className="btn"
+                    type="button"
+                    disabled={safeAttemptsPage >= attemptsTotalPages}
+                    onClick={() => setAttemptsPage((prev) => Math.min(attemptsTotalPages, prev + 1))}
+                  >
+                    ›
+                  </button>
+                </div>
+              )}
             </>
           )}
         </div>
