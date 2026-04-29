@@ -129,6 +129,14 @@ export async function POST(request: Request) {
       author,
       format: formatPayload,
     });
+    if (insertQ.error && isMissingColumn(insertQ.error.message || "", "priority")) {
+      insertQ = await supabase.from("news").insert({
+        title,
+        body: text,
+        author,
+        format: formatPayload,
+      });
+    }
 
     if (insertQ.error && isMissingColumn(insertQ.error.message || "", "format")) {
       insertQ = await supabase.from("news").insert({
@@ -137,6 +145,13 @@ export async function POST(request: Request) {
         priority,
         author,
       });
+      if (insertQ.error && isMissingColumn(insertQ.error.message || "", "priority")) {
+        insertQ = await supabase.from("news").insert({
+          title,
+          body: text,
+          author,
+        });
+      }
     }
     if (insertQ.error && isMissingColumn(insertQ.error.message || "", "body")) {
       insertQ = await supabase.from("news").insert({
@@ -146,6 +161,14 @@ export async function POST(request: Request) {
         author,
         format: formatPayload,
       });
+      if (insertQ.error && isMissingColumn(insertQ.error.message || "", "priority")) {
+        insertQ = await supabase.from("news").insert({
+          title,
+          text,
+          author,
+          format: formatPayload,
+        });
+      }
       if (insertQ.error && isMissingColumn(insertQ.error.message || "", "format")) {
         insertQ = await supabase.from("news").insert({
           title,
@@ -153,6 +176,13 @@ export async function POST(request: Request) {
           priority,
           author,
         });
+        if (insertQ.error && isMissingColumn(insertQ.error.message || "", "priority")) {
+          insertQ = await supabase.from("news").insert({
+            title,
+            text,
+            author,
+          });
+        }
       }
     }
     if (insertQ.error && isMissingColumn(insertQ.error.message || "", "author")) {
@@ -162,12 +192,25 @@ export async function POST(request: Request) {
         priority,
         format: formatPayload,
       });
+      if (insertQ.error && isMissingColumn(insertQ.error.message || "", "priority")) {
+        insertQ = await supabase.from("news").insert({
+          title,
+          body: text,
+          format: formatPayload,
+        });
+      }
       if (insertQ.error && isMissingColumn(insertQ.error.message || "", "format")) {
         insertQ = await supabase.from("news").insert({
           title,
           body: text,
           priority,
         });
+        if (insertQ.error && isMissingColumn(insertQ.error.message || "", "priority")) {
+          insertQ = await supabase.from("news").insert({
+            title,
+            body: text,
+          });
+        }
       }
       if (insertQ.error && isMissingColumn(insertQ.error.message || "", "body")) {
         insertQ = await supabase.from("news").insert({
@@ -175,6 +218,12 @@ export async function POST(request: Request) {
           text,
           priority,
         });
+        if (insertQ.error && isMissingColumn(insertQ.error.message || "", "priority")) {
+          insertQ = await supabase.from("news").insert({
+            title,
+            text,
+          });
+        }
       }
     }
     if (insertQ.error) return Response.json({ ok: false, error: insertQ.error.message }, { status: 500 });

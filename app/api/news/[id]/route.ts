@@ -70,13 +70,25 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
     const supabase = getServerSupabaseServiceClient();
     let updateQ = await supabase.from("news").update({ title, body: text, priority, format: formatPayload }).eq("id", id);
+    if (updateQ.error && isMissingColumn(updateQ.error.message || "", "priority")) {
+      updateQ = await supabase.from("news").update({ title, body: text, format: formatPayload }).eq("id", id);
+    }
     if (updateQ.error && isMissingColumn(updateQ.error.message || "", "format")) {
       updateQ = await supabase.from("news").update({ title, body: text, priority }).eq("id", id);
+      if (updateQ.error && isMissingColumn(updateQ.error.message || "", "priority")) {
+        updateQ = await supabase.from("news").update({ title, body: text }).eq("id", id);
+      }
     }
     if (updateQ.error && isMissingColumn(updateQ.error.message || "", "body")) {
       updateQ = await supabase.from("news").update({ title, text, priority, format: formatPayload }).eq("id", id);
+      if (updateQ.error && isMissingColumn(updateQ.error.message || "", "priority")) {
+        updateQ = await supabase.from("news").update({ title, text, format: formatPayload }).eq("id", id);
+      }
       if (updateQ.error && isMissingColumn(updateQ.error.message || "", "format")) {
         updateQ = await supabase.from("news").update({ title, text, priority }).eq("id", id);
+        if (updateQ.error && isMissingColumn(updateQ.error.message || "", "priority")) {
+          updateQ = await supabase.from("news").update({ title, text }).eq("id", id);
+        }
       }
     }
     if (updateQ.error) return Response.json({ ok: false, error: updateQ.error.message }, { status: 500 });
