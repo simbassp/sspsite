@@ -182,8 +182,9 @@ export async function POST(request: Request) {
   };
 
   const supabase = getServerSupabaseServiceClient();
+  const normalizedType: "trial" | "final" = body.type === "trial" ? "trial" : "final";
   const base = {
-    type: body.type === "trial" ? "trial" : "final",
+    type: normalizedType,
     text: String(body.text || ""),
     options: Array.isArray(body.options) ? body.options.map((v) => String(v)) : [],
     correct_index: Number(body.correctIndex ?? 0),
