@@ -848,10 +848,19 @@ export async function createInviteCode(input: { code: string; maxUses: number | 
   if (!normalizedCode) {
     return { ok: false as const, error: "Введите код приглашения." };
   }
+  if (normalizedCode.length < 3 || normalizedCode.length > 40) {
+    return { ok: false as const, error: "Длина кода должна быть от 3 до 40 символов." };
+  }
+  if (!/^[A-Z0-9-]+$/.test(normalizedCode)) {
+    return { ok: false as const, error: "Используйте только латинские буквы, цифры и дефисы." };
+  }
 
   if (!isSupabaseConfigured) {
     const current = readLocalInvites();
     const exists = current.some((row) => row.code.toLowerCase() === normalizedCode.toLowerCase());
+    if (exists) {
+      return { ok: false as const, error: "Такой код уже существует." };
+    }
     const nextRow: InviteCodeRecord = {
       code: normalizedCode,
       isActive: true,
@@ -859,21 +868,26 @@ export async function createInviteCode(input: { code: string; maxUses: number | 
       usedCount: 0,
       createdAt: new Date().toISOString(),
     };
-    const next = exists
-      ? current.map((row) => (row.code.toLowerCase() === normalizedCode.toLowerCase() ? nextRow : row))
-      : [nextRow, ...current];
+    const next = [nextRow, ...current];
     writeLocalInvites(next);
     return { ok: true as const };
   }
 
   const supabase = getSupabaseBrowserClient();
-  const { error } = await supabase.from("registration_invites").upsert(
+  const { data: existing, error: existingError } = await supabase
+    .from("registration_invites")
+    .select("code")
+    .eq("code", normalizedCode)
+    .maybeSingle();
+  if (!existingError && existing) {
+    return { ok: false as const, error: "Такой код уже существует." };
+  }
+  const { error } = await supabase.from("registration_invites").insert(
     {
       code: normalizedCode,
       is_active: true,
       max_uses: maxUses,
     },
-    { onConflict: "code" },
   );
   if (error) {
     return { ok: false as const, error: error.message };
@@ -889,6 +903,16 @@ export async function disableInviteCode(code: string) {
   }
   const supabase = getSupabaseBrowserClient();
   await supabase.from("registration_invites").update({ is_active: false }).eq("code", code.trim().toUpperCase());
+}
+
+export async function enableInviteCode(code: string) {
+  if (!isSupabaseConfigured) {
+    const next = readLocalInvites().map((row) => (row.code === code ? { ...row, isActive: true } : row));
+    writeLocalInvites(next);
+    return;
+  }
+  const supabase = getSupabaseBrowserClient();
+  await supabase.from("registration_invites").update({ is_active: true }).eq("code", code.trim().toUpperCase());
 }
 
 export async function removeInviteCode(code: string) {

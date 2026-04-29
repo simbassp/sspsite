@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { readClientSession } from "@/lib/client-auth";
 import { formatDate } from "@/lib/format";
@@ -7,6 +8,7 @@ import { isSupabaseConfigured } from "@/lib/supabase";
 import {
   createInviteCode,
   disableInviteCode,
+  enableInviteCode,
   fetchCurrentAuthEmail,
   InviteCodeRecord,
   persistSession,
@@ -41,9 +43,10 @@ export default function ProfilePage() {
   const [isInviteLoading, setIsInviteLoading] = useState(false);
   const [profileNameInput, setProfileNameInput] = useState(() => session?.name ?? "");
   const [profileCallsignInput, setProfileCallsignInput] = useState(() => session?.callsign ?? "");
-  const [onlineNames, setOnlineNames] = useState<string[]>([]);
-  const [totalUsers, setTotalUsers] = useState<number | null>(null);
-  const [onlineError, setOnlineError] = useState("");
+  const [showAllAttempts, setShowAllAttempts] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
+  const [fieldError, setFieldError] = useState<{ name?: string; callsign?: string }>({});
+  const canManageInvites = session?.role === "admin" || session?.permissions.users === true;
 
   useEffect(() => {
     if (!session) return;
@@ -71,15 +74,20 @@ export default function ProfilePage() {
           status: r.status === "passed" ? "passed" : "failed",
           score: Number(r.score || 0),
           createdAt: String(r.created_at),
+          questionsTotal: r.questions_total === null || r.questions_total === undefined ? null : Number(r.questions_total),
+          questionsCorrect:
+            r.questions_correct === null || r.questions_correct === undefined ? null : Number(r.questions_correct),
+          finalAttemptIndex:
+            r.final_attempt_index === null || r.final_attempt_index === undefined ? null : Number(r.final_attempt_index),
         })) as TestResult[];
-        setRows(mappedRows);
+        setRows(mappedRows.sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)));
         if (typeof payload.email === "string" && payload.email) {
           setEmailInput(payload.email);
         } else {
           const emailResult = await fetchCurrentAuthEmail();
           if (!cancelled && emailResult.ok) setEmailInput(emailResult.email);
         }
-        if (session.role === "admin") {
+        if (canManageInvites) {
           setIsInviteLoading(true);
           const mappedInvites = (payload.inviteCodes || []).map((x) => ({
             code: String(x.code),
@@ -100,45 +108,26 @@ export default function ProfilePage() {
     return () => {
       cancelled = true;
     };
-  }, [session]);
+  }, [session, canManageInvites]);
 
   useEffect(() => {
-    if (!session) return;
-    if (session.role !== "admin" && session.permissions.online !== true) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const response = await fetch("/api/presence/online", { cache: "no-store" });
-        const payload = (await response.json()) as {
-          ok?: boolean;
-          names?: unknown;
-          total_users?: unknown;
-          error?: string;
-        };
-        if (!response.ok || payload.ok !== true || !Array.isArray(payload.names)) {
-          if (!cancelled) setOnlineError(payload.error || "online_load_failed");
-          return;
-        }
-        if (!cancelled) {
-          setOnlineError("");
-          setOnlineNames(payload.names.map((x) => String(x)));
-          setTotalUsers(typeof payload.total_users === "number" ? payload.total_users : null);
-        }
-      } catch {
-        if (!cancelled) setOnlineError("online_load_failed");
-      }
-    })();
+    const sync = () => setIsOnline(typeof navigator !== "undefined" ? navigator.onLine : true);
+    sync();
+    window.addEventListener("online", sync);
+    window.addEventListener("offline", sync);
     return () => {
-      cancelled = true;
+      window.removeEventListener("online", sync);
+      window.removeEventListener("offline", sync);
     };
-  }, [session]);
+  }, []);
 
   const stats = useMemo(() => {
-    if (!session) return { average: 0, best: 0, total: 0 };
+    if (!session) return { total: 0, passed: 0, successRate: 0, averageTimeSec: null as number | null, lastAttempt: null as TestResult | null };
     const total = rows.length;
-    const average = total ? Math.round(rows.reduce((acc, r) => acc + r.score, 0) / total) : 0;
-    const best = total ? Math.max(...rows.map((r) => r.score)) : 0;
-    return { average, best, total };
+    const passed = rows.filter((r) => r.status === "passed").length;
+    const successRate = total ? Math.round((passed / total) * 100) : 0;
+    const lastAttempt = rows[0] ?? null;
+    return { total, passed, successRate, averageTimeSec: null, lastAttempt };
   }, [rows, session]);
 
   if (!session) {
@@ -151,7 +140,7 @@ export default function ProfilePage() {
   };
 
   const refreshInvites = async () => {
-    if (session.role !== "admin") return;
+    if (!canManageInvites) return;
     const response = await fetch("/api/profile/bootstrap", { cache: "no-store" });
     const payload = (await response.json()) as { ok?: boolean; inviteCodes?: Array<Record<string, unknown>> };
     if (!response.ok || !payload.ok || !Array.isArray(payload.inviteCodes)) return;
@@ -163,36 +152,58 @@ export default function ProfilePage() {
       createdAt: String(x.created_at || ""),
     })) as InviteCodeRecord[];
     setInviteCodes(mapped);
-  };
+  };  
 
   const onCreateInvite = async () => {
-    if (session.role !== "admin") return;
+    if (!canManageInvites) return;
     setAdminMessage("");
+    const normalizedCode = inviteInput.trim().toUpperCase();
+    if (!normalizedCode) {
+      setAdminMessage("Введите код приглашения");
+      return;
+    }
+    if (!/^[A-Z0-9-]{3,40}$/.test(normalizedCode)) {
+      setAdminMessage("Используйте только латинские буквы, цифры и дефисы");
+      return;
+    }
     const maxUses = maxUsesInput.trim() ? Number(maxUsesInput.trim()) : null;
+    if (maxUses !== null && (!Number.isInteger(maxUses) || maxUses <= 0)) {
+      setAdminMessage("Введите положительное число");
+      return;
+    }
     const result = await createInviteCode({
-      code: inviteInput.trim(),
+      code: normalizedCode,
       maxUses: Number.isFinite(maxUses) && maxUses !== null ? maxUses : null,
     });
     if (!result.ok) {
       setAdminMessage(result.error);
       return;
     }
-    setAdminMessage("Код приглашения сохранен.");
+    setAdminMessage("Код приглашения создан.");
     setInviteInput("");
     setMaxUsesInput("");
     await refreshInvites();
   };
 
   const onDisableInvite = async (code: string) => {
-    if (session.role !== "admin") return;
+    if (!canManageInvites) return;
     setAdminMessage("");
     await disableInviteCode(code);
     setAdminMessage(`Код ${code} отключен.`);
     await refreshInvites();
   };
 
+  const onEnableInvite = async (code: string) => {
+    if (!canManageInvites) return;
+    setAdminMessage("");
+    await enableInviteCode(code);
+    setAdminMessage(`Код ${code} включен.`);
+    await refreshInvites();
+  };
+
   const onDeleteInvite = async (code: string) => {
-    if (session.role !== "admin") return;
+    if (!canManageInvites) return;
+    if (!window.confirm(`Удалить код ${code}?`)) return;
     setAdminMessage("");
     await removeInviteCode(code);
     setAdminMessage(`Код ${code} удален.`);
@@ -283,9 +294,19 @@ export default function ProfilePage() {
 
   const onSaveProfile = async () => {
     setSettingsMessage("");
+    setFieldError({});
+    const trimmedName = profileNameInput.trim();
+    const trimmedCallsign = profileCallsignInput.trim();
+    const nextError: { name?: string; callsign?: string } = {};
+    if (trimmedName.length < 2) nextError.name = "Минимум 2 символа";
+    if (trimmedCallsign.length < 2) nextError.callsign = "Минимум 2 символа";
+    if (nextError.name || nextError.callsign) {
+      setFieldError(nextError);
+      return;
+    }
     const result = await updateCurrentUserProfile({
-      name: profileNameInput,
-      callsign: profileCallsignInput,
+      name: trimmedName,
+      callsign: trimmedCallsign,
     });
     if (!result.ok) {
       setSettingsMessage(result.error);
@@ -296,62 +317,45 @@ export default function ProfilePage() {
       name: result.name,
       callsign: result.callsign,
     });
-    setSettingsMessage("Профиль обновлен.");
+    setSettingsMessage("Профиль сохранён");
   };
 
+  const visibleAttempts = showAllAttempts ? rows : rows.slice(0, 5);
+
   return (
-    <section>
+    <section className="profile-page">
       <h1 className="page-title">Профиль</h1>
       {isInitialLoading && <p className="page-subtitle">Загружаем профиль...</p>}
       {!!initialLoadError && <p className="page-subtitle">{initialLoadError}</p>}
-      {(session.role === "admin" || session.permissions.online === true) && (
-        <article className="card" style={{ marginBottom: 12 }}>
-          <div className="card-body">
-            <p className="label">Пользователи и активность</p>
-            <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
-              Всего пользователей: {totalUsers !== null ? totalUsers : "—"}
-            </p>
-            <p className="page-subtitle" style={{ marginTop: 10, marginBottom: 0 }}>
-              Онлайн
-              {onlineNames.length > 0
-                ? `: ${onlineNames.join(", ")}`
-                : onlineError
-                  ? ": не удалось загрузить список."
-                  : ": сейчас никого нет."}
-            </p>
-          </div>
-        </article>
-      )}
+
       <article className="card">
         <div className="card-body">
-          <h3>{profileNameInput || session.name}</h3>
-          <p className="page-subtitle" style={{ marginTop: 8 }}>
-            {(profileCallsignInput || session.callsign) + " • " + session.position}
-          </p>
-          <div className="grid grid-two">
-            <div className="card">
-              <div className="card-body">
-                <p className="label">Средний балл</p>
-                <p className="stat-value">{stats.average}%</p>
-              </div>
+          <h3>Пользовательский профиль</h3>
+          <div className="grid" style={{ marginTop: 10, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
+            <div>
+              <p className="label">Пользователь</p>
+              <p style={{ fontWeight: 700, marginTop: 6 }}>{profileNameInput || session.name}</p>
             </div>
-            <div className="card">
-              <div className="card-body">
-                <p className="label">Лучшая попытка</p>
-                <p className="stat-value">{stats.best}%</p>
-              </div>
+            <div>
+              <p className="label">Роль</p>
+              <p style={{ fontWeight: 700, marginTop: 6 }}>
+                {session.role === "admin" ? "Администратор" : session.position || "Специалист"}
+              </p>
             </div>
-            <div className="card">
-              <div className="card-body">
-                <p className="label">Всего попыток</p>
-                <p className="stat-value">{stats.total}</p>
-              </div>
-            </div>
-            <div className="card">
-              <div className="card-body">
-                <p className="label">План на будущее</p>
-                <p style={{ marginTop: 8 }}>Вход по Face ID / отпечатку / WebAuthn (подготовлено).</p>
-              </div>
+            <div>
+              <p className="label">Статус</p>
+              <p style={{ fontWeight: 700, marginTop: 6, display: "flex", alignItems: "center", gap: 8 }}>
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: 999,
+                    background: isOnline ? "var(--ok)" : "var(--muted)",
+                    display: "inline-block",
+                  }}
+                />
+                {isOnline ? "Онлайн" : "Офлайн"}
+              </p>
             </div>
           </div>
         </div>
@@ -365,20 +369,36 @@ export default function ProfilePage() {
           </p>
 
           <div className="form" style={{ marginTop: 10 }}>
-            <label className="label">Имя</label>
-            <input
-              className="input"
-              value={profileNameInput}
-              onChange={(e) => setProfileNameInput(e.target.value)}
-              placeholder="Ваше имя"
-            />
-            <label className="label">Позывной</label>
-            <input
-              className="input"
-              value={profileCallsignInput}
-              onChange={(e) => setProfileCallsignInput(e.target.value)}
-              placeholder="Ваш позывной"
-            />
+            <div className="grid grid-two">
+              <div>
+                <label className="label">Имя</label>
+                <input
+                  className="input"
+                  value={profileNameInput}
+                  onChange={(e) => setProfileNameInput(e.target.value)}
+                  placeholder="Ваше имя"
+                />
+                {!!fieldError.name && (
+                  <p className="page-subtitle" style={{ marginTop: 4, marginBottom: 0, color: "var(--bad)" }}>
+                    {fieldError.name}
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="label">Позывной</label>
+                <input
+                  className="input"
+                  value={profileCallsignInput}
+                  onChange={(e) => setProfileCallsignInput(e.target.value)}
+                  placeholder="Ваш позывной"
+                />
+                {!!fieldError.callsign && (
+                  <p className="page-subtitle" style={{ marginTop: 4, marginBottom: 0, color: "var(--bad)" }}>
+                    {fieldError.callsign}
+                  </p>
+                )}
+              </div>
+            </div>
             <button className="btn" type="button" onClick={() => void onSaveProfile()}>
               Сохранить профиль
             </button>
@@ -521,12 +541,128 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {session.role === "admin" && (
+      <article className="card" style={{ marginTop: 12 }}>
+        <div className="card-body">
+          <h3>Ваша активность</h3>
+          {!rows.length ? (
+            <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
+              Статистика появится после прохождения первого теста.
+            </p>
+          ) : (
+            <>
+              <div className="grid" style={{ marginTop: 10, gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))" }}>
+                <div className="card">
+                  <div className="card-body">
+                    <p className="label">Всего тестов пройдено</p>
+                    <p className="stat-value">{stats.total}</p>
+                  </div>
+                </div>
+                <div className="card">
+                  <div className="card-body">
+                    <p className="label">Успешных попыток</p>
+                    <p className="stat-value">{stats.passed}</p>
+                    <p className="page-subtitle" style={{ marginBottom: 0 }}>
+                      {stats.successRate}%
+                    </p>
+                  </div>
+                </div>
+                <div className="card">
+                  <div className="card-body">
+                    <p className="label">Среднее время</p>
+                    <p className="stat-value">{stats.averageTimeSec !== null ? `${stats.averageTimeSec} сек` : "—"}</p>
+                  </div>
+                </div>
+                <div className="card">
+                  <div className="card-body">
+                    <p className="label">Последний тест</p>
+                    <p style={{ marginTop: 10, fontWeight: 700 }}>{stats.lastAttempt ? formatDate(stats.lastAttempt.createdAt) : "—"}</p>
+                  </div>
+                </div>
+              </div>
+              <div
+                style={{
+                  marginTop: 10,
+                  borderRadius: 12,
+                  border: "1px solid var(--line)",
+                  background: "color-mix(in srgb, var(--panel2) 70%, transparent)",
+                  padding: "10px 12px",
+                  color: "var(--muted)",
+                  fontSize: 13,
+                }}
+              >
+                Статистика обновляется после каждой попытки прохождения теста.
+              </div>
+            </>
+          )}
+        </div>
+      </article>
+
+      <article className="card" style={{ marginTop: 12 }}>
+        <div className="card-body">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <h3>Последние попытки</h3>
+            <Link href="/tests" className="btn">
+              Перейти к тестам
+            </Link>
+          </div>
+          {!rows.length ? (
+            <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
+              Пока нет попыток прохождения тестов.
+            </p>
+          ) : (
+            <>
+              <div className="list" style={{ marginTop: 10 }}>
+                {visibleAttempts.map((item) => {
+                  const statusText = item.status === "passed" ? "Сдан" : "Не сдан";
+                  const testName = item.type === "final" ? "Итоговый тест" : "Пробный тест";
+                  const finalAttempt = item.type === "final" ? item.finalAttemptIndex : null;
+                  const attemptText = finalAttempt ? `${finalAttempt} из 3` : item.type === "trial" ? "—" : "—";
+                  const dateText = formatDate(item.createdAt);
+                  return (
+                    <article className="card" key={item.id}>
+                      <div className="card-body">
+                        <div className="grid" style={{ gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 10 }}>
+                          <div>
+                            <p className="label">Тест</p>
+                            <p style={{ marginTop: 6, fontWeight: 700 }}>{testName}</p>
+                          </div>
+                          <div>
+                            <p className="label">Результат</p>
+                            <p style={{ marginTop: 6 }}>
+                              <span className={`pill ${item.status === "passed" ? "pill-green" : "pill-red"}`}>{statusText}</span>
+                            </p>
+                            <p style={{ marginTop: 6, fontWeight: 700 }}>{item.score}%</p>
+                          </div>
+                          <div>
+                            <p className="label">Попытка</p>
+                            <p style={{ marginTop: 6, fontWeight: 700 }}>{attemptText}</p>
+                          </div>
+                          <div>
+                            <p className="label">Дата и время</p>
+                            <p style={{ marginTop: 6, fontWeight: 700 }}>{dateText}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+              {rows.length > 5 && (
+                <button className="btn" style={{ marginTop: 10 }} type="button" onClick={() => setShowAllAttempts((v) => !v)}>
+                  {showAllAttempts ? "Скрыть" : "Показать все"}
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      </article>
+
+      {canManageInvites && (
         <article className="card" style={{ marginTop: 12 }}>
           <div className="card-body">
-            <h3>Коды приглашений для регистрации</h3>
+            <h3>Персональные коды приглашений</h3>
             <p className="page-subtitle" style={{ marginTop: 8 }}>
-              Создайте код, отправьте сотрудникам, потом отключите или удалите его.
+              Создавайте персональные коды регистрации, управляйте статусом и лимитами.
             </p>
 
             <div className="form" style={{ marginTop: 10 }}>
@@ -535,7 +671,7 @@ export default function ProfilePage() {
                 className="input"
                 placeholder="например: PVO-2026-ALPHA"
                 value={inviteInput}
-                onChange={(e) => setInviteInput(e.target.value)}
+                onChange={(e) => setInviteInput(e.target.value.toUpperCase())}
               />
               <button className="btn" type="button" onClick={createRandomCode}>
                 Сгенерировать код
@@ -560,7 +696,7 @@ export default function ProfilePage() {
               {inviteCodes.map((invite) => (
                 <article className="card" key={invite.code}>
                   <div className="card-body">
-                    <h3>{invite.code}</h3>
+                    <h3 style={{ marginBottom: 0 }}>{invite.code}</h3>
                     {(() => {
                       const exhausted = invite.maxUses !== null && invite.usedCount >= invite.maxUses;
                       return (
@@ -577,9 +713,13 @@ export default function ProfilePage() {
                       );
                     })()}
                     <div className="form" style={{ marginTop: 10 }}>
-                      {invite.isActive && (
+                      {invite.isActive ? (
                         <button className="btn" type="button" onClick={() => void onDisableInvite(invite.code)}>
                           Отключить
+                        </button>
+                      ) : (
+                        <button className="btn" type="button" onClick={() => void onEnableInvite(invite.code)}>
+                          Включить
                         </button>
                       )}
                       <button className="btn btn-danger" type="button" onClick={() => void onDeleteInvite(invite.code)}>
@@ -589,7 +729,7 @@ export default function ProfilePage() {
                   </div>
                 </article>
               ))}
-              {!inviteCodes.length && <p className="page-subtitle">Пока нет кодов приглашений.</p>}
+              {!inviteCodes.length && <p className="page-subtitle">Коды приглашений ещё не созданы.</p>}
               {isInviteLoading && <p className="page-subtitle">Загружаем коды приглашений...</p>}
             </div>
           </div>
