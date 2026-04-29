@@ -132,7 +132,7 @@ export default function AdminUsersPage() {
   };
 
   const visible = users.filter((item) => {
-    const matchesText = `${item.name} ${item.login}`.toLowerCase().includes(query.toLowerCase().trim());
+    const matchesText = `${item.name} ${item.callsign} ${item.login}`.toLowerCase().includes(query.toLowerCase().trim());
     const matchesRole = roleFilter === "all" ? true : item.role === roleFilter;
     return matchesText && matchesRole;
   });
@@ -190,7 +190,7 @@ export default function AdminUsersPage() {
                         {getInitials(user)}
                       </span>
                       <span>
-                        <strong>{user.name || "Без имени"}{user.callsign ? `, ${user.callsign}` : ""}</strong>
+                        <strong>{user.name || "Без имени"}{user.callsign ? ` ${user.callsign}` : ""}</strong>
                         <small>@{user.login}</small>
                       </span>
                     </div>
@@ -335,7 +335,7 @@ export default function AdminUsersPage() {
                       {getInitials(user)}
                     </span>
                     <span>
-                      <strong>{user.name || "Без имени"}{user.callsign ? `, ${user.callsign}` : ""}</strong>
+                      <strong>{user.name || "Без имени"}{user.callsign ? ` ${user.callsign}` : ""}</strong>
                       <small>@{user.login}</small>
                     </span>
                   </div>
