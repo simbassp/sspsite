@@ -73,7 +73,7 @@ export default function AdminNewsPage() {
     setBody("");
     setPriority("normal");
     setTextStyle(DEFAULT_NEWS_TEXT_STYLE);
-    await refresh();
+    await refresh(true);
   };
 
   const onEdit = (item: NewsItem) => {
@@ -93,7 +93,7 @@ export default function AdminNewsPage() {
     await refresh(true);
   };
 
-  const applySelectionTag = (tag: "b" | "i" | "u" | "size") => {
+  const applySelectionTag = (tag: "b" | "i" | "u") => {
     const textarea = bodyRef.current;
     if (!textarea) return;
     const { selectionStart, selectionEnd, value } = textarea;
@@ -102,7 +102,6 @@ export default function AdminNewsPage() {
       start: selectionStart,
       end: selectionEnd,
       tag,
-      sizePx: textStyle.fontSize,
     });
     setBody(next.nextValue);
     window.requestAnimationFrame(() => {
@@ -158,9 +157,6 @@ export default function AdminNewsPage() {
               <button className="btn" type="button" onClick={() => applySelectionTag("u")}>
                 Подчеркнутый
               </button>
-              <button className="btn" type="button" onClick={() => applySelectionTag("size")}>
-                Размер выделения
-              </button>
             </div>
             <div
               className="card"
@@ -188,22 +184,6 @@ export default function AdminNewsPage() {
               <option value="high">Важная</option>
               <option value="update">Update</option>
             </select>
-            <div className="grid grid-two">
-              <div>
-                <label className="label">Размер шрифта</label>
-                <input
-                  className="input"
-                  type="number"
-                  min={12}
-                  max={32}
-                  value={textStyle.fontSize}
-                  onChange={(e) =>
-                    setTextStyle((prev) => ({ ...prev, fontSize: Math.min(32, Math.max(12, Number(e.target.value) || 16)) }))
-                  }
-                />
-              </div>
-              <div />
-            </div>
             <button className="btn btn-primary" type="submit">
               {editingId ? "Сохранить изменения" : "Опубликовать"}
             </button>

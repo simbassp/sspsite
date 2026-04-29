@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { readClientSession } from "@/lib/client-auth";
 import { formatDate } from "@/lib/format";
 import { canManageNews } from "@/lib/permissions";
-import { isUpdateNews, NewsBody } from "@/lib/news-text";
+import { applyMarkupToSelection, isUpdateNews, NewsBody } from "@/lib/news-text";
 import { deleteNews, fetchNews, normalizeNewsTextStyle, updateNews } from "@/lib/news-repository";
 import { NewsItem } from "@/lib/types";
 
@@ -22,6 +22,7 @@ export default function NewsPage() {
     body: "",
     priority: "normal",
   });
+  const editBodyRef = useRef<HTMLTextAreaElement | null>(null);
 
   const load = async (forceRefresh = false) => {
     setLoading(true);
@@ -89,6 +90,18 @@ export default function NewsPage() {
       return;
     }
     await load(true);
+  };
+
+  const applyEditSelectionTag = (tag: "b" | "i" | "u") => {
+    const textarea = editBodyRef.current;
+    if (!textarea) return;
+    const { selectionStart, selectionEnd, value } = textarea;
+    const next = applyMarkupToSelection({ value, start: selectionStart, end: selectionEnd, tag });
+    setEditDraft((prev) => ({ ...prev, body: next.nextValue }));
+    window.requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(next.caretStart, next.caretEnd);
+    });
   };
 
   const onDelete = async (item: NewsItem) => {
@@ -161,12 +174,24 @@ export default function NewsPage() {
                     placeholder="Заголовок"
                   />
                   <textarea
+                    ref={editBodyRef}
                     className="input"
                     value={editDraft.body}
                     onChange={(e) => setEditDraft((prev) => ({ ...prev, body: e.target.value }))}
                     placeholder="Текст новости"
                     style={{ minHeight: 100 }}
                   />
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button className="btn" type="button" onClick={() => applyEditSelectionTag("b")}>
+                      Жирный
+                    </button>
+                    <button className="btn" type="button" onClick={() => applyEditSelectionTag("i")}>
+                      Курсив
+                    </button>
+                    <button className="btn" type="button" onClick={() => applyEditSelectionTag("u")}>
+                      Подчеркнутый
+                    </button>
+                  </div>
                   <select
                     className="select"
                     value={editDraft.priority}
