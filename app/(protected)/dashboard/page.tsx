@@ -132,7 +132,8 @@ function iconByType(type: HomeEvent["type"]) {
 }
 
 export default function DashboardPage() {
-  const session = useMemo(() => readClientSession(), []);
+  const [session, setSession] = useState<ReturnType<typeof readClientSession>>(null);
+  const [sessionResolved, setSessionResolved] = useState(false);
   const permissions = resolvePermissions(session);
   const canSeeUserStats = Boolean(permissions.users || permissions.online);
   const [events, setEvents] = useState<HomeEvent[]>([]);
@@ -249,6 +250,12 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
+    setSession(readClientSession());
+    setSessionResolved(true);
+  }, []);
+
+  useEffect(() => {
+    if (!sessionResolved) return;
     let cancelled = false;
     (async () => {
       await refresh();
@@ -257,7 +264,7 @@ export default function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sessionResolved]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const usersSummaryText = useMemo(() => {
     if (!usersSummary) return "";

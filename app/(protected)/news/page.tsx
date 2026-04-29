@@ -218,7 +218,7 @@ export default function NewsPage() {
                   {item.priority === "high" ? "Важно" : isUpdateNews(item) ? "Update" : "Новость"}
                 </span>
                 <span>{formatDate(item.createdAt)}</span>
-                <span>{item.author || "Автор не указан"}</span>
+                <span>{item.author || "Редактор"}</span>
               </div>
               {canEditNews && (
                 <div style={{ display: "flex", gap: 8, marginTop: 8 }}>

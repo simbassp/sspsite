@@ -109,7 +109,7 @@ export async function GET(request: Request) {
       return Response.json({ ok: true, rows: mapped });
     }
 
-    const usersQ = await supabase.from("app_users").select("id,name,callsign").in("id", candidateUserIds);
+    const usersQ = await supabase.from("app_users").select("id,auth_user_id,name,callsign");
     if (usersQ.error || !Array.isArray(usersQ.data)) {
       return Response.json({ ok: true, rows: mapped });
     }
@@ -117,11 +117,13 @@ export async function GET(request: Request) {
     const usersMap = new Map<string, { name: string; callsign: string }>();
     for (const user of usersQ.data as Array<Record<string, unknown>>) {
       const id = typeof user.id === "string" ? user.id : "";
-      if (!id) continue;
-      usersMap.set(id, {
+      const authUserId = typeof user.auth_user_id === "string" ? user.auth_user_id : "";
+      const person = {
         name: typeof user.name === "string" ? user.name.trim() : "",
         callsign: typeof user.callsign === "string" ? user.callsign.trim() : "",
-      });
+      };
+      if (id) usersMap.set(id, person);
+      if (authUserId) usersMap.set(authUserId, person);
     }
 
     const withAuthorFallback = mapped.map((item, idx) => {
