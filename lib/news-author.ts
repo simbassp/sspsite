@@ -4,6 +4,7 @@ export function isPlaceholderNewsAuthor(author: string) {
   if (!t) return true;
   if (t === "редактор") return true;
   if (t === "автор не указан") return true;
+  if (t === "пользователь") return true;
   if (t === "editor") return true;
   return false;
 }

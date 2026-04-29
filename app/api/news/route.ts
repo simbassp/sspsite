@@ -80,18 +80,26 @@ function isMissingColumn(message: string, column: string) {
 async function resolveNewsAuthorForInsert(
   supabase: ReturnType<typeof getServerSupabaseServiceClient>,
   session: SessionUser,
-): Promise<{ author: string; author_position: string | null; created_by: string }> {
+): Promise<{ author: string; author_position: string | null; created_by: string | null }> {
   let name = (session.name || "").trim();
   let callsign = (session.callsign || "").trim();
   let position = (session.position || "").trim();
+  let appUserId = (session.id || "").trim() || null;
 
-  if (!name && !callsign && session.id) {
-    const { data, error } = await supabase.from("app_users").select("name,callsign,position").eq("id", session.id).maybeSingle();
+  const needsProfileLookup = (!name && !callsign) || !position || !appUserId;
+  if (needsProfileLookup && session.id) {
+    const { data, error } = await supabase
+      .from("app_users")
+      .select("id,name,callsign,position")
+      .or(`id.eq.${session.id},auth_user_id.eq.${session.id}`)
+      .limit(1)
+      .maybeSingle();
     if (!error && data && typeof data === "object") {
       const r = data as Record<string, unknown>;
+      if (typeof r.id === "string" && r.id.trim()) appUserId = r.id.trim();
       if (typeof r.name === "string" && r.name.trim()) name = r.name.trim();
       if (typeof r.callsign === "string" && r.callsign.trim()) callsign = r.callsign.trim();
-      if (!position && typeof r.position === "string" && r.position.trim()) position = r.position.trim();
+      if (typeof r.position === "string" && r.position.trim()) position = r.position.trim();
     }
   }
 
@@ -99,7 +107,7 @@ async function resolveNewsAuthorForInsert(
   return {
     author: label || "Пользователь",
     author_position: position || null,
-    created_by: session.id,
+    created_by: appUserId,
   };
 }
 
@@ -124,7 +132,18 @@ export async function GET(request: Request) {
     if (!rows.length) return Response.json({ ok: true, rows: fallbackSeedRows(limit), degraded: true });
     const mapped = normalizeNewsRows(rows);
 
-    const needsAuthorEnrichment = (idx: number) => isPlaceholderNewsAuthor(mapped[idx]?.author ?? "");
+    const needsAuthorEnrichment = (idx: number) => {
+      const item = mapped[idx];
+      const row = rows[idx];
+      const hasCreator =
+        (typeof row.created_by === "string" && row.created_by.trim().length > 0) ||
+        (typeof row.author_id === "string" && row.author_id.trim().length > 0) ||
+        (typeof row.user_id === "string" && row.user_id.trim().length > 0) ||
+        (typeof row.created_by_user_id === "string" && row.created_by_user_id.trim().length > 0);
+      // Если есть ссылка на пользователя, всегда приоритезируем профиль из app_users.
+      if (hasCreator) return true;
+      return isPlaceholderNewsAuthor(item?.author ?? "");
+    };
 
     const candidateUserIds = Array.from(
       new Set(
@@ -217,15 +236,17 @@ export async function POST(request: Request) {
     const author_position = resolvedAuthor.author_position;
     const created_by = resolvedAuthor.created_by;
 
-    let insertQ = await supabase.from("news").insert({
+    let insertPayload: Record<string, unknown> = {
       title,
       body: text,
       priority,
       author,
       format: formatPayload,
-      author_position,
-      created_by,
-    });
+    };
+    if (author_position) insertPayload.author_position = author_position;
+    if (created_by) insertPayload.created_by = created_by;
+
+    let insertQ = await supabase.from("news").insert(insertPayload);
     if (
       insertQ.error &&
       (isMissingColumn(insertQ.error.message || "", "author_position") ||

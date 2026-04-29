@@ -14,8 +14,10 @@ const AUTHOR_POSITIONS: readonly Position[] = [
 ];
 
 function normalizeAuthorPosition(value: string | null | undefined): Position | null {
-  if (value == null || value === "") return null;
-  return (AUTHOR_POSITIONS as readonly string[]).includes(value) ? (value as Position) : null;
+  if (value == null || value.trim() === "") return null;
+  const normalized = value.trim().toLowerCase();
+  const matched = AUTHOR_POSITIONS.find((item) => item.toLowerCase() === normalized);
+  return matched ?? null;
 }
 
 type NewsRow = {
