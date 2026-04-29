@@ -181,15 +181,15 @@ export async function POST(request: Request) {
   }
 
   if (!authUserId || !accessToken || !refreshToken) {
-    return NextResponse.json({ ok: false, error: lastError }, { status: 401 });
+    return NextResponse.json({ ok: false, error: lastError });
   }
 
   const profile = await fetchProfile(baseUrl, supabaseAnonKey, accessToken, authUserId);
   if (!profile) {
-    return NextResponse.json({ ok: false, error: "Профиль пользователя не найден в app_users." }, { status: 404 });
+    return NextResponse.json({ ok: false, error: "Профиль пользователя не найден в app_users." });
   }
   if (profile.status !== "active") {
-    return NextResponse.json({ ok: false, error: "Пользователь деактивирован администратором." }, { status: 403 });
+    return NextResponse.json({ ok: false, error: "Пользователь деактивирован администратором." });
   }
 
   const hasGranularContentPermissions = [
