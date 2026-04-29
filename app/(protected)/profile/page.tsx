@@ -178,6 +178,21 @@ export default function ProfilePage() {
     return { totalByType, indexById };
   }, [rows]);
 
+  const averageDurationByType = useMemo(() => {
+    const byType: Record<"trial" | "final", number[]> = { trial: [], final: [] };
+    for (const row of rows) {
+      if (row.isCompleted === false) continue;
+      const duration = Number(row.durationSeconds ?? 0);
+      if (!Number.isFinite(duration) || duration <= 0) continue;
+      byType[row.type].push(duration);
+    }
+    const toAvg = (arr: number[]) => (arr.length ? Math.round(arr.reduce((acc, v) => acc + v, 0) / arr.length) : null);
+    return {
+      trial: toAvg(byType.trial),
+      final: toAvg(byType.final),
+    } as const;
+  }, [rows]);
+
   if (!sessionResolved) {
     return <p className="page-subtitle">Загружаем профиль...</p>;
   }
@@ -820,9 +835,8 @@ export default function ProfilePage() {
                 {visibleAttempts.map((item) => {
                   const statusText = item.status === "passed" ? "Сдан" : "Не сдан";
                   const testName = item.type === "final" ? "Итоговый тест" : "Пробный тест";
-                  const totalByType = attemptMeta.totalByType.get(item.type) ?? 0;
-                  const currentIndex = attemptMeta.indexById.get(item.id) ?? 0;
-                  const attemptText = totalByType > 0 && currentIndex > 0 ? `${currentIndex} из ${totalByType}` : "—";
+                  const avgTypeDuration = averageDurationByType[item.type];
+                  const avgDurationText = avgTypeDuration != null ? `${avgTypeDuration} сек` : "Нет данных";
                   const dateText = formatDateTime(item.createdAt);
                   return (
                     <article className="card" key={item.id}>
@@ -840,8 +854,8 @@ export default function ProfilePage() {
                             <p style={{ marginTop: 6, fontWeight: 700 }}>{item.score}%</p>
                           </div>
                           <div>
-                            <p className="label">Попытка</p>
-                            <p style={{ marginTop: 6, fontWeight: 700 }}>{attemptText}</p>
+                            <p className="label">Сред. время</p>
+                            <p style={{ marginTop: 6, fontWeight: 700 }}>{avgDurationText}</p>
                           </div>
                           <div>
                             <p className="label">Дата и время</p>
