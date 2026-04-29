@@ -438,7 +438,13 @@ export async function finishFinalAttempt(
   userId: string,
   score: number,
   passed: boolean,
-  meta?: { questionsTotal: number; questionsCorrect: number },
+  meta?: {
+    questionsTotal: number;
+    questionsCorrect: number;
+    startedAt?: string;
+    finishedAt?: string;
+    durationSeconds?: number;
+  },
 ) {
   if (!isSupabaseConfigured) {
     completeFinalAttempt(userId, score, passed, meta);
@@ -452,6 +458,10 @@ export async function finishFinalAttempt(
     score,
     ...(meta
       ? {
+          started_at: meta.startedAt,
+          finished_at: meta.finishedAt,
+          duration_seconds: meta.durationSeconds,
+          is_completed: true,
           questions_total: meta.questionsTotal,
           questions_correct: meta.questionsCorrect,
         }
