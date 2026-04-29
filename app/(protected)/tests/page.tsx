@@ -22,6 +22,7 @@ import { fetchUavItems } from "@/lib/uav-repository";
 import { TestConfig, TestQuestion, TestResult } from "@/lib/types";
 
 const TRIAL_FEEDBACK_MS = 2600;
+const QUESTION_START_COUNTDOWN_SEC = 3;
 
 function pickRandomQuestions(bank: TestQuestion[], count: number) {
   const cloned = [...bank];
@@ -68,6 +69,7 @@ export default function TestsPage() {
   const [historyError, setHistoryError] = useState("");
   const [isPoolLoading, setIsPoolLoading] = useState(false);
   const [isTestStarted, setIsTestStarted] = useState(false);
+  const [startCountdown, setStartCountdown] = useState<number | null>(null);
   const [finalTest, setFinalTest] = useState<FinalTestSummary | null>(null);
 
   useEffect(() => {
@@ -379,6 +381,25 @@ export default function TestsPage() {
   }, [currentQuestion?.id, activeTest, isTestStarted]);
 
   useEffect(() => {
+    if (!activeTest || !currentQuestion || isTestStarted) return;
+    setStartCountdown(QUESTION_START_COUNTDOWN_SEC);
+  }, [activeTest, currentQuestion?.id, isTestStarted]);
+
+  useEffect(() => {
+    if (startCountdown == null || startCountdown <= 0) return;
+    const timer = window.setTimeout(() => {
+      if (startCountdown === 1) {
+        setStartCountdown(null);
+        setIsTestStarted(true);
+        setTimeLeft(Math.max(1, currentQuestionRef.current?.timeLimitSec ?? 1));
+      } else {
+        setStartCountdown((prev) => (prev == null ? null : prev - 1));
+      }
+    }, 1000);
+    return () => window.clearTimeout(timer);
+  }, [startCountdown]);
+
+  useEffect(() => {
     if (!isTestStarted || !activeTest || !currentQuestion || trialFeedback) return;
     const id = window.setInterval(() => {
       setTimeLeft((prev) => {
@@ -612,20 +633,19 @@ export default function TestsPage() {
     setMessage(`Итоговый тест запущен: ${randomQuestions.length} случайных вопросов. Режим строгий.`);
   };
 
-  const onStartCurrentTest = () => {
-    if (!currentQuestion || !activeTest) return;
-    expireHandledForQuestionIdRef.current = null;
-    setTimeLeft(Math.max(1, currentQuestion.timeLimitSec));
-    setIsTestStarted(true);
+  const getTrialOptionState = (index: number) => {
+    if (activeTest !== "trial" || !trialFeedback) return "neutral";
+    const { chosen, correct } = trialFeedback;
+    if (index === correct) return "correct";
+    if (chosen !== null && index === chosen && chosen !== correct) return "wrong";
+    return "neutral";
   };
 
-  const trialOptionClassName = (index: number) => {
-    if (activeTest !== "trial" || !trialFeedback) return "btn";
-    const { chosen, correct } = trialFeedback;
-    if (index === correct) return "btn trial-feedback-btn--correct";
-    if (chosen !== null && index === chosen && chosen !== correct) return "btn trial-feedback-btn--wrong";
-    return "btn trial-feedback-btn--dim";
-  };
+  const optionLetter = (index: number) => String.fromCharCode(65 + index);
+  const timerRatio =
+    currentQuestion && currentQuestion.timeLimitSec > 0 ? Math.max(0, Math.min(1, timeLeft / currentQuestion.timeLimitSec)) : 0;
+  const timerHue = Math.round(120 * timerRatio);
+  const timerColor = `hsl(${timerHue}, 70%, 45%)`;
 
   return (
     <section className="tests-page">
@@ -738,8 +758,8 @@ export default function TestsPage() {
               {activeTest === "final" ? "Итоговый" : "Пробный"} вопрос {questionIndex + 1} / {activeQuestions.length}
             </p>
             <p className="page-subtitle" style={{ marginTop: 8 }}>
-              {!isTestStarted ? (
-                <>Нажмите кнопку ниже, чтобы начать вопрос. Таймер стартует после нажатия.</>
+              {!isTestStarted && startCountdown != null ? (
+                <>Начинаем через {startCountdown} с…</>
               ) : activeTest === "trial" && trialFeedback ? (
                 <>
                   {trialFeedback.chosen === null
@@ -750,23 +770,34 @@ export default function TestsPage() {
                   Следующий вопрос через {Math.ceil(TRIAL_FEEDBACK_MS / 1000)} с…
                 </>
               ) : (
-                <>
-                  Осталось времени: <strong>{timeLeft}</strong> сек
-                </>
+                <>Осталось времени на ответ:</>
               )}
             </p>
-            {!isTestStarted && (
-              <button className="btn btn-primary" type="button" onClick={onStartCurrentTest} style={{ marginTop: 8 }}>
-                Начать вопрос
-              </button>
-            )}
             {isTestStarted ? (
               <>
+                <div
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                    marginTop: 4,
+                    marginBottom: 10,
+                    padding: "7px 12px",
+                    borderRadius: 999,
+                    backgroundColor: `color-mix(in srgb, ${timerColor} 16%, var(--panel))`,
+                    border: `1px solid color-mix(in srgb, ${timerColor} 60%, transparent)`,
+                    color: timerColor,
+                    transition: "all .35s ease",
+                  }}
+                >
+                  <strong style={{ minWidth: 22, textAlign: "right" }}>{timeLeft}</strong>
+                  <span>секунд</span>
+                </div>
                 <h3 style={{ marginTop: 8 }}>{currentQuestion.text}</h3>
                 <div className="form" style={{ marginTop: 10 }}>
                   {currentQuestion.options.map((option, index) => (
                     <button
-                      className={trialOptionClassName(index)}
+                      className={`btn test-option-btn ${activeTest === "trial" && trialFeedback ? "test-option-btn--trial-reveal" : ""}`}
                       type="button"
                       key={`${currentQuestion.id}-${index}-${option}`}
                       disabled={(activeTest === "trial" && !!trialFeedback) || (activeTest === "final" && isAnswering)}
@@ -775,14 +806,15 @@ export default function TestsPage() {
                         else void submitFinalAnswer(index);
                       }}
                     >
-                      {option}
+                      <span className={`test-option-letter test-option-letter--${getTrialOptionState(index)}`}>{optionLetter(index)}</span>
+                      <span>{option}</span>
                     </button>
                   ))}
                 </div>
               </>
             ) : (
               <p className="page-subtitle" style={{ marginTop: 8 }}>
-                Вопрос будет показан после нажатия «Начать вопрос».
+                Готовим вопрос…
               </p>
             )}
           </div>
