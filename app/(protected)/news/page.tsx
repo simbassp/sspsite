@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { readClientSession } from "@/lib/client-auth";
 import { formatDate } from "@/lib/format";
-import { fetchNews } from "@/lib/news-repository";
+import { canManageNews } from "@/lib/permissions";
+import { deleteNews, fetchNews, normalizeNewsTextStyle, updateNews } from "@/lib/news-repository";
 import { NewsItem } from "@/lib/types";
 
 export default function NewsPage() {
@@ -10,6 +12,9 @@ export default function NewsPage() {
   const [filter, setFilter] = useState<"all" | "high">("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
+  const session = readClientSession();
+  const canEditNews = canManageNews(session);
 
   const load = async (forceRefresh = false) => {
     setLoading(true);
@@ -31,6 +36,33 @@ export default function NewsPage() {
 
   const visible = news.filter((item) => (filter === "all" ? true : item.priority === "high"));
 
+  const onEdit = async (item: NewsItem) => {
+    const nextTitle = window.prompt("Заголовок новости", item.title)?.trim();
+    if (!nextTitle) return;
+    const nextBody = window.prompt("Текст новости", item.body)?.trim();
+    if (!nextBody) return;
+    const nextPriorityRaw = window.prompt('Приоритет: "normal" или "high"', item.priority)?.trim().toLowerCase();
+    const nextPriority = nextPriorityRaw === "high" ? "high" : "normal";
+
+    const result = await updateNews({
+      id: item.id,
+      title: nextTitle,
+      body: nextBody,
+      priority: nextPriority,
+      textStyle: normalizeNewsTextStyle(item.textStyle),
+    });
+    setInfo(result.ok ? "Новость обновлена." : `Ошибка обновления: ${result.error}`);
+    await load(true);
+  };
+
+  const onDelete = async (item: NewsItem) => {
+    const ok = window.confirm(`Удалить новость "${item.title}"?`);
+    if (!ok) return;
+    const result = await deleteNews(item.id);
+    setInfo(result.ok ? "Новость удалена." : `Ошибка удаления: ${result.error}`);
+    await load(true);
+  };
+
   return (
     <section>
       <h1 className="page-title">Новости</h1>
@@ -44,6 +76,11 @@ export default function NewsPage() {
           Важные
         </button>
       </div>
+      {info && (
+        <p className="page-subtitle" style={{ marginTop: 10 }}>
+          {info}
+        </p>
+      )}
 
       <div className="list" style={{ marginTop: 12 }}>
         {loading && (
@@ -80,7 +117,41 @@ export default function NewsPage() {
                 <span>{formatDate(item.createdAt)}</span>
                 <span>{item.author}</span>
               </div>
-              <p className="page-subtitle" style={{ marginTop: 10, marginBottom: 0 }}>
+              {canEditNews && (
+                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                  <button
+                    className="btn"
+                    style={{ width: 38, height: 34, padding: 0, fontSize: 16, lineHeight: 1 }}
+                    type="button"
+                    title="Редактировать"
+                    aria-label={`Редактировать ${item.title}`}
+                    onClick={() => void onEdit(item)}
+                  >
+                    ✏
+                  </button>
+                  <button
+                    className="btn btn-danger"
+                    style={{ width: 38, height: 34, padding: 0, fontSize: 16, lineHeight: 1 }}
+                    type="button"
+                    title="Удалить"
+                    aria-label={`Удалить ${item.title}`}
+                    onClick={() => void onDelete(item)}
+                  >
+                    🗑
+                  </button>
+                </div>
+              )}
+              <p
+                className="page-subtitle"
+                style={{
+                  marginTop: 10,
+                  marginBottom: 0,
+                  fontSize: normalizeNewsTextStyle(item.textStyle).fontSize,
+                  fontWeight: normalizeNewsTextStyle(item.textStyle).bold ? 700 : 400,
+                  fontStyle: normalizeNewsTextStyle(item.textStyle).italic ? "italic" : "normal",
+                  textDecoration: normalizeNewsTextStyle(item.textStyle).underline ? "underline" : "none",
+                }}
+              >
                 {item.body}
               </p>
             </div>

@@ -2,7 +2,14 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { readClientSession } from "@/lib/client-auth";
-import { createNews, fetchNews } from "@/lib/news-repository";
+import {
+  createNews,
+  DEFAULT_NEWS_TEXT_STYLE,
+  deleteNews,
+  fetchNews,
+  normalizeNewsTextStyle,
+  updateNews,
+} from "@/lib/news-repository";
 import { NewsItem } from "@/lib/types";
 
 export default function AdminNewsPage() {
@@ -11,6 +18,8 @@ export default function AdminNewsPage() {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [priority, setPriority] = useState<"high" | "normal">("normal");
+  const [textStyle, setTextStyle] = useState(DEFAULT_NEWS_TEXT_STYLE);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [info, setInfo] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -35,21 +44,49 @@ export default function AdminNewsPage() {
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    const result = await createNews({
-      title,
-      body,
-      priority,
-      author: session?.name || session?.callsign || "Редактор",
-    });
+    const result = editingId
+      ? await updateNews({
+          id: editingId,
+          title,
+          body,
+          priority,
+          textStyle,
+        })
+      : await createNews({
+          title,
+          body,
+          priority,
+          author: session?.name || session?.callsign || "Редактор",
+          textStyle,
+        });
     if (!result.ok) {
-      setInfo(`Supabase недоступен, сохранено локально. Причина: ${result.error}`);
+      setInfo(`Ошибка: ${result.error}`);
     } else {
-      setInfo("Новость опубликована.");
+      setInfo(editingId ? "Новость обновлена." : "Новость опубликована.");
     }
+    setEditingId(null);
     setTitle("");
     setBody("");
     setPriority("normal");
+    setTextStyle(DEFAULT_NEWS_TEXT_STYLE);
     await refresh();
+  };
+
+  const onEdit = (item: NewsItem) => {
+    setEditingId(item.id);
+    setTitle(item.title);
+    setBody(item.body);
+    setPriority(item.priority);
+    setTextStyle(normalizeNewsTextStyle(item.textStyle));
+    setInfo("");
+  };
+
+  const onDelete = async (item: NewsItem) => {
+    const ok = typeof window === "undefined" ? true : window.confirm(`Удалить новость "${item.title}"?`);
+    if (!ok) return;
+    const result = await deleteNews(item.id);
+    setInfo(result.ok ? "Новость удалена." : `Ошибка удаления: ${result.error}`);
+    await refresh(true);
   };
 
   return (
@@ -71,9 +108,65 @@ export default function AdminNewsPage() {
               <option value="normal">Обычная</option>
               <option value="high">Важная</option>
             </select>
+            <div className="grid grid-two">
+              <div>
+                <label className="label">Размер шрифта</label>
+                <input
+                  className="input"
+                  type="number"
+                  min={12}
+                  max={32}
+                  value={textStyle.fontSize}
+                  onChange={(e) =>
+                    setTextStyle((prev) => ({ ...prev, fontSize: Math.min(32, Math.max(12, Number(e.target.value) || 16)) }))
+                  }
+                />
+              </div>
+              <div style={{ display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap" }}>
+                <label className="label" style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <input
+                    type="checkbox"
+                    checked={textStyle.bold}
+                    onChange={(e) => setTextStyle((prev) => ({ ...prev, bold: e.target.checked }))}
+                  />
+                  Жирный
+                </label>
+                <label className="label" style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <input
+                    type="checkbox"
+                    checked={textStyle.italic}
+                    onChange={(e) => setTextStyle((prev) => ({ ...prev, italic: e.target.checked }))}
+                  />
+                  Курсив
+                </label>
+                <label className="label" style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <input
+                    type="checkbox"
+                    checked={textStyle.underline}
+                    onChange={(e) => setTextStyle((prev) => ({ ...prev, underline: e.target.checked }))}
+                  />
+                  Подчеркнутый
+                </label>
+              </div>
+            </div>
             <button className="btn btn-primary" type="submit">
-              Опубликовать
+              {editingId ? "Сохранить изменения" : "Опубликовать"}
             </button>
+            {editingId && (
+              <button
+                className="btn"
+                type="button"
+                onClick={() => {
+                  setEditingId(null);
+                  setTitle("");
+                  setBody("");
+                  setPriority("normal");
+                  setTextStyle(DEFAULT_NEWS_TEXT_STYLE);
+                }}
+              >
+                Отменить редактирование
+              </button>
+            )}
             {info && <p className="page-subtitle">{info}</p>}
           </form>
         </div>
@@ -93,7 +186,39 @@ export default function AdminNewsPage() {
           <article className="card" key={item.id}>
             <div className="card-body">
               <h3>{item.title}</h3>
-              <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
+              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <button
+                  className="btn"
+                  style={{ width: 38, height: 34, padding: 0, fontSize: 16, lineHeight: 1 }}
+                  type="button"
+                  title="Редактировать"
+                  aria-label={`Редактировать ${item.title}`}
+                  onClick={() => onEdit(item)}
+                >
+                  ✏
+                </button>
+                <button
+                  className="btn btn-danger"
+                  style={{ width: 38, height: 34, padding: 0, fontSize: 16, lineHeight: 1 }}
+                  type="button"
+                  title="Удалить"
+                  aria-label={`Удалить ${item.title}`}
+                  onClick={() => void onDelete(item)}
+                >
+                  🗑
+                </button>
+              </div>
+              <p
+                className="page-subtitle"
+                style={{
+                  marginTop: 8,
+                  marginBottom: 0,
+                  fontSize: normalizeNewsTextStyle(item.textStyle).fontSize,
+                  fontWeight: normalizeNewsTextStyle(item.textStyle).bold ? 700 : 400,
+                  fontStyle: normalizeNewsTextStyle(item.textStyle).italic ? "italic" : "normal",
+                  textDecoration: normalizeNewsTextStyle(item.textStyle).underline ? "underline" : "none",
+                }}
+              >
                 {item.body}
               </p>
             </div>

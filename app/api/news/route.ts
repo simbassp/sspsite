@@ -1,11 +1,28 @@
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
+import { canManageNews } from "@/lib/permissions";
+import { seedData } from "@/lib/seed";
+import { NewsTextStyle } from "@/lib/types";
 
 export const runtime = "nodejs";
 
-function isMissingColumnError(message: string | undefined) {
-  const m = (message || "").toLowerCase();
-  return m.includes("column") && m.includes("does not exist");
+const DEFAULT_NEWS_TEXT_STYLE: NewsTextStyle = {
+  fontSize: 16,
+  bold: false,
+  italic: false,
+  underline: false,
+};
+
+function normalizeNewsTextStyle(input: unknown): NewsTextStyle {
+  if (!input || typeof input !== "object") return DEFAULT_NEWS_TEXT_STYLE;
+  const candidate = input as Partial<NewsTextStyle>;
+  const fontSizeRaw = Number(candidate.fontSize);
+  return {
+    fontSize: Number.isFinite(fontSizeRaw) ? Math.min(32, Math.max(12, Math.round(fontSizeRaw))) : 16,
+    bold: candidate.bold === true,
+    italic: candidate.italic === true,
+    underline: candidate.underline === true,
+  };
 }
 
 function normalizeNewsRows(rows: Array<Record<string, unknown>>) {
@@ -18,6 +35,21 @@ function normalizeNewsRows(rows: Array<Record<string, unknown>>) {
     priority: row.priority === "high" ? "high" : "normal",
     author: typeof row.author === "string" ? row.author : "",
     created_at: row.created_at,
+    format: normalizeNewsTextStyle(row.format),
+  }));
+}
+
+function fallbackSeedRows(limit: number) {
+  return seedData.news.slice(0, limit).map((item) => ({
+    id: item.id,
+    title: item.title,
+    body: item.body,
+    text: item.body,
+    content: item.body,
+    priority: item.priority,
+    author: item.author,
+    created_at: item.createdAt,
+    format: normalizeNewsTextStyle(item.textStyle),
   }));
 }
 
@@ -30,54 +62,85 @@ export async function GET(request: Request) {
 
   try {
     const supabase = getServerSupabaseServiceClient();
-    const primaryQ = await supabase
-      .from("news")
-      .select("id,title,body,text,content,priority,author,created_at")
-      .order("created_at", { ascending: false })
-      .limit(limit);
-    let rows: unknown[] = (primaryQ.data as unknown[]) || [];
-    let queryError: string | null = primaryQ.error?.message || null;
-    if (primaryQ.error && isMissingColumnError(primaryQ.error.message)) {
-      const bodyQ = await supabase
-        .from("news")
-        .select("id,title,body,priority,author,created_at")
-        .order("created_at", { ascending: false })
-        .limit(limit);
-      rows = (bodyQ.data as unknown[]) || [];
-      queryError = bodyQ.error?.message || null;
+    const q = await supabase.from("news").select("*").order("created_at", { ascending: false }).limit(limit);
+    if (q.error) {
+      const message = (q.error.message || "").toLowerCase();
+      if (message.includes("relation") && message.includes("news")) {
+        return Response.json({ ok: true, rows: fallbackSeedRows(limit), degraded: true });
+      }
+      return Response.json({ ok: false, error: q.error.message || "news_query_failed" }, { status: 500 });
     }
-    if (queryError && isMissingColumnError(queryError)) {
-      const textQ = await supabase
-        .from("news")
-        .select("id,title,text,priority,author,created_at")
-        .order("created_at", { ascending: false })
-        .limit(limit);
-      rows = (textQ.data as unknown[]) || [];
-      queryError = textQ.error?.message || null;
-    }
-    if (queryError && isMissingColumnError(queryError)) {
-      const contentQ = await supabase
-        .from("news")
-        .select("id,title,content,priority,author,created_at")
-        .order("created_at", { ascending: false })
-        .limit(limit);
-      rows = (contentQ.data as unknown[]) || [];
-      queryError = contentQ.error?.message || null;
-    }
-    if (queryError && isMissingColumnError(queryError)) {
-      const minimalQ = await supabase
-        .from("news")
-        .select("id,title,body,text,content,created_at")
-        .order("created_at", { ascending: false })
-        .limit(limit);
-      rows = (minimalQ.data as unknown[]) || [];
-      queryError = minimalQ.error?.message || null;
-    }
-    if (queryError) return Response.json({ ok: false, error: queryError }, { status: 500 });
+    const rows: unknown[] = (q.data as unknown[]) || [];
     return Response.json({ ok: true, rows: normalizeNewsRows(rows as Array<Record<string, unknown>>) });
   } catch (error) {
+    return Response.json({ ok: true, rows: fallbackSeedRows(limit), degraded: true });
+  }
+}
+
+export async function POST(request: Request) {
+  const session = await getServerSession();
+  if (!session) return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
+  if (!canManageNews(session)) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+
+  try {
+    const body = (await request.json()) as {
+      title?: unknown;
+      body?: unknown;
+      priority?: unknown;
+      author?: unknown;
+      textStyle?: unknown;
+    };
+
+    const title = String(body.title || "").trim();
+    const text = String(body.body || "").trim();
+    const priority = body.priority === "high" ? "high" : "normal";
+    const author = String(body.author || session.name || session.callsign || "Редактор").trim();
+    const textStyle = normalizeNewsTextStyle(body.textStyle);
+
+    if (!title || !text) {
+      return Response.json({ ok: false, error: "title_and_body_required" }, { status: 400 });
+    }
+
+    const supabase = getServerSupabaseServiceClient();
+    let insertQ = await supabase.from("news").insert({
+      title,
+      body: text,
+      priority,
+      author,
+      format: textStyle,
+    });
+
+    if (insertQ.error && insertQ.error.message.toLowerCase().includes("format")) {
+      insertQ = await supabase.from("news").insert({
+        title,
+        body: text,
+        priority,
+        author,
+      });
+    }
+    if (insertQ.error && insertQ.error.message.toLowerCase().includes("body")) {
+      insertQ = await supabase.from("news").insert({
+        title,
+        text,
+        priority,
+        author,
+        format: textStyle,
+      });
+      if (insertQ.error && insertQ.error.message.toLowerCase().includes("format")) {
+        insertQ = await supabase.from("news").insert({
+          title,
+          text,
+          priority,
+          author,
+        });
+      }
+    }
+    if (insertQ.error) return Response.json({ ok: false, error: insertQ.error.message }, { status: 500 });
+
+    return Response.json({ ok: true });
+  } catch (error) {
     return Response.json(
-      { ok: false, error: error instanceof Error ? error.message : "news_exception" },
+      { ok: false, error: error instanceof Error ? error.message : "news_create_exception" },
       { status: 500 },
     );
   }

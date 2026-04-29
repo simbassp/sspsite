@@ -47,6 +47,14 @@ export interface NewsItem {
   priority: "high" | "normal";
   createdAt: string;
   author: string;
+  textStyle?: NewsTextStyle;
+}
+
+export interface NewsTextStyle {
+  fontSize: number;
+  bold: boolean;
+  italic: boolean;
+  underline: boolean;
 }
 
 export interface CatalogItem {

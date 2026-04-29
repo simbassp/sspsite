@@ -41,6 +41,7 @@ create table if not exists public.news (
   id uuid primary key default gen_random_uuid(),
   title text not null,
   body text not null,
+  format jsonb not null default '{}'::jsonb,
   priority public.news_priority not null default 'normal',
   author text not null,
   created_at timestamptz not null default now()

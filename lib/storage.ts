@@ -216,7 +216,13 @@ export function listNews() {
   return readData().news;
 }
 
-export function addNews(payload: { title: string; body: string; priority: "high" | "normal"; author: string }) {
+export function addNews(payload: {
+  title: string;
+  body: string;
+  priority: "high" | "normal";
+  author: string;
+  textStyle?: { fontSize: number; bold: boolean; italic: boolean; underline: boolean };
+}) {
   const data = readData();
   data.news.unshift({
     id: uid("n"),
@@ -225,7 +231,28 @@ export function addNews(payload: { title: string; body: string; priority: "high"
     priority: payload.priority,
     author: payload.author,
     createdAt: new Date().toISOString(),
+    textStyle: payload.textStyle,
   });
+  writeData(data);
+}
+
+export function updateNewsItem(
+  id: string,
+  patch: {
+    title?: string;
+    body?: string;
+    priority?: "high" | "normal";
+    textStyle?: { fontSize: number; bold: boolean; italic: boolean; underline: boolean };
+  },
+) {
+  const data = readData();
+  data.news = data.news.map((item) => (item.id === id ? { ...item, ...patch } : item));
+  writeData(data);
+}
+
+export function removeNewsItem(id: string) {
+  const data = readData();
+  data.news = data.news.filter((item) => item.id !== id);
   writeData(data);
 }
 

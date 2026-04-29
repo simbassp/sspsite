@@ -1,9 +1,9 @@
 "use client";
 
-import { listNews, addNews } from "@/lib/storage";
-import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
+import { addNews, listNews, removeNewsItem, updateNewsItem } from "@/lib/storage";
+import { isSupabaseConfigured } from "@/lib/supabase";
 import { withTimeoutAndRetry } from "@/lib/async-utils";
-import { NewsItem } from "@/lib/types";
+import { NewsItem, NewsTextStyle } from "@/lib/types";
 
 type NewsRow = {
   id: string;
@@ -14,11 +14,30 @@ type NewsRow = {
   priority: "high" | "normal";
   author: string;
   created_at: string;
+  format?: unknown;
 };
 
 const NEWS_CACHE_TTL_MS = 60_000;
 const NEWS_CACHE_KEY = "ssp_news_cache_v1";
 let newsMemoryCache: { ts: number; rows: NewsItem[] } | null = null;
+const DEFAULT_NEWS_TEXT_STYLE: NewsTextStyle = {
+  fontSize: 16,
+  bold: false,
+  italic: false,
+  underline: false,
+};
+
+function normalizeNewsTextStyle(input: unknown): NewsTextStyle {
+  if (!input || typeof input !== "object") return DEFAULT_NEWS_TEXT_STYLE;
+  const candidate = input as Partial<NewsTextStyle>;
+  const fontSizeRaw = Number(candidate.fontSize);
+  return {
+    fontSize: Number.isFinite(fontSizeRaw) ? Math.min(32, Math.max(12, Math.round(fontSizeRaw))) : 16,
+    bold: candidate.bold === true,
+    italic: candidate.italic === true,
+    underline: candidate.underline === true,
+  };
+}
 
 function mapNewsRow(row: NewsRow): NewsItem {
   const body = row.body ?? row.text ?? row.content ?? "";
@@ -26,9 +45,10 @@ function mapNewsRow(row: NewsRow): NewsItem {
     id: row.id,
     title: row.title,
     body,
-    priority: row.priority,
+    priority: row.priority === "high" ? "high" : "normal",
     author: row.author,
     createdAt: row.created_at,
+    textStyle: normalizeNewsTextStyle(row.format),
   };
 }
 
@@ -99,34 +119,93 @@ export async function fetchNews(limit = 40, forceRefresh = false): Promise<NewsI
   }
 }
 
-export async function createNews(payload: { title: string; body: string; priority: "high" | "normal"; author: string }) {
+export async function createNews(payload: {
+  title: string;
+  body: string;
+  priority: "high" | "normal";
+  author: string;
+  textStyle?: NewsTextStyle;
+}) {
+  const normalizedStyle = normalizeNewsTextStyle(payload.textStyle);
   if (!isSupabaseConfigured) {
-    addNews(payload);
+    addNews({ ...payload, textStyle: normalizedStyle });
     return { ok: true as const };
   }
 
-  const supabase = getSupabaseBrowserClient();
-  let { error } = await supabase.from("news").insert({
-    title: payload.title,
-    body: payload.body,
-    priority: payload.priority,
-    author: payload.author,
-  });
-  if (error && error.message.toLowerCase().includes("body")) {
-    // Compatibility fallback for environments where news text column is named differently.
-    const retry = await supabase.from("news").insert({
-      title: payload.title,
-      text: payload.body,
-      priority: payload.priority,
-      author: payload.author,
+  try {
+    const response = await fetch("/api/news", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ...payload, textStyle: normalizedStyle }),
     });
-    error = retry.error;
+    if (!response.ok) {
+      const data = (await response.json().catch(() => ({}))) as { error?: string };
+      addNews({ ...payload, textStyle: normalizedStyle });
+      return { ok: false as const, error: data.error || `request_failed_${response.status}` };
+    }
+    return { ok: true as const };
+  } catch {
+    addNews({ ...payload, textStyle: normalizedStyle });
+    return { ok: false as const, error: "network_error" };
   }
-
-  if (error) {
-    addNews(payload);
-    return { ok: false as const, error: error.message };
-  }
-
-  return { ok: true as const };
 }
+
+export async function updateNews(input: {
+  id: string;
+  title: string;
+  body: string;
+  priority: "high" | "normal";
+  textStyle: NewsTextStyle;
+}) {
+  const normalizedStyle = normalizeNewsTextStyle(input.textStyle);
+  if (!isSupabaseConfigured) {
+    updateNewsItem(input.id, {
+      title: input.title,
+      body: input.body,
+      priority: input.priority,
+      textStyle: normalizedStyle,
+    });
+    return { ok: true as const };
+  }
+
+  try {
+    const response = await fetch(`/api/news/${input.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        title: input.title,
+        body: input.body,
+        priority: input.priority,
+        textStyle: normalizedStyle,
+      }),
+    });
+    if (!response.ok) {
+      const data = (await response.json().catch(() => ({}))) as { error?: string };
+      return { ok: false as const, error: data.error || `request_failed_${response.status}` };
+    }
+    return { ok: true as const };
+  } catch {
+    return { ok: false as const, error: "network_error" };
+  }
+}
+
+export async function deleteNews(id: string) {
+  if (!isSupabaseConfigured) {
+    removeNewsItem(id);
+    return { ok: true as const };
+  }
+
+  try {
+    const response = await fetch(`/api/news/${id}`, { method: "DELETE" });
+    if (!response.ok) {
+      const data = (await response.json().catch(() => ({}))) as { error?: string };
+      return { ok: false as const, error: data.error || `request_failed_${response.status}` };
+    }
+    return { ok: true as const };
+  } catch {
+    return { ok: false as const, error: "network_error" };
+  }
+}
+
+export { DEFAULT_NEWS_TEXT_STYLE, normalizeNewsTextStyle };
+
