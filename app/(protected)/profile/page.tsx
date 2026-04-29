@@ -350,6 +350,65 @@ export default function ProfilePage() {
       marginRight: 8,
       flex: "0 0 auto",
     }) as const;
+  const iconStroke = (color: string) =>
+    ({
+      width: 14,
+      height: 14,
+      color,
+      stroke: "currentColor",
+      fill: "none",
+      strokeWidth: 1.8,
+      strokeLinecap: "round",
+      strokeLinejoin: "round",
+      display: "block",
+    }) as const;
+
+  const UserIcon = ({ color }: { color: string }) => (
+    <svg viewBox="0 0 24 24" aria-hidden="true" style={iconStroke(color)}>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 20c1.8-3.6 4.2-5 8-5s6.2 1.4 8 5" />
+    </svg>
+  );
+
+  const ShieldIcon = ({ color }: { color: string }) => (
+    <svg viewBox="0 0 24 24" aria-hidden="true" style={iconStroke(color)}>
+      <path d="M12 3l7 3v6c0 4.2-2.8 7.8-7 9-4.2-1.2-7-4.8-7-9V6l7-3z" />
+    </svg>
+  );
+
+  const ListIcon = ({ color }: { color: string }) => (
+    <svg viewBox="0 0 24 24" aria-hidden="true" style={iconStroke(color)}>
+      <line x1="9" y1="7" x2="20" y2="7" />
+      <line x1="9" y1="12" x2="20" y2="12" />
+      <line x1="9" y1="17" x2="20" y2="17" />
+      <circle cx="5" cy="7" r="1" />
+      <circle cx="5" cy="12" r="1" />
+      <circle cx="5" cy="17" r="1" />
+    </svg>
+  );
+
+  const CheckIcon = ({ color }: { color: string }) => (
+    <svg viewBox="0 0 24 24" aria-hidden="true" style={iconStroke(color)}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M8 12.5l2.7 2.7L16 10" />
+    </svg>
+  );
+
+  const ClockIcon = ({ color }: { color: string }) => (
+    <svg viewBox="0 0 24 24" aria-hidden="true" style={iconStroke(color)}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </svg>
+  );
+
+  const CalendarIcon = ({ color }: { color: string }) => (
+    <svg viewBox="0 0 24 24" aria-hidden="true" style={iconStroke(color)}>
+      <rect x="3" y="5" width="18" height="16" rx="3" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+      <line x1="8" y1="3" x2="8" y2="7" />
+      <line x1="16" y1="3" x2="16" y2="7" />
+    </svg>
+  );
 
   return (
     <section className="profile-page">
@@ -364,14 +423,18 @@ export default function ProfilePage() {
             <div>
               <p className="label">Пользователь</p>
               <p style={{ fontWeight: 700, marginTop: 6, display: "flex", alignItems: "center" }}>
-                <span style={iconBubble("rgba(196, 43, 43, 0.10)")}>👤</span>
+                <span style={iconBubble("rgba(196, 43, 43, 0.10)")}>
+                  <UserIcon color="#c42b2b" />
+                </span>
                 {profileNameInput || session.name}
               </p>
             </div>
             <div>
               <p className="label">Роль</p>
               <p style={{ fontWeight: 700, marginTop: 6, display: "flex", alignItems: "center" }}>
-                <span style={iconBubble("rgba(59, 130, 246, 0.12)")}>🛡️</span>
+                <span style={iconBubble("rgba(59, 130, 246, 0.12)")}>
+                  <ShieldIcon color="#3b82f6" />
+                </span>
                 {session.role === "admin" ? "Администратор" : session.position || "Специалист"}
               </p>
             </div>
@@ -588,7 +651,9 @@ export default function ProfilePage() {
                   <div className="card-body">
                     <p className="label">Всего тестов пройдено</p>
                     <p className="stat-value" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={iconBubble("rgba(59, 130, 246, 0.12)")}>📋</span>
+                      <span style={iconBubble("rgba(59, 130, 246, 0.12)")}>
+                        <ListIcon color="#3b82f6" />
+                      </span>
                       {stats.total}
                     </p>
                   </div>
@@ -597,7 +662,9 @@ export default function ProfilePage() {
                   <div className="card-body">
                     <p className="label">Успешных попыток</p>
                     <p className="stat-value" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={iconBubble("rgba(35, 147, 92, 0.14)")}>✅</span>
+                      <span style={iconBubble("rgba(35, 147, 92, 0.14)")}>
+                        <CheckIcon color="#23935c" />
+                      </span>
                       {stats.passed}
                     </p>
                     <p className="page-subtitle" style={{ marginBottom: 0 }}>
@@ -609,7 +676,9 @@ export default function ProfilePage() {
                   <div className="card-body">
                     <p className="label">Среднее время</p>
                     <p className="stat-value" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={iconBubble("rgba(234, 179, 8, 0.14)")}>⏱️</span>
+                      <span style={iconBubble("rgba(234, 179, 8, 0.14)")}>
+                        <ClockIcon color="#b88319" />
+                      </span>
                       {stats.averageTimeSec !== null ? `${stats.averageTimeSec} сек` : "—"}
                     </p>
                   </div>
@@ -618,7 +687,9 @@ export default function ProfilePage() {
                   <div className="card-body">
                     <p className="label">Последний тест</p>
                     <p style={{ marginTop: 10, fontWeight: 700, display: "flex", alignItems: "center" }}>
-                      <span style={iconBubble("rgba(168, 85, 247, 0.14)")}>📅</span>
+                      <span style={iconBubble("rgba(168, 85, 247, 0.14)")}>
+                        <CalendarIcon color="#8b5cf6" />
+                      </span>
                       {stats.lastAttempt ? formatDate(stats.lastAttempt.createdAt) : "—"}
                     </p>
                   </div>
