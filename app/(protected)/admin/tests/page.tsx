@@ -3,12 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { answerEquivalenceKey } from "@/lib/answer-equivalence";
 import {
-  deleteAdminQuestion,
-  fetchAdminQuestionBank,
   fetchTestConfig,
-  saveAdminQuestion,
   seedDefaultQuestionsIfEmpty,
-  setAdminQuestionActive,
 } from "@/lib/tests-repository";
 import { DEFAULT_TEST_CONFIG, normalizeTestConfig } from "@/lib/test-config";
 import { TestConfig, TestQuestion, TestResult, TestType } from "@/lib/types";
@@ -117,8 +113,13 @@ export default function AdminTestsPage() {
   }, [results, questions]);
 
   const refreshQuestions = async () => {
-    const allQuestions = await fetchAdminQuestionBank();
-    setQuestions(allQuestions);
+    const response = await fetch("/api/admin/tests/questions", { cache: "no-store" });
+    const payload = (await response.json()) as { ok?: boolean; error?: string; questions?: TestQuestion[] };
+    if (!response.ok || !payload.ok) {
+      setMessage(payload.error || "Не удалось загрузить банк вопросов.");
+      return;
+    }
+    setQuestions(payload.questions || []);
   };
 
   const filteredQuestions = useMemo(() => {
@@ -164,24 +165,29 @@ export default function AdminTestsPage() {
     const currentOrder = draft.id ? (questions.find((item) => item.id === draft.id)?.order ?? maxOrder + 1) : maxOrder + 1;
     const timeLimitSec = isEditingTimeLimit ? Math.max(5, draft.timeLimitSec) : 20;
 
-    const saved = await saveAdminQuestion({
-      id: draft.id,
-      type: draft.type,
-      text,
-      options,
-      correctIndex: draft.correctIndex,
-      timeLimitSec,
-      order: Math.max(1, currentOrder),
-      isActive: draft.isActive,
+    const response = await fetch("/api/admin/tests/questions", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        id: draft.id,
+        type: draft.type,
+        text,
+        options,
+        correctIndex: draft.correctIndex,
+        timeLimitSec,
+        order: Math.max(1, currentOrder),
+        isActive: draft.isActive,
+      }),
     });
-    if (!saved.ok) {
-      setMessage(`Не удалось сохранить в базе: ${saved.error || "проверьте права или схему таблицы test_questions."}`);
+    const payload = (await response.json()) as { ok?: boolean; error?: string; questions?: TestQuestion[] };
+    if (!response.ok || !payload.ok) {
+      setMessage(`Не удалось сохранить в базе: ${payload.error || "ошибка сохранения"}`);
       return;
     }
     setMessage(draft.id ? "Вопрос обновлен." : "Вопрос добавлен.");
     setDraft(initialDraft);
     setIsEditingTimeLimit(false);
-    await refreshQuestions();
+    setQuestions(payload.questions || []);
   };
 
   const onEdit = (question: TestQuestion) => {
@@ -202,20 +208,40 @@ export default function AdminTestsPage() {
 
   const onDelete = async (questionId: string) => {
     setMessage("");
-    const deleted = await deleteAdminQuestion(questionId);
-    setMessage(deleted ? "Вопрос удален." : "Не удалось удалить вопрос из базы.");
+    const response = await fetch(`/api/admin/tests/questions?id=${encodeURIComponent(questionId)}`, { method: "DELETE" });
+    const payload = (await response.json()) as { ok?: boolean; error?: string; questions?: TestQuestion[] };
+    setMessage(response.ok && payload.ok ? "Вопрос удален." : payload.error || "Не удалось удалить вопрос из базы.");
     if (draft.id === questionId) {
       setDraft(initialDraft);
       setIsEditingTimeLimit(false);
     }
-    await refreshQuestions();
+    if (response.ok && payload.ok) {
+      setQuestions(payload.questions || []);
+    } else {
+      await refreshQuestions();
+    }
   };
 
   const onToggleActive = async (question: TestQuestion) => {
     setMessage("");
-    const updated = await setAdminQuestionActive(question.id, !question.isActive);
-    setMessage(updated ? (!question.isActive ? "Вопрос включен." : "Вопрос выключен.") : "Не удалось изменить статус вопроса.");
-    await refreshQuestions();
+    const response = await fetch("/api/admin/tests/questions", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: question.id, isActive: !question.isActive }),
+    });
+    const payload = (await response.json()) as { ok?: boolean; error?: string; questions?: TestQuestion[] };
+    setMessage(
+      response.ok && payload.ok
+        ? !question.isActive
+          ? "Вопрос включен."
+          : "Вопрос выключен."
+        : payload.error || "Не удалось изменить статус вопроса.",
+    );
+    if (response.ok && payload.ok) {
+      setQuestions(payload.questions || []);
+    } else {
+      await refreshQuestions();
+    }
   };
 
   const onSaveConfig = async () => {
