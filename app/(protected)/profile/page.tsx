@@ -643,6 +643,10 @@ export default function ProfilePage() {
             <div className="profile-hero-main">
               <p className="profile-hero-kicker">Пользовательский профиль</p>
               <p className="profile-hero-name">{profileNameInput || session.name}</p>
+              <p className="profile-hero-callsign">
+                Позывной:{" "}
+                <strong>{(profileCallsignInput || session.callsign || "").trim() || "—"}</strong>
+              </p>
               <div className="profile-role-badge">
                 <ShieldIcon color="currentColor" size={16} />
                 {roleLabel}

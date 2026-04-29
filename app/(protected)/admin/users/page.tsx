@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { readClientSession } from "@/lib/client-auth";
 import { fetchUsers, patchUser, removeUser } from "@/lib/users-repository";
@@ -295,15 +296,17 @@ export default function AdminUsersPage() {
               {pagedUsers.map((user) => (
                 <tr key={user.id}>
                   <td>
-                    <div className="admin-users-person">
-                      <span className="admin-users-avatar" style={{ backgroundColor: getAvatarColor(user) }}>
-                        {getInitials(user)}
-                      </span>
-                      <span>
-                        <strong>{user.name || "Без имени"}{user.callsign ? ` ${user.callsign}` : ""}</strong>
-                        <small>@{user.login}</small>
-                      </span>
-                    </div>
+                    <Link href={`/profile/${user.id}`} prefetch={false} className="admin-users-profile-link">
+                      <div className="admin-users-person">
+                        <span className="admin-users-avatar" style={{ backgroundColor: getAvatarColor(user) }}>
+                          {getInitials(user)}
+                        </span>
+                        <span>
+                          <strong>{user.name || "Без имени"}{user.callsign ? ` ${user.callsign}` : ""}</strong>
+                          <small>@{user.login}</small>
+                        </span>
+                      </div>
+                    </Link>
                   </td>
                   <td>
                     <div className="admin-users-role-position">
@@ -375,15 +378,17 @@ export default function AdminUsersPage() {
             {pagedUsers.map((user) => (
               <article className="card admin-users-mobile-card" key={`mobile-${user.id}`}>
                 <div className="card-body">
-                  <div className="admin-users-person">
-                    <span className="admin-users-avatar" style={{ backgroundColor: getAvatarColor(user) }}>
-                      {getInitials(user)}
-                    </span>
-                    <span>
-                      <strong>{user.name || "Без имени"}{user.callsign ? ` ${user.callsign}` : ""}</strong>
-                      <small>@{user.login}</small>
-                    </span>
-                  </div>
+                  <Link href={`/profile/${user.id}`} prefetch={false} className="admin-users-profile-link">
+                    <div className="admin-users-person">
+                      <span className="admin-users-avatar" style={{ backgroundColor: getAvatarColor(user) }}>
+                        {getInitials(user)}
+                      </span>
+                      <span>
+                        <strong>{user.name || "Без имени"}{user.callsign ? ` ${user.callsign}` : ""}</strong>
+                        <small>@{user.login}</small>
+                      </span>
+                    </div>
+                  </Link>
                   <div className="admin-users-role-position">
                     <span className={`admin-users-role-text ${user.role === "admin" ? "is-admin" : "is-employee"}`}>
                       {user.role === "admin" ? "Администратор" : "Сотрудник"}

@@ -361,6 +361,18 @@ html[data-theme="dark"] .select option {
   word-break: break-word;
 }
 
+.profile-page .profile-hero-callsign {
+  margin: 6px 0 0;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.profile-page .profile-hero-callsign strong {
+  font-weight: 700;
+  color: var(--text);
+}
+
 .profile-page .profile-role-badge {
   display: inline-flex;
   align-items: center;
