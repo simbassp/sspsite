@@ -6,7 +6,10 @@ export const runtime = "nodejs";
 
 function isMissingColumnError(message: string | undefined) {
   const m = (message || "").toLowerCase();
-  return m.includes("column") && m.includes("does not exist");
+  return (
+    (m.includes("column") && m.includes("does not exist")) ||
+    (m.includes("column") && m.includes("could not find") && m.includes("schema cache"))
+  );
 }
 
 export async function GET() {
