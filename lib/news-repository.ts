@@ -29,6 +29,9 @@ type NewsRow = {
   content?: string;
   priority: "high" | "normal";
   author: string;
+  author_id?: string | null;
+  author_name?: string | null;
+  author_callsign?: string | null;
   author_position?: string | null;
   created_at: string;
   format?: unknown;
@@ -74,8 +77,15 @@ function mapNewsRow(row: NewsRow): NewsItem {
     body,
     priority: row.priority === "high" ? "high" : "normal",
     kind: normalizeNewsKind(row.format),
+    authorId: row.author_id ?? null,
     author: row.author,
     authorPosition: normalizeAuthorPosition(row.author_position),
+    authorInfo: {
+      id: row.author_id ?? null,
+      name: row.author_name?.trim() || null,
+      callsign: row.author_callsign?.trim() || null,
+      position: normalizeAuthorPosition(row.author_position),
+    },
     createdAt: row.created_at,
     textStyle: normalizeNewsTextStyle(row.format),
   };

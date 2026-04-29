@@ -6,6 +6,7 @@ import { formatDate } from "@/lib/format";
 import { canManageNews } from "@/lib/permissions";
 import { applyMarkupToSelection, isUpdateNews, NewsBody } from "@/lib/news-text";
 import { deleteNews, fetchNews, normalizeNewsTextStyle, updateNews } from "@/lib/news-repository";
+import { AuthorInfo } from "@/components/news/AuthorInfo";
 import { NewsItem } from "@/lib/types";
 
 export default function NewsPage() {
@@ -122,16 +123,6 @@ export default function NewsPage() {
     await load(true);
   };
 
-  const getPositionBadgeClass = (position?: string | null) => {
-    const normalized = (position || "").trim().toLowerCase();
-    if (normalized === "младший специалист") return "is-junior";
-    if (normalized === "специалист") return "is-specialist";
-    if (normalized === "ведущий специалист") return "is-lead";
-    if (normalized === "главный специалист") return "is-chief";
-    if (normalized === "командир взвода") return "is-commander";
-    return "is-default";
-  };
-
   return (
     <section>
       <h1 className="page-title">Новости</h1>
@@ -227,16 +218,11 @@ export default function NewsPage() {
                   </div>
                 </div>
               ) : null}
-              <div className="meta" style={{ marginTop: editingId === item.id ? 8 : 0 }}>
+              <div className="news-card-header" style={{ marginTop: editingId === item.id ? 8 : 0 }}>
                 <span className={`pill ${item.priority === "high" ? "pill-red" : ""}`}>
                   {formatDate(item.createdAt)} · {item.priority === "high" ? "Важно" : isUpdateNews(item) ? "Update" : "Новость"}
                 </span>
-                <span>{item.author?.trim() || "Автор не указан"}</span>
-                {item.authorPosition ? (
-                  <span className={`admin-users-position-badge ${getPositionBadgeClass(item.authorPosition)}`}>
-                    {item.authorPosition}
-                  </span>
-                ) : null}
+                <AuthorInfo item={item} />
               </div>
               {editingId !== item.id ? <h3 style={{ marginTop: 10 }}>{item.title}</h3> : null}
               <NewsBody

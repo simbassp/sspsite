@@ -47,8 +47,15 @@ export interface NewsItem {
   priority: "high" | "normal";
   kind?: "news" | "update";
   createdAt: string;
+  authorId?: string | null;
   author: string;
   authorPosition?: Position | null;
+  authorInfo?: {
+    id?: string | null;
+    name?: string | null;
+    callsign?: string | null;
+    position?: Position | null;
+  };
   textStyle?: NewsTextStyle;
 }
 

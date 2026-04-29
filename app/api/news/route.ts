@@ -33,25 +33,41 @@ function normalizeNewsKind(input: unknown): "news" | "update" {
 }
 
 function normalizeNewsRows(rows: Array<Record<string, unknown>>) {
-  const resolveAuthorText = (row: Record<string, unknown>) => {
-    if (typeof row.author === "string" && row.author.trim()) return row.author.trim();
-    if (typeof row.author_name === "string" && row.author_name.trim()) return row.author_name.trim();
-    if (typeof row.publisher_name === "string" && row.publisher_name.trim()) return row.publisher_name.trim();
-    return "";
+  const resolveAuthorParts = (row: Record<string, unknown>) => {
+    const name =
+      (typeof row.author_name === "string" && row.author_name.trim()) ||
+      (typeof row.publisher_name === "string" && row.publisher_name.trim()) ||
+      "";
+    const callsign = (typeof row.author_callsign === "string" && row.author_callsign.trim()) || "";
+    const joined = [name, callsign].filter(Boolean).join(" ").trim();
+    const fallbackText = typeof row.author === "string" && row.author.trim() ? row.author.trim() : "";
+    return { name, callsign, text: joined || fallbackText };
   };
-  return rows.map((row) => ({
-    id: row.id,
-    title: row.title,
-    body: row.body ?? row.text ?? row.content ?? "",
-    text: row.text ?? row.body ?? row.content ?? "",
-    content: row.content ?? row.body ?? row.text ?? "",
-    priority: row.priority === "high" ? "high" : "normal",
-    kind: normalizeNewsKind(row.format),
-    author: resolveAuthorText(row),
-    author_position: typeof row.author_position === "string" ? row.author_position : null,
-    created_at: row.created_at,
-    format: normalizeNewsTextStyle(row.format),
-  }));
+  return rows.map((row) => {
+    const resolvedAuthor = resolveAuthorParts(row);
+    return {
+      id: row.id,
+      title: row.title,
+      body: row.body ?? row.text ?? row.content ?? "",
+      text: row.text ?? row.body ?? row.content ?? "",
+      content: row.content ?? row.body ?? row.text ?? "",
+      priority: row.priority === "high" ? "high" : "normal",
+      kind: normalizeNewsKind(row.format),
+      author:
+        resolvedAuthor.text ||
+        ((typeof row.author_name === "string" && row.author_name.trim()) || "") ||
+        ((typeof row.publisher_name === "string" && row.publisher_name.trim()) || ""),
+      author_id:
+        (typeof row.author_id === "string" && row.author_id.trim()) ||
+        (typeof row.created_by === "string" && row.created_by.trim()) ||
+        null,
+      author_name: resolvedAuthor.name || null,
+      author_callsign: resolvedAuthor.callsign || null,
+      author_position: typeof row.author_position === "string" ? row.author_position : null,
+      created_at: row.created_at,
+      format: normalizeNewsTextStyle(row.format),
+    };
+  });
 }
 
 function fallbackSeedRows(limit: number) {
@@ -80,7 +96,7 @@ function isMissingColumn(message: string, column: string) {
 async function resolveNewsAuthorForInsert(
   supabase: ReturnType<typeof getServerSupabaseServiceClient>,
   session: SessionUser,
-): Promise<{ author: string; author_position: string | null; created_by: string | null }> {
+): Promise<{ author: string; author_position: string | null; created_by: string | null; author_id: string | null }> {
   let name = (session.name || "").trim();
   let callsign = (session.callsign || "").trim();
   let position = (session.position || "").trim();
@@ -108,6 +124,7 @@ async function resolveNewsAuthorForInsert(
     author: label || "Пользователь",
     author_position: position || null,
     created_by: appUserId,
+    author_id: appUserId,
   };
 }
 
@@ -150,6 +167,7 @@ export async function GET(request: Request) {
         rows.flatMap((row, idx) => {
           if (!needsAuthorEnrichment(idx)) return [];
           const id =
+            (typeof row.author_id === "string" && row.author_id.trim()) ||
             (typeof row.created_by === "string" && row.created_by.trim()) ||
             (typeof row.author_id === "string" && row.author_id.trim()) ||
             (typeof row.user_id === "string" && row.user_id.trim()) ||
@@ -186,6 +204,7 @@ export async function GET(request: Request) {
       if (!needsAuthorEnrichment(idx)) return item;
       const row = rows[idx];
       const candidateId =
+        (typeof row.author_id === "string" && row.author_id.trim()) ||
         (typeof row.created_by === "string" && row.created_by.trim()) ||
         (typeof row.author_id === "string" && row.author_id.trim()) ||
         (typeof row.user_id === "string" && row.user_id.trim()) ||
@@ -195,7 +214,14 @@ export async function GET(request: Request) {
       const user = usersMap.get(candidateId);
       if (!user) return item;
       const authorText = `${user.name}${user.callsign ? ` ${user.callsign}` : ""}`.trim();
-      return { ...item, author: authorText, author_position: user.position || item.author_position || null };
+      return {
+        ...item,
+        author_id: candidateId,
+        author: authorText || item.author,
+        author_name: user.name || item.author_name || null,
+        author_callsign: user.callsign || item.author_callsign || null,
+        author_position: user.position || item.author_position || null,
+      };
     });
 
     return Response.json({ ok: true, rows: withAuthorFallback });
@@ -235,6 +261,7 @@ export async function POST(request: Request) {
     const author = resolvedAuthor.author;
     const author_position = resolvedAuthor.author_position;
     const created_by = resolvedAuthor.created_by;
+    const author_id = resolvedAuthor.author_id;
 
     let insertPayload: Record<string, unknown> = {
       title,
@@ -245,12 +272,14 @@ export async function POST(request: Request) {
     };
     if (author_position) insertPayload.author_position = author_position;
     if (created_by) insertPayload.created_by = created_by;
+    if (author_id) insertPayload.author_id = author_id;
 
     let insertQ = await supabase.from("news").insert(insertPayload);
     if (
       insertQ.error &&
       (isMissingColumn(insertQ.error.message || "", "author_position") ||
-        isMissingColumn(insertQ.error.message || "", "created_by"))
+        isMissingColumn(insertQ.error.message || "", "created_by") ||
+        isMissingColumn(insertQ.error.message || "", "author_id"))
     ) {
       insertQ = await supabase.from("news").insert({
         title,

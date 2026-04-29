@@ -394,6 +394,30 @@ html[data-theme="dark"] .chip:not(.active):hover {
   font-size: 12px;
 }
 
+.news-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 42px;
+}
+
+.news-author-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  text-align: right;
+  min-width: 0;
+}
+
+.news-author-name {
+  font-size: 13px;
+  color: var(--text);
+  max-width: 280px;
+  overflow-wrap: anywhere;
+}
+
 .pill {
   white-space: nowrap;
   padding: 6px 10px;
@@ -457,6 +481,22 @@ html[data-theme="dark"] .chip:not(.active):hover {
 
   .bottom-nav a {
     padding: 10px 2px;
+  }
+
+  .news-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    min-height: 0;
+  }
+
+  .news-author-info {
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .news-author-name {
+    max-width: 100%;
   }
 
   /* Явный размер: родительский font-size: 0 скрывал и эмодзи-иконки */

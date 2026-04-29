@@ -44,6 +44,7 @@ create table if not exists public.news (
   format jsonb not null default '{}'::jsonb,
   priority public.news_priority not null default 'normal',
   author text not null,
+  author_id uuid references public.app_users(id) on delete set null,
   created_at timestamptz not null default now()
 );
 
