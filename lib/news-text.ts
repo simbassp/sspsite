@@ -12,9 +12,9 @@ function escapeHtml(input: string) {
 export function renderNewsBodyHtml(raw: string) {
   const escaped = escapeHtml(raw);
   return escaped
-    .replaceAll(/\[b\](.*?)\[\/b\]/gis, "<strong>$1</strong>")
-    .replaceAll(/\[i\](.*?)\[\/i\]/gis, "<em>$1</em>")
-    .replaceAll(/\[u\](.*?)\[\/u\]/gis, "<u>$1</u>")
+    .replaceAll(/\[b\]([\s\S]*?)\[\/b\]/gi, "<strong>$1</strong>")
+    .replaceAll(/\[i\]([\s\S]*?)\[\/i\]/gi, "<em>$1</em>")
+    .replaceAll(/\[u\]([\s\S]*?)\[\/u\]/gi, "<u>$1</u>")
     .replaceAll(/\n/g, "<br/>");
 }
 
