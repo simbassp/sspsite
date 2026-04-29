@@ -276,6 +276,7 @@ export default function AdminUavPage() {
                   src={publicUploadDisplayUrl(draft.image)}
                   alt=""
                   decoding="async"
+                  loading="lazy"
                   style={{ width: "100%", maxWidth: 360, height: 160, objectFit: "cover", borderRadius: 12, border: "1px solid var(--line)" }}
                 />
               </div>

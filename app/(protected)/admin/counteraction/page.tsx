@@ -236,6 +236,7 @@ export default function AdminCounteractionPage() {
                     src={publicUploadDisplayUrl(url)}
                     alt=""
                     decoding="async"
+                    loading="lazy"
                     style={{ width: 110, height: 70, borderRadius: 10, border: "1px solid var(--line)", objectFit: "cover" }}
                   />
                 ))}

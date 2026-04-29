@@ -274,6 +274,7 @@ export default function UavPage() {
                     src={imageSrc}
                     alt={item.title}
                     decoding="async"
+                    loading="lazy"
                     onError={() => setImgErrors((prev) => ({ ...prev, [item.id]: true }))}
                     style={{
                       width: "100%",

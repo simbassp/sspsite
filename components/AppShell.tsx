@@ -14,8 +14,6 @@ import {
   canManageUav,
   canManageUsers,
 } from "@/lib/permissions";
-import { forceFailFinalAttempt } from "@/lib/tests-repository";
-import { logoutUser } from "@/lib/users-repository";
 import { SessionUser } from "@/lib/types";
 
 interface AppShellProps {
@@ -53,7 +51,15 @@ export function AppShell({ session, children }: AppShellProps) {
   }, []);
 
   useEffect(() => {
-    const HEARTBEAT_MS = 45_000;
+    const conn =
+      typeof navigator !== "undefined" && "connection" in navigator
+        ? (navigator as Navigator & {
+            connection?: { effectiveType?: string; saveData?: boolean };
+          }).connection
+        : undefined;
+    let HEARTBEAT_MS = 90_000;
+    if (conn?.saveData) HEARTBEAT_MS = 180_000;
+    else if (conn?.effectiveType === "slow-2g" || conn?.effectiveType === "2g") HEARTBEAT_MS = 180_000;
 
     const postPresence = (online: boolean, keepalive?: boolean) => {
       if (isLoggingOutRef.current) return;
@@ -214,8 +220,12 @@ export function AppShell({ session, children }: AppShellProps) {
     if (isLoggingOut) return;
     isLoggingOutRef.current = true;
     setIsLoggingOut(true);
-    void withTimeout(forceFailFinalAttempt(session.id), 1200).catch(() => {});
     try {
+      const [{ forceFailFinalAttempt }, { logoutUser }] = await Promise.all([
+        import("@/lib/tests-repository"),
+        import("@/lib/users-repository"),
+      ]);
+      void withTimeout(forceFailFinalAttempt(session.id), 1200).catch(() => {});
       await withTimeout(logoutUser(), 1200);
     } catch {}
     window.location.assign("/login");
@@ -243,7 +253,12 @@ export function AppShell({ session, children }: AppShellProps) {
           {mainLinks.map((link) => {
             const active = pathname === link.href || pathname.startsWith(`${link.href}/`);
             return (
-              <Link className={`desktop-nav-link ${active ? "active" : ""}`} key={link.href} href={link.href}>
+              <Link
+                prefetch={false}
+                className={`desktop-nav-link ${active ? "active" : ""}`}
+                key={link.href}
+                href={link.href}
+              >
                 {link.label}
               </Link>
             );
@@ -258,7 +273,12 @@ export function AppShell({ session, children }: AppShellProps) {
             {visibleAdminLinks.map((link) => {
               const active = pathname === link.href || pathname.startsWith(`${link.href}/`);
               return (
-                <Link className={`desktop-nav-link ${active ? "active" : ""}`} key={link.href} href={link.href}>
+                <Link
+                  prefetch={false}
+                  className={`desktop-nav-link ${active ? "active" : ""}`}
+                  key={link.href}
+                  href={link.href}
+                >
                   {link.label}
                 </Link>
               );
@@ -270,7 +290,7 @@ export function AppShell({ session, children }: AppShellProps) {
       <main>
         <header className="mobile-header" id="mobile-app-header">
           <div className="brand">
-            <Link href="/dashboard" style={{ display: "contents" }}>
+            <Link prefetch={false} href="/dashboard" style={{ display: "contents" }}>
               <div className="brand-mark">ПВО</div>
             </Link>
             <div>
@@ -280,7 +300,7 @@ export function AppShell({ session, children }: AppShellProps) {
           </div>
           <div className="header-actions">
             {hasAdminAccess && (
-              <Link className="btn" href="/admin">
+              <Link prefetch={false} className="btn" href="/admin">
                 Управление
               </Link>
             )}
@@ -305,7 +325,13 @@ export function AppShell({ session, children }: AppShellProps) {
         {bottomLinks.map((link) => {
           const active = pathname === link.href || pathname.startsWith(`${link.href}/`);
           return (
-            <Link key={link.href} href={link.href} className={active ? "active" : ""} aria-label={link.label}>
+            <Link
+              prefetch={false}
+              key={link.href}
+              href={link.href}
+              className={active ? "active" : ""}
+              aria-label={link.label}
+            >
               <span className="bottom-nav-icon" aria-hidden="true">
                 {renderBottomIcon(link.icon)}
               </span>

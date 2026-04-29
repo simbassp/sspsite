@@ -35,25 +35,25 @@ export async function GET() {
 
   try {
     const supabase = getServerSupabaseServiceClient();
-    const newestQ = await supabase
-      .from("app_users")
-      .select("id,name,callsign,created_at,status")
-      .order("created_at", { ascending: false })
-      .limit(1);
-
-    const leftQ = await supabase
-      .from("dashboard_events")
-      .select("id,payload,created_at")
-      .eq("kind", "user_deleted")
-      .order("created_at", { ascending: false })
-      .limit(1);
-
-    const promotedQ = await supabase
-      .from("dashboard_events")
-      .select("id,payload,created_at")
-      .eq("kind", "position_promoted")
-      .order("created_at", { ascending: false })
-      .limit(1);
+    const [newestQ, leftQ, promotedQ] = await Promise.all([
+      supabase
+        .from("app_users")
+        .select("id,name,callsign,created_at,status")
+        .order("created_at", { ascending: false })
+        .limit(1),
+      supabase
+        .from("dashboard_events")
+        .select("id,payload,created_at")
+        .eq("kind", "user_deleted")
+        .order("created_at", { ascending: false })
+        .limit(1),
+      supabase
+        .from("dashboard_events")
+        .select("id,payload,created_at")
+        .eq("kind", "position_promoted")
+        .order("created_at", { ascending: false })
+        .limit(1),
+    ]);
 
     const newest = Array.isArray(newestQ.data) ? newestQ.data[0] : null;
     const left = Array.isArray(leftQ.data) ? leftQ.data[0] : null;

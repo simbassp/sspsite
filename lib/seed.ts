@@ -96,8 +96,7 @@ export const seedData: AppData = {
       title: "АК-74М",
       category: "Оружие",
       summary: "Базовая карточка для быстрого просмотра параметров.",
-      image:
-        "https://images.unsplash.com/photo-1511884642898-4c92249e20b6?auto=format&fit=crop&w=1200&q=80",
+      image: "",
       specs: [
         { key: "Дальность", value: "3150 м" },
         { key: "Вес", value: "3.9 кг" },
@@ -114,8 +113,7 @@ export const seedData: AppData = {
       title: "Комплекс подавления",
       category: "Подавление",
       summary: "Средство РЭБ для подавления управляющих каналов БПЛА.",
-      image:
-        "https://images.unsplash.com/photo-1581092918484-8313ac49f9cc?auto=format&fit=crop&w=1200&q=80",
+      image: "",
       specs: [
         { key: "Радиус", value: "2 км" },
         { key: "Диапазон", value: "UHF" },
@@ -134,8 +132,7 @@ export const seedData: AppData = {
       title: "FPV-01",
       category: "FPV",
       summary: "Ударный FPV-дрон короткой/средней дальности.",
-      image:
-        "https://images.unsplash.com/photo-1473968512647-3e447244af8f?auto=format&fit=crop&w=1200&q=80",
+      image: "",
       specs: [
         { key: "Дальность", value: "8 км" },
         { key: "Скорость", value: "120 км/ч" },
@@ -152,8 +149,7 @@ export const seedData: AppData = {
       title: "Scout-X2",
       category: "Разведка",
       summary: "Разведывательная платформа для наблюдения и корректировки.",
-      image:
-        "https://images.unsplash.com/photo-1508614589041-895b88991e3e?auto=format&fit=crop&w=1200&q=80",
+      image: "",
       specs: [
         { key: "Время", value: "60 мин" },
         { key: "Высота", value: "1500 м" },

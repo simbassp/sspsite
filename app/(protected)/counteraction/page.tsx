@@ -233,6 +233,7 @@ export default function CounteractionPage() {
                   src={imageSrc}
                   alt={item.title}
                   decoding="async"
+                  loading="lazy"
                   style={{ width: "100%", height: 180, objectFit: "cover", objectPosition: "top center" }}
                 />
               ) : (
