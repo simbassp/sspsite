@@ -222,7 +222,7 @@ export default function NewsPage() {
                 <span className={`pill ${item.priority === "high" ? "pill-red" : ""}`}>
                   {formatDate(item.createdAt)} · {item.priority === "high" ? "Важно" : isUpdateNews(item) ? "Update" : "Новость"}
                 </span>
-                <AuthorInfo item={item} />
+                <AuthorInfo author={item.authorProfile ?? item.authorInfo ?? null} fallbackName={item.author} />
               </div>
               {editingId !== item.id ? <h3 style={{ marginTop: 10 }}>{item.title}</h3> : null}
               <NewsBody

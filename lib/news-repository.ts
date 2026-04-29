@@ -33,6 +33,12 @@ type NewsRow = {
   author_name?: string | null;
   author_callsign?: string | null;
   author_position?: string | null;
+  author_profile?: {
+    id?: string | null;
+    name?: string | null;
+    callsign?: string | null;
+    position?: string | null;
+  } | null;
   created_at: string;
   format?: unknown;
 };
@@ -81,10 +87,16 @@ function mapNewsRow(row: NewsRow): NewsItem {
     author: row.author,
     authorPosition: normalizeAuthorPosition(row.author_position),
     authorInfo: {
-      id: row.author_id ?? null,
-      name: row.author_name?.trim() || null,
-      callsign: row.author_callsign?.trim() || null,
-      position: normalizeAuthorPosition(row.author_position),
+      id: row.author_profile?.id ?? row.author_id ?? null,
+      name: row.author_profile?.name?.trim() || row.author_name?.trim() || null,
+      callsign: row.author_profile?.callsign?.trim() || row.author_callsign?.trim() || null,
+      position: normalizeAuthorPosition(row.author_profile?.position ?? row.author_position),
+    },
+    authorProfile: {
+      id: row.author_profile?.id ?? row.author_id ?? null,
+      name: row.author_profile?.name?.trim() || row.author_name?.trim() || null,
+      callsign: row.author_profile?.callsign?.trim() || row.author_callsign?.trim() || null,
+      position: normalizeAuthorPosition(row.author_profile?.position ?? row.author_position),
     },
     createdAt: row.created_at,
     textStyle: normalizeNewsTextStyle(row.format),

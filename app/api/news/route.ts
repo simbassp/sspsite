@@ -64,6 +64,18 @@ function normalizeNewsRows(rows: Array<Record<string, unknown>>) {
       author_name: resolvedAuthor.name || null,
       author_callsign: resolvedAuthor.callsign || null,
       author_position: typeof row.author_position === "string" ? row.author_position : null,
+      author_profile:
+        resolvedAuthor.name || resolvedAuthor.callsign || (typeof row.author_position === "string" && row.author_position.trim())
+          ? {
+              id:
+                (typeof row.author_id === "string" && row.author_id.trim()) ||
+                (typeof row.created_by === "string" && row.created_by.trim()) ||
+                "",
+              name: resolvedAuthor.name || "",
+              callsign: resolvedAuthor.callsign || "",
+              position: typeof row.author_position === "string" ? row.author_position : null,
+            }
+          : null,
       created_at: row.created_at,
       format: normalizeNewsTextStyle(row.format),
     };
@@ -221,6 +233,12 @@ export async function GET(request: Request) {
         author_name: user.name || item.author_name || null,
         author_callsign: user.callsign || item.author_callsign || null,
         author_position: user.position || item.author_position || null,
+        author_profile: {
+          id: candidateId,
+          name: user.name || "",
+          callsign: user.callsign || "",
+          position: user.position || null,
+        },
       };
     });
 

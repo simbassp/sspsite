@@ -1,9 +1,17 @@
 "use client";
 
-import { NewsItem } from "@/lib/types";
+import { Position } from "@/lib/types";
 
 type AuthorInfoProps = {
-  item: NewsItem;
+  author?:
+    | {
+        id?: string | null;
+        name?: string | null;
+        callsign?: string | null;
+        position?: Position | null;
+      }
+    | null;
+  fallbackName?: string | null;
 };
 
 function getPositionBadgeClass(position?: string | null) {
@@ -16,11 +24,11 @@ function getPositionBadgeClass(position?: string | null) {
   return "is-default";
 }
 
-export function AuthorInfo({ item }: AuthorInfoProps) {
-  const name = item.authorInfo?.name?.trim() || "";
-  const callsign = item.authorInfo?.callsign?.trim() || "";
-  const authorName = [name, callsign].filter(Boolean).join(" ").trim() || item.author?.trim() || "Автор не указан";
-  const position = item.authorInfo?.position || item.authorPosition || null;
+export function AuthorInfo({ author, fallbackName }: AuthorInfoProps) {
+  const name = author?.name?.trim() || "";
+  const callsign = author?.callsign?.trim() || "";
+  const authorName = [name, callsign].filter(Boolean).join(" ").trim() || fallbackName?.trim() || "Автор не указан";
+  const position = author?.position || null;
 
   return (
     <div className="news-author-info">

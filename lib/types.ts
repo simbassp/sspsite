@@ -56,6 +56,12 @@ export interface NewsItem {
     callsign?: string | null;
     position?: Position | null;
   };
+  authorProfile?: {
+    id?: string | null;
+    name?: string | null;
+    callsign?: string | null;
+    position?: Position | null;
+  } | null;
   textStyle?: NewsTextStyle;
 }
 
