@@ -92,6 +92,22 @@ async function getQuestionColumns(supabase: ReturnType<typeof getServerSupabaseS
   return (data || []) as Array<{ column_name: string; is_nullable: "YES" | "NO" | string }>;
 }
 
+function extractMissingColumn(message: string | undefined): string | null {
+  const m = message || "";
+  const schemaCacheMatch = m.match(/Could not find the '([^']+)' column/i);
+  if (schemaCacheMatch?.[1]) return schemaCacheMatch[1];
+  const sqlMatch = m.match(/column ["`]?([^"'`\s]+)["`]? does not exist/i);
+  if (sqlMatch?.[1]) return sqlMatch[1];
+  return null;
+}
+
+function deleteKeyInsensitive(payload: Record<string, unknown>, key: string): boolean {
+  const exact = Object.keys(payload).find((k) => k.toLowerCase() === key.toLowerCase());
+  if (!exact) return false;
+  delete payload[exact];
+  return true;
+}
+
 export async function GET() {
   const session = await getServerSession();
   if (!session || !canManageTests(session)) {
@@ -131,13 +147,11 @@ export async function POST(request: Request) {
   const id = body.id ? String(body.id) : null;
   const columns = await getQuestionColumns(supabase);
   const errors: string[] = [];
-  if (!columns || !columns.length) {
-    return Response.json({ ok: false, error: "Не удалось определить структуру таблицы test_questions." }, { status: 500 });
-  }
+  const canIntrospect = Boolean(columns && columns.length);
 
-  const columnSet = new Set(columns.map((c) => c.column_name.toLowerCase()));
+  const columnSet = new Set((columns || []).map((c) => c.column_name.toLowerCase()));
   const nonNullable = new Set(
-    columns
+    (columns || [])
       .filter((c) => c.is_nullable === "NO")
       .map((c) => c.column_name.toLowerCase())
       .filter((name) => !["id", "created_at", "updated_at"].includes(name)),
@@ -145,7 +159,7 @@ export async function POST(request: Request) {
 
   const payload: Record<string, unknown> = {};
   const setIfExists = (column: string, value: unknown) => {
-    if (columnSet.has(column)) payload[column] = value;
+    if (!canIntrospect || columnSet.has(column)) payload[column] = value;
   };
 
   setIfExists("type", base.type);
@@ -162,11 +176,11 @@ export async function POST(request: Request) {
   setIfExists("is_active", base.is_active);
   setIfExists("active", base.is_active);
 
-  if (columnSet.has("test_id")) {
+  if (!canIntrospect || columnSet.has("test_id")) {
     const candidates = await resolveTestIdCandidates(supabase);
     if (candidates.length) {
       payload.test_id = candidates[0];
-    } else if (nonNullable.has("test_id")) {
+    } else if (canIntrospect && nonNullable.has("test_id")) {
       return Response.json(
         { ok: false, error: "В БД test_questions.test_id обязателен, но не найдено ни одного валидного теста." },
         { status: 400 },
@@ -175,7 +189,7 @@ export async function POST(request: Request) {
   }
 
   for (const required of nonNullable) {
-    if (!(required in payload)) {
+    if (canIntrospect && !(required in payload)) {
       return Response.json(
         { ok: false, error: `В БД обязательна колонка "${required}", но API не знает как её заполнить.` },
         { status: 400 },
@@ -183,22 +197,47 @@ export async function POST(request: Request) {
     }
   }
 
-  const updateByIdKey = columnSet.has("id") ? "id" : columnSet.has("question_id") ? "question_id" : null;
+  const updateByIdKey = canIntrospect ? (columnSet.has("id") ? "id" : columnSet.has("question_id") ? "question_id" : null) : "id";
   if (id && !updateByIdKey) {
     return Response.json({ ok: false, error: "В таблице нет ни id, ни question_id для обновления." }, { status: 400 });
   }
 
-  const res = id
-    ? await supabase.from("test_questions").update(payload).eq(updateByIdKey as string, id)
-    : await supabase.from("test_questions").insert(payload);
-  if (res.error) {
-    errors.push(res.error.message);
-    return Response.json({ ok: false, error: res.error.message, details: errors }, { status: 400 });
+  let finalError: string | null = null;
+  const updateKeys = canIntrospect ? [updateByIdKey as string] : ["id", "question_id"];
+  for (const key of updateKeys) {
+    const workingPayload = { ...payload };
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      if (!Object.keys(workingPayload).length) break;
+      const res = id
+        ? await supabase.from("test_questions").update(workingPayload).eq(key, id)
+        : await supabase.from("test_questions").insert(workingPayload);
+      if (!res.error) {
+        const listed = await listQuestions();
+        if (listed.error) return Response.json({ ok: true, saved: true, warning: listed.error });
+        return Response.json({ ok: true, saved: true, questions: listed.data });
+      }
+      finalError = res.error.message;
+      errors.push(res.error.message);
+      const missingColumn = extractMissingColumn(res.error.message);
+      if (missingColumn && deleteKeyInsensitive(workingPayload, missingColumn)) {
+        continue;
+      }
+      if (
+        !id &&
+        res.error.message.toLowerCase().includes("null value in column \"test_id\"") &&
+        !Object.prototype.hasOwnProperty.call(workingPayload, "test_id")
+      ) {
+        const candidates = await resolveTestIdCandidates(supabase);
+        if (candidates.length) {
+          workingPayload.test_id = candidates[0];
+          continue;
+        }
+      }
+      break;
+    }
   }
 
-  const listed = await listQuestions();
-  if (listed.error) return Response.json({ ok: true, saved: true, warning: listed.error });
-  return Response.json({ ok: true, saved: true, questions: listed.data });
+  return Response.json({ ok: false, error: finalError || "save_failed", details: errors }, { status: 400 });
 }
 
 export async function PATCH(request: Request) {
