@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   canAccessAdminPanel,
@@ -39,6 +39,7 @@ export function AppShell({ session, children }: AppShellProps) {
   const hasAdminAccess = canAccessAdminPanel(session);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
+  const isLoggingOutRef = useRef(false);
 
   useEffect(() => {
     const sync = () => setIsOnline(typeof navigator !== "undefined" ? navigator.onLine : true);
@@ -55,6 +56,7 @@ export function AppShell({ session, children }: AppShellProps) {
     const HEARTBEAT_MS = 45_000;
 
     const postPresence = (online: boolean, keepalive?: boolean) => {
+      if (isLoggingOutRef.current) return;
       void fetch("/api/presence", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -78,10 +80,12 @@ export function AppShell({ session, children }: AppShellProps) {
     };
 
     const onHidden = () => {
+      if (isLoggingOutRef.current) return;
       stopHeartbeat();
       postPresence(false, true);
     };
     const onVisible = () => {
+      if (isLoggingOutRef.current) return;
       postPresence(true);
       startHeartbeat();
     };
@@ -93,10 +97,12 @@ export function AppShell({ session, children }: AppShellProps) {
     };
 
     const onBlur = () => {
+      if (isLoggingOutRef.current) return;
       stopHeartbeat();
       postPresence(false, true);
     };
     const onFocus = () => {
+      if (isLoggingOutRef.current) return;
       postPresence(true);
       if (typeof document !== "undefined" && document.visibilityState === "visible") startHeartbeat();
     };
@@ -114,7 +120,9 @@ export function AppShell({ session, children }: AppShellProps) {
       window.removeEventListener("blur", onBlur);
       window.removeEventListener("focus", onFocus);
       stopHeartbeat();
-      postPresence(false, true);
+      if (!isLoggingOutRef.current) {
+        postPresence(false, true);
+      }
     };
   }, []);
   const visibleAdminLinks = [
@@ -204,6 +212,7 @@ export function AppShell({ session, children }: AppShellProps) {
 
   const logout = async () => {
     if (isLoggingOut) return;
+    isLoggingOutRef.current = true;
     setIsLoggingOut(true);
     void withTimeout(forceFailFinalAttempt(session.id), 1200).catch(() => {});
     try {

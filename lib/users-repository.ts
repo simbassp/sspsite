@@ -1165,10 +1165,11 @@ export async function removeUser(userId: string): Promise<
 }
 
 export async function logoutUser() {
-  await fetch("/api/presence", {
+  void fetch("/api/presence", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ online: false }),
+    keepalive: true,
   }).catch(() => undefined);
   document.cookie = clearSessionCookie();
   document.cookie = `${SESSION_COOKIE}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`;
@@ -1185,7 +1186,7 @@ export async function logoutUser() {
   }
   if (!isSupabaseConfigured) return;
   const supabase = getSupabaseBrowserClient();
-  await supabase.auth.signOut();
+  void supabase.auth.signOut().catch(() => undefined);
 }
 
 export function persistSession(session: SessionUser) {
