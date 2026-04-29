@@ -16,6 +16,43 @@ import {
 } from "@/lib/permissions";
 import { SessionUser } from "@/lib/types";
 
+const mobileHeaderIconSvg = {
+  viewBox: "0 0 24 24" as const,
+  width: 22,
+  height: 22,
+  fill: "none" as const,
+  stroke: "currentColor" as const,
+  strokeWidth: 2,
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
+};
+
+function AdminPanelIcon() {
+  return (
+    <svg {...mobileHeaderIconSvg} aria-hidden>
+      <line x1="4" y1="21" x2="4" y2="14" />
+      <line x1="4" y1="10" x2="4" y2="3" />
+      <line x1="12" y1="21" x2="12" y2="12" />
+      <line x1="12" y1="8" x2="12" y2="3" />
+      <line x1="20" y1="21" x2="20" y2="16" />
+      <line x1="20" y1="12" x2="20" y2="3" />
+      <line x1="1" y1="14" x2="7" y2="14" />
+      <line x1="9" y1="8" x2="15" y2="8" />
+      <line x1="17" y1="16" x2="23" y2="16" />
+    </svg>
+  );
+}
+
+function LogoutIcon() {
+  return (
+    <svg {...mobileHeaderIconSvg} aria-hidden>
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <polyline points="16 17 21 12 16 7" />
+      <line x1="21" y1="12" x2="9" y2="12" />
+    </svg>
+  );
+}
+
 interface AppShellProps {
   session: SessionUser;
   children: React.ReactNode;
@@ -300,13 +337,20 @@ export function AppShell({ session, children }: AppShellProps) {
           </div>
           <div className="header-actions">
             {hasAdminAccess && (
-              <Link prefetch={false} className="btn" href="/admin">
-                Управление
+              <Link prefetch={false} className="btn mobile-header-icon-btn" href="/admin" aria-label="Управление">
+                <AdminPanelIcon />
               </Link>
             )}
-            <ThemeToggle />
-            <button className="btn btn-danger" type="button" onClick={logout} disabled={isLoggingOut}>
-              {isLoggingOut ? "Выход..." : "Выход"}
+            <ThemeToggle showLabels={false} preferSvgIcon />
+            <button
+              className="btn btn-danger mobile-header-icon-btn"
+              type="button"
+              onClick={logout}
+              disabled={isLoggingOut}
+              aria-busy={isLoggingOut}
+              aria-label="Выход"
+            >
+              <LogoutIcon />
             </button>
           </div>
         </header>

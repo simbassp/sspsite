@@ -191,6 +191,28 @@ a {
   justify-content: flex-end;
 }
 
+.mobile-header .header-actions {
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+
+.mobile-header .mobile-header-icon-btn,
+.mobile-header .theme-toggle-btn {
+  box-sizing: border-box;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.mobile-header .theme-toggle-btn {
+  gap: 0;
+}
+
 .offline-banner {
   margin: 0 16px 12px;
   padding: 12px 14px;
