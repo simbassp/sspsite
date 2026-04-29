@@ -6,8 +6,8 @@ import { FormEvent, useEffect, useState } from "react";
 import { SESSION_COOKIE } from "@/lib/seed";
 import { loginUser, persistSession, requestPasswordReset } from "@/lib/users-repository";
 
-/** Чуть выше LOGIN_SERVER_TIMEOUT_MS в users-repository (запас на сеть до API route). */
-const AUTH_REQUEST_TIMEOUT_MS = 30000;
+/** Две попытки loginViaServer (см. LOGIN_SERVER_TIMEOUT_MS) + пауза между ними. */
+const AUTH_REQUEST_TIMEOUT_MS = 90000;
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -72,7 +72,7 @@ export default function LoginPage() {
     setInfo("");
     setIsSubmitting(true);
     try {
-      setInfo("Вход…");
+      setInfo("Проверяем доступ к серверу...");
       const result = await withTimeout(loginUser(login.trim(), password), AUTH_REQUEST_TIMEOUT_MS, "request_timeout");
       if (!result.ok) {
         setInfo("");

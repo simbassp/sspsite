@@ -158,31 +158,24 @@ export async function POST(request: Request) {
     refreshToken = signIn.data.refresh_token;
   } else {
     const fakeEmail = `${login}@ssp.local`;
-    const [resolved, signInFake] = await Promise.all([
-      resolveEmail(baseUrl, supabaseAnonKey, login),
-      signInWithEmail(baseUrl, supabaseAnonKey, fakeEmail, password),
-    ]);
+    const resolvedRaw = await resolveEmail(baseUrl, supabaseAnonKey, login);
+    const resolvedTrim = typeof resolvedRaw === "string" ? resolvedRaw.trim() : "";
 
-    if (signInFake.ok) {
-      authUserId = signInFake.data.user?.id ?? "";
-      accessToken = signInFake.data.access_token;
-      refreshToken = signInFake.data.refresh_token;
-    } else {
-      lastError = signInFake.error;
-      const resolvedTrim = typeof resolved === "string" ? resolved.trim() : "";
-      if (
-        resolvedTrim &&
-        resolvedTrim.toLowerCase() !== fakeEmail.toLowerCase()
-      ) {
-        const signInResolved = await signInWithEmail(baseUrl, supabaseAnonKey, resolvedTrim, password);
-        if (signInResolved.ok) {
-          authUserId = signInResolved.data.user?.id ?? "";
-          accessToken = signInResolved.data.access_token;
-          refreshToken = signInResolved.data.refresh_token;
-        } else {
-          lastError = signInResolved.error;
-        }
+    const attempts: string[] = [];
+    if (resolvedTrim) attempts.push(resolvedTrim);
+    if (!attempts.some((e) => e.toLowerCase() === fakeEmail.toLowerCase())) {
+      attempts.push(fakeEmail);
+    }
+
+    for (const email of attempts) {
+      const signIn = await signInWithEmail(baseUrl, supabaseAnonKey, email, password);
+      if (signIn.ok) {
+        authUserId = signIn.data.user?.id ?? "";
+        accessToken = signIn.data.access_token;
+        refreshToken = signIn.data.refresh_token;
+        break;
       }
+      lastError = signIn.error;
     }
   }
 
