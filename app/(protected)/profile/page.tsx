@@ -195,6 +195,27 @@ export default function ProfilePage() {
     } as const;
   }, [rows]);
 
+  const ATTEMPTS_PER_PAGE = 10;
+  const attemptsTotalPages = Math.max(1, Math.ceil(rows.length / ATTEMPTS_PER_PAGE));
+  const safeAttemptsPage = Math.min(attemptsPage, attemptsTotalPages);
+  const pagedAttempts = rows.slice(
+    (safeAttemptsPage - 1) * ATTEMPTS_PER_PAGE,
+    safeAttemptsPage * ATTEMPTS_PER_PAGE,
+  );
+  const visibleAttempts = showAllAttempts ? pagedAttempts : rows.slice(0, 3);
+  const canExpandAttempts = rows.length > 3;
+  const canPaginateAttempts = showAllAttempts && attemptsTotalPages > 1;
+
+  useEffect(() => {
+    if (!showAllAttempts && attemptsPage !== 1) {
+      setAttemptsPage(1);
+      return;
+    }
+    if (attemptsPage > attemptsTotalPages) {
+      setAttemptsPage(attemptsTotalPages);
+    }
+  }, [attemptsPage, attemptsTotalPages, showAllAttempts]);
+
   if (!sessionResolved) {
     return <p className="page-subtitle">Загружаем профиль...</p>;
   }
@@ -388,27 +409,6 @@ export default function ProfilePage() {
     });
     setSettingsMessage("Профиль сохранён");
   };
-
-  const ATTEMPTS_PER_PAGE = 10;
-  const attemptsTotalPages = Math.max(1, Math.ceil(rows.length / ATTEMPTS_PER_PAGE));
-  const safeAttemptsPage = Math.min(attemptsPage, attemptsTotalPages);
-  const pagedAttempts = rows.slice(
-    (safeAttemptsPage - 1) * ATTEMPTS_PER_PAGE,
-    safeAttemptsPage * ATTEMPTS_PER_PAGE,
-  );
-  const visibleAttempts = showAllAttempts ? pagedAttempts : rows.slice(0, 3);
-  const canExpandAttempts = rows.length > 3;
-  const canPaginateAttempts = showAllAttempts && attemptsTotalPages > 1;
-
-  useEffect(() => {
-    if (!showAllAttempts && attemptsPage !== 1) {
-      setAttemptsPage(1);
-      return;
-    }
-    if (attemptsPage > attemptsTotalPages) {
-      setAttemptsPage(attemptsTotalPages);
-    }
-  }, [attemptsPage, attemptsTotalPages, showAllAttempts]);
 
   const onResetStats = async () => {
     if (isResettingStats) return;
