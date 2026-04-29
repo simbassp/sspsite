@@ -108,6 +108,53 @@ function deleteKeyInsensitive(payload: Record<string, unknown>, key: string): bo
   return true;
 }
 
+function compactErrors(errors: string[]) {
+  const unique: string[] = [];
+  for (const err of errors) {
+    if (!unique.includes(err)) unique.push(err);
+  }
+  return unique.slice(0, 10);
+}
+
+async function tryCreateTestRecord(
+  supabase: ReturnType<typeof getServerSupabaseServiceClient>,
+  tableName: "tests" | "test",
+  type: "trial" | "final",
+) {
+  const id = crypto.randomUUID();
+  const payload: Record<string, unknown> = {
+    id,
+    type,
+    test_type: type,
+    name: type === "trial" ? "Пробный тест" : "Итоговый тест",
+    title: type === "trial" ? "Пробный тест" : "Итоговый тест",
+    is_active: true,
+    active: true,
+  };
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    if (!Object.keys(payload).length) break;
+    const res = await supabase.from(tableName).insert(payload);
+    if (!res.error) return id;
+    const missingColumn = extractMissingColumn(res.error.message);
+    if (missingColumn && deleteKeyInsensitive(payload, missingColumn)) continue;
+    break;
+  }
+  return null;
+}
+
+async function resolveOrCreateTestId(
+  supabase: ReturnType<typeof getServerSupabaseServiceClient>,
+  type: "trial" | "final",
+) {
+  const existing = await resolveTestIdCandidates(supabase);
+  if (existing.length) return existing[0];
+  const createdInTests = await tryCreateTestRecord(supabase, "tests", type);
+  if (createdInTests) return createdInTests;
+  const createdInLegacy = await tryCreateTestRecord(supabase, "test", type);
+  if (createdInLegacy) return createdInLegacy;
+  return null;
+}
+
 export async function GET() {
   const session = await getServerSession();
   if (!session || !canManageTests(session)) {
@@ -177,9 +224,9 @@ export async function POST(request: Request) {
   setIfExists("active", base.is_active);
 
   if (!canIntrospect || columnSet.has("test_id")) {
-    const candidates = await resolveTestIdCandidates(supabase);
-    if (candidates.length) {
-      payload.test_id = candidates[0];
+    const testId = await resolveOrCreateTestId(supabase, base.type);
+    if (testId) {
+      payload.test_id = testId;
     } else if (canIntrospect && nonNullable.has("test_id")) {
       return Response.json(
         { ok: false, error: "В БД test_questions.test_id обязателен, но не найдено ни одного валидного теста." },
@@ -227,9 +274,9 @@ export async function POST(request: Request) {
         res.error.message.toLowerCase().includes("null value in column \"test_id\"") &&
         !Object.prototype.hasOwnProperty.call(workingPayload, "test_id")
       ) {
-        const candidates = await resolveTestIdCandidates(supabase);
-        if (candidates.length) {
-          workingPayload.test_id = candidates[0];
+        const testId = await resolveOrCreateTestId(supabase, base.type);
+        if (testId) {
+          workingPayload.test_id = testId;
           continue;
         }
       }
@@ -237,7 +284,7 @@ export async function POST(request: Request) {
     }
   }
 
-  return Response.json({ ok: false, error: finalError || "save_failed", details: errors }, { status: 400 });
+  return Response.json({ ok: false, error: finalError || "save_failed", details: compactErrors(errors) }, { status: 400 });
 }
 
 export async function PATCH(request: Request) {

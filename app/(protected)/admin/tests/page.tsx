@@ -36,6 +36,7 @@ export default function AdminTestsPage() {
   const [message, setMessage] = useState("");
   const [isEditingTimeLimit, setIsEditingTimeLimit] = useState(false);
   const [isSavingConfig, setIsSavingConfig] = useState(false);
+  const [isSavingQuestion, setIsSavingQuestion] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
@@ -133,6 +134,7 @@ export default function AdminTestsPage() {
   }, [questions, searchTerm]);
 
   const onSaveQuestion = async () => {
+    if (isSavingQuestion) return;
     setMessage("");
     const text = draft.text.trim();
     const options = draft.options.map((item) => item.trim()).filter(Boolean);
@@ -164,36 +166,41 @@ export default function AdminTestsPage() {
     const maxOrder = questions.reduce((acc, item) => Math.max(acc, item.order), 0);
     const currentOrder = draft.id ? (questions.find((item) => item.id === draft.id)?.order ?? maxOrder + 1) : maxOrder + 1;
     const timeLimitSec = isEditingTimeLimit ? Math.max(5, draft.timeLimitSec) : 20;
-
-    const response = await fetch("/api/admin/tests/questions", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        id: draft.id,
-        type: draft.type,
-        text,
-        options,
-        correctIndex: draft.correctIndex,
-        timeLimitSec,
-        order: Math.max(1, currentOrder),
-        isActive: draft.isActive,
-      }),
-    });
-    const payload = (await response.json()) as {
-      ok?: boolean;
-      error?: string;
-      details?: string[];
-      questions?: TestQuestion[];
-    };
-    if (!response.ok || !payload.ok) {
-      const details = Array.isArray(payload.details) && payload.details.length ? ` | ${payload.details.join(" | ")}` : "";
-      setMessage(`Не удалось сохранить в базе: ${payload.error || "ошибка сохранения"}${details}`);
-      return;
+    setIsSavingQuestion(true);
+    setMessage(draft.id ? "Сохраняю..." : "Добавляю...");
+    try {
+      const response = await fetch("/api/admin/tests/questions", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          id: draft.id,
+          type: draft.type,
+          text,
+          options,
+          correctIndex: draft.correctIndex,
+          timeLimitSec,
+          order: Math.max(1, currentOrder),
+          isActive: draft.isActive,
+        }),
+      });
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        error?: string;
+        details?: string[];
+        questions?: TestQuestion[];
+      };
+      if (!response.ok || !payload.ok) {
+        const details = Array.isArray(payload.details) && payload.details.length ? ` | ${payload.details.join(" | ")}` : "";
+        setMessage(`Не удалось сохранить в базе: ${payload.error || "ошибка сохранения"}${details}`);
+        return;
+      }
+      setMessage(draft.id ? "Вопрос обновлен." : "Вопрос добавлен.");
+      setDraft(initialDraft);
+      setIsEditingTimeLimit(false);
+      setQuestions(payload.questions || []);
+    } finally {
+      setIsSavingQuestion(false);
     }
-    setMessage(draft.id ? "Вопрос обновлен." : "Вопрос добавлен.");
-    setDraft(initialDraft);
-    setIsEditingTimeLimit(false);
-    setQuestions(payload.questions || []);
   };
 
   const onEdit = (question: TestQuestion) => {
@@ -527,8 +534,8 @@ export default function AdminTestsPage() {
 
             {message && <p className="page-subtitle">{message}</p>}
 
-            <button className="btn btn-primary" type="button" onClick={() => void onSaveQuestion()}>
-              {draft.id ? "Сохранить изменения" : "Добавить вопрос"}
+            <button className="btn btn-primary" type="button" onClick={() => void onSaveQuestion()} disabled={isSavingQuestion}>
+              {isSavingQuestion ? (draft.id ? "Сохраняю..." : "Добавляю...") : draft.id ? "Сохранить изменения" : "Добавить вопрос"}
             </button>
             {draft.id && (
               <button
