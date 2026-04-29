@@ -4,6 +4,22 @@ import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 
 export const runtime = "nodejs";
 
+function extractMissingColumn(message: string | undefined): string | null {
+  const m = message || "";
+  const schemaCacheMatch = m.match(/Could not find the '([^']+)' column/i);
+  if (schemaCacheMatch?.[1]) return schemaCacheMatch[1];
+  const sqlMatch = m.match(/column ["`]?([^"'`\s]+)["`]? does not exist/i);
+  if (sqlMatch?.[1]) return sqlMatch[1];
+  return null;
+}
+
+function deleteKeyInsensitive(payload: Record<string, unknown>, key: string): boolean {
+  const exact = Object.keys(payload).find((k) => k.toLowerCase() === key.toLowerCase());
+  if (!exact) return false;
+  delete payload[exact];
+  return true;
+}
+
 function mapQuestionRow(row: Record<string, unknown>, index: number) {
   const rawOptions = row.options ?? row.answers ?? row.variants ?? row.answer_options ?? [];
   let options: string[] = [];
@@ -81,71 +97,52 @@ export async function POST(request: Request) {
   };
   const id = body.id ? String(body.id) : null;
 
-  const attempts: Array<() => Promise<{ error: { message: string } | null }>> = [
-    async () =>
-      id
-        ? await supabase.from("test_questions").update(base).eq("id", id)
-        : await supabase.from("test_questions").insert(base),
-    async () =>
-      id
-        ? await supabase.from("test_questions").update(base).eq("question_id", id)
-        : await supabase.from("test_questions").insert({ ...base, question_id: id }),
-    async () => {
-      const minimal = { type: base.type, text: base.text, options: base.options, correct_index: base.correct_index };
-      return id
-        ? await supabase.from("test_questions").update(minimal).eq("id", id)
-        : await supabase.from("test_questions").insert(minimal);
-    },
-    async () => {
-      const legacy = {
-        test_type: base.type,
-        question: base.text,
-        answers: base.options,
-        correct_answer: base.correct_index,
-        active: base.is_active,
-        order: base.order_index,
-      };
-      return id
-        ? await supabase.from("test_questions").update(legacy).eq("question_id", id)
-        : await supabase.from("test_questions").insert(legacy);
-    },
-    async () => {
-      const legacyTextAnswers = {
-        test_type: base.type,
-        question: base.text,
-        answers: JSON.stringify(base.options),
-        correct_answer: base.correct_index,
-        active: base.is_active,
-        order: base.order_index,
-      };
-      return id
-        ? await supabase.from("test_questions").update(legacyTextAnswers).eq("question_id", id)
-        : await supabase.from("test_questions").insert(legacyTextAnswers);
-    },
-    async () => {
-      const legacyCorrectText = {
-        test_type: base.type,
-        question: base.text,
-        answers: JSON.stringify(base.options),
-        correct_answer: String(base.options[base.correct_index] ?? ""),
-        active: base.is_active,
-        order: base.order_index,
-      };
-      return id
-        ? await supabase.from("test_questions").update(legacyCorrectText).eq("question_id", id)
-        : await supabase.from("test_questions").insert(legacyCorrectText);
-    },
+  const minimal = { type: base.type, text: base.text, options: base.options, correct_index: base.correct_index };
+  const legacy = {
+    test_type: base.type,
+    question: base.text,
+    answers: base.options,
+    correct_answer: base.correct_index,
+    active: base.is_active,
+    order: base.order_index,
+  };
+  const legacyTextAnswers = {
+    ...legacy,
+    answers: JSON.stringify(base.options),
+  };
+  const legacyCorrectText = {
+    ...legacyTextAnswers,
+    correct_answer: String(base.options[base.correct_index] ?? ""),
+  };
+
+  const attempts: Array<{ payload: Record<string, unknown>; updateKey: "id" | "question_id" }> = [
+    { payload: base, updateKey: "id" },
+    { payload: base, updateKey: "question_id" },
+    { payload: minimal, updateKey: "id" },
+    { payload: legacy, updateKey: "question_id" },
+    { payload: legacyTextAnswers, updateKey: "question_id" },
+    { payload: legacyCorrectText, updateKey: "question_id" },
   ];
 
   const errors: string[] = [];
   for (const attempt of attempts) {
-    const res = await attempt();
-    if (!res.error) {
-      const listed = await listQuestions();
-      if (listed.error) return Response.json({ ok: true, saved: true, warning: listed.error });
-      return Response.json({ ok: true, saved: true, questions: listed.data });
+    const payload = { ...attempt.payload };
+    for (let retry = 0; retry < 12; retry += 1) {
+      if (!Object.keys(payload).length) break;
+      const res = id
+        ? await supabase.from("test_questions").update(payload).eq(attempt.updateKey, id)
+        : await supabase.from("test_questions").insert(payload);
+      if (!res.error) {
+        const listed = await listQuestions();
+        if (listed.error) return Response.json({ ok: true, saved: true, warning: listed.error });
+        return Response.json({ ok: true, saved: true, questions: listed.data });
+      }
+      errors.push(res.error.message);
+      const missingColumn = extractMissingColumn(res.error.message);
+      if (!missingColumn) break;
+      const removed = deleteKeyInsensitive(payload, missingColumn);
+      if (!removed) break;
     }
-    errors.push(res.error.message);
   }
 
   return Response.json({ ok: false, error: errors[errors.length - 1] || "save_failed", details: errors }, { status: 400 });
