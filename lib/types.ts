@@ -48,6 +48,7 @@ export interface NewsItem {
   kind?: "news" | "update";
   createdAt: string;
   author: string;
+  authorPosition?: Position | null;
   textStyle?: NewsTextStyle;
 }
 

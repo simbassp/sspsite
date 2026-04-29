@@ -13,6 +13,7 @@ type NewsRow = {
   content?: string;
   priority: "high" | "normal";
   author: string;
+  author_position?: string | null;
   created_at: string;
   format?: unknown;
 };
@@ -58,6 +59,7 @@ function mapNewsRow(row: NewsRow): NewsItem {
     priority: row.priority === "high" ? "high" : "normal",
     kind: normalizeNewsKind(row.format),
     author: row.author,
+    authorPosition: row.author_position ?? null,
     createdAt: row.created_at,
     textStyle: normalizeNewsTextStyle(row.format),
   };

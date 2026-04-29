@@ -110,6 +110,16 @@ export default function AdminNewsPage() {
     });
   };
 
+  const getPositionBadgeClass = (position?: string | null) => {
+    const normalized = (position || "").trim().toLowerCase();
+    if (normalized === "младший специалист") return "is-junior";
+    if (normalized === "специалист") return "is-specialist";
+    if (normalized === "ведущий специалист") return "is-lead";
+    if (normalized === "главный специалист") return "is-chief";
+    if (normalized === "командир взвода") return "is-commander";
+    return "is-default";
+  };
+
   const visibleNews = news.filter((item) => {
     if (filter === "high") return item.priority === "high";
     if (filter === "update") return isUpdateNews(item);
@@ -226,7 +236,12 @@ export default function AdminNewsPage() {
                   {item.priority === "high" ? "Важно" : isUpdateNews(item) ? "Update" : "Новость"}
                 </span>
                 <span>{formatDate(item.createdAt)}</span>
-                <span>{item.author || "Автор не указан"}</span>
+                <span>{item.author || "Редактор"}</span>
+                {item.authorPosition ? (
+                  <span className={`admin-users-position-badge ${getPositionBadgeClass(item.authorPosition)}`}>
+                    {item.authorPosition}
+                  </span>
+                ) : null}
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                 <button

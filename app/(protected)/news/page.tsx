@@ -116,6 +116,16 @@ export default function NewsPage() {
     await load(true);
   };
 
+  const getPositionBadgeClass = (position?: string | null) => {
+    const normalized = (position || "").trim().toLowerCase();
+    if (normalized === "младший специалист") return "is-junior";
+    if (normalized === "специалист") return "is-specialist";
+    if (normalized === "ведущий специалист") return "is-lead";
+    if (normalized === "главный специалист") return "is-chief";
+    if (normalized === "командир взвода") return "is-commander";
+    return "is-default";
+  };
+
   return (
     <section>
       <h1 className="page-title">Новости</h1>
@@ -219,6 +229,11 @@ export default function NewsPage() {
                 </span>
                 <span>{formatDate(item.createdAt)}</span>
                 <span>{item.author || "Редактор"}</span>
+                {item.authorPosition ? (
+                  <span className={`admin-users-position-badge ${getPositionBadgeClass(item.authorPosition)}`}>
+                    {item.authorPosition}
+                  </span>
+                ) : null}
               </div>
               {canEditNews && (
                 <div style={{ display: "flex", gap: 8, marginTop: 8 }}>

@@ -47,6 +47,7 @@ function normalizeNewsRows(rows: Array<Record<string, unknown>>) {
     priority: row.priority === "high" ? "high" : "normal",
     kind: normalizeNewsKind(row.format),
     author: resolveAuthorText(row),
+    author_position: typeof row.author_position === "string" ? row.author_position : null,
     created_at: row.created_at,
     format: normalizeNewsTextStyle(row.format),
   }));
@@ -109,18 +110,19 @@ export async function GET(request: Request) {
       return Response.json({ ok: true, rows: mapped });
     }
 
-    const usersQ = await supabase.from("app_users").select("id,auth_user_id,name,callsign");
+    const usersQ = await supabase.from("app_users").select("id,auth_user_id,name,callsign,position");
     if (usersQ.error || !Array.isArray(usersQ.data)) {
       return Response.json({ ok: true, rows: mapped });
     }
 
-    const usersMap = new Map<string, { name: string; callsign: string }>();
+    const usersMap = new Map<string, { name: string; callsign: string; position: string }>();
     for (const user of usersQ.data as Array<Record<string, unknown>>) {
       const id = typeof user.id === "string" ? user.id : "";
       const authUserId = typeof user.auth_user_id === "string" ? user.auth_user_id : "";
       const person = {
         name: typeof user.name === "string" ? user.name.trim() : "",
         callsign: typeof user.callsign === "string" ? user.callsign.trim() : "",
+        position: typeof user.position === "string" ? user.position.trim() : "",
       };
       if (id) usersMap.set(id, person);
       if (authUserId) usersMap.set(authUserId, person);
@@ -139,7 +141,7 @@ export async function GET(request: Request) {
       const user = usersMap.get(candidateId);
       if (!user) return item;
       const authorText = `${user.name}${user.callsign ? ` ${user.callsign}` : ""}`.trim();
-      return { ...item, author: authorText };
+      return { ...item, author: authorText, author_position: user.position || item.author_position || null };
     });
 
     return Response.json({ ok: true, rows: withAuthorFallback });
