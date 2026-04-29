@@ -50,5 +50,9 @@ export const NewsBody = React.memo(function NewsBody({
   className?: string;
   style?: React.CSSProperties;
 }) {
-  return <p className={className} style={style} dangerouslySetInnerHTML={{ __html: renderNewsBodyHtml(body) }} />;
+  return React.createElement("p", {
+    className,
+    style,
+    dangerouslySetInnerHTML: { __html: renderNewsBodyHtml(body) },
+  });
 });
