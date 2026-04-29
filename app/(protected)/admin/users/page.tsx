@@ -132,7 +132,9 @@ export default function AdminUsersPage() {
   };
 
   const visible = users.filter((item) => {
-    const matchesText = `${item.name} ${item.callsign} ${item.login}`.toLowerCase().includes(query.toLowerCase().trim());
+    const matchesText = `${item.name} ${item.callsign} ${item.login} ${item.position}`
+      .toLowerCase()
+      .includes(query.toLowerCase().trim());
     const matchesRole = roleFilter === "all" ? true : item.role === roleFilter;
     return matchesText && matchesRole;
   });
@@ -176,6 +178,7 @@ export default function AdminUsersPage() {
             <thead>
               <tr>
                 <th>Пользователь</th>
+                <th>Должность</th>
                 <th>Роль</th>
                 <th>Права</th>
                 <th>Действия</th>
@@ -194,6 +197,9 @@ export default function AdminUsersPage() {
                         <small>@{user.login}</small>
                       </span>
                     </div>
+                  </td>
+                  <td>
+                    <span className="admin-users-role-text">{user.position}</span>
                   </td>
                   <td>
                     {canGrantAdminRole ? (
@@ -348,6 +354,7 @@ export default function AdminUsersPage() {
                     <option value="employee">Сотрудник</option>
                     <option value="admin">Администратор</option>
                   </select>
+                  <p className="admin-users-role-text">{user.position}</p>
                   <p className="admin-users-perms-text">{getPermissionsSummary(user)}</p>
                   <div className="admin-users-table__actions admin-users-mobile-actions">
                     <button
