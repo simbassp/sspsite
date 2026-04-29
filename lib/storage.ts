@@ -221,6 +221,7 @@ export function addNews(payload: {
   body: string;
   priority: "high" | "normal";
   author: string;
+  authorPosition?: Position | null;
   textStyle?: { fontSize: number; bold: boolean; italic: boolean; underline: boolean };
   kind?: "news" | "update";
 }) {
@@ -232,6 +233,7 @@ export function addNews(payload: {
     priority: payload.priority,
     kind: payload.kind ?? "news",
     author: payload.author,
+    authorPosition: payload.authorPosition ?? null,
     createdAt: new Date().toISOString(),
     textStyle: payload.textStyle,
   });

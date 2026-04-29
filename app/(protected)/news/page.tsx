@@ -6,7 +6,6 @@ import { formatDate } from "@/lib/format";
 import { canManageNews } from "@/lib/permissions";
 import { applyMarkupToSelection, isUpdateNews, NewsBody } from "@/lib/news-text";
 import { deleteNews, fetchNews, normalizeNewsTextStyle, updateNews } from "@/lib/news-repository";
-import { isPlaceholderNewsAuthor } from "@/lib/news-author";
 import { NewsItem } from "@/lib/types";
 
 export default function NewsPage() {
@@ -229,16 +228,15 @@ export default function NewsPage() {
                 </div>
               ) : null}
               <div className="meta" style={{ marginTop: editingId === item.id ? 8 : 0 }}>
-                <span>{formatDate(item.createdAt)}</span>
-                {item.author && !isPlaceholderNewsAuthor(item.author) ? <span>{item.author}</span> : null}
+                <span className={`pill ${item.priority === "high" ? "pill-red" : ""}`}>
+                  {formatDate(item.createdAt)} · {item.priority === "high" ? "Важно" : isUpdateNews(item) ? "Update" : "Новость"}
+                </span>
+                <span>{item.author?.trim() || "Автор не указан"}</span>
                 {item.authorPosition ? (
                   <span className={`admin-users-position-badge ${getPositionBadgeClass(item.authorPosition)}`}>
                     {item.authorPosition}
                   </span>
                 ) : null}
-                <span className={`pill ${item.priority === "high" ? "pill-red" : ""}`}>
-                  {item.priority === "high" ? "Важно" : isUpdateNews(item) ? "Update" : "Новость"}
-                </span>
               </div>
               {editingId !== item.id ? <h3 style={{ marginTop: 10 }}>{item.title}</h3> : null}
               <NewsBody

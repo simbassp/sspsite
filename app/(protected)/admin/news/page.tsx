@@ -61,7 +61,6 @@ export default function AdminNewsPage() {
           title,
           body,
           priority,
-          author: "",
           textStyle,
         });
     if (!result.ok) {

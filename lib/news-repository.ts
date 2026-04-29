@@ -1,6 +1,7 @@
 "use client";
 
 import { addNews, listNews, removeNewsItem, updateNewsItem } from "@/lib/storage";
+import { readClientSession } from "@/lib/client-auth";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { withTimeoutAndRetry } from "@/lib/async-utils";
 import { NewsItem, NewsTextStyle, Position } from "@/lib/types";
@@ -151,15 +152,25 @@ export async function createNews(payload: {
   title: string;
   body: string;
   priority: "high" | "normal" | "update";
-  author: string;
   textStyle?: NewsTextStyle;
 }) {
+  const session = readClientSession();
+  const authorFromSession = [session?.name?.trim(), session?.callsign?.trim()].filter(Boolean).join(" ").trim();
+  const authorFallback = authorFromSession || "Пользователь";
+  const authorPosition = session?.position || null;
   const normalizedStyle = normalizeNewsTextStyle(payload.textStyle);
   const normalizedKind = payload.priority === "update" ? "update" : "news";
   const normalizedPriority = payload.priority === "high" ? "high" : "normal";
   const formatPayload = { ...normalizedStyle, kind: normalizedKind } as const;
   if (!isSupabaseConfigured) {
-    addNews({ ...payload, priority: normalizedPriority, textStyle: normalizedStyle, kind: normalizedKind });
+    addNews({
+      ...payload,
+      author: authorFallback,
+      authorPosition,
+      priority: normalizedPriority,
+      textStyle: normalizedStyle,
+      kind: normalizedKind,
+    });
     return { ok: true as const };
   }
 
@@ -167,16 +178,36 @@ export async function createNews(payload: {
     const response = await fetch("/api/news", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ...payload, priority: normalizedPriority, kind: normalizedKind, textStyle: formatPayload }),
+      body: JSON.stringify({
+        ...payload,
+        author: authorFallback,
+        priority: normalizedPriority,
+        kind: normalizedKind,
+        textStyle: formatPayload,
+      }),
     });
     if (!response.ok) {
       const data = (await response.json().catch(() => ({}))) as { error?: string };
-      addNews({ ...payload, priority: normalizedPriority, textStyle: normalizedStyle, kind: normalizedKind });
+      addNews({
+        ...payload,
+        author: authorFallback,
+        authorPosition,
+        priority: normalizedPriority,
+        textStyle: normalizedStyle,
+        kind: normalizedKind,
+      });
       return { ok: false as const, error: data.error || `request_failed_${response.status}` };
     }
     return { ok: true as const };
   } catch {
-    addNews({ ...payload, priority: normalizedPriority, textStyle: normalizedStyle, kind: normalizedKind });
+    addNews({
+      ...payload,
+      author: authorFallback,
+      authorPosition,
+      priority: normalizedPriority,
+      textStyle: normalizedStyle,
+      kind: normalizedKind,
+    });
     return { ok: false as const, error: "network_error" };
   }
 }
