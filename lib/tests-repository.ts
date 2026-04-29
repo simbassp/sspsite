@@ -536,7 +536,7 @@ export async function saveAdminQuestion(question: {
     return upsertTestQuestion({ ...question });
   }
   const supabase = getSupabaseBrowserClient();
-  const payload = {
+  const fullPayload: Record<string, unknown> = {
     type: question.type,
     text: question.text,
     options: question.options,
@@ -545,17 +545,27 @@ export async function saveAdminQuestion(question: {
     order_index: question.order,
     is_active: question.isActive,
   };
-  const payloadWithId = question.id ? { ...payload, id: question.id } : payload;
-  const { data, error } = await supabase
-    .from("test_questions")
-    .upsert(payloadWithId, { onConflict: "id" })
-    .select("id,type,text,options,correct_index,time_limit_sec,order_index,is_active,created_at")
-    .single();
+  const fullPayloadWithId = question.id ? { ...fullPayload, id: question.id } : fullPayload;
 
-  if (error || !data) {
+  // Основная попытка — с полным набором полей.
+  let upsertRes = await supabase.from("test_questions").upsert(fullPayloadWithId, { onConflict: "id" });
+
+  // Если схема БД старая и не знает какие‑то колонки (time_limit_sec / order_index / is_active),
+  // пробуем более минимальный набор, который совместим с любой версией.
+  if (upsertRes.error && isMissingColumnError(upsertRes.error.message)) {
+    const minimalPayload: Record<string, unknown> = {
+      type: question.type,
+      text: question.text,
+      options: question.options,
+      correct_index: question.correctIndex,
+    };
+    const minimalPayloadWithId = question.id ? { ...minimalPayload, id: question.id } : minimalPayload;
+    upsertRes = await supabase.from("test_questions").upsert(minimalPayloadWithId, { onConflict: "id" });
+  }
+
+  if (upsertRes.error) {
     return upsertTestQuestion({ ...question });
   }
-  return mapQuestion(data as TestQuestionRow);
 }
 
 export async function deleteAdminQuestion(questionId: string) {

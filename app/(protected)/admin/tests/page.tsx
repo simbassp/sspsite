@@ -27,7 +27,7 @@ const initialDraft: DraftQuestion = {
   text: "",
   options: ["", "", "", ""],
   correctIndex: 0,
-  timeLimitSec: 10,
+  timeLimitSec: 20,
   isActive: true,
 };
 
@@ -149,7 +149,7 @@ export default function AdminTestsPage() {
 
     const maxOrder = questions.reduce((acc, item) => Math.max(acc, item.order), 0);
     const currentOrder = draft.id ? (questions.find((item) => item.id === draft.id)?.order ?? maxOrder + 1) : maxOrder + 1;
-    const timeLimitSec = isEditingTimeLimit ? Math.max(5, draft.timeLimitSec) : 10;
+    const timeLimitSec = isEditingTimeLimit ? Math.max(5, draft.timeLimitSec) : 20;
 
     await saveAdminQuestion({
       id: draft.id,
@@ -417,7 +417,7 @@ export default function AdminTestsPage() {
             </select>
 
             <label className="label" htmlFor="time-limit">
-              Время на ответ: 10 сек по умолчанию
+              Время на ответ: 20 сек по умолчанию
             </label>
             <button className="btn" type="button" onClick={() => setIsEditingTimeLimit((prev) => !prev)}>
               {isEditingTimeLimit ? "Скрыть изменение времени" : "Изменить время"}
