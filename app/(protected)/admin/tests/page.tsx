@@ -202,8 +202,8 @@ export default function AdminTestsPage() {
 
   const onDelete = async (questionId: string) => {
     setMessage("");
-    await deleteAdminQuestion(questionId);
-    setMessage("Вопрос удален.");
+    const deleted = await deleteAdminQuestion(questionId);
+    setMessage(deleted ? "Вопрос удален." : "Не удалось удалить вопрос из базы.");
     if (draft.id === questionId) {
       setDraft(initialDraft);
       setIsEditingTimeLimit(false);
@@ -213,8 +213,8 @@ export default function AdminTestsPage() {
 
   const onToggleActive = async (question: TestQuestion) => {
     setMessage("");
-    await setAdminQuestionActive(question.id, !question.isActive);
-    setMessage(!question.isActive ? "Вопрос включен." : "Вопрос выключен.");
+    const updated = await setAdminQuestionActive(question.id, !question.isActive);
+    setMessage(updated ? (!question.isActive ? "Вопрос включен." : "Вопрос выключен.") : "Не удалось изменить статус вопроса.");
     await refreshQuestions();
   };
 
@@ -255,6 +255,9 @@ export default function AdminTestsPage() {
   };
 
   const onClearManualQuestions = async () => {
+    if (!window.confirm("Удалить все ручные вопросы? Это действие нельзя отменить.")) {
+      return;
+    }
     setMessage("");
     setIsClearingManual(true);
     try {

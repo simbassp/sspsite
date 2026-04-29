@@ -50,6 +50,11 @@ export async function GET() {
       questionsData = minimalQuestionsQ.data as Array<Record<string, unknown>> | null;
       questionsError = minimalQuestionsQ.error;
     }
+    if (questionsError) {
+      const wildcardQuestionsQ = await supabase.from("test_questions").select("*").limit(2000);
+      questionsData = wildcardQuestionsQ.data as Array<Record<string, unknown>> | null;
+      questionsError = wildcardQuestionsQ.error;
+    }
 
     let configQ = await supabase
       .from("test_settings")
@@ -103,9 +108,9 @@ export async function GET() {
         .maybeSingle();
     }
 
-    if (resultsQ.error || questionsError || configQ.error) {
+    if (resultsQ.error || configQ.error) {
       return Response.json(
-        { ok: false, error: resultsQ.error?.message || questionsError?.message || configQ.error?.message },
+        { ok: false, error: resultsQ.error?.message || configQ.error?.message },
         { status: 500 },
       );
     }
@@ -115,15 +120,15 @@ export async function GET() {
       results: resultsQ.data || [],
       questions:
         (questionsData || []).map((q: Record<string, unknown>, index: number) => ({
-          id: q.id,
-          type: q.type,
-          text: q.text,
-          options: q.options,
-          correct_index: q.correct_index,
-          time_limit_sec: q.time_limit_sec ?? 20,
-          order_index: q.order_index ?? index + 1,
-          is_active: q.is_active ?? q.active ?? true,
-          created_at: q.created_at ?? null,
+          id: q.id ?? q.question_id ?? `legacy-${index + 1}`,
+          type: (q.type ?? q.test_type) === "trial" ? "trial" : "final",
+          text: q.text ?? q.question_text ?? q.question ?? "",
+          options: q.options ?? q.answers ?? q.variants ?? [],
+          correct_index: q.correct_index ?? q.correct_answer_index ?? q.correct_option ?? q.correct_answer ?? 0,
+          time_limit_sec: q.time_limit_sec ?? q.time_sec ?? q.time_limit ?? 20,
+          order_index: q.order_index ?? q.sort_order ?? q.order ?? index + 1,
+          is_active: q.is_active ?? q.active ?? q.enabled ?? true,
+          created_at: q.created_at ?? q.created ?? null,
         })) || [],
       config: configQ.data || null,
     });

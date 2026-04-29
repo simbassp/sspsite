@@ -171,6 +171,51 @@ function mapQuestion(row: TestQuestionRow): TestQuestion {
   });
 }
 
+function parseQuestionOptions(raw: unknown): string[] {
+  if (Array.isArray(raw)) return raw.map((item) => String(item));
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed.map((item) => String(item));
+    } catch {}
+    return raw
+      .split(/\r?\n|;/g)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+function mapUnknownQuestionRow(row: Record<string, unknown>, index: number): TestQuestion {
+  const idRaw = row.id ?? row.question_id ?? row.uuid ?? `legacy-${index + 1}`;
+  const typeRaw = row.type ?? row.test_type ?? row.mode ?? "final";
+  const textRaw = row.text ?? row.question_text ?? row.question ?? "";
+  const optionsRaw = row.options ?? row.answers ?? row.variants ?? row.answer_options ?? [];
+  const correctIndexRaw = row.correct_index ?? row.correct_answer_index ?? row.correct_option ?? row.correct_answer ?? 0;
+  const timeRaw = row.time_limit_sec ?? row.time_sec ?? row.time_limit ?? 20;
+  const orderRaw = row.order_index ?? row.sort_order ?? row.order ?? index + 1;
+  const activeRaw = row.is_active ?? row.active ?? row.enabled ?? true;
+  const createdRaw = row.created_at ?? row.created ?? new Date().toISOString();
+  const numericCorrect = Number(correctIndexRaw ?? 0);
+  const options = parseQuestionOptions(optionsRaw);
+  const correctIndex =
+    Number.isFinite(numericCorrect) && numericCorrect >= 0
+      ? numericCorrect
+      : Math.max(0, options.findIndex((opt) => String(opt) === String(correctIndexRaw)));
+
+  return dedupeQuestionOptions({
+    id: String(idRaw),
+    type: String(typeRaw) === "trial" ? "trial" : "final",
+    text: String(textRaw),
+    options,
+    correctIndex,
+    timeLimitSec: Math.max(5, Number(timeRaw || 20)),
+    order: Math.max(1, Number(orderRaw || index + 1)),
+    isActive: Boolean(activeRaw),
+    createdAt: String(createdRaw),
+  });
+}
+
 function mapConfig(row: TestConfigRow): TestConfig {
   const uav =
     typeof row.uav_auto_generation === "boolean" ? row.uav_auto_generation : undefined;
@@ -549,6 +594,14 @@ export async function fetchAdminQuestionBank() {
       );
     }
   }
+  if (error) {
+    const wildcardRes = await supabase.from("test_questions").select("*").limit(2000);
+    data = wildcardRes.data as typeof data;
+    error = wildcardRes.error as typeof error;
+    if (!error && Array.isArray(data)) {
+      return (data as Array<Record<string, unknown>>).map(mapUnknownQuestionRow);
+    }
+  }
 
   if (error || !data) {
     return listTestQuestions();
@@ -597,6 +650,18 @@ export async function saveAdminQuestion(question: {
     const minimalPayloadWithId = question.id ? { ...minimalPayload, id: question.id } : minimalPayload;
     upsertRes = await supabase.from("test_questions").upsert(minimalPayloadWithId, { onConflict: "id" });
   }
+  if (upsertRes.error && isMissingColumnError(upsertRes.error.message)) {
+    const legacyPayload: Record<string, unknown> = {
+      test_type: question.type,
+      question: question.text,
+      answers: question.options,
+      correct_answer: question.correctIndex,
+      active: question.isActive,
+      order: question.order,
+    };
+    const legacyPayloadWithId = question.id ? { ...legacyPayload, id: question.id } : legacyPayload;
+    upsertRes = await supabase.from("test_questions").upsert(legacyPayloadWithId, { onConflict: "id" });
+  }
 
   if (upsertRes.error) {
     upsertTestQuestion({ ...question });
@@ -606,23 +671,32 @@ export async function saveAdminQuestion(question: {
 }
 
 export async function deleteAdminQuestion(questionId: string) {
+  if (!questionId || questionId === "undefined") {
+    return false;
+  }
   if (!isSupabaseConfigured) {
     removeTestQuestion(questionId);
-    return;
+    return true;
   }
   const supabase = getSupabaseBrowserClient();
-  const { error } = await supabase.from("test_questions").delete().eq("id", questionId);
-  if (error) {
-    removeTestQuestion(questionId);
+  let removeRes = await supabase.from("test_questions").delete().eq("id", questionId);
+  if (removeRes.error && isMissingColumnError(removeRes.error.message)) {
+    removeRes = await supabase.from("test_questions").delete().eq("question_id", questionId);
   }
+  if (removeRes.error) {
+    removeTestQuestion(questionId);
+    return false;
+  }
+  return true;
 }
 
 export async function setAdminQuestionActive(questionId: string, isActive: boolean) {
+  if (!questionId || questionId === "undefined") return false;
   if (!isSupabaseConfigured) {
     const existing = listTestQuestions().find((q) => q.id === questionId);
-    if (!existing) return;
+    if (!existing) return false;
     upsertTestQuestion({ ...existing, isActive });
-    return;
+    return true;
   }
   const supabase = getSupabaseBrowserClient();
   let updateRes = await supabase.from("test_questions").update({ is_active: isActive }).eq("id", questionId);
@@ -630,10 +704,17 @@ export async function setAdminQuestionActive(questionId: string, isActive: boole
     updateRes = await supabase.from("test_questions").update({ active: isActive }).eq("id", questionId);
   }
   if (updateRes.error) {
+    let legacyRes = await supabase.from("test_questions").update({ active: isActive }).eq("question_id", questionId);
+    if (legacyRes.error && isMissingColumnError(legacyRes.error.message)) {
+      legacyRes = await supabase.from("test_questions").update({ enabled: isActive }).eq("id", questionId);
+    }
+    if (!legacyRes.error) return true;
     const existing = listTestQuestions().find((q) => q.id === questionId);
-    if (!existing) return;
+    if (!existing) return false;
     upsertTestQuestion({ ...existing, isActive });
+    return false;
   }
+  return true;
 }
 
 export async function seedDefaultQuestionsIfEmpty() {
