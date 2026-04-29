@@ -82,21 +82,21 @@ export async function POST(request: Request) {
   const id = body.id ? String(body.id) : null;
 
   const attempts: Array<() => Promise<{ error: { message: string } | null }>> = [
-    () =>
+    async () =>
       id
-        ? supabase.from("test_questions").update(base).eq("id", id)
-        : supabase.from("test_questions").insert(base),
-    () =>
+        ? await supabase.from("test_questions").update(base).eq("id", id)
+        : await supabase.from("test_questions").insert(base),
+    async () =>
       id
-        ? supabase.from("test_questions").update(base).eq("question_id", id)
-        : supabase.from("test_questions").insert({ ...base, question_id: id }),
-    () => {
+        ? await supabase.from("test_questions").update(base).eq("question_id", id)
+        : await supabase.from("test_questions").insert({ ...base, question_id: id }),
+    async () => {
       const minimal = { type: base.type, text: base.text, options: base.options, correct_index: base.correct_index };
       return id
-        ? supabase.from("test_questions").update(minimal).eq("id", id)
-        : supabase.from("test_questions").insert(minimal);
+        ? await supabase.from("test_questions").update(minimal).eq("id", id)
+        : await supabase.from("test_questions").insert(minimal);
     },
-    () => {
+    async () => {
       const legacy = {
         test_type: base.type,
         question: base.text,
@@ -106,8 +106,8 @@ export async function POST(request: Request) {
         order: base.order_index,
       };
       return id
-        ? supabase.from("test_questions").update(legacy).eq("question_id", id)
-        : supabase.from("test_questions").insert(legacy);
+        ? await supabase.from("test_questions").update(legacy).eq("question_id", id)
+        : await supabase.from("test_questions").insert(legacy);
     },
   ];
 
