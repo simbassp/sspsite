@@ -22,6 +22,13 @@ function toSafeString(value: unknown) {
   return typeof value === "string" ? value : "";
 }
 
+function formatPerson(name: unknown, callsign: unknown) {
+  const n = toSafeString(name).trim();
+  const c = toSafeString(callsign).trim();
+  if (n && c) return `${n} ${c}`;
+  return n || c || "Пользователь";
+}
+
 export async function GET() {
   const session = await getServerSession();
   if (!session) return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
@@ -91,8 +98,8 @@ export async function GET() {
         ? {
             id: `newcomer:${String(newest.id || "")}`,
             type: "user_added",
-            title: "Новый пользователь",
-            description: toSafeString(newest.name) || toSafeString(newest.callsign) || "Без имени",
+            title: "Наш новый товарищ:",
+            description: formatPerson(newest.name, newest.callsign),
             created_at: newest.created_at ? String(newest.created_at) : null,
           }
         : null,
@@ -100,9 +107,8 @@ export async function GET() {
         ? {
             id: `left:${String(left.id || "")}`,
             type: "user_removed",
-            title: "Пользователь выбыл",
-            description:
-              toSafeString(leftPayload.name) || toSafeString(leftPayload.callsign) || "Пользователь",
+            title: "Товарищ покинул нас:",
+            description: formatPerson(leftPayload.name, leftPayload.callsign),
             created_at: left.created_at ? String(left.created_at) : null,
           }
         : null,
@@ -111,16 +117,16 @@ export async function GET() {
             id: `promoted:${String(promoted.id || "")}`,
             type: "position_changed",
             title: "Повышение должности",
-            description: `${
-              toSafeString(promotedPayload.name) || toSafeString(promotedPayload.callsign) || "Пользователь"
-            } — новая должность: ${toSafeString(promotedPayload.position) || "Не указана"}`,
+            description: `${formatPerson(promotedPayload.name, promotedPayload.callsign)} — новая должность: ${
+              toSafeString(promotedPayload.position) || "Не указана"
+            }`,
             created_at: promoted.created_at ? String(promoted.created_at) : null,
           }
         : null,
       {
         id: "commander",
         type: "commander_assigned",
-        title: "Назначен командир",
+        title: "Наш командир",
         description: "Владислав Клиган",
         created_at: null,
       },

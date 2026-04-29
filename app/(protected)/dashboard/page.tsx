@@ -266,10 +266,10 @@ export default function DashboardPage() {
     if (!online.length) return `Пользователей: ${total} · Онлайн: 0`;
     const shown = online.slice(0, 3).map((item) => {
       const name = item.name || "Пользователь";
-      return item.callsign ? `${name} (@${item.callsign})` : name;
+      return item.callsign ? `${name} ${item.callsign}` : name;
     });
     const extra = online.length > 3 ? ` +${online.length - 3}` : "";
-    return `Пользователей: ${total} · Онлайн: ${online.length} — ${shown.join(", ")}${extra}`;
+    return `Пользователей: ${total} · Онлайн: ${online.length} - ${shown.join(", ")}${extra}`;
   }, [usersSummary]);
 
   return (
@@ -325,10 +325,14 @@ export default function DashboardPage() {
                       <span className="home-event-title">{item.title}</span>
                       <span className="home-event-desc">{item.description}</span>
                     </span>
-                    <span className="home-event-time">
-                      <span>{formatTimeLabel(item.createdAt)}</span>
-                      <span>{formatDayLabel(item.createdAt)}</span>
-                    </span>
+                    {item.type === "commander_assigned" ? (
+                      <span className="home-event-time" />
+                    ) : (
+                      <span className="home-event-time">
+                        <span>{formatTimeLabel(item.createdAt)}</span>
+                        <span>{formatDayLabel(item.createdAt)}</span>
+                      </span>
+                    )}
                   </article>
                 ))}
               </div>
