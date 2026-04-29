@@ -153,11 +153,13 @@ export async function createNews(payload: {
   body: string;
   priority: "high" | "normal" | "update";
   textStyle?: NewsTextStyle;
+  authorSnapshot?: string;
+  authorPositionSnapshot?: Position | null;
 }) {
   const session = readClientSession();
-  const authorFromSession = [session?.name?.trim(), session?.callsign?.trim()].filter(Boolean).join(" ").trim();
-  const authorFallback = authorFromSession || "Пользователь";
-  const authorPosition = session?.position || null;
+  const authorFromCookieSession = [session?.name?.trim(), session?.callsign?.trim()].filter(Boolean).join(" ").trim();
+  const authorFallback = payload.authorSnapshot?.trim() || authorFromCookieSession || "Пользователь";
+  const authorPosition = payload.authorPositionSnapshot || session?.position || null;
   const normalizedStyle = normalizeNewsTextStyle(payload.textStyle);
   const normalizedKind = payload.priority === "update" ? "update" : "news";
   const normalizedPriority = payload.priority === "high" ? "high" : "normal";

@@ -62,6 +62,8 @@ export default function AdminNewsPage() {
           body,
           priority,
           textStyle,
+          authorSnapshot: [session?.name?.trim(), session?.callsign?.trim()].filter(Boolean).join(" ").trim(),
+          authorPositionSnapshot: session?.position ?? null,
         });
     if (!result.ok) {
       setInfo(`Ошибка: ${result.error}`);
