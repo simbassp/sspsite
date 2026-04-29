@@ -1,6 +1,6 @@
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
-import { canManageUsers } from "@/lib/permissions";
+import { canManageUsers, canViewOnline } from "@/lib/permissions";
 import { ONLINE_LAST_SEEN_MAX_MS } from "@/lib/presence-constants";
 
 export const runtime = "nodejs";
@@ -16,6 +16,10 @@ function effectiveOnlineStrict(isOnline: unknown, lastSeenAt: unknown): boolean 
 function isMissingColumnError(message: string | undefined) {
   const m = (message || "").toLowerCase();
   return m.includes("column") && m.includes("does not exist");
+}
+
+function toSafeString(value: unknown) {
+  return typeof value === "string" ? value : "";
 }
 
 export async function GET() {
@@ -49,56 +53,90 @@ export async function GET() {
     const promoted = Array.isArray(promotedQ.data) ? promotedQ.data[0] : null;
     const leftPayload = (left?.payload || {}) as Record<string, unknown>;
     const promotedPayload = (promoted?.payload || {}) as Record<string, unknown>;
-    let accessStats: { totalUsers: number; onlineUsers: number } | null = null;
+    let usersSummary: { totalUsers: number; onlineUsers: Array<{ id: string; name: string; callsign: string }> } | null = null;
+    const canReadUsersSummary = canManageUsers(session) || canViewOnline(session);
 
-    if (canManageUsers(session)) {
-      const onlineStrictQ = await supabase.from("app_users").select("id,is_online,last_seen_at");
+    if (canReadUsersSummary) {
+      const onlineStrictQ = await supabase.from("app_users").select("id,name,callsign,is_online,last_seen_at");
       if (onlineStrictQ.error && isMissingColumnError(onlineStrictQ.error.message)) {
-        const fallbackQ = await supabase.from("app_users").select("id,is_online");
+        const fallbackQ = await supabase.from("app_users").select("id,name,callsign,is_online");
         if (!fallbackQ.error) {
           const rows = Array.isArray(fallbackQ.data) ? fallbackQ.data : [];
-          accessStats = {
+          const onlineRows = rows.filter((row) => row.is_online === true);
+          usersSummary = {
             totalUsers: rows.length,
-            onlineUsers: rows.filter((row) => row.is_online === true).length,
+            onlineUsers: onlineRows.map((row) => ({
+              id: String(row.id || ""),
+              name: toSafeString(row.name),
+              callsign: toSafeString(row.callsign),
+            })),
           };
         }
       } else if (!onlineStrictQ.error) {
         const rows = Array.isArray(onlineStrictQ.data) ? onlineStrictQ.data : [];
-        accessStats = {
+        const onlineRows = rows.filter((row) => effectiveOnlineStrict(row.is_online, row.last_seen_at));
+        usersSummary = {
           totalUsers: rows.length,
-          onlineUsers: rows.filter((row) => effectiveOnlineStrict(row.is_online, row.last_seen_at)).length,
+          onlineUsers: onlineRows.map((row) => ({
+            id: String(row.id || ""),
+            name: toSafeString(row.name),
+            callsign: toSafeString(row.callsign),
+          })),
         };
       }
     }
 
+    const events = [
+      newest
+        ? {
+            id: `newcomer:${String(newest.id || "")}`,
+            type: "user_added",
+            title: "Новый пользователь",
+            description: toSafeString(newest.name) || toSafeString(newest.callsign) || "Без имени",
+            created_at: newest.created_at ? String(newest.created_at) : null,
+          }
+        : null,
+      left
+        ? {
+            id: `left:${String(left.id || "")}`,
+            type: "user_removed",
+            title: "Пользователь выбыл",
+            description:
+              toSafeString(leftPayload.name) || toSafeString(leftPayload.callsign) || "Пользователь",
+            created_at: left.created_at ? String(left.created_at) : null,
+          }
+        : null,
+      promoted
+        ? {
+            id: `promoted:${String(promoted.id || "")}`,
+            type: "position_changed",
+            title: "Повышение должности",
+            description: `${
+              toSafeString(promotedPayload.name) || toSafeString(promotedPayload.callsign) || "Пользователь"
+            } — новая должность: ${toSafeString(promotedPayload.position) || "Не указана"}`,
+            created_at: promoted.created_at ? String(promoted.created_at) : null,
+          }
+        : null,
+      {
+        id: "commander",
+        type: "commander_assigned",
+        title: "Назначен командир",
+        description: "Владислав Клиган",
+        created_at: null,
+      },
+    ]
+      .filter(Boolean)
+      .sort((a, b) => {
+        const ta = a?.created_at ? Date.parse(a.created_at) : -1;
+        const tb = b?.created_at ? Date.parse(b.created_at) : -1;
+        return tb - ta;
+      })
+      .slice(0, 8);
+
     return Response.json({
       ok: true,
-      highlights: {
-        newcomer: newest
-          ? {
-              name: String(newest.name || ""),
-              callsign: String(newest.callsign || ""),
-              created_at: newest.created_at,
-            }
-          : null,
-        departed: left
-          ? {
-              name: String(leftPayload.name || ""),
-              callsign: String(leftPayload.callsign || ""),
-              created_at: left.created_at,
-            }
-          : null,
-        promoted: promoted
-          ? {
-              name: String(promotedPayload.name || ""),
-              callsign: String(promotedPayload.callsign || ""),
-              position: String(promotedPayload.position || ""),
-              created_at: promoted.created_at,
-            }
-          : null,
-        commander: { name: "Владислав", callsign: "Клиган" },
-      },
-      accessStats,
+      events,
+      usersSummary,
     });
   } catch (error) {
     return Response.json(
