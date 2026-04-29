@@ -3,7 +3,20 @@
 import { addNews, listNews, removeNewsItem, updateNewsItem } from "@/lib/storage";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { withTimeoutAndRetry } from "@/lib/async-utils";
-import { NewsItem, NewsTextStyle } from "@/lib/types";
+import { NewsItem, NewsTextStyle, Position } from "@/lib/types";
+
+const AUTHOR_POSITIONS: readonly Position[] = [
+  "Младший специалист",
+  "Специалист",
+  "Ведущий специалист",
+  "Главный специалист",
+  "Командир взвода",
+];
+
+function normalizeAuthorPosition(value: string | null | undefined): Position | null {
+  if (value == null || value === "") return null;
+  return (AUTHOR_POSITIONS as readonly string[]).includes(value) ? (value as Position) : null;
+}
 
 type NewsRow = {
   id: string;
@@ -59,7 +72,7 @@ function mapNewsRow(row: NewsRow): NewsItem {
     priority: row.priority === "high" ? "high" : "normal",
     kind: normalizeNewsKind(row.format),
     author: row.author,
-    authorPosition: row.author_position ?? null,
+    authorPosition: normalizeAuthorPosition(row.author_position),
     createdAt: row.created_at,
     textStyle: normalizeNewsTextStyle(row.format),
   };
