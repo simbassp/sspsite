@@ -143,13 +143,12 @@ export default function DashboardPage() {
   const [statsError, setStatsError] = useState("");
 
   const sections = useMemo(() => {
-    const base = [
+    return [
       {
         href: "/news",
         title: "Новости",
         description: "Важные сообщения и уведомления.",
         color: "purple",
-        visible: permissions.news,
         icon: (
           <svg viewBox="0 0 24 24" aria-hidden="true" className="home-icon-svg">
             <rect x="4" y="4" width="13" height="16" rx="2" />
@@ -164,7 +163,6 @@ export default function DashboardPage() {
         title: "Противодействие",
         description: "Каталог карточек со структурированными ТТХ.",
         color: "green",
-        visible: permissions.counteraction,
         icon: (
           <svg viewBox="0 0 24 24" aria-hidden="true" className="home-icon-svg">
             <path d="M12 3l8 3v6c0 5-3.5 8.5-8 9.8C7.5 20.5 4 17 4 12V6l8-3z" />
@@ -177,7 +175,6 @@ export default function DashboardPage() {
         title: "ТТХ БПЛА",
         description: "Отдельные карточки и детальные страницы.",
         color: "blue",
-        visible: permissions.uav,
         icon: (
           <svg viewBox="0 0 24 24" aria-hidden="true" className="home-icon-svg">
             <circle cx="12" cy="12" r="2.3" />
@@ -194,7 +191,6 @@ export default function DashboardPage() {
         title: "Тесты",
         description: "Пробный мягкий режим и строгий итоговый.",
         color: "orange",
-        visible: permissions.tests,
         icon: (
           <svg viewBox="0 0 24 24" aria-hidden="true" className="home-icon-svg">
             <rect x="5" y="4" width="14" height="17" rx="2" />
@@ -209,7 +205,6 @@ export default function DashboardPage() {
         title: "Профиль",
         description: "Ваши данные и личные результаты тестов.",
         color: "sky",
-        visible: true,
         icon: (
           <svg viewBox="0 0 24 24" aria-hidden="true" className="home-icon-svg">
             <circle cx="12" cy="8" r="4" />
@@ -218,43 +213,7 @@ export default function DashboardPage() {
         ),
       },
     ];
-    const visibleBase = base.filter((item) => item.visible).map(({ visible, ...rest }) => rest);
-    const admin = [
-      permissions.users
-        ? {
-            href: "/admin/users",
-            title: "Пользователи",
-            description: "Управление пользователями и доступом.",
-            color: "green",
-            icon: (
-              <svg viewBox="0 0 24 24" aria-hidden="true" className="home-icon-svg">
-                <circle cx="9" cy="8" r="3" />
-                <circle cx="16.5" cy="9" r="2.5" />
-                <path d="M3 18c1.5-3 3.7-4.4 6-4.4s4.5 1.4 6 4.4" />
-                <path d="M14.5 17.5c.7-1.7 2-2.8 3.8-3.2" />
-              </svg>
-            ),
-          }
-        : null,
-      permissions.results
-        ? {
-            href: "/admin/results",
-            title: "Результаты",
-            description: "Просмотр результатов тестирования.",
-            color: "blue",
-            icon: (
-              <svg viewBox="0 0 24 24" aria-hidden="true" className="home-icon-svg">
-                <line x1="5" y1="20" x2="19" y2="20" />
-                <rect x="6" y="11" width="3" height="7" rx="1" />
-                <rect x="11" y="8" width="3" height="10" rx="1" />
-                <rect x="16" y="5" width="3" height="13" rx="1" />
-              </svg>
-            ),
-          }
-        : null,
-    ].filter(Boolean);
-    return [...visibleBase, ...admin].filter((item): item is NonNullable<(typeof admin)[number]> => Boolean(item));
-  }, [permissions.news, permissions.counteraction, permissions.uav, permissions.tests, permissions.users, permissions.results]);
+  }, []);
 
   const refresh = async () => {
     setIsLoadingEvents(true);
