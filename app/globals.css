@@ -554,6 +554,67 @@ html[data-theme="dark"] .chip:not(.active):hover {
   width: min(100%, 460px);
 }
 
+.auth-card__header {
+  text-align: center;
+}
+
+.auth-card__lead .page-subtitle {
+  margin-bottom: 8px;
+}
+
+.auth-card__lead .page-subtitle:last-child {
+  margin-bottom: 18px;
+}
+
+.auth-card .label.label--center {
+  display: block;
+  text-align: center;
+}
+
+.auth-text-link {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  text-align: center;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.auth-text-link:hover:not(:disabled) {
+  color: var(--accent2);
+}
+
+.auth-text-link:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.auth-register-footer {
+  text-align: center;
+}
+
+.auth-register-footer__muted {
+  color: var(--muted);
+}
+
+.auth-register-footer__link {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.auth-register-footer__link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .stat-value {
   font-size: 30px;
   font-weight: 800;

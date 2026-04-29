@@ -233,10 +233,13 @@ export default function LoginPage() {
       <style dangerouslySetInnerHTML={{ __html: `@keyframes login-spin { to { transform: rotate(360deg); } }` }} />
       <div className="card auth-card">
         <div className="card-body">
-          <h1 className="page-title">Вход в ССП ПВО</h1>
-          <p className="page-subtitle">
-            Платформа полностью закрыта. Для входа используйте выданные учетные данные.
-          </p>
+          <div className="auth-card__header">
+            <h1 className="page-title">Вход в ССП ПВО</h1>
+            <div className="auth-card__lead">
+              <p className="page-subtitle">Закрытая платформа.</p>
+              <p className="page-subtitle">Используйте выданные учётные данные.</p>
+            </div>
+          </div>
 
           {!isOnline && (
             <p style={{ color: "#d4a63a", fontSize: 13, marginBottom: 8 }}>
@@ -246,7 +249,7 @@ export default function LoginPage() {
 
           {!requestResetMode ? (
             <form className="form" onSubmit={onSubmit}>
-              <label className="label" htmlFor="login">
+              <label className="label label--center" htmlFor="login">
                 Логин или Email
               </label>
               <input
@@ -260,7 +263,7 @@ export default function LoginPage() {
                 autoComplete="username"
               />
 
-              <label className="label" htmlFor="password">
+              <label className="label label--center" htmlFor="password">
                 Пароль
               </label>
               <input
@@ -286,7 +289,12 @@ export default function LoginPage() {
                   "Войти"
                 )}
               </button>
-              <button className="btn" type="button" onClick={openRequestReset} disabled={isSubmitting}>
+              <button
+                type="button"
+                className="auth-text-link"
+                onClick={openRequestReset}
+                disabled={isSubmitting}
+              >
                 Забыли пароль?
               </button>
             </form>
@@ -298,7 +306,7 @@ export default function LoginPage() {
                 void onRequestReset();
               }}
             >
-              <label className="label" htmlFor="reset-login">
+              <label className="label label--center" htmlFor="reset-login">
                 Логин или Email
               </label>
               <input
@@ -321,10 +329,10 @@ export default function LoginPage() {
             </form>
           )}
 
-          <p className="page-subtitle" style={{ marginTop: 12, marginBottom: 0 }}>
-            Нет аккаунта?{" "}
-            <Link href="/register" prefetch={false}>
-              Регистрация сотрудника
+          <p className="page-subtitle auth-register-footer" style={{ marginTop: 12, marginBottom: 0 }}>
+            <span className="auth-register-footer__muted">(или нет аккаунта?) </span>
+            <Link href="/register" prefetch={false} className="auth-register-footer__link">
+              Зарегистрировать по коду приглашения
             </Link>
           </p>
           {!showDebug && (
