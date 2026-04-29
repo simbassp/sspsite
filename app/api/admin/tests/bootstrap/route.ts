@@ -30,17 +30,25 @@ export async function GET() {
         .order("order_index", { ascending: true })
         .limit(2000),
     ]);
-    let questionsQ = baseQuestionsQ;
-    if (questionsQ.error && isMissingColumnError(questionsQ.error.message)) {
-      questionsQ = await supabase
+    let questionsData = baseQuestionsQ.data as Array<Record<string, unknown>> | null;
+    let questionsError = baseQuestionsQ.error;
+    if (questionsError && isMissingColumnError(questionsError.message)) {
+      const legacyQuestionsQ = await supabase
         .from("test_questions")
         .select("id,type,text,options,correct_index,order_index,active,created_at")
         .order("type", { ascending: true })
         .order("order_index", { ascending: true })
         .limit(2000);
+      questionsData = legacyQuestionsQ.data as Array<Record<string, unknown>> | null;
+      questionsError = legacyQuestionsQ.error;
     }
-    if (questionsQ.error && isMissingColumnError(questionsQ.error.message)) {
-      questionsQ = await supabase.from("test_questions").select("id,type,text,options,correct_index").limit(2000);
+    if (questionsError && isMissingColumnError(questionsError.message)) {
+      const minimalQuestionsQ = await supabase
+        .from("test_questions")
+        .select("id,type,text,options,correct_index")
+        .limit(2000);
+      questionsData = minimalQuestionsQ.data as Array<Record<string, unknown>> | null;
+      questionsError = minimalQuestionsQ.error;
     }
 
     let configQ = await supabase
@@ -95,9 +103,9 @@ export async function GET() {
         .maybeSingle();
     }
 
-    if (resultsQ.error || questionsQ.error || configQ.error) {
+    if (resultsQ.error || questionsError || configQ.error) {
       return Response.json(
-        { ok: false, error: resultsQ.error?.message || questionsQ.error?.message || configQ.error?.message },
+        { ok: false, error: resultsQ.error?.message || questionsError?.message || configQ.error?.message },
         { status: 500 },
       );
     }
@@ -106,7 +114,7 @@ export async function GET() {
       ok: true,
       results: resultsQ.data || [],
       questions:
-        (questionsQ.data || []).map((q: Record<string, unknown>, index: number) => ({
+        (questionsData || []).map((q: Record<string, unknown>, index: number) => ({
           id: q.id,
           type: q.type,
           text: q.text,
