@@ -24,12 +24,12 @@ interface AppShellProps {
 }
 
 const mainLinks = [
-  { href: "/dashboard", label: "Главная", icon: "🏠" },
-  { href: "/news", label: "Новости", icon: "📰" },
-  { href: "/counteraction", label: "Противодействие", icon: "🛡️" },
-  { href: "/uav", label: "БПЛА", icon: "🚁" },
-  { href: "/tests", label: "Тесты", icon: "🧪" },
-  { href: "/profile", label: "Профиль", icon: "👤" },
+  { href: "/dashboard", label: "Главная", icon: "home" },
+  { href: "/news", label: "Новости", icon: "news" },
+  { href: "/counteraction", label: "Противодействие", icon: "shield" },
+  { href: "/uav", label: "БПЛА", icon: "uav" },
+  { href: "/tests", label: "Тесты", icon: "clipboard" },
+  { href: "/profile", label: "Профиль", icon: "user" },
 ];
 
 export function AppShell({ session, children }: AppShellProps) {
@@ -134,6 +134,74 @@ export function AppShell({ session, children }: AppShellProps) {
       new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), timeoutMs)),
     ]);
 
+  const iconStyle = {
+    width: 22,
+    height: 22,
+    stroke: "currentColor",
+    fill: "none",
+    strokeWidth: 2,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+  };
+
+  const renderBottomIcon = (name: string) => {
+    switch (name) {
+      case "home":
+        return (
+          <svg viewBox="0 0 24 24" aria-hidden="true" style={iconStyle}>
+            <path d="M3 10.5L12 3l9 7.5" />
+            <path d="M5 10v10h14V10" />
+            <path d="M10 20v-5h4v5" />
+          </svg>
+        );
+      case "news":
+        return (
+          <svg viewBox="0 0 24 24" aria-hidden="true" style={iconStyle}>
+            <rect x="3" y="4" width="14" height="16" rx="2" />
+            <path d="M17 7h4v11a2 2 0 0 1-2 2" />
+            <line x1="6" y1="9" x2="14" y2="9" />
+            <line x1="6" y1="13" x2="14" y2="13" />
+            <line x1="6" y1="17" x2="11" y2="17" />
+          </svg>
+        );
+      case "shield":
+        return (
+          <svg viewBox="0 0 24 24" aria-hidden="true" style={iconStyle}>
+            <path d="M12 3l8 3v6c0 5-3.5 8.5-8 9.8C7.5 20.5 4 17 4 12V6l8-3z" />
+            <path d="M9 12.5l2 2 4-4" />
+          </svg>
+        );
+      case "uav":
+        return (
+          <svg viewBox="0 0 24 24" aria-hidden="true" style={iconStyle}>
+            <rect x="9" y="9" width="6" height="6" rx="2" />
+            <path d="M12 9V5M12 19v-4M9 12H5M19 12h-4" />
+            <circle cx="5" cy="5" r="2.2" />
+            <circle cx="19" cy="5" r="2.2" />
+            <circle cx="5" cy="19" r="2.2" />
+            <circle cx="19" cy="19" r="2.2" />
+            <path d="M7 7l2.2 2.2M17 7l-2.2 2.2M7 17l2.2-2.2M17 17l-2.2-2.2" />
+          </svg>
+        );
+      case "clipboard":
+        return (
+          <svg viewBox="0 0 24 24" aria-hidden="true" style={iconStyle}>
+            <rect x="5" y="4" width="14" height="17" rx="2" />
+            <rect x="9" y="2.5" width="6" height="3.5" rx="1.2" />
+            <path d="M8 10h8M8 14h8M8 18h5" />
+          </svg>
+        );
+      case "user":
+      default:
+        return (
+          <svg viewBox="0 0 24 24" aria-hidden="true" style={iconStyle}>
+            <circle cx="12" cy="8" r="4" />
+            <path d="M4 20c1.8-3.8 4.5-5.5 8-5.5S18.2 16.2 20 20" />
+          </svg>
+        );
+    }
+  };
+
   const logout = async () => {
     if (isLoggingOut) return;
     setIsLoggingOut(true);
@@ -230,7 +298,7 @@ export function AppShell({ session, children }: AppShellProps) {
           return (
             <Link key={link.href} href={link.href} className={active ? "active" : ""} aria-label={link.label}>
               <span className="bottom-nav-icon" aria-hidden="true">
-                {link.icon}
+                {renderBottomIcon(link.icon)}
               </span>
               <span className="bottom-nav-label">{link.label}</span>
             </Link>
