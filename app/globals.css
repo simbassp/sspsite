@@ -581,6 +581,7 @@ html[data-theme="dark"] .chip:not(.active):hover {
   color: var(--accent);
   font: inherit;
   font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
   text-align: center;
   text-decoration: underline;

@@ -330,7 +330,7 @@ export default function LoginPage() {
           )}
 
           <p className="page-subtitle auth-register-footer" style={{ marginTop: 12, marginBottom: 0 }}>
-            <span className="auth-register-footer__muted">(или нет аккаунта?) </span>
+            <span className="auth-register-footer__muted">Или нет аккаунта? </span>
             <Link href="/register" prefetch={false} className="auth-register-footer__link">
               Зарегистрировать по коду приглашения
             </Link>
