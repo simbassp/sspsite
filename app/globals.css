@@ -1157,13 +1157,19 @@ html[data-theme="dark"] .chip:not(.active):hover {
   gap: 6px;
 }
 
+.admin-users-role-position .admin-users-position-badge {
+  align-self: flex-start;
+  margin: 0;
+}
+
 .admin-users-position-badge {
   display: inline-flex;
   align-items: center;
   padding: 4px 10px;
   border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.25;
 }
 
 .admin-users-position-badge.is-junior {
@@ -1195,8 +1201,12 @@ html[data-theme="dark"] .chip:not(.active):hover {
 button.admin-users-position-badge--editable {
   cursor: pointer;
   border: none;
-  font: inherit;
   text-align: left;
+  /* не font: inherit — иначе теряется жирность от .admin-users-position-badge */
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.25;
 }
 
 button.admin-users-position-badge--editable:hover:not(:disabled) {
