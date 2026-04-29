@@ -804,29 +804,52 @@ html[data-theme="dark"] .chip:not(.active):hover {
   min-width: 140px;
 }
 
-.admin-users-role-badge {
+.admin-users-role-position {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.admin-users-position-badge {
   display: inline-flex;
   align-items: center;
   padding: 4px 10px;
   border-radius: 999px;
   font-size: 11px;
   font-weight: 700;
-  margin-bottom: 6px;
 }
 
-.admin-users-role-badge.is-admin {
+.admin-users-position-badge.is-junior {
+  background: rgba(245, 158, 11, 0.15);
+  color: #d97706;
+}
+
+.admin-users-position-badge.is-specialist {
   background: rgba(47, 170, 109, 0.14);
   color: #2faa6d;
 }
 
-.admin-users-role-badge.is-employee {
+.admin-users-position-badge.is-lead {
   background: rgba(59, 130, 246, 0.14);
   color: #3b82f6;
 }
 
+.admin-users-position-badge.is-chief,
+.admin-users-position-badge.is-commander {
+  background: rgba(220, 38, 38, 0.14);
+  color: #dc2626;
+}
+
+.admin-users-position-badge.is-default {
+  background: rgba(107, 114, 128, 0.14);
+  color: #6b7280;
+}
+
 .admin-users-role-text {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
+  line-height: 1.2;
 }
 
 .admin-users-perms-text {
@@ -856,6 +879,7 @@ html[data-theme="dark"] .chip:not(.active):hover {
 
 .admin-users-page__permissions-editor {
   margin-bottom: 12px;
+  scroll-margin-top: calc(120px + env(safe-area-inset-top, 0px));
 }
 
 .admin-users-page__permissions .card-body {

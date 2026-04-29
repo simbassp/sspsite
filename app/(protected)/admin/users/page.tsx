@@ -114,6 +114,15 @@ export default function AdminUsersPage() {
     return `${words[0][0] || ""}${words[1][0] || ""}`.toUpperCase();
   };
   const getAvatarColor = (user: UserRecord) => palette[hash(`${user.name}:${user.login}`) % palette.length];
+  const getPositionBadgeClass = (position: string) => {
+    const normalized = position.trim().toLowerCase();
+    if (normalized === "младший специалист") return "is-junior";
+    if (normalized === "специалист") return "is-specialist";
+    if (normalized === "ведущий специалист") return "is-lead";
+    if (normalized === "главный специалист") return "is-chief";
+    if (normalized === "командир взвода") return "is-commander";
+    return "is-default";
+  };
   const getPermissionsSummary = (user: UserRecord) => {
     const labels = permissionOptions
       .filter((opt) => user.permissions[opt.key])
@@ -149,7 +158,11 @@ export default function AdminUsersPage() {
     if (typeof window === "undefined") return;
     if (window.innerWidth > 819) return;
     window.setTimeout(() => {
-      permissionEditorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      const node = permissionEditorRef.current;
+      if (!node) return;
+      const rect = node.getBoundingClientRect();
+      const y = rect.top + window.scrollY - 12;
+      window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
     }, 80);
   }, [permissionsTargetId]);
 
@@ -293,10 +306,12 @@ export default function AdminUsersPage() {
                     </div>
                   </td>
                   <td>
-                    <div className={`admin-users-role-badge ${user.role === "admin" ? "is-admin" : "is-employee"}`}>
-                      {user.role === "admin" ? "Администратор" : "Сотрудник"}
+                    <div className="admin-users-role-position">
+                      <span className="admin-users-role-text">{user.role === "admin" ? "Администратор" : "Сотрудник"}</span>
+                      <div className={`admin-users-position-badge ${getPositionBadgeClass(user.position)}`}>
+                        {user.position}
+                      </div>
                     </div>
-                    <span className="admin-users-role-text">{user.position}</span>
                   </td>
                   <td>
                     <span className="admin-users-perms-text" title={permissionOptions.filter((opt) => user.permissions[opt.key]).map((opt) => opt.label).join(", ") || "Нет прав"}>
@@ -367,10 +382,12 @@ export default function AdminUsersPage() {
                       <small>@{user.login}</small>
                     </span>
                   </div>
-                  <div className={`admin-users-role-badge ${user.role === "admin" ? "is-admin" : "is-employee"}`}>
-                    {user.role === "admin" ? "Администратор" : "Сотрудник"}
+                  <div className="admin-users-role-position">
+                    <span className="admin-users-role-text">{user.role === "admin" ? "Администратор" : "Сотрудник"}</span>
+                    <div className={`admin-users-position-badge ${getPositionBadgeClass(user.position)}`}>
+                      {user.position}
+                    </div>
                   </div>
-                  <p className="admin-users-role-text">{user.position}</p>
                   <p className="admin-users-perms-text">{getPermissionsSummary(user)}</p>
                   <div className="admin-users-table__actions admin-users-mobile-actions">
                     <button
