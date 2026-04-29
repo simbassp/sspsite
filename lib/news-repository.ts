@@ -39,6 +39,12 @@ function normalizeNewsTextStyle(input: unknown): NewsTextStyle {
   };
 }
 
+function normalizeNewsKind(input: unknown): "news" | "update" {
+  if (!input || typeof input !== "object") return "news";
+  const candidate = input as { kind?: unknown };
+  return candidate.kind === "update" ? "update" : "news";
+}
+
 function mapNewsRow(row: NewsRow): NewsItem {
   const body = row.body ?? row.text ?? row.content ?? "";
   return {
@@ -46,6 +52,7 @@ function mapNewsRow(row: NewsRow): NewsItem {
     title: row.title,
     body,
     priority: row.priority === "high" ? "high" : "normal",
+    kind: normalizeNewsKind(row.format),
     author: row.author,
     createdAt: row.created_at,
     textStyle: normalizeNewsTextStyle(row.format),
@@ -122,13 +129,16 @@ export async function fetchNews(limit = 40, forceRefresh = false): Promise<NewsI
 export async function createNews(payload: {
   title: string;
   body: string;
-  priority: "high" | "normal";
+  priority: "high" | "normal" | "update";
   author: string;
   textStyle?: NewsTextStyle;
 }) {
   const normalizedStyle = normalizeNewsTextStyle(payload.textStyle);
+  const normalizedKind = payload.priority === "update" ? "update" : "news";
+  const normalizedPriority = payload.priority === "high" ? "high" : "normal";
+  const formatPayload = { ...normalizedStyle, kind: normalizedKind } as const;
   if (!isSupabaseConfigured) {
-    addNews({ ...payload, textStyle: normalizedStyle });
+    addNews({ ...payload, priority: normalizedPriority, textStyle: normalizedStyle, kind: normalizedKind });
     return { ok: true as const };
   }
 
@@ -136,16 +146,16 @@ export async function createNews(payload: {
     const response = await fetch("/api/news", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ...payload, textStyle: normalizedStyle }),
+      body: JSON.stringify({ ...payload, priority: normalizedPriority, kind: normalizedKind, textStyle: formatPayload }),
     });
     if (!response.ok) {
       const data = (await response.json().catch(() => ({}))) as { error?: string };
-      addNews({ ...payload, textStyle: normalizedStyle });
+      addNews({ ...payload, priority: normalizedPriority, textStyle: normalizedStyle, kind: normalizedKind });
       return { ok: false as const, error: data.error || `request_failed_${response.status}` };
     }
     return { ok: true as const };
   } catch {
-    addNews({ ...payload, textStyle: normalizedStyle });
+    addNews({ ...payload, priority: normalizedPriority, textStyle: normalizedStyle, kind: normalizedKind });
     return { ok: false as const, error: "network_error" };
   }
 }
@@ -154,15 +164,19 @@ export async function updateNews(input: {
   id: string;
   title: string;
   body: string;
-  priority: "high" | "normal";
+  priority: "high" | "normal" | "update";
   textStyle: NewsTextStyle;
 }) {
   const normalizedStyle = normalizeNewsTextStyle(input.textStyle);
+  const normalizedKind = input.priority === "update" ? "update" : "news";
+  const normalizedPriority = input.priority === "high" ? "high" : "normal";
+  const formatPayload = { ...normalizedStyle, kind: normalizedKind } as const;
   if (!isSupabaseConfigured) {
     updateNewsItem(input.id, {
       title: input.title,
       body: input.body,
-      priority: input.priority,
+      priority: normalizedPriority,
+      kind: normalizedKind,
       textStyle: normalizedStyle,
     });
     return { ok: true as const };
@@ -175,8 +189,9 @@ export async function updateNews(input: {
       body: JSON.stringify({
         title: input.title,
         body: input.body,
-        priority: input.priority,
-        textStyle: normalizedStyle,
+        priority: normalizedPriority,
+        kind: normalizedKind,
+        textStyle: formatPayload,
       }),
     });
     if (!response.ok) {

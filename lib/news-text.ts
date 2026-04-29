@@ -36,7 +36,8 @@ export function applyMarkupToSelection(input: {
   return { nextValue, caretStart, caretEnd };
 }
 
-export function isUpdateNews(item: { title: string; body: string }) {
+export function isUpdateNews(item: { title: string; body: string; kind?: "news" | "update" }) {
+  if (item.kind === "update") return true;
   const source = `${item.title} ${item.body}`.toLowerCase();
   return source.includes("update") || source.includes("обнов");
 }

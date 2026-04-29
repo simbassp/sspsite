@@ -222,6 +222,7 @@ export function addNews(payload: {
   priority: "high" | "normal";
   author: string;
   textStyle?: { fontSize: number; bold: boolean; italic: boolean; underline: boolean };
+  kind?: "news" | "update";
 }) {
   const data = readData();
   data.news.unshift({
@@ -229,6 +230,7 @@ export function addNews(payload: {
     title: payload.title,
     body: payload.body,
     priority: payload.priority,
+    kind: payload.kind ?? "news",
     author: payload.author,
     createdAt: new Date().toISOString(),
     textStyle: payload.textStyle,
@@ -242,6 +244,7 @@ export function updateNewsItem(
     title?: string;
     body?: string;
     priority?: "high" | "normal";
+    kind?: "news" | "update";
     textStyle?: { fontSize: number; bold: boolean; italic: boolean; underline: boolean };
   },
 ) {

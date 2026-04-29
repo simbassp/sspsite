@@ -24,6 +24,11 @@ function normalizeNewsTextStyle(input: unknown): NewsTextStyle {
   };
 }
 
+function normalizeNewsKind(input: unknown): "news" | "update" {
+  if (input === "update") return "update";
+  return "news";
+}
+
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const session = await getServerSession();
   if (!session) return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
@@ -33,22 +38,30 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   if (!id) return Response.json({ ok: false, error: "id_required" }, { status: 400 });
 
   try {
-    const body = (await request.json()) as { title?: unknown; body?: unknown; priority?: unknown; textStyle?: unknown };
+    const body = (await request.json()) as {
+      title?: unknown;
+      body?: unknown;
+      priority?: unknown;
+      kind?: unknown;
+      textStyle?: unknown;
+    };
     const title = String(body.title || "").trim();
     const text = String(body.body || "").trim();
     const priority = body.priority === "high" ? "high" : "normal";
+    const kind = normalizeNewsKind(body.kind);
     const textStyle = normalizeNewsTextStyle(body.textStyle);
+    const formatPayload = { ...textStyle, kind } as const;
     if (!title || !text) {
       return Response.json({ ok: false, error: "title_and_body_required" }, { status: 400 });
     }
 
     const supabase = getServerSupabaseServiceClient();
-    let updateQ = await supabase.from("news").update({ title, body: text, priority, format: textStyle }).eq("id", id);
+    let updateQ = await supabase.from("news").update({ title, body: text, priority, format: formatPayload }).eq("id", id);
     if (updateQ.error && updateQ.error.message.toLowerCase().includes("format")) {
       updateQ = await supabase.from("news").update({ title, body: text, priority }).eq("id", id);
     }
     if (updateQ.error && updateQ.error.message.toLowerCase().includes("body")) {
-      updateQ = await supabase.from("news").update({ title, text, priority, format: textStyle }).eq("id", id);
+      updateQ = await supabase.from("news").update({ title, text, priority, format: formatPayload }).eq("id", id);
       if (updateQ.error && updateQ.error.message.toLowerCase().includes("format")) {
         updateQ = await supabase.from("news").update({ title, text, priority }).eq("id", id);
       }

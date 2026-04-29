@@ -46,8 +46,11 @@ export default function NewsPage() {
     if (!nextTitle) return;
     const nextBody = window.prompt("Текст новости", item.body)?.trim();
     if (!nextBody) return;
-    const nextPriorityRaw = window.prompt('Приоритет: "normal" или "high"', item.priority)?.trim().toLowerCase();
-    const nextPriority = nextPriorityRaw === "high" ? "high" : "normal";
+    const nextPriorityRaw = window
+      .prompt('Приоритет: "normal", "high" или "update"', item.kind === "update" ? "update" : item.priority)
+      ?.trim()
+      .toLowerCase();
+    const nextPriority = nextPriorityRaw === "update" ? "update" : nextPriorityRaw === "high" ? "high" : "normal";
 
     const result = await updateNews({
       id: item.id,

@@ -45,6 +45,7 @@ export interface NewsItem {
   title: string;
   body: string;
   priority: "high" | "normal";
+  kind?: "news" | "update";
   createdAt: string;
   author: string;
   textStyle?: NewsTextStyle;

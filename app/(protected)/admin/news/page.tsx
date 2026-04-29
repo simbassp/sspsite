@@ -19,7 +19,7 @@ export default function AdminNewsPage() {
   const [news, setNews] = useState<NewsItem[]>([]);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
-  const [priority, setPriority] = useState<"high" | "normal">("normal");
+  const [priority, setPriority] = useState<"high" | "normal" | "update">("normal");
   const [textStyle, setTextStyle] = useState(DEFAULT_NEWS_TEXT_STYLE);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [info, setInfo] = useState("");
@@ -80,7 +80,7 @@ export default function AdminNewsPage() {
     setEditingId(item.id);
     setTitle(item.title);
     setBody(item.body);
-    setPriority(item.priority);
+    setPriority(item.kind === "update" ? "update" : item.priority);
     setTextStyle(normalizeNewsTextStyle(item.textStyle));
     setInfo("");
   };
@@ -178,6 +178,7 @@ export default function AdminNewsPage() {
             <select className="select" value={priority} onChange={(e) => setPriority(e.target.value as typeof priority)}>
               <option value="normal">Обычная</option>
               <option value="high">Важная</option>
+              <option value="update">Update</option>
             </select>
             <div className="grid grid-two">
               <div>

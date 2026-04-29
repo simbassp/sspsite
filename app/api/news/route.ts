@@ -25,6 +25,12 @@ function normalizeNewsTextStyle(input: unknown): NewsTextStyle {
   };
 }
 
+function normalizeNewsKind(input: unknown): "news" | "update" {
+  if (!input || typeof input !== "object") return "news";
+  const candidate = input as { kind?: unknown };
+  return candidate.kind === "update" ? "update" : "news";
+}
+
 function normalizeNewsRows(rows: Array<Record<string, unknown>>) {
   return rows.map((row) => ({
     id: row.id,
@@ -33,6 +39,7 @@ function normalizeNewsRows(rows: Array<Record<string, unknown>>) {
     text: row.text ?? row.body ?? row.content ?? "",
     content: row.content ?? row.body ?? row.text ?? "",
     priority: row.priority === "high" ? "high" : "normal",
+    kind: normalizeNewsKind(row.format),
     author: typeof row.author === "string" ? row.author : "",
     created_at: row.created_at,
     format: normalizeNewsTextStyle(row.format),
@@ -47,6 +54,7 @@ function fallbackSeedRows(limit: number) {
     text: item.body,
     content: item.body,
     priority: item.priority,
+    kind: item.kind ?? "news",
     author: item.author,
     created_at: item.createdAt,
     format: normalizeNewsTextStyle(item.textStyle),
@@ -93,6 +101,7 @@ export async function POST(request: Request) {
       title?: unknown;
       body?: unknown;
       priority?: unknown;
+      kind?: unknown;
       author?: unknown;
       textStyle?: unknown;
     };
@@ -100,8 +109,10 @@ export async function POST(request: Request) {
     const title = String(body.title || "").trim();
     const text = String(body.body || "").trim();
     const priority = body.priority === "high" ? "high" : "normal";
+    const kind = body.kind === "update" ? "update" : "news";
     const author = String(body.author || session.name || session.callsign || "Редактор").trim();
     const textStyle = normalizeNewsTextStyle(body.textStyle);
+    const formatPayload = { ...textStyle, kind } as const;
 
     if (!title || !text) {
       return Response.json({ ok: false, error: "title_and_body_required" }, { status: 400 });
@@ -113,7 +124,7 @@ export async function POST(request: Request) {
       body: text,
       priority,
       author,
-      format: textStyle,
+      format: formatPayload,
     });
 
     if (insertQ.error && insertQ.error.message.toLowerCase().includes("format")) {
@@ -130,7 +141,7 @@ export async function POST(request: Request) {
         text,
         priority,
         author,
-        format: textStyle,
+        format: formatPayload,
       });
       if (insertQ.error && insertQ.error.message.toLowerCase().includes("format")) {
         insertQ = await supabase.from("news").insert({
@@ -146,7 +157,7 @@ export async function POST(request: Request) {
         title,
         body: text,
         priority,
-        format: textStyle,
+        format: formatPayload,
       });
       if (insertQ.error && insertQ.error.message.toLowerCase().includes("format")) {
         insertQ = await supabase.from("news").insert({
