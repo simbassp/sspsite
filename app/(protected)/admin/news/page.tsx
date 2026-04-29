@@ -93,11 +93,17 @@ export default function AdminNewsPage() {
     await refresh(true);
   };
 
-  const applySelectionTag = (tag: "b" | "i" | "u") => {
+  const applySelectionTag = (tag: "b" | "i" | "u" | "size") => {
     const textarea = bodyRef.current;
     if (!textarea) return;
     const { selectionStart, selectionEnd, value } = textarea;
-    const next = applyMarkupToSelection({ value, start: selectionStart, end: selectionEnd, tag });
+    const next = applyMarkupToSelection({
+      value,
+      start: selectionStart,
+      end: selectionEnd,
+      tag,
+      sizePx: textStyle.fontSize,
+    });
     setBody(next.nextValue);
     window.requestAnimationFrame(() => {
       textarea.focus();
@@ -152,6 +158,9 @@ export default function AdminNewsPage() {
               <button className="btn" type="button" onClick={() => applySelectionTag("u")}>
                 Подчеркнутый
               </button>
+              <button className="btn" type="button" onClick={() => applySelectionTag("size")}>
+                Размер выделения
+              </button>
             </div>
             <div
               className="card"
@@ -166,7 +175,6 @@ export default function AdminNewsPage() {
                   style={{
                     marginTop: 0,
                     marginBottom: 0,
-                    fontSize: textStyle.fontSize,
                     fontWeight: textStyle.bold ? 700 : 400,
                     fontStyle: textStyle.italic ? "italic" : "normal",
                     textDecoration: textStyle.underline ? "underline" : "none",
@@ -267,7 +275,6 @@ export default function AdminNewsPage() {
                 style={{
                   marginTop: 8,
                   marginBottom: 0,
-                  fontSize: normalizeNewsTextStyle(item.textStyle).fontSize,
                   fontWeight: normalizeNewsTextStyle(item.textStyle).bold ? 700 : 400,
                   fontStyle: normalizeNewsTextStyle(item.textStyle).italic ? "italic" : "normal",
                   textDecoration: normalizeNewsTextStyle(item.textStyle).underline ? "underline" : "none",

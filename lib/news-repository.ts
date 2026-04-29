@@ -45,6 +45,10 @@ function normalizeNewsKind(input: unknown): "news" | "update" {
   return candidate.kind === "update" ? "update" : "news";
 }
 
+function isUuidLike(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 function mapNewsRow(row: NewsRow): NewsItem {
   const body = row.body ?? row.text ?? row.content ?? "";
   return {
@@ -171,7 +175,7 @@ export async function updateNews(input: {
   const normalizedKind = input.priority === "update" ? "update" : "news";
   const normalizedPriority = input.priority === "high" ? "high" : "normal";
   const formatPayload = { ...normalizedStyle, kind: normalizedKind } as const;
-  if (!isSupabaseConfigured) {
+  if (!isSupabaseConfigured || !isUuidLike(input.id)) {
     updateNewsItem(input.id, {
       title: input.title,
       body: input.body,
@@ -179,7 +183,7 @@ export async function updateNews(input: {
       kind: normalizedKind,
       textStyle: normalizedStyle,
     });
-    return { ok: true as const };
+    return { ok: true as const, localOnly: !isSupabaseConfigured || !isUuidLike(input.id) };
   }
 
   try {
@@ -198,16 +202,16 @@ export async function updateNews(input: {
       const data = (await response.json().catch(() => ({}))) as { error?: string };
       return { ok: false as const, error: data.error || `request_failed_${response.status}` };
     }
-    return { ok: true as const };
+    return { ok: true as const, localOnly: false };
   } catch {
     return { ok: false as const, error: "network_error" };
   }
 }
 
 export async function deleteNews(id: string) {
-  if (!isSupabaseConfigured) {
+  if (!isSupabaseConfigured || !isUuidLike(id)) {
     removeNewsItem(id);
-    return { ok: true as const };
+    return { ok: true as const, localOnly: !isSupabaseConfigured || !isUuidLike(id) };
   }
 
   try {
@@ -216,7 +220,7 @@ export async function deleteNews(id: string) {
       const data = (await response.json().catch(() => ({}))) as { error?: string };
       return { ok: false as const, error: data.error || `request_failed_${response.status}` };
     }
-    return { ok: true as const };
+    return { ok: true as const, localOnly: false };
   } catch {
     return { ok: false as const, error: "network_error" };
   }

@@ -29,6 +29,18 @@ function normalizeNewsKind(input: unknown): "news" | "update" {
   return "news";
 }
 
+function isUuidLike(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function isMissingColumn(message: string, column: string) {
+  const lower = message.toLowerCase();
+  return (
+    (lower.includes("column") && lower.includes(column.toLowerCase()) && lower.includes("does not exist")) ||
+    (lower.includes("could not find") && lower.includes(column.toLowerCase()) && lower.includes("column"))
+  );
+}
+
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const session = await getServerSession();
   if (!session) return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
@@ -36,6 +48,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
   const { id } = await context.params;
   if (!id) return Response.json({ ok: false, error: "id_required" }, { status: 400 });
+  if (!isUuidLike(id)) return Response.json({ ok: false, error: "invalid_news_id" }, { status: 400 });
 
   try {
     const body = (await request.json()) as {
@@ -57,12 +70,12 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
     const supabase = getServerSupabaseServiceClient();
     let updateQ = await supabase.from("news").update({ title, body: text, priority, format: formatPayload }).eq("id", id);
-    if (updateQ.error && updateQ.error.message.toLowerCase().includes("format")) {
+    if (updateQ.error && isMissingColumn(updateQ.error.message || "", "format")) {
       updateQ = await supabase.from("news").update({ title, body: text, priority }).eq("id", id);
     }
-    if (updateQ.error && updateQ.error.message.toLowerCase().includes("body")) {
+    if (updateQ.error && isMissingColumn(updateQ.error.message || "", "body")) {
       updateQ = await supabase.from("news").update({ title, text, priority, format: formatPayload }).eq("id", id);
-      if (updateQ.error && updateQ.error.message.toLowerCase().includes("format")) {
+      if (updateQ.error && isMissingColumn(updateQ.error.message || "", "format")) {
         updateQ = await supabase.from("news").update({ title, text, priority }).eq("id", id);
       }
     }
@@ -83,6 +96,7 @@ export async function DELETE(_request: Request, context: { params: Promise<{ id:
 
   const { id } = await context.params;
   if (!id) return Response.json({ ok: false, error: "id_required" }, { status: 400 });
+  if (!isUuidLike(id)) return Response.json({ ok: false, error: "invalid_news_id" }, { status: 400 });
 
   try {
     const supabase = getServerSupabaseServiceClient();

@@ -16,6 +16,12 @@ export default function NewsPage() {
   const [info, setInfo] = useState("");
   const session = readClientSession();
   const canEditNews = canManageNews(session);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<{ title: string; body: string; priority: "normal" | "high" | "update" }>({
+    title: "",
+    body: "",
+    priority: "normal",
+  });
 
   const load = async (forceRefresh = false) => {
     setLoading(true);
@@ -41,25 +47,47 @@ export default function NewsPage() {
     return true;
   });
 
-  const onEdit = async (item: NewsItem) => {
-    const nextTitle = window.prompt("Заголовок новости", item.title)?.trim();
-    if (!nextTitle) return;
-    const nextBody = window.prompt("Текст новости", item.body)?.trim();
-    if (!nextBody) return;
-    const nextPriorityRaw = window
-      .prompt('Приоритет: "normal", "high" или "update"', item.kind === "update" ? "update" : item.priority)
-      ?.trim()
-      .toLowerCase();
-    const nextPriority = nextPriorityRaw === "update" ? "update" : nextPriorityRaw === "high" ? "high" : "normal";
+  const startEdit = (item: NewsItem) => {
+    setEditingId(item.id);
+    setEditDraft({
+      title: item.title,
+      body: item.body,
+      priority: item.kind === "update" ? "update" : item.priority,
+    });
+  };
 
+  const saveEdit = async (item: NewsItem) => {
+    const nextTitle = editDraft.title.trim();
+    const nextBody = editDraft.body.trim();
+    if (!nextTitle || !nextBody) {
+      setInfo("Заполните заголовок и текст.");
+      return;
+    }
     const result = await updateNews({
       id: item.id,
       title: nextTitle,
       body: nextBody,
-      priority: nextPriority,
+      priority: editDraft.priority,
       textStyle: normalizeNewsTextStyle(item.textStyle),
     });
     setInfo(result.ok ? "Новость обновлена." : `Ошибка обновления: ${result.error}`);
+    setEditingId(null);
+    if ("localOnly" in result && result.localOnly) {
+      setNews((prev) =>
+        prev.map((entry) =>
+          entry.id === item.id
+            ? {
+                ...entry,
+                title: nextTitle,
+                body: nextBody,
+                priority: editDraft.priority === "high" ? "high" : "normal",
+                kind: editDraft.priority === "update" ? "update" : "news",
+              }
+            : entry,
+        ),
+      );
+      return;
+    }
     await load(true);
   };
 
@@ -68,6 +96,10 @@ export default function NewsPage() {
     if (!ok) return;
     const result = await deleteNews(item.id);
     setInfo(result.ok ? "Новость удалена." : `Ошибка удаления: ${result.error}`);
+    if ("localOnly" in result && result.localOnly) {
+      setNews((prev) => prev.filter((entry) => entry.id !== item.id));
+      return;
+    }
     await load(true);
   };
 
@@ -120,7 +152,42 @@ export default function NewsPage() {
         {visible.map((item) => (
           <article className="card" key={item.id}>
             <div className="card-body">
-              <h3>{item.title}</h3>
+              {editingId === item.id ? (
+                <div className="form" style={{ marginBottom: 4 }}>
+                  <input
+                    className="input"
+                    value={editDraft.title}
+                    onChange={(e) => setEditDraft((prev) => ({ ...prev, title: e.target.value }))}
+                    placeholder="Заголовок"
+                  />
+                  <textarea
+                    className="input"
+                    value={editDraft.body}
+                    onChange={(e) => setEditDraft((prev) => ({ ...prev, body: e.target.value }))}
+                    placeholder="Текст новости"
+                    style={{ minHeight: 100 }}
+                  />
+                  <select
+                    className="select"
+                    value={editDraft.priority}
+                    onChange={(e) => setEditDraft((prev) => ({ ...prev, priority: e.target.value as typeof prev.priority }))}
+                  >
+                    <option value="normal">Обычная</option>
+                    <option value="high">Важная</option>
+                    <option value="update">Update</option>
+                  </select>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button className="btn btn-primary" type="button" onClick={() => void saveEdit(item)}>
+                      Сохранить
+                    </button>
+                    <button className="btn" type="button" onClick={() => setEditingId(null)}>
+                      Отмена
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <h3>{item.title}</h3>
+              )}
               <div className="meta" style={{ marginTop: 8 }}>
                 <span className={`pill ${item.priority === "high" ? "pill-red" : ""}`}>
                   {item.priority === "high" ? "Важно" : isUpdateNews(item) ? "Update" : "Новость"}
@@ -136,7 +203,7 @@ export default function NewsPage() {
                     type="button"
                     title="Редактировать"
                     aria-label={`Редактировать ${item.title}`}
-                    onClick={() => void onEdit(item)}
+                    onClick={() => startEdit(item)}
                   >
                     ✏
                   </button>
@@ -157,7 +224,6 @@ export default function NewsPage() {
                 style={{
                   marginTop: 10,
                   marginBottom: 0,
-                  fontSize: normalizeNewsTextStyle(item.textStyle).fontSize,
                   fontWeight: normalizeNewsTextStyle(item.textStyle).bold ? 700 : 400,
                   fontStyle: normalizeNewsTextStyle(item.textStyle).italic ? "italic" : "normal",
                   textDecoration: normalizeNewsTextStyle(item.textStyle).underline ? "underline" : "none",

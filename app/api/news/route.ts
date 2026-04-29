@@ -63,7 +63,10 @@ function fallbackSeedRows(limit: number) {
 
 function isMissingColumn(message: string, column: string) {
   const lower = message.toLowerCase();
-  return lower.includes("column") && lower.includes(column.toLowerCase()) && lower.includes("does not exist");
+  return (
+    (lower.includes("column") && lower.includes(column.toLowerCase()) && lower.includes("does not exist")) ||
+    (lower.includes("could not find") && lower.includes(column.toLowerCase()) && lower.includes("column"))
+  );
 }
 
 export async function GET(request: Request) {
@@ -127,7 +130,7 @@ export async function POST(request: Request) {
       format: formatPayload,
     });
 
-    if (insertQ.error && insertQ.error.message.toLowerCase().includes("format")) {
+    if (insertQ.error && isMissingColumn(insertQ.error.message || "", "format")) {
       insertQ = await supabase.from("news").insert({
         title,
         body: text,
@@ -135,7 +138,7 @@ export async function POST(request: Request) {
         author,
       });
     }
-    if (insertQ.error && insertQ.error.message.toLowerCase().includes("body")) {
+    if (insertQ.error && isMissingColumn(insertQ.error.message || "", "body")) {
       insertQ = await supabase.from("news").insert({
         title,
         text,
@@ -143,7 +146,7 @@ export async function POST(request: Request) {
         author,
         format: formatPayload,
       });
-      if (insertQ.error && insertQ.error.message.toLowerCase().includes("format")) {
+      if (insertQ.error && isMissingColumn(insertQ.error.message || "", "format")) {
         insertQ = await supabase.from("news").insert({
           title,
           text,
@@ -159,14 +162,14 @@ export async function POST(request: Request) {
         priority,
         format: formatPayload,
       });
-      if (insertQ.error && insertQ.error.message.toLowerCase().includes("format")) {
+      if (insertQ.error && isMissingColumn(insertQ.error.message || "", "format")) {
         insertQ = await supabase.from("news").insert({
           title,
           body: text,
           priority,
         });
       }
-      if (insertQ.error && insertQ.error.message.toLowerCase().includes("body")) {
+      if (insertQ.error && isMissingColumn(insertQ.error.message || "", "body")) {
         insertQ = await supabase.from("news").insert({
           title,
           text,
