@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { readClientSession } from "@/lib/client-auth";
 import { fetchUsers, patchUser, removeUser } from "@/lib/users-repository";
 import { Role, UserRecord } from "@/lib/types";
@@ -39,6 +39,7 @@ export default function AdminUsersPage() {
   const [permissionsTargetId, setPermissionsTargetId] = useState<string | null>(null);
   const [permissionDrafts, setPermissionDrafts] = useState<Record<string, UserRecord["permissions"]>>({});
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const permissionEditorRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     void fetchUsers().then((next) => setUsers(next));
@@ -141,6 +142,16 @@ export default function AdminUsersPage() {
   const pages = Math.max(1, Math.ceil(visible.length / pageSize));
   const currentPage = Math.min(page, pages);
   const pagedUsers = visible.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const permissionsTargetUser = permissionsTargetId ? users.find((item) => item.id === permissionsTargetId) ?? null : null;
+
+  useEffect(() => {
+    if (!permissionsTargetId) return;
+    if (typeof window === "undefined") return;
+    if (window.innerWidth > 819) return;
+    window.setTimeout(() => {
+      permissionEditorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
+  }, [permissionsTargetId]);
 
   return (
     <section className="admin-users-page">
@@ -172,6 +183,90 @@ export default function AdminUsersPage() {
       </div>
       {info && <p className="page-subtitle admin-users-page__info">{info}</p>}
 
+      {permissionsTargetUser && (
+        <div className="card admin-users-page__permissions-editor" ref={permissionEditorRef}>
+          <div className="card-body">
+            <div className="admin-users-person">
+              <span className="admin-users-avatar" style={{ backgroundColor: getAvatarColor(permissionsTargetUser) }}>
+                {getInitials(permissionsTargetUser)}
+              </span>
+              <span>
+                <strong>{permissionsTargetUser.name || "Без имени"}{permissionsTargetUser.callsign ? ` ${permissionsTargetUser.callsign}` : ""}</strong>
+                <small>@{permissionsTargetUser.login}</small>
+                <small>{permissionsTargetUser.position}</small>
+              </span>
+            </div>
+            {canGrantAdminRole && (
+              <label className="admin-users-role-switch">
+                <span className="label">Роль администратора</span>
+                <input
+                  type="checkbox"
+                  checked={permissionsTargetUser.role === "admin"}
+                  onChange={(e) => void applyRoleChange(permissionsTargetUser, e.target.checked ? "admin" : "employee")}
+                />
+              </label>
+            )}
+            <h3 className="admin-users-page__perm-title" style={{ marginTop: 12 }}>
+              Права доступа
+            </h3>
+            <div className="form admin-users-page__perm-form">
+              {permissionOptions.map((item) => (
+                <label key={`${permissionsTargetUser.id}-${item.key}`} className="admin-users-page__perm-row">
+                  <input
+                    className="admin-users-perm-checkbox"
+                    type="checkbox"
+                    checked={getDraftPermissions(permissionsTargetUser)[item.key]}
+                    onChange={(event) => {
+                      if (permissionsTargetUser.role === "admin") return;
+                      const nextPermissions = { ...getDraftPermissions(permissionsTargetUser), [item.key]: event.target.checked };
+                      setPermissionDrafts((prev) => ({ ...prev, [permissionsTargetUser.id]: nextPermissions }));
+                    }}
+                    disabled={permissionsTargetUser.role === "admin"}
+                  />
+                  <span>{item.label}</span>
+                </label>
+              ))}
+              {permissionsTargetUser.role !== "admin" ? (
+                <button
+                  className="btn btn-primary"
+                  type="button"
+                  onClick={async () => {
+                    const nextPermissions = getDraftPermissions(permissionsTargetUser);
+                    const nextCanManageContent =
+                      nextPermissions.news || nextPermissions.tests || nextPermissions.uav || nextPermissions.counteraction;
+                    setUsers((prev) =>
+                      prev.map((item) =>
+                        item.id === permissionsTargetUser.id
+                          ? { ...item, permissions: { ...nextPermissions }, canManageContent: nextCanManageContent }
+                          : item,
+                      ),
+                    );
+                    try {
+                      await patchUser(permissionsTargetUser.id, {
+                        permissions: nextPermissions,
+                        canManageContent: nextCanManageContent,
+                      });
+                      setInfo("Права сохранены.");
+                      setPermissionsTargetId(null);
+                      await refresh();
+                    } catch {
+                      setInfo("Не удалось сохранить права. Проверьте интернет и повторите.");
+                    }
+                  }}
+                >
+                  Сохранить
+                </button>
+              ) : (
+                <p className="page-subtitle admin-users-page__perm-hint">У администратора полный доступ по всем разделам.</p>
+              )}
+              <button className="btn" type="button" onClick={() => setPermissionsTargetId(null)}>
+                Отмена
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="admin-users-table-wrap card">
         <div className="card-body">
           <table className="admin-users-table">
@@ -179,7 +274,6 @@ export default function AdminUsersPage() {
               <tr>
                 <th>Пользователь</th>
                 <th>Должность</th>
-                <th>Роль</th>
                 <th>Права</th>
                 <th>Действия</th>
               </tr>
@@ -199,22 +293,10 @@ export default function AdminUsersPage() {
                     </div>
                   </td>
                   <td>
+                    <div className={`admin-users-role-badge ${user.role === "admin" ? "is-admin" : "is-employee"}`}>
+                      {user.role === "admin" ? "Администратор" : "Сотрудник"}
+                    </div>
                     <span className="admin-users-role-text">{user.position}</span>
-                  </td>
-                  <td>
-                    {canGrantAdminRole ? (
-                      <select
-                        className="select admin-users-page__role"
-                        value={user.role}
-                        onChange={(e) => void applyRoleChange(user, e.target.value as Role)}
-                        aria-label="Роль пользователя"
-                      >
-                        <option value="employee">Сотрудник</option>
-                        <option value="admin">Администратор</option>
-                      </select>
-                    ) : (
-                      <span className="admin-users-role-text">{user.role === "admin" ? "Администратор" : "Сотрудник"}</span>
-                    )}
                   </td>
                   <td>
                     <span className="admin-users-perms-text" title={permissionOptions.filter((opt) => user.permissions[opt.key]).map((opt) => opt.label).join(", ") || "Нет прав"}>
@@ -272,66 +354,6 @@ export default function AdminUsersPage() {
             </tbody>
           </table>
 
-          {pagedUsers.map((user) => (
-            permissionsTargetId === user.id && (
-              <div className="card admin-users-page__permissions" key={`perm-${user.id}`}>
-                <div className="card-body">
-                  <h3 className="admin-users-page__perm-title">Права доступа</h3>
-                  <div className="form admin-users-page__perm-form">
-                    {permissionOptions.map((item) => (
-                      <label key={`${user.id}-${item.key}`} className="admin-users-page__perm-row">
-                        <input
-                          type="checkbox"
-                          checked={getDraftPermissions(user)[item.key]}
-                          onChange={(event) => {
-                            if (user.role === "admin") return;
-                            const nextPermissions = { ...getDraftPermissions(user), [item.key]: event.target.checked };
-                            setPermissionDrafts((prev) => ({ ...prev, [user.id]: nextPermissions }));
-                          }}
-                          disabled={user.role === "admin"}
-                        />
-                        <span>{item.label}</span>
-                      </label>
-                    ))}
-                    {user.role !== "admin" ? (
-                      <button
-                        className="btn btn-primary"
-                        type="button"
-                        onClick={async () => {
-                          const nextPermissions = getDraftPermissions(user);
-                          const nextCanManageContent =
-                            nextPermissions.news || nextPermissions.tests || nextPermissions.uav || nextPermissions.counteraction;
-                          setUsers((prev) =>
-                            prev.map((item) =>
-                              item.id === user.id
-                                ? { ...item, permissions: { ...nextPermissions }, canManageContent: nextCanManageContent }
-                                : item,
-                            ),
-                          );
-                          try {
-                            await patchUser(user.id, {
-                              permissions: nextPermissions,
-                              canManageContent: nextCanManageContent,
-                            });
-                            setInfo("Права сохранены.");
-                            setPermissionsTargetId(null);
-                            await refresh();
-                          } catch {
-                            setInfo("Не удалось сохранить права. Проверьте интернет и повторите.");
-                          }
-                        }}
-                      >
-                        Сохранить права
-                      </button>
-                    ) : (
-                      <p className="page-subtitle admin-users-page__perm-hint">У администратора полный доступ по всем разделам.</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )
-          ))}
-
           <div className="admin-users-mobile-list">
             {pagedUsers.map((user) => (
               <article className="card admin-users-mobile-card" key={`mobile-${user.id}`}>
@@ -345,15 +367,9 @@ export default function AdminUsersPage() {
                       <small>@{user.login}</small>
                     </span>
                   </div>
-                  <select
-                    className="select"
-                    value={user.role}
-                    onChange={(e) => void applyRoleChange(user, e.target.value as Role)}
-                    aria-label="Роль пользователя"
-                  >
-                    <option value="employee">Сотрудник</option>
-                    <option value="admin">Администратор</option>
-                  </select>
+                  <div className={`admin-users-role-badge ${user.role === "admin" ? "is-admin" : "is-employee"}`}>
+                    {user.role === "admin" ? "Администратор" : "Сотрудник"}
+                  </div>
                   <p className="admin-users-role-text">{user.position}</p>
                   <p className="admin-users-perms-text">{getPermissionsSummary(user)}</p>
                   <div className="admin-users-table__actions admin-users-mobile-actions">

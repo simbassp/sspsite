@@ -804,6 +804,26 @@ html[data-theme="dark"] .chip:not(.active):hover {
   min-width: 140px;
 }
 
+.admin-users-role-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.admin-users-role-badge.is-admin {
+  background: rgba(47, 170, 109, 0.14);
+  color: #2faa6d;
+}
+
+.admin-users-role-badge.is-employee {
+  background: rgba(59, 130, 246, 0.14);
+  color: #3b82f6;
+}
+
 .admin-users-role-text {
   color: var(--muted);
   font-size: 13px;
@@ -834,6 +854,10 @@ html[data-theme="dark"] .chip:not(.active):hover {
   margin-top: 12px;
 }
 
+.admin-users-page__permissions-editor {
+  margin-bottom: 12px;
+}
+
 .admin-users-page__permissions .card-body {
   padding: 12px !important;
 }
@@ -852,6 +876,26 @@ html[data-theme="dark"] .chip:not(.active):hover {
   gap: 8px;
   align-items: center;
   font-size: 13px;
+}
+
+.admin-users-perm-checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+.admin-users-role-switch {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.admin-users-role-switch input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
 }
 
 .admin-users-page__perm-hint {
