@@ -659,8 +659,25 @@ export async function updateCurrentUserProfile(payload: { name: string; callsign
     p_name: name,
     p_callsign: callsign,
   });
-  if (error || data !== true) {
-    return { ok: false as const, error: "Не удалось обновить профиль. Попробуйте позже." };
+
+  if (error) {
+    const raw = error.message || "";
+    const low = raw.toLowerCase();
+    if (low.includes("duplicate") || low.includes("unique constraint")) {
+      return { ok: false as const, error: "Такой позывной уже занят. Укажите другой." };
+    }
+    return {
+      ok: false as const,
+      error: raw ? `Не удалось обновить профиль: ${raw}` : "Не удалось обновить профиль. Попробуйте позже.",
+    };
+  }
+
+  if (data !== true) {
+    return {
+      ok: false as const,
+      error:
+        "Профиль не сохранён: запись пользователя не найдена в базе. Выйдите из аккаунта и войдите снова; если не поможет — напишите администратору.",
+    };
   }
   return { ok: true as const, name, callsign };
 }

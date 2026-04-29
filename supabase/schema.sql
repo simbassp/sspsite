@@ -333,6 +333,7 @@ as $$
 declare
   v_name text;
   v_callsign text;
+  v_updated int;
 begin
   v_name := nullif(trim(coalesce(p_name, '')), '');
   v_callsign := nullif(trim(coalesce(p_callsign, '')), '');
@@ -340,13 +341,14 @@ begin
     return false;
   end if;
 
+  -- Привязка только по auth.uid(); статус не ограничиваем — иначе при inactive не сохранялось бы ничего.
   update public.app_users
   set name = v_name,
       callsign = v_callsign
-  where auth_user_id = auth.uid()
-    and status = 'active';
+  where auth_user_id = auth.uid();
 
-  return found;
+  get diagnostics v_updated = row_count;
+  return v_updated > 0;
 end;
 $$;
 
