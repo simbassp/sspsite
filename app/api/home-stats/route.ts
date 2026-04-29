@@ -1,7 +1,22 @@
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
+import { canManageUsers } from "@/lib/permissions";
+import { ONLINE_LAST_SEEN_MAX_MS } from "@/lib/presence-constants";
 
 export const runtime = "nodejs";
+
+function effectiveOnlineStrict(isOnline: unknown, lastSeenAt: unknown): boolean {
+  if (isOnline !== true) return false;
+  if (lastSeenAt == null || typeof lastSeenAt !== "string") return false;
+  const t = Date.parse(lastSeenAt);
+  if (!Number.isFinite(t)) return false;
+  return Date.now() - t <= ONLINE_LAST_SEEN_MAX_MS;
+}
+
+function isMissingColumnError(message: string | undefined) {
+  const m = (message || "").toLowerCase();
+  return m.includes("column") && m.includes("does not exist");
+}
 
 export async function GET() {
   const session = await getServerSession();
@@ -34,6 +49,27 @@ export async function GET() {
     const promoted = Array.isArray(promotedQ.data) ? promotedQ.data[0] : null;
     const leftPayload = (left?.payload || {}) as Record<string, unknown>;
     const promotedPayload = (promoted?.payload || {}) as Record<string, unknown>;
+    let accessStats: { totalUsers: number; onlineUsers: number } | null = null;
+
+    if (canManageUsers(session)) {
+      const onlineStrictQ = await supabase.from("app_users").select("id,is_online,last_seen_at");
+      if (onlineStrictQ.error && isMissingColumnError(onlineStrictQ.error.message)) {
+        const fallbackQ = await supabase.from("app_users").select("id,is_online");
+        if (!fallbackQ.error) {
+          const rows = Array.isArray(fallbackQ.data) ? fallbackQ.data : [];
+          accessStats = {
+            totalUsers: rows.length,
+            onlineUsers: rows.filter((row) => row.is_online === true).length,
+          };
+        }
+      } else if (!onlineStrictQ.error) {
+        const rows = Array.isArray(onlineStrictQ.data) ? onlineStrictQ.data : [];
+        accessStats = {
+          totalUsers: rows.length,
+          onlineUsers: rows.filter((row) => effectiveOnlineStrict(row.is_online, row.last_seen_at)).length,
+        };
+      }
+    }
 
     return Response.json({
       ok: true,
@@ -62,6 +98,7 @@ export async function GET() {
           : null,
         commander: { name: "Владислав", callsign: "Клиган" },
       },
+      accessStats,
     });
   } catch (error) {
     return Response.json(

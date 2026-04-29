@@ -13,6 +13,10 @@ type Highlight = {
 type HomePayload = {
   ok?: boolean;
   error?: string;
+  accessStats?: {
+    totalUsers?: number;
+    onlineUsers?: number;
+  } | null;
   highlights?: {
     newcomer?: Highlight;
     departed?: Highlight;
@@ -22,6 +26,10 @@ type HomePayload = {
 };
 
 type DashboardData = {
+  accessStats: {
+    totalUsers: number;
+    onlineUsers: number;
+  } | null;
   highlights: {
     newcomer: Highlight;
     departed: Highlight;
@@ -34,7 +42,18 @@ function parseDashboardData(raw: unknown): DashboardData | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as HomePayload;
   if (!o.highlights || typeof o.highlights !== "object") return null;
+  const hasStats =
+    o.accessStats &&
+    typeof o.accessStats === "object" &&
+    Number.isFinite(Number(o.accessStats.totalUsers)) &&
+    Number.isFinite(Number(o.accessStats.onlineUsers));
   return {
+    accessStats: hasStats
+      ? {
+          totalUsers: Number(o.accessStats?.totalUsers ?? 0),
+          onlineUsers: Number(o.accessStats?.onlineUsers ?? 0),
+        }
+      : null,
     highlights: {
       newcomer: o.highlights?.newcomer ?? null,
       departed: o.highlights?.departed ?? null,
@@ -45,6 +64,7 @@ function parseDashboardData(raw: unknown): DashboardData | null {
 }
 
 export default function DashboardPage() {
+  const [accessStats, setAccessStats] = useState<DashboardData["accessStats"]>(null);
   const [highlights, setHighlights] = useState<DashboardData["highlights"]>({
     newcomer: null,
     departed: null,
@@ -70,6 +90,7 @@ export default function DashboardPage() {
         setLoadError("Некорректный ответ сервера.");
         return;
       }
+      setAccessStats(parsed.accessStats);
       setHighlights(parsed.highlights);
     } catch {
       setLoadError("Часть данных не загрузилась. Проверьте интернет и обновите страницу.");
@@ -96,6 +117,23 @@ export default function DashboardPage() {
       {loadError && <p className="page-subtitle">{loadError}</p>}
 
       <div className="dashboard-page__stack">
+        {accessStats && (
+          <div className="grid grid-two">
+            <article className="card dashboard-highlight-card">
+              <div className="card-body">
+                <p className="label">Всего пользователей</p>
+                <h3 className="dashboard-highlight-name">{accessStats.totalUsers}</h3>
+              </div>
+            </article>
+            <article className="card dashboard-highlight-card">
+              <div className="card-body">
+                <p className="label">Сейчас онлайн</p>
+                <h3 className="dashboard-highlight-name">{accessStats.onlineUsers}</h3>
+              </div>
+            </article>
+          </div>
+        )}
+
         <div className="dashboard-home-summary">
           <div className="card dashboard-highlight-card">
             <div className="card-body">
