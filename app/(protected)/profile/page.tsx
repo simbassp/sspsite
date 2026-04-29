@@ -22,7 +22,8 @@ import {
 import { TestResult } from "@/lib/types";
 
 export default function ProfilePage() {
-  const session = useMemo(() => readClientSession(), []);
+  const [session, setSession] = useState<ReturnType<typeof readClientSession>>(null);
+  const [sessionResolved, setSessionResolved] = useState(false);
   const [rows, setRows] = useState<TestResult[]>([]);
   const [inviteCodes, setInviteCodes] = useState<InviteCodeRecord[]>([]);
   const [inviteInput, setInviteInput] = useState("");
@@ -47,6 +48,17 @@ export default function ProfilePage() {
   const [isOnline, setIsOnline] = useState(true);
   const [fieldError, setFieldError] = useState<{ name?: string; callsign?: string }>({});
   const canManageInvites = session?.role === "admin" || session?.permissions.users === true;
+
+  useEffect(() => {
+    setSession(readClientSession());
+    setSessionResolved(true);
+  }, []);
+
+  useEffect(() => {
+    if (!session) return;
+    setProfileNameInput(session.name ?? "");
+    setProfileCallsignInput(session.callsign ?? "");
+  }, [session]);
 
   useEffect(() => {
     if (!session) return;
@@ -129,6 +141,10 @@ export default function ProfilePage() {
     const lastAttempt = rows[0] ?? null;
     return { total, passed, successRate, averageTimeSec: null, lastAttempt };
   }, [rows, session]);
+
+  if (!sessionResolved) {
+    return <p className="page-subtitle">Загружаем профиль...</p>;
+  }
 
   if (!session) {
     return <p className="page-subtitle">Профиль не найден.</p>;
