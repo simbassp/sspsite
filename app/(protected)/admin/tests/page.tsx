@@ -8,6 +8,7 @@ import {
   fetchTestConfig,
   saveAdminQuestion,
   seedDefaultQuestionsIfEmpty,
+  setAdminQuestionActive,
 } from "@/lib/tests-repository";
 import { DEFAULT_TEST_CONFIG, normalizeTestConfig } from "@/lib/test-config";
 import { TestConfig, TestQuestion, TestResult, TestType } from "@/lib/types";
@@ -41,6 +42,8 @@ export default function AdminTestsPage() {
   const [isSavingConfig, setIsSavingConfig] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isClearingManual, setIsClearingManual] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -118,6 +121,16 @@ export default function AdminTestsPage() {
     setQuestions(allQuestions);
   };
 
+  const filteredQuestions = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) return questions;
+    return questions.filter((question) => {
+      const textHit = question.text.toLowerCase().includes(query);
+      const optionHit = question.options.some((option) => option.toLowerCase().includes(query));
+      return textHit || optionHit;
+    });
+  }, [questions, searchTerm]);
+
   const onSaveQuestion = async () => {
     setMessage("");
     const text = draft.text.trim();
@@ -151,7 +164,7 @@ export default function AdminTestsPage() {
     const currentOrder = draft.id ? (questions.find((item) => item.id === draft.id)?.order ?? maxOrder + 1) : maxOrder + 1;
     const timeLimitSec = isEditingTimeLimit ? Math.max(5, draft.timeLimitSec) : 20;
 
-    await saveAdminQuestion({
+    const saved = await saveAdminQuestion({
       id: draft.id,
       type: draft.type,
       text,
@@ -161,6 +174,10 @@ export default function AdminTestsPage() {
       order: Math.max(1, currentOrder),
       isActive: draft.isActive,
     });
+    if (!saved) {
+      setMessage("Не удалось сохранить в базе. Проверьте права или схему таблицы test_questions.");
+      return;
+    }
     setMessage(draft.id ? "Вопрос обновлен." : "Вопрос добавлен.");
     setDraft(initialDraft);
     setIsEditingTimeLimit(false);
@@ -191,6 +208,13 @@ export default function AdminTestsPage() {
       setDraft(initialDraft);
       setIsEditingTimeLimit(false);
     }
+    await refreshQuestions();
+  };
+
+  const onToggleActive = async (question: TestQuestion) => {
+    setMessage("");
+    await setAdminQuestionActive(question.id, !question.isActive);
+    setMessage(!question.isActive ? "Вопрос включен." : "Вопрос выключен.");
     await refreshQuestions();
   };
 
@@ -227,6 +251,26 @@ export default function AdminTestsPage() {
       setMessage("Настройки тестов сохранены.");
     } finally {
       setIsSavingConfig(false);
+    }
+  };
+
+  const onClearManualQuestions = async () => {
+    setMessage("");
+    setIsClearingManual(true);
+    try {
+      const response = await fetch("/api/admin/tests/questions/clear-manual", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+      });
+      const payload = (await response.json()) as { ok?: boolean; error?: string; deleted?: number };
+      if (!response.ok || !payload.ok) {
+        setMessage(payload.error || "Не удалось очистить ручной банк вопросов.");
+        return;
+      }
+      setMessage(`Удалено вопросов: ${Number(payload.deleted || 0)}.`);
+      await refreshQuestions();
+    } finally {
+      setIsClearingManual(false);
     }
   };
 
@@ -471,13 +515,34 @@ export default function AdminTestsPage() {
         <div className="card-body">
           <h3>Банк вопросов</h3>
           <p className="page-subtitle">Всего: {questions.length}</p>
+          <button
+            className="btn btn-danger"
+            type="button"
+            onClick={() => void onClearManualQuestions()}
+            disabled={isClearingManual}
+          >
+            {isClearingManual ? "Очищаем..." : "Удалить все ручные вопросы"}
+          </button>
+          <input
+            className="input"
+            type="text"
+            placeholder="Поиск по тексту вопроса и вариантам ответа"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{ marginTop: 8 }}
+          />
           <div className="list" style={{ marginTop: 10 }}>
-            {questions.map((question) => (
+            {filteredQuestions.map((question) => (
               <article className="card" key={question.id}>
                 <div className="card-body">
                   <div className="meta">
                     <span>Время: {question.timeLimitSec} сек</span>
                     <span>{question.isActive ? "Активен" : "Отключен"}</span>
+                  </div>
+                  <div className="form" style={{ marginTop: 8 }}>
+                    <button className="btn" type="button" onClick={() => void onToggleActive(question)}>
+                      {question.isActive ? "Выключить" : "Включить"}
+                    </button>
                   </div>
                   <h3 style={{ marginTop: 8 }}>{question.text}</h3>
                   <div className="list" style={{ marginTop: 8 }}>
@@ -498,7 +563,7 @@ export default function AdminTestsPage() {
                 </div>
               </article>
             ))}
-            {!questions.length && <p className="page-subtitle">Вопросов пока нет.</p>}
+            {!filteredQuestions.length && <p className="page-subtitle">Ничего не найдено.</p>}
           </div>
         </div>
       </article>

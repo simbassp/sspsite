@@ -510,11 +510,45 @@ export async function fetchAdminQuestionBank() {
     return listTestQuestions();
   }
   const supabase = getSupabaseBrowserClient();
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from("test_questions")
     .select("id,type,text,options,correct_index,time_limit_sec,order_index,is_active,created_at")
     .order("type", { ascending: true })
     .order("order_index", { ascending: true });
+
+  if (error && isMissingColumnError(error.message)) {
+    const legacyRes = await supabase
+      .from("test_questions")
+      .select("id,type,text,options,correct_index,order_index,active,created_at")
+      .order("type", { ascending: true })
+      .order("order_index", { ascending: true });
+    data = legacyRes.data as typeof data;
+    error = legacyRes.error as typeof error;
+  }
+
+  if (error && isMissingColumnError(error.message)) {
+    const minimalRes = await supabase
+      .from("test_questions")
+      .select("id,type,text,options,correct_index")
+      .order("type", { ascending: true });
+    data = minimalRes.data as typeof data;
+    error = minimalRes.error as typeof error;
+    if (!error && Array.isArray(data)) {
+      return (data as Array<Record<string, unknown>>).map((row, index) =>
+        dedupeQuestionOptions({
+          id: String(row.id),
+          type: row.type === "trial" ? "trial" : "final",
+          text: String(row.text || ""),
+          options: Array.isArray(row.options) ? (row.options as string[]) : [],
+          correctIndex: Number(row.correct_index ?? 0),
+          timeLimitSec: 20,
+          order: index + 1,
+          isActive: true,
+          createdAt: new Date().toISOString(),
+        }),
+      );
+    }
+  }
 
   if (error || !data) {
     return listTestQuestions();
@@ -533,7 +567,8 @@ export async function saveAdminQuestion(question: {
   isActive: boolean;
 }) {
   if (!isSupabaseConfigured) {
-    return upsertTestQuestion({ ...question });
+    upsertTestQuestion({ ...question });
+    return true;
   }
   const supabase = getSupabaseBrowserClient();
   const fullPayload: Record<string, unknown> = {
@@ -564,8 +599,10 @@ export async function saveAdminQuestion(question: {
   }
 
   if (upsertRes.error) {
-    return upsertTestQuestion({ ...question });
+    upsertTestQuestion({ ...question });
+    return false;
   }
+  return true;
 }
 
 export async function deleteAdminQuestion(questionId: string) {
@@ -577,6 +614,25 @@ export async function deleteAdminQuestion(questionId: string) {
   const { error } = await supabase.from("test_questions").delete().eq("id", questionId);
   if (error) {
     removeTestQuestion(questionId);
+  }
+}
+
+export async function setAdminQuestionActive(questionId: string, isActive: boolean) {
+  if (!isSupabaseConfigured) {
+    const existing = listTestQuestions().find((q) => q.id === questionId);
+    if (!existing) return;
+    upsertTestQuestion({ ...existing, isActive });
+    return;
+  }
+  const supabase = getSupabaseBrowserClient();
+  let updateRes = await supabase.from("test_questions").update({ is_active: isActive }).eq("id", questionId);
+  if (updateRes.error && isMissingColumnError(updateRes.error.message)) {
+    updateRes = await supabase.from("test_questions").update({ active: isActive }).eq("id", questionId);
+  }
+  if (updateRes.error) {
+    const existing = listTestQuestions().find((q) => q.id === questionId);
+    if (!existing) return;
+    upsertTestQuestion({ ...existing, isActive });
   }
 }
 

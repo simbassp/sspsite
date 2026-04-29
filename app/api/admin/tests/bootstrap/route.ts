@@ -17,7 +17,7 @@ export async function GET() {
 
   try {
     const supabase = getServerSupabaseServiceClient();
-    const [resultsQ, questionsQ] = await Promise.all([
+    const [resultsQ, baseQuestionsQ] = await Promise.all([
       supabase
         .from("test_results")
         .select("id,user_id,type,status,score,created_at")
@@ -30,6 +30,18 @@ export async function GET() {
         .order("order_index", { ascending: true })
         .limit(2000),
     ]);
+    let questionsQ = baseQuestionsQ;
+    if (questionsQ.error && isMissingColumnError(questionsQ.error.message)) {
+      questionsQ = await supabase
+        .from("test_questions")
+        .select("id,type,text,options,correct_index,order_index,active,created_at")
+        .order("type", { ascending: true })
+        .order("order_index", { ascending: true })
+        .limit(2000);
+    }
+    if (questionsQ.error && isMissingColumnError(questionsQ.error.message)) {
+      questionsQ = await supabase.from("test_questions").select("id,type,text,options,correct_index").limit(2000);
+    }
 
     let configQ = await supabase
       .from("test_settings")
@@ -93,7 +105,18 @@ export async function GET() {
     return Response.json({
       ok: true,
       results: resultsQ.data || [],
-      questions: questionsQ.data || [],
+      questions:
+        (questionsQ.data || []).map((q: Record<string, unknown>, index: number) => ({
+          id: q.id,
+          type: q.type,
+          text: q.text,
+          options: q.options,
+          correct_index: q.correct_index,
+          time_limit_sec: q.time_limit_sec ?? 20,
+          order_index: q.order_index ?? index + 1,
+          is_active: q.is_active ?? q.active ?? true,
+          created_at: q.created_at ?? null,
+        })) || [],
       config: configQ.data || null,
     });
   } catch (error) {
