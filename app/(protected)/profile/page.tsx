@@ -545,11 +545,31 @@ export default function ProfilePage() {
           <div className="grid" style={{ marginTop: 10, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
             <div>
               <p className="label">Пользователь</p>
-              <p style={{ fontWeight: 700, marginTop: 6, display: "flex", alignItems: "center" }}>
-                <span style={iconBubble("rgba(196, 43, 43, 0.10)")}>
-                  <UserIcon color="#c42b2b" />
+              <p
+                style={{
+                  fontWeight: 700,
+                  marginTop: 6,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  flexWrap: "wrap",
+                }}
+              >
+                <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                  <span style={iconBubble("rgba(196, 43, 43, 0.10)")}>
+                    <UserIcon color="#c42b2b" />
+                  </span>
+                  {profileNameInput || session.name}
                 </span>
-                {profileNameInput || session.name}
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                  <span className="label" style={{ margin: 0 }}>
+                    Позывной
+                  </span>
+                  <span style={{ fontWeight: 800 }}>
+                    {(profileCallsignInput || session.callsign || "").trim() || "—"}
+                  </span>
+                </span>
               </p>
             </div>
             <div>
