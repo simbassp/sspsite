@@ -43,11 +43,17 @@ export default function NewsPage() {
     void load();
   }, []);
 
-  const visible = news.filter((item) => {
-    if (filter === "high") return item.priority === "high";
-    if (filter === "update") return isUpdateNews(item);
-    return true;
-  });
+  const visible = news
+    .filter((item) => {
+      if (filter === "high") return item.priority === "high";
+      if (filter === "update") return isUpdateNews(item);
+      return true;
+    })
+    .sort((a, b) => {
+      const left = new Date(a.createdAt).getTime();
+      const right = new Date(b.createdAt).getTime();
+      return (Number.isNaN(right) ? 0 : right) - (Number.isNaN(left) ? 0 : left);
+    });
 
   const startEdit = (item: NewsItem) => {
     setEditingId(item.id);
@@ -221,13 +227,8 @@ export default function NewsPage() {
                     </button>
                   </div>
                 </div>
-              ) : (
-                <h3>{item.title}</h3>
-              )}
-              <div className="meta" style={{ marginTop: 8 }}>
-                <span className={`pill ${item.priority === "high" ? "pill-red" : ""}`}>
-                  {item.priority === "high" ? "Важно" : isUpdateNews(item) ? "Update" : "Новость"}
-                </span>
+              ) : null}
+              <div className="meta" style={{ marginTop: editingId === item.id ? 8 : 0 }}>
                 <span>{formatDate(item.createdAt)}</span>
                 {item.author && !isPlaceholderNewsAuthor(item.author) ? <span>{item.author}</span> : null}
                 {item.authorPosition ? (
@@ -235,9 +236,24 @@ export default function NewsPage() {
                     {item.authorPosition}
                   </span>
                 ) : null}
+                <span className={`pill ${item.priority === "high" ? "pill-red" : ""}`}>
+                  {item.priority === "high" ? "Важно" : isUpdateNews(item) ? "Update" : "Новость"}
+                </span>
               </div>
-              {canEditNews && (
-                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              {editingId !== item.id ? <h3 style={{ marginTop: 10 }}>{item.title}</h3> : null}
+              <NewsBody
+                className="page-subtitle"
+                style={{
+                  marginTop: 10,
+                  marginBottom: 0,
+                  fontWeight: normalizeNewsTextStyle(item.textStyle).bold ? 700 : 400,
+                  fontStyle: normalizeNewsTextStyle(item.textStyle).italic ? "italic" : "normal",
+                  textDecoration: normalizeNewsTextStyle(item.textStyle).underline ? "underline" : "none",
+                }}
+                body={item.body}
+              />
+              {canEditNews && editingId !== item.id && (
+                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
                   <button
                     className="btn"
                     style={{ width: 38, height: 34, padding: 0, fontSize: 16, lineHeight: 1 }}
@@ -260,17 +276,6 @@ export default function NewsPage() {
                   </button>
                 </div>
               )}
-              <NewsBody
-                className="page-subtitle"
-                style={{
-                  marginTop: 10,
-                  marginBottom: 0,
-                  fontWeight: normalizeNewsTextStyle(item.textStyle).bold ? 700 : 400,
-                  fontStyle: normalizeNewsTextStyle(item.textStyle).italic ? "italic" : "normal",
-                  textDecoration: normalizeNewsTextStyle(item.textStyle).underline ? "underline" : "none",
-                }}
-                body={item.body}
-              />
             </div>
           </article>
         ))}
