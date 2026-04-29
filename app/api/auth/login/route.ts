@@ -29,6 +29,8 @@ type ProfileRow = {
 };
 
 const SUPABASE_REQUEST_TIMEOUT_MS = 10000;
+/** RPC resolve_login_email часто отвечает быстрее 2–3 с; не держим общий шаг дольше без необходимости. */
+const RESOLVE_LOGIN_RPC_TIMEOUT_MS = 7000;
 
 function normalizeSupabaseUrl(url: string) {
   return url.endsWith("/") ? url.slice(0, -1) : url;
@@ -54,16 +56,20 @@ async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit, tim
 
 async function resolveEmail(baseUrl: string, anonKey: string, login: string) {
   try {
-    const response = await fetchWithTimeout(`${baseUrl}/rest/v1/rpc/resolve_login_email`, {
-      method: "POST",
-      headers: {
-        apikey: anonKey,
-        authorization: `Bearer ${anonKey}`,
-        "content-type": "application/json",
+    const response = await fetchWithTimeout(
+      `${baseUrl}/rest/v1/rpc/resolve_login_email`,
+      {
+        method: "POST",
+        headers: {
+          apikey: anonKey,
+          authorization: `Bearer ${anonKey}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ p_login: login }),
+        cache: "no-store",
       },
-      body: JSON.stringify({ p_login: login }),
-      cache: "no-store",
-    });
+      RESOLVE_LOGIN_RPC_TIMEOUT_MS,
+    );
     if (!response.ok) return "";
     const data = (await response.json()) as string | null;
     return typeof data === "string" ? data : "";
@@ -158,24 +164,28 @@ export async function POST(request: Request) {
     refreshToken = signIn.data.refresh_token;
   } else {
     const fakeEmail = `${login}@ssp.local`;
-    const resolvedRaw = await resolveEmail(baseUrl, supabaseAnonKey, login);
-    const resolvedTrim = typeof resolvedRaw === "string" ? resolvedRaw.trim() : "";
+    const [resolvedRaw, signInFake] = await Promise.all([
+      resolveEmail(baseUrl, supabaseAnonKey, login),
+      signInWithEmail(baseUrl, supabaseAnonKey, fakeEmail, password),
+    ]);
 
-    const attempts: string[] = [];
-    if (resolvedTrim) attempts.push(resolvedTrim);
-    if (!attempts.some((e) => e.toLowerCase() === fakeEmail.toLowerCase())) {
-      attempts.push(fakeEmail);
-    }
-
-    for (const email of attempts) {
-      const signIn = await signInWithEmail(baseUrl, supabaseAnonKey, email, password);
-      if (signIn.ok) {
-        authUserId = signIn.data.user?.id ?? "";
-        accessToken = signIn.data.access_token;
-        refreshToken = signIn.data.refresh_token;
-        break;
+    if (signInFake.ok) {
+      authUserId = signInFake.data.user?.id ?? "";
+      accessToken = signInFake.data.access_token;
+      refreshToken = signInFake.data.refresh_token;
+    } else {
+      lastError = signInFake.error;
+      const resolvedTrim = typeof resolvedRaw === "string" ? resolvedRaw.trim() : "";
+      if (resolvedTrim && resolvedTrim.toLowerCase() !== fakeEmail.toLowerCase()) {
+        const signInResolved = await signInWithEmail(baseUrl, supabaseAnonKey, resolvedTrim, password);
+        if (signInResolved.ok) {
+          authUserId = signInResolved.data.user?.id ?? "";
+          accessToken = signInResolved.data.access_token;
+          refreshToken = signInResolved.data.refresh_token;
+        } else {
+          lastError = signInResolved.error;
+        }
       }
-      lastError = signIn.error;
     }
   }
 

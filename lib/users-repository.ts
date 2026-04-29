@@ -413,9 +413,8 @@ export async function loginUser(login: string, password: string) {
   const loginTrim = login.trim();
   const serverResult = await loginViaServer(loginTrim, password);
   if (serverResult?.ok) {
-    const supabase = getSupabaseBrowserClient();
-    await supabase.auth
-      .setSession({
+    void getSupabaseBrowserClient()
+      .auth.setSession({
         access_token: serverResult.auth.accessToken,
         refresh_token: serverResult.auth.refreshToken,
       })

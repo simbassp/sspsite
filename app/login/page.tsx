@@ -6,7 +6,10 @@ import type { CSSProperties } from "react";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { SESSION_COOKIE } from "@/lib/seed";
 import { mapLoginErrorForDisplay } from "@/lib/login-ui";
-import { loginUser, persistSession, requestPasswordReset } from "@/lib/users-repository";
+
+async function loadUsersRepo() {
+  return import("@/lib/users-repository");
+}
 
 /** Запас над одной попыткой loginViaServer (LOGIN_SERVER_TIMEOUT_MS ≈ 55s). */
 const AUTH_REQUEST_TIMEOUT_MS = 62000;
@@ -104,6 +107,11 @@ export default function LoginPage() {
   }, [showDebug]);
 
   useEffect(() => {
+    const t = window.setTimeout(() => void loadUsersRepo(), 300);
+    return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
     if (typeof document === "undefined") return;
     const hasSessionCookie = document.cookie
       .split(";")
@@ -133,6 +141,7 @@ export default function LoginPage() {
     startProgress();
 
     try {
+      const { loginUser, persistSession } = await loadUsersRepo();
       const result = await withTimeout(loginUser(login.trim(), password), AUTH_REQUEST_TIMEOUT_MS, "request_timeout");
       if (!result.ok) {
         clearProgressTimer();
@@ -196,6 +205,7 @@ export default function LoginPage() {
     }
     setIsSendingReset(true);
     try {
+      const { requestPasswordReset } = await loadUsersRepo();
       const result = await withTimeout(
         requestPasswordReset(login.trim()),
         AUTH_REQUEST_TIMEOUT_MS,
