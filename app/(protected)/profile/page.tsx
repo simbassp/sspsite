@@ -337,6 +337,19 @@ export default function ProfilePage() {
   };
 
   const visibleAttempts = showAllAttempts ? rows : rows.slice(0, 5);
+  const iconBubble = (bg: string) =>
+    ({
+      width: 28,
+      height: 28,
+      borderRadius: 999,
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: bg,
+      fontSize: 14,
+      marginRight: 8,
+      flex: "0 0 auto",
+    }) as const;
 
   return (
     <section className="profile-page">
@@ -350,11 +363,15 @@ export default function ProfilePage() {
           <div className="grid" style={{ marginTop: 10, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
             <div>
               <p className="label">Пользователь</p>
-              <p style={{ fontWeight: 700, marginTop: 6 }}>{profileNameInput || session.name}</p>
+              <p style={{ fontWeight: 700, marginTop: 6, display: "flex", alignItems: "center" }}>
+                <span style={iconBubble("rgba(196, 43, 43, 0.10)")}>👤</span>
+                {profileNameInput || session.name}
+              </p>
             </div>
             <div>
               <p className="label">Роль</p>
-              <p style={{ fontWeight: 700, marginTop: 6 }}>
+              <p style={{ fontWeight: 700, marginTop: 6, display: "flex", alignItems: "center" }}>
+                <span style={iconBubble("rgba(59, 130, 246, 0.12)")}>🛡️</span>
                 {session.role === "admin" ? "Администратор" : session.position || "Специалист"}
               </p>
             </div>
@@ -570,13 +587,19 @@ export default function ProfilePage() {
                 <div className="card">
                   <div className="card-body">
                     <p className="label">Всего тестов пройдено</p>
-                    <p className="stat-value">{stats.total}</p>
+                    <p className="stat-value" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={iconBubble("rgba(59, 130, 246, 0.12)")}>📋</span>
+                      {stats.total}
+                    </p>
                   </div>
                 </div>
                 <div className="card">
                   <div className="card-body">
                     <p className="label">Успешных попыток</p>
-                    <p className="stat-value">{stats.passed}</p>
+                    <p className="stat-value" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={iconBubble("rgba(35, 147, 92, 0.14)")}>✅</span>
+                      {stats.passed}
+                    </p>
                     <p className="page-subtitle" style={{ marginBottom: 0 }}>
                       {stats.successRate}%
                     </p>
@@ -585,13 +608,19 @@ export default function ProfilePage() {
                 <div className="card">
                   <div className="card-body">
                     <p className="label">Среднее время</p>
-                    <p className="stat-value">{stats.averageTimeSec !== null ? `${stats.averageTimeSec} сек` : "—"}</p>
+                    <p className="stat-value" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={iconBubble("rgba(234, 179, 8, 0.14)")}>⏱️</span>
+                      {stats.averageTimeSec !== null ? `${stats.averageTimeSec} сек` : "—"}
+                    </p>
                   </div>
                 </div>
                 <div className="card">
                   <div className="card-body">
                     <p className="label">Последний тест</p>
-                    <p style={{ marginTop: 10, fontWeight: 700 }}>{stats.lastAttempt ? formatDate(stats.lastAttempt.createdAt) : "—"}</p>
+                    <p style={{ marginTop: 10, fontWeight: 700, display: "flex", alignItems: "center" }}>
+                      <span style={iconBubble("rgba(168, 85, 247, 0.14)")}>📅</span>
+                      {stats.lastAttempt ? formatDate(stats.lastAttempt.createdAt) : "—"}
+                    </p>
                   </div>
                 </div>
               </div>
