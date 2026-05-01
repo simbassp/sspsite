@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { readClientSession } from "@/lib/client-auth";
 import { canResetTestResults } from "@/lib/permissions";
+import { getPositionBadgeClass } from "@/lib/position-ui";
 import { FINAL_TEST_MAX_ATTEMPTS } from "@/lib/final-test-constants";
 import { formatDateTime } from "@/lib/format";
 
@@ -215,9 +216,9 @@ export default function AdminResultsPage() {
                 <h3 style={{ margin: 0 }}>
                   {row.name} ({row.callsign})
                 </h3>
-                <p className="page-subtitle" style={{ margin: 0 }}>
+                <span className={`admin-users-position-badge ${getPositionBadgeClass(row.position || "")}`}>
                   {row.position || "—"}
-                </p>
+                </span>
               </div>
               <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 Статус:{" "}
