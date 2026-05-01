@@ -566,7 +566,7 @@ to authenticated
 using (public.can_manage_content())
 with check (public.can_manage_content());
 
--- registration_invites
+-- registration_invites (только админ: персональные коды регистрации)
 create policy "registration_invites_admin_read"
 on public.registration_invites
 for select

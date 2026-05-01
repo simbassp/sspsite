@@ -43,6 +43,8 @@ export default function ProfilePage() {
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [initialLoadError, setInitialLoadError] = useState("");
   const [isInviteLoading, setIsInviteLoading] = useState(false);
+  const [isSavingInvite, setIsSavingInvite] = useState(false);
+  const [inviteDeleteCode, setInviteDeleteCode] = useState<string | null>(null);
   const [profileNameInput, setProfileNameInput] = useState(() => session?.name ?? "");
   const [profileCallsignInput, setProfileCallsignInput] = useState(() => session?.callsign ?? "");
   const [isOnline, setIsOnline] = useState(true);
@@ -50,7 +52,7 @@ export default function ProfilePage() {
   const [isResettingStats, setIsResettingStats] = useState(false);
   const [showAllAttempts, setShowAllAttempts] = useState(false);
   const [attemptsPage, setAttemptsPage] = useState(1);
-  const canManageInvites = session?.role === "admin" || session?.permissions.users === true;
+  const canManageInvites = session?.role === "admin";
 
   useEffect(() => {
     setSession(readClientSession());
@@ -246,7 +248,7 @@ export default function ProfilePage() {
   };  
 
   const onCreateInvite = async () => {
-    if (!canManageInvites) return;
+    if (!canManageInvites || isSavingInvite) return;
     setAdminMessage("");
     const normalizedCode = inviteInput.trim().toUpperCase();
     if (!normalizedCode) {
@@ -262,24 +264,34 @@ export default function ProfilePage() {
       setAdminMessage("Введите положительное число");
       return;
     }
-    const result = await createInviteCode({
-      code: normalizedCode,
-      maxUses: Number.isFinite(maxUses) && maxUses !== null ? maxUses : null,
-    });
-    if (!result.ok) {
-      setAdminMessage(result.error);
-      return;
+    setIsSavingInvite(true);
+    try {
+      const result = await createInviteCode({
+        code: normalizedCode,
+        maxUses: Number.isFinite(maxUses) && maxUses !== null ? maxUses : null,
+      });
+      if (!result.ok) {
+        setAdminMessage(result.error);
+        return;
+      }
+      setAdminMessage("Код приглашения создан.");
+      setInviteInput("");
+      setMaxUsesInput("");
+      await refreshInvites();
+    } finally {
+      setIsSavingInvite(false);
     }
-    setAdminMessage("Код приглашения создан.");
-    setInviteInput("");
-    setMaxUsesInput("");
-    await refreshInvites();
   };
 
   const onDisableInvite = async (code: string) => {
     if (!canManageInvites) return;
     setAdminMessage("");
-    await disableInviteCode(code);
+    const result = await disableInviteCode(code);
+    if (!result.ok) {
+      setAdminMessage(result.error);
+      await refreshInvites();
+      return;
+    }
     setAdminMessage(`Код ${code} отключен.`);
     await refreshInvites();
   };
@@ -287,16 +299,27 @@ export default function ProfilePage() {
   const onEnableInvite = async (code: string) => {
     if (!canManageInvites) return;
     setAdminMessage("");
-    await enableInviteCode(code);
+    const result = await enableInviteCode(code);
+    if (!result.ok) {
+      setAdminMessage(result.error);
+      await refreshInvites();
+      return;
+    }
     setAdminMessage(`Код ${code} включен.`);
     await refreshInvites();
   };
 
-  const onDeleteInvite = async (code: string) => {
-    if (!canManageInvites) return;
-    if (!window.confirm(`Удалить код ${code}?`)) return;
+  const onConfirmDeleteInvite = async () => {
+    if (!canManageInvites || !inviteDeleteCode) return;
+    const code = inviteDeleteCode;
     setAdminMessage("");
-    await removeInviteCode(code);
+    setInviteDeleteCode(null);
+    const result = await removeInviteCode(code);
+    if (!result.ok) {
+      setAdminMessage(result.error);
+      await refreshInvites();
+      return;
+    }
     setAdminMessage(`Код ${code} удален.`);
     await refreshInvites();
   };
@@ -1071,12 +1094,41 @@ export default function ProfilePage() {
       </article>
 
       {canManageInvites && (
-        <article className="card" style={{ marginTop: 12 }}>
+        <article className="card profile-invites-card" style={{ marginTop: 12 }}>
           <div className="card-body">
             <h3>Персональные коды приглашений</h3>
             <p className="page-subtitle" style={{ marginTop: 8 }}>
               Создавайте персональные коды регистрации, управляйте статусом и лимитами.
             </p>
+
+            {inviteDeleteCode && (
+              <div
+                className="card"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="invite-delete-title"
+                style={{
+                  marginTop: 12,
+                  marginBottom: 4,
+                  borderColor: "color-mix(in srgb, var(--danger, #c62828) 45%, var(--line))",
+                  background: "color-mix(in srgb, var(--danger, #c62828) 8%, var(--panel))",
+                }}
+              >
+                <div className="card-body" style={{ padding: 14 }}>
+                  <p id="invite-delete-title" className="page-subtitle" style={{ margin: 0, fontWeight: 600 }}>
+                    Удалить код «{inviteDeleteCode}»? Это действие нельзя отменить.
+                  </p>
+                  <div className="form" style={{ marginTop: 12, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                    <button className="btn btn-danger" type="button" onClick={() => void onConfirmDeleteInvite()}>
+                      Да, удалить
+                    </button>
+                    <button className="btn" type="button" onClick={() => setInviteDeleteCode(null)}>
+                      Отмена
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="form" style={{ marginTop: 10 }}>
               <label className="label">Код приглашения</label>
@@ -1099,8 +1151,13 @@ export default function ProfilePage() {
                 onChange={(e) => setMaxUsesInput(e.target.value)}
               />
 
-              <button className="btn btn-primary" type="button" onClick={() => void onCreateInvite()}>
-                Сохранить код
+              <button
+                className="btn btn-primary"
+                type="button"
+                disabled={isSavingInvite}
+                onClick={() => void onCreateInvite()}
+              >
+                {isSavingInvite ? "Сохраняем…" : "Сохранить код"}
               </button>
               {adminMessage && <p className="page-subtitle">{adminMessage}</p>}
             </div>
@@ -1135,7 +1192,7 @@ export default function ProfilePage() {
                           Включить
                         </button>
                       )}
-                      <button className="btn btn-danger" type="button" onClick={() => void onDeleteInvite(invite.code)}>
+                      <button className="btn btn-danger" type="button" onClick={() => setInviteDeleteCode(invite.code)}>
                         Удалить
                       </button>
                     </div>

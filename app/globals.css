@@ -977,6 +977,11 @@ html[data-theme="dark"] .chip:not(.active):hover {
 }
 
 @media (max-width: 819px) {
+  /* Нижний блок профиля (коды приглашений): доп. зазор над фиксированной навигацией, чтобы кнопки не перекрывались. */
+  .profile-invites-card {
+    margin-bottom: 28px;
+  }
+
   .app-shell {
     padding-bottom: calc(132px + env(safe-area-inset-bottom, 0px));
   }

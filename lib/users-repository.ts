@@ -68,6 +68,15 @@ export type InviteCodeRecord = {
 
 const LOCAL_INVITES_KEY = "ssp_local_invites_v1";
 const LOGIN_EMAIL_CACHE_KEY = "ssp_login_email_cache_v1";
+
+/** Точное сопоставление через ilike (без %/_), с экранированием спецсимволов ILIKE. */
+function inviteCodeIlikeExact(value: string) {
+  return value
+    .trim()
+    .replace(/\\/g, "\\\\")
+    .replace(/%/g, "\\%")
+    .replace(/_/g, "\\_");
+}
 /** Одна попытка /api/auth/login: RPC + token + профиль; не обрывать раньше типичного ответа Supabase на LTE. */
 const LOGIN_SERVER_TIMEOUT_MS = 55000;
 const LOGIN_RESOLVE_TIMEOUT_MS = 5000;
@@ -713,13 +722,6 @@ export async function registerUser(payload: {
   if (!inviteCodeRaw) {
     return { ok: false as const, error: "Введите персональный код приглашения." };
   }
-  const inviteCode = await resolveInviteCodeForRegistration(inviteCodeRaw);
-  if (!inviteCode) {
-    return {
-      ok: false as const,
-      error: "Персональный код недействителен или лимит использований исчерпан. Запросите у администратора новый код.",
-    };
-  }
 
   // Best-effort precheck to show a clear message for duplicate logins.
   try {
@@ -747,6 +749,15 @@ export async function registerUser(payload: {
     }
   } catch {
     // Ignore precheck failures; signup error mapping below still handles conflicts.
+  }
+
+  // Проверка кода сразу перед signUp (после быстрых precheck), чтобы окно гонки с лимитом было короче.
+  const inviteCode = await resolveInviteCodeForRegistration(inviteCodeRaw);
+  if (!inviteCode) {
+    return {
+      ok: false as const,
+      error: "Персональный код недействителен или лимит использований исчерпан. Запросите у администратора новый код.",
+    };
   }
 
   const confirmRegistrationCreated = async () => {
@@ -892,12 +903,13 @@ export async function createInviteCode(input: { code: string; maxUses: number | 
   }
 
   const supabase = getSupabaseBrowserClient();
-  const { data: existing, error: existingError } = await supabase
+  const pattern = inviteCodeIlikeExact(normalizedCode);
+  const { data: existingRows, error: existingError } = await supabase
     .from("registration_invites")
     .select("code")
-    .eq("code", normalizedCode)
-    .maybeSingle();
-  if (!existingError && existing) {
+    .ilike("code", pattern)
+    .limit(1);
+  if (!existingError && existingRows && existingRows.length > 0) {
     return { ok: false as const, error: "Такой код уже существует." };
   }
   const { error } = await supabase.from("registration_invites").insert(
@@ -913,34 +925,59 @@ export async function createInviteCode(input: { code: string; maxUses: number | 
   return { ok: true as const };
 }
 
-export async function disableInviteCode(code: string) {
+export async function disableInviteCode(code: string): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!isSupabaseConfigured) {
-    const next = readLocalInvites().map((row) => (row.code === code ? { ...row, isActive: false } : row));
+    const needle = code.trim().toLowerCase();
+    const next = readLocalInvites().map((row) =>
+      row.code.toLowerCase() === needle ? { ...row, isActive: false } : row,
+    );
     writeLocalInvites(next);
-    return;
+    return { ok: true as const };
   }
   const supabase = getSupabaseBrowserClient();
-  await supabase.from("registration_invites").update({ is_active: false }).eq("code", code.trim().toUpperCase());
+  const pattern = inviteCodeIlikeExact(code);
+  const { data: found, error: findErr } = await supabase.from("registration_invites").select("code").ilike("code", pattern).limit(1);
+  if (findErr) return { ok: false as const, error: findErr.message || "Не удалось отключить код." };
+  if (!found?.length) return { ok: false as const, error: "Код не найден." };
+  const { error } = await supabase.from("registration_invites").update({ is_active: false }).ilike("code", pattern);
+  if (error) return { ok: false as const, error: error.message || "Не удалось отключить код." };
+  return { ok: true as const };
 }
 
-export async function enableInviteCode(code: string) {
+export async function enableInviteCode(code: string): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!isSupabaseConfigured) {
-    const next = readLocalInvites().map((row) => (row.code === code ? { ...row, isActive: true } : row));
+    const needle = code.trim().toLowerCase();
+    const next = readLocalInvites().map((row) =>
+      row.code.toLowerCase() === needle ? { ...row, isActive: true } : row,
+    );
     writeLocalInvites(next);
-    return;
+    return { ok: true as const };
   }
   const supabase = getSupabaseBrowserClient();
-  await supabase.from("registration_invites").update({ is_active: true }).eq("code", code.trim().toUpperCase());
+  const pattern = inviteCodeIlikeExact(code);
+  const { data: found, error: findErr } = await supabase.from("registration_invites").select("code").ilike("code", pattern).limit(1);
+  if (findErr) return { ok: false as const, error: findErr.message || "Не удалось включить код." };
+  if (!found?.length) return { ok: false as const, error: "Код не найден." };
+  const { error } = await supabase.from("registration_invites").update({ is_active: true }).ilike("code", pattern);
+  if (error) return { ok: false as const, error: error.message || "Не удалось включить код." };
+  return { ok: true as const };
 }
 
-export async function removeInviteCode(code: string) {
+export async function removeInviteCode(code: string): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!isSupabaseConfigured) {
-    const next = readLocalInvites().filter((row) => row.code !== code);
+    const needle = code.trim().toLowerCase();
+    const next = readLocalInvites().filter((row) => row.code.toLowerCase() !== needle);
     writeLocalInvites(next);
-    return;
+    return { ok: true as const };
   }
   const supabase = getSupabaseBrowserClient();
-  await supabase.from("registration_invites").delete().eq("code", code.trim().toUpperCase());
+  const pattern = inviteCodeIlikeExact(code);
+  const { data: found, error: findErr } = await supabase.from("registration_invites").select("code").ilike("code", pattern).limit(1);
+  if (findErr) return { ok: false as const, error: findErr.message || "Не удалось удалить код." };
+  if (!found?.length) return { ok: false as const, error: "Код не найден." };
+  const { error } = await supabase.from("registration_invites").delete().ilike("code", pattern);
+  if (error) return { ok: false as const, error: error.message || "Не удалось удалить код." };
+  return { ok: true as const };
 }
 
 export async function fetchUsers() {
