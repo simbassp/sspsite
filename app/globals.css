@@ -389,6 +389,34 @@ html[data-theme="dark"] .selfcheck-hint__text svg {
   padding: 16px;
 }
 
+.app-site-footer {
+  padding: 10px 16px 6px;
+  text-align: center;
+  font-size: 10px;
+  line-height: 1.35;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  opacity: 0.38;
+  user-select: none;
+}
+
+.app-site-footer__line {
+  margin: 0;
+}
+
+.app-site-footer__line + .app-site-footer__line {
+  margin-top: 3px;
+}
+
+@media (min-width: 820px) {
+  .app-site-footer {
+    padding-left: 24px;
+    padding-right: 24px;
+    font-size: 11px;
+    opacity: 0.42;
+  }
+}
+
 .card {
   background: linear-gradient(180deg, var(--panel), var(--panel2));
   border: 1px solid var(--line);

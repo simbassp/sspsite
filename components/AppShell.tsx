@@ -363,6 +363,10 @@ export function AppShell({ session, children }: AppShellProps) {
         )}
 
         <div className="screen">{children}</div>
+        <footer className="app-site-footer" aria-label="Информация о платформе">
+          <p className="app-site-footer__line">Закрытая обучающая платформа</p>
+          <p className="app-site-footer__line">© 2026 ССП ПВО · Developed by Simba</p>
+        </footer>
       </main>
 
       <nav className="bottom-nav">
