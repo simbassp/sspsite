@@ -193,8 +193,7 @@ export default function CounteractionPage() {
     if (!draft) return;
     if (!draft.title.trim()) return setMessage("Введите название.");
     if (parseImages(draft.image).length === 0) return setMessage("Добавьте минимум одно изображение.");
-    const specs = normalizeSpecs(draft.specsText);
-    if (specs.length < 8) return setMessage("Заполните 8 параметров.");
+    const specs = normalizeSpecs(draft.specsText).slice(0, 8);
 
     setBusyId(draft.id);
     setMessage("");
@@ -205,7 +204,7 @@ export default function CounteractionPage() {
         category: draft.category.trim() || "Без категории",
         image: draft.image.trim(),
         summary: draft.summary.trim(),
-        specs: specs.slice(0, 8),
+        specs,
         details: {
           overview: "",
           tth: "",

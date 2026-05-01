@@ -90,8 +90,7 @@ export default function AdminCounteractionPage() {
     if (!draft.title.trim()) return setMessage("Введите название карточки.");
     if (parseImages(draft.image).length === 0) return setMessage("Добавьте минимум одно изображение.");
 
-    const specs = normalizeSpecs(draft.specsText);
-    if (specs.length < 8) return setMessage("Заполните 8 строк параметров.");
+    const specs = normalizeSpecs(draft.specsText).slice(0, 8);
 
     await saveCounteractionItem({
       id: draft.id,
@@ -99,7 +98,7 @@ export default function AdminCounteractionPage() {
       category: draft.category.trim() || "Без категории",
       image: draft.image.trim(),
       summary: draft.summary.trim(),
-      specs: specs.slice(0, 8),
+      specs,
       details: {
         overview: "",
         tth: "",
@@ -251,7 +250,7 @@ export default function AdminCounteractionPage() {
               onChange={(e) => setDraft((prev) => ({ ...prev, summary: e.target.value }))}
             />
 
-            <h3 style={{ marginTop: 4 }}>8 параметров (вручную)</h3>
+            <h3 style={{ marginTop: 4 }}>Параметры (до 8 строк, заполните только нужные)</h3>
             {draft.specsText.map((line, index) => (
               <div key={`spec-${index}`}>
                 <label className="label">Параметр {index + 1}</label>
