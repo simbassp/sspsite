@@ -44,6 +44,7 @@ export default function AdminTestsPage() {
   const [loadError, setLoadError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [bankTopicFilter, setBankTopicFilter] = useState<"all" | ManualQuestionTopic>("all");
+  const [currentPage, setCurrentPage] = useState(1);
   const [isClearingManual, setIsClearingManual] = useState(false);
 
   useEffect(() => {
@@ -159,6 +160,23 @@ export default function AdminTestsPage() {
 
   const topicLabel = (t: ManualQuestionTopic | undefined) =>
     normalizeManualTopic(t) === "counteraction" ? "Противодействие" : "ТТХ БПЛА";
+
+  const QUESTIONS_PER_PAGE = 10;
+  const totalPages = Math.max(1, Math.ceil(filteredQuestions.length / QUESTIONS_PER_PAGE));
+  const pagedQuestions = useMemo(() => {
+    const start = (currentPage - 1) * QUESTIONS_PER_PAGE;
+    return filteredQuestions.slice(start, start + QUESTIONS_PER_PAGE);
+  }, [filteredQuestions, currentPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, bankTopicFilter]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const onSaveQuestion = async () => {
     if (isSavingQuestion) return;
@@ -701,7 +719,7 @@ export default function AdminTestsPage() {
             style={{ marginTop: 8 }}
           />
           <div className="list" style={{ marginTop: 10 }}>
-            {filteredQuestions.map((question) => (
+            {pagedQuestions.map((question) => (
               <article className="card" key={question.id}>
                 <div className="card-body">
                   <div className="meta">
@@ -735,6 +753,29 @@ export default function AdminTestsPage() {
             ))}
             {!filteredQuestions.length && <p className="page-subtitle">Ничего не найдено.</p>}
           </div>
+          {filteredQuestions.length > 0 && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 12 }}>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+              >
+                ←
+              </button>
+              <span className="page-subtitle" style={{ margin: 0 }}>
+                Страница {currentPage} из {totalPages}
+              </span>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+              >
+                →
+              </button>
+            </div>
+          )}
         </div>
       </article>
     </section>
