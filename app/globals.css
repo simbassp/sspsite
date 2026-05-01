@@ -65,6 +65,18 @@ html[data-theme="light"] {
   padding: 0;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 html,
 body {
   min-height: 100%;
@@ -151,6 +163,160 @@ a {
     top: 0;
     margin: 0;
   }
+}
+
+/* Якоря карточек каталога (БПЛА / противодействие): не уезжают под липкую полосу чипов */
+.catalog-card-anchor {
+  scroll-margin-top: calc(132px + env(safe-area-inset-top, 0px));
+}
+
+@media (min-width: 820px) {
+  .catalog-card-anchor {
+    scroll-margin-top: 20px;
+  }
+}
+
+.uav-page__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.uav-page__head-text {
+  min-width: 0;
+  flex: 1 1 220px;
+}
+
+.uav-selfcheck-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-shrink: 0;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--line));
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+  color: var(--text);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font: inherit;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.uav-selfcheck-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+}
+
+@media (max-width: 819px) {
+  .uav-selfcheck-btn {
+    flex: 1 1 100%;
+    width: 100%;
+    max-width: 100%;
+  }
+}
+
+.selfcheck-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text);
+  background: color-mix(in srgb, #3b82f6 10%, var(--panel));
+  border: 1px solid color-mix(in srgb, #3b82f6 22%, var(--line));
+}
+
+.selfcheck-hint__text {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  flex: 1 1 200px;
+}
+
+.selfcheck-hint__text svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: #2563eb;
+}
+
+html[data-theme="dark"] .selfcheck-hint__text svg {
+  color: #93c5fd;
+}
+
+.selfcheck-hint__actions {
+  flex-shrink: 0;
+}
+
+.ttx-masked {
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  color: var(--accent);
+  cursor: pointer;
+  user-select: none;
+}
+
+.ttx-masked:focus-visible {
+  outline: 2px solid var(--accent2);
+  outline-offset: 2px;
+}
+
+.catalog-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.catalog-badge {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.catalog-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.catalog-card-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.catalog-card-actions .btn svg {
+  flex-shrink: 0;
+}
+
+.btn--icon-text {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 
 .brand {

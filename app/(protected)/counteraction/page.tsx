@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowRight, Pencil, Trash2 } from "lucide-react";
 import { readClientSession } from "@/lib/client-auth";
+import { counteractionBadgeStyle, specHasDisplayValue, splitCategoryLabels } from "@/lib/catalog-badges";
 import { canManageCounteraction } from "@/lib/permissions";
 import { publicUploadDisplayUrl } from "@/lib/public-asset-url";
 import { deleteCounteractionItem, fetchCounteractionItems, saveCounteractionItem } from "@/lib/uav-repository";
@@ -52,6 +55,7 @@ export default function CounteractionPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [activeChipId, setActiveChipId] = useState<string | "all">("all");
   const canInlineEdit = canManageCounteraction(readClientSession());
 
   const refresh = async () => {
@@ -102,6 +106,55 @@ export default function CounteractionPage() {
   const scrollToCard = (id: string) => {
     cardRefs.current[id]?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+
+  const scrollToListTop = () => {
+    if (typeof window === "undefined") return;
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const onChipNavigate = (target: string | "all") => {
+    setActiveChipId(target);
+    if (target === "all") scrollToListTop();
+    else scrollToCard(target);
+  };
+
+  const computeActiveChipId = useCallback((): string | "all" => {
+    if (typeof window === "undefined") return "all";
+    if (window.scrollY < 40) return "all";
+    const yRef = window.innerHeight * 0.22;
+    let best: string | "all" = "all";
+    let bestDist = 1e9;
+    for (const item of items) {
+      const el = cardRefs.current[item.id];
+      if (!el) continue;
+      const r = el.getBoundingClientRect();
+      if (r.bottom < 72 || r.top > window.innerHeight * 0.94) continue;
+      const anchor = r.top + Math.min(r.height * 0.22, 64);
+      const d = Math.abs(anchor - yRef);
+      if (d < bestDist) {
+        bestDist = d;
+        best = item.id;
+      }
+    }
+    return best;
+  }, [items]);
+
+  useEffect(() => {
+    if (!items.length) return;
+    let t: ReturnType<typeof setTimeout> | undefined;
+    const onScroll = () => {
+      if (t) clearTimeout(t);
+      t = setTimeout(() => setActiveChipId(computeActiveChipId()), 48);
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      if (t) clearTimeout(t);
+    };
+  }, [items, computeActiveChipId]);
 
   useEffect(() => {
     if (!zoomedSrc) return;
@@ -166,8 +219,11 @@ export default function CounteractionPage() {
 
   const onDelete = async (itemId: string) => {
     const target = items.find((entry) => entry.id === itemId);
+    const title = target?.title ?? "карточку";
     const approved =
-      typeof window === "undefined" ? true : window.confirm(`Удалить карточку "${target?.title ?? "Противодействие"}"?`);
+      typeof window === "undefined"
+        ? true
+        : window.confirm(`Удалить карточку?\n\nЭто действие нельзя отменить.\n\n«${title}»`);
     if (!approved) return;
     setBusyId(itemId);
     setMessage("");
@@ -187,31 +243,28 @@ export default function CounteractionPage() {
   };
 
   return (
-    <section>
+    <section style={{ minWidth: 0 }}>
       <h1 className="page-title">Противодействие</h1>
       <p className="page-subtitle">Каталог со сжатыми параметрами и переходом в детальные вкладки.</p>
       {isLoading && <p className="page-subtitle">Загружаем каталог…</p>}
       {message && <p className="page-subtitle">{message}</p>}
 
-      {items.length > 1 && (
+      {!!items.length && (
         <div className="uav-model-nav">
           <div className="chips">
+            <button
+              type="button"
+              className={`chip${activeChipId === "all" ? " active" : ""}`}
+              onClick={() => onChipNavigate("all")}
+            >
+              Все
+            </button>
             {items.map((item) => (
               <button
                 key={item.id}
                 type="button"
-                onClick={() => scrollToCard(item.id)}
-                style={{
-                  whiteSpace: "nowrap",
-                  padding: "7px 14px",
-                  borderRadius: 999,
-                  border: "1px solid var(--line-strong)",
-                  background: "var(--panel)",
-                  color: "var(--text)",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
+                className={`chip${activeChipId === item.id ? " active" : ""}`}
+                onClick={() => onChipNavigate(item.id)}
               >
                 {item.title}
               </button>
@@ -225,157 +278,229 @@ export default function CounteractionPage() {
           const images = parseImages(item.image).map(publicUploadDisplayUrl).filter(Boolean);
           const activeIndex = Math.min(imageIndexes[item.id] ?? 0, Math.max(images.length - 1, 0));
           const imageSrc = images[activeIndex] ?? "";
+          const badges = splitCategoryLabels(item.category);
+          const filledSpecs = item.specs.filter((s) => specHasDisplayValue(s.value));
           return (
-          <article className="card" key={item.id} ref={(el) => { cardRefs.current[item.id] = el; }}>
-            <div style={{ position: "relative", overflow: "hidden", cursor: imageSrc ? "zoom-in" : "default" }} onClick={() => imageSrc && setZoomedSrc(imageSrc)}>
-              {imageSrc ? (
-                <img
-                  src={imageSrc}
-                  alt={item.title}
-                  decoding="async"
-                  loading="lazy"
-                  style={{ width: "100%", height: 180, objectFit: "cover", objectPosition: "top center" }}
-                />
-              ) : (
-                <div
-                  style={{
-                    width: "100%",
-                    height: 180,
-                    background: "var(--panel2)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "var(--muted)",
-                    fontSize: 13,
-                  }}
-                >
-                  Нет изображения
-                </div>
-              )}
-              {images.length > 1 && (
-                <>
-                  <button
-                    type="button"
-                    className="btn"
-                    style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", padding: "6px 8px" }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setImageIndexes((prev) => ({
-                        ...prev,
-                        [item.id]: (activeIndex - 1 + images.length) % images.length,
-                      }));
+            <article
+              className="card catalog-card-anchor"
+              key={item.id}
+              ref={(el) => {
+                cardRefs.current[item.id] = el;
+              }}
+              data-catalog-card={item.id}
+            >
+              <div
+                style={{ position: "relative", overflow: "hidden", cursor: imageSrc ? "zoom-in" : "default" }}
+                onClick={() => imageSrc && setZoomedSrc(imageSrc)}
+              >
+                {imageSrc ? (
+                  <img
+                    src={imageSrc}
+                    alt={item.title}
+                    decoding="async"
+                    loading="lazy"
+                    style={{ width: "100%", height: 180, objectFit: "cover", objectPosition: "top center" }}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: "100%",
+                      height: 180,
+                      background: "var(--panel2)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "var(--muted)",
+                      fontSize: 13,
                     }}
                   >
-                    ‹
-                  </button>
-                  <button
-                    type="button"
-                    className="btn"
-                    style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", padding: "6px 8px" }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setImageIndexes((prev) => ({
-                        ...prev,
-                        [item.id]: (activeIndex + 1) % images.length,
-                      }));
-                    }}
-                  >
-                    ›
-                  </button>
-                  <div style={{ position: "absolute", right: 10, bottom: 8, fontSize: 11, color: "#fff" }}>
-                    {activeIndex + 1}/{images.length}
+                    Нет изображения
                   </div>
-                </>
-              )}
-            </div>
-            <div className="card-body">
-              {editingId === item.id && draft ? (
-                <div className="form">
-                  <input className="input" value={draft.title} onChange={(e) => setDraft((prev) => (prev ? { ...prev, title: e.target.value } : prev))} />
-                  <input className="input" value={draft.category} onChange={(e) => setDraft((prev) => (prev ? { ...prev, category: e.target.value } : prev))} />
-                  <textarea className="input" rows={2} value={draft.summary} onChange={(e) => setDraft((prev) => (prev ? { ...prev, summary: e.target.value } : prev))} />
-                  <textarea className="input" rows={3} value={draft.image} onChange={(e) => setDraft((prev) => (prev ? { ...prev, image: e.target.value } : prev))} />
-                  {draft.specsText.map((line, index) => (
+                )}
+                {images.length > 1 && (
+                  <>
+                    <button
+                      type="button"
+                      className="btn"
+                      style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", padding: "6px 8px" }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setImageIndexes((prev) => ({
+                          ...prev,
+                          [item.id]: (activeIndex - 1 + images.length) % images.length,
+                        }));
+                      }}
+                    >
+                      ‹
+                    </button>
+                    <button
+                      type="button"
+                      className="btn"
+                      style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", padding: "6px 8px" }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setImageIndexes((prev) => ({
+                          ...prev,
+                          [item.id]: (activeIndex + 1) % images.length,
+                        }));
+                      }}
+                    >
+                      ›
+                    </button>
+                    <div style={{ position: "absolute", right: 10, bottom: 8, fontSize: 11, color: "#fff" }}>
+                      {activeIndex + 1}/{images.length}
+                    </div>
+                  </>
+                )}
+              </div>
+              <div className="card-body">
+                {editingId === item.id && draft ? (
+                  <div className="form">
                     <input
-                      key={`cnt-inline-spec-${item.id}-${index}`}
                       className="input"
-                      placeholder={`Параметр ${index + 1}: ...`}
-                      value={line}
-                      onChange={(e) =>
-                        setDraft((prev) =>
-                          prev
-                            ? {
-                                ...prev,
-                                specsText: prev.specsText.map((oldLine, idx) => (idx === index ? e.target.value : oldLine)),
-                              }
-                            : prev,
-                        )
-                      }
+                      value={draft.title}
+                      onChange={(e) => setDraft((prev) => (prev ? { ...prev, title: e.target.value } : prev))}
                     />
-                  ))}
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button className="btn btn-primary" type="button" onClick={() => void onSave()} disabled={busyId === item.id}>
-                      Сохранить
-                    </button>
-                    <button className="btn" type="button" onClick={() => { setEditingId(null); setDraft(null); }}>
-                      Отмена
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <div className="meta">
-                    <span className="pill">{item.category}</span>
-                  </div>
-                  <h3 style={{ marginTop: 8 }}>{item.title}</h3>
-                  <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 8 }}>
-                    {item.summary}
-                  </p>
-                  <p className="label" style={{ marginBottom: 6 }}>Ключевые характеристики</p>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-                    {item.specs.slice(0, 8).map((spec) => (
-                      <div
-                        key={spec.key}
-                        style={{
-                          padding: "7px 10px",
-                          background: "var(--glass)",
-                          borderRadius: 10,
-                          border: "1px solid var(--line)",
+                    <input
+                      className="input"
+                      value={draft.category}
+                      onChange={(e) => setDraft((prev) => (prev ? { ...prev, category: e.target.value } : prev))}
+                    />
+                    <textarea
+                      className="input"
+                      rows={2}
+                      value={draft.summary}
+                      onChange={(e) => setDraft((prev) => (prev ? { ...prev, summary: e.target.value } : prev))}
+                    />
+                    <textarea
+                      className="input"
+                      rows={3}
+                      value={draft.image}
+                      onChange={(e) => setDraft((prev) => (prev ? { ...prev, image: e.target.value } : prev))}
+                    />
+                    {draft.specsText.map((line, index) => (
+                      <input
+                        key={`cnt-inline-spec-${item.id}-${index}`}
+                        className="input"
+                        placeholder={`Параметр ${index + 1}: ...`}
+                        value={line}
+                        onChange={(e) =>
+                          setDraft((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  specsText: prev.specsText.map((oldLine, idx) =>
+                                    idx === index ? e.target.value : oldLine,
+                                  ),
+                                }
+                              : prev,
+                          )
+                        }
+                      />
+                    ))}
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <button className="btn btn-primary" type="button" onClick={() => void onSave()} disabled={busyId === item.id}>
+                        Сохранить
+                      </button>
+                      <button
+                        className="btn"
+                        type="button"
+                        onClick={() => {
+                          setEditingId(null);
+                          setDraft(null);
                         }}
                       >
-                        <p style={{ fontSize: 11, color: "var(--muted)", lineHeight: 1.3 }}>{spec.key}</p>
-                        <p style={{ marginTop: 2, fontWeight: 700, fontSize: 13 }}>{spec.value}</p>
-                      </div>
-                    ))}
+                        Отмена
+                      </button>
+                    </div>
                   </div>
-                </>
-              )}
-              {canInlineEdit && (
-                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                  <button
-                    className="btn"
-                    style={{ width: 38, height: 34, padding: 0, fontSize: 16, lineHeight: 1 }}
-                    type="button"
-                    title="Редактировать"
-                    onClick={() => onEdit(item)}
-                  >
-                    ✏
-                  </button>
-                  <button
-                    className="btn btn-danger"
-                    style={{ width: 38, height: 34, padding: 0, fontSize: 16, lineHeight: 1 }}
-                    type="button"
-                    title="Удалить"
-                    onClick={() => void onDelete(item.id)}
-                    disabled={busyId === item.id}
-                  >
-                    🗑
-                  </button>
-                </div>
-              )}
-            </div>
-          </article>
-        );
+                ) : (
+                  <>
+                    <div className="catalog-badge-row" style={{ marginTop: 4 }}>
+                      {(badges.length ? badges : [item.category].filter(Boolean)).map((label, bi) => {
+                        const tone = counteractionBadgeStyle(label);
+                        return (
+                          <span key={`${item.id}-b-${bi}-${label}`} className="catalog-badge" style={tone} title={label}>
+                            {label}
+                          </span>
+                        );
+                      })}
+                    </div>
+                    <h3 style={{ marginTop: 8 }}>{item.title}</h3>
+                    <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 8 }}>
+                      {item.summary}
+                    </p>
+                    {filledSpecs.length > 0 && (
+                      <>
+                        <p className="label" style={{ marginBottom: 6 }}>
+                          Ключевые характеристики
+                        </p>
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
+                            gap: 6,
+                          }}
+                        >
+                          {filledSpecs.map((spec, specIndex) => (
+                            <div
+                              key={`${item.id}-spec-${specIndex}-${spec.key}`}
+                              style={{
+                                padding: "7px 10px",
+                                background: "var(--glass)",
+                                borderRadius: 10,
+                                border: "1px solid var(--line)",
+                                minWidth: 0,
+                              }}
+                            >
+                              <p style={{ fontSize: 11, color: "var(--muted)", lineHeight: 1.3 }}>{spec.key}</p>
+                              <p
+                                style={{
+                                  marginTop: 2,
+                                  fontWeight: 700,
+                                  fontSize: 13,
+                                  overflowWrap: "anywhere",
+                                  wordBreak: "break-word",
+                                }}
+                              >
+                                {spec.value}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </>
+                )}
+                {!editingId && (
+                  <div className="catalog-card-actions">
+                    <Link href={`/counteraction/${item.id}`} className="btn btn-primary btn--icon-text">
+                      <ArrowRight width={18} height={18} strokeWidth={2} aria-hidden />
+                      Подробнее
+                    </Link>
+                    {canInlineEdit && (
+                      <>
+                        <button className="btn btn--icon-text" type="button" title="Редактировать" onClick={() => onEdit(item)}>
+                          <Pencil width={18} height={18} strokeWidth={2} aria-hidden />
+                          Редактировать
+                        </button>
+                        <button
+                          className="btn btn-danger btn--icon-text"
+                          type="button"
+                          title="Удалить"
+                          onClick={() => void onDelete(item.id)}
+                          disabled={busyId === item.id}
+                        >
+                          <Trash2 width={18} height={18} strokeWidth={2} aria-hidden />
+                          Удалить
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            </article>
+          );
         })}
       </div>
       {zoomedSrc && (
@@ -396,6 +521,8 @@ export default function CounteractionPage() {
           <img
             src={zoomedSrc}
             alt=""
+            decoding="async"
+            loading="lazy"
             style={{
               maxWidth: "100%",
               maxHeight: "90vh",
