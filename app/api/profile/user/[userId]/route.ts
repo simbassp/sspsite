@@ -43,7 +43,7 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
     const userPrimary = await supabase
       .from("app_users")
       .select(
-        "id,name,callsign,position,role,status,login,is_online,last_seen_at",
+        "id,name,callsign,position,role,status,login,is_online,last_seen_at,duty_location",
       )
       .eq("id", userId)
       .maybeSingle();
@@ -51,8 +51,10 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
     let userRow: Record<string, unknown> | null = (userPrimary.data || null) as Record<string, unknown> | null;
     let userErr = userPrimary.error?.message || null;
     let onlineFromFlagOnly = false;
+    let dutyFromDb = true;
 
     if (userPrimary.error && isMissingColumnError(userPrimary.error.message)) {
+      dutyFromDb = false;
       const fallback = await supabase
         .from("app_users")
         .select("id,name,callsign,position,role,status,login,is_online")
@@ -101,6 +103,13 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
       ? userRow.is_online === true
       : effectiveOnlineStrict(userRow.is_online, userRow.last_seen_at);
 
+    const dutyLocation =
+      dutyFromDb &&
+      typeof userRow.duty_location === "string" &&
+      userRow.duty_location.trim().toLowerCase() === "deployment"
+        ? "deployment"
+        : "base";
+
     return Response.json({
       ok: true,
       user: {
@@ -112,6 +121,7 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
         role: userRow.role === "admin" ? "admin" : "employee",
         status: userRow.status === "inactive" ? "inactive" : "active",
         is_online: isOnline,
+        duty_location: dutyLocation,
       },
       results: resultsRows.map((r) => ({
         id: r.id,

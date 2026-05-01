@@ -30,14 +30,16 @@ export async function GET() {
     const primaryQ = await supabase
       .from("app_users")
       .select(
-        "id,auth_user_id,login,name,callsign,position,can_manage_content,can_manage_news,can_manage_tests,can_manage_results,can_manage_uav,can_manage_counteraction,can_manage_users,can_reset_test_results,can_view_online,is_online,last_seen_at,role,status",
+        "id,auth_user_id,login,name,callsign,position,can_manage_content,can_manage_news,can_manage_tests,can_manage_results,can_manage_uav,can_manage_counteraction,can_manage_users,can_reset_test_results,can_view_online,is_online,last_seen_at,role,status,duty_location",
       )
       .order("created_at", { ascending: false })
       .limit(1000);
     let rows: Array<Record<string, unknown>> = (primaryQ.data || []) as Array<Record<string, unknown>>;
     let queryError: string | null = primaryQ.error?.message || null;
     let onlineFromFlagOnly = false;
+    let dutyFromDb = true;
     if (primaryQ.error && isMissingColumnError(primaryQ.error.message)) {
+      dutyFromDb = false;
       const fallbackQ = await supabase
         .from("app_users")
         .select("id,name,callsign,position,role,status,can_manage_content,is_online")
@@ -64,6 +66,10 @@ export async function GET() {
       can_reset_test_results: r.can_reset_test_results ?? undefined,
       can_view_online: r.can_view_online ?? false,
       is_online: onlineFromFlagOnly ? r.is_online === true : effectiveOnlineStrict(r.is_online, r.last_seen_at),
+      duty_location:
+        dutyFromDb && typeof r.duty_location === "string" && r.duty_location.trim().toLowerCase() === "deployment"
+          ? "deployment"
+          : "base",
       role: r.role === "admin" ? "admin" : "employee",
       status: r.status === "inactive" ? "inactive" : "active",
     }));

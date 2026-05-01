@@ -32,13 +32,20 @@ export async function GET() {
       resultsRows = (resultsLegacyQ.data || []) as Array<Record<string, unknown>>;
       resultsError = resultsLegacyQ.error?.message || null;
     }
-    const profilePrimaryQ = await supabase.from("app_users").select("auth_user_id").eq("id", session.id).maybeSingle();
+    const profilePrimaryQ = await supabase
+      .from("app_users")
+      .select("auth_user_id,duty_location")
+      .eq("id", session.id)
+      .maybeSingle();
     let profileRow: Record<string, unknown> | null = (profilePrimaryQ.data || null) as Record<string, unknown> | null;
     let profileError: string | null = profilePrimaryQ.error?.message || null;
+    let dutyLocation: "base" | "deployment" = "base";
     if (profilePrimaryQ.error && isMissingColumnError(profilePrimaryQ.error.message)) {
-      const profileLegacyQ = await supabase.from("app_users").select("id").eq("id", session.id).maybeSingle();
+      const profileLegacyQ = await supabase.from("app_users").select("auth_user_id").eq("id", session.id).maybeSingle();
       profileRow = (profileLegacyQ.data || null) as Record<string, unknown> | null;
       profileError = profileLegacyQ.error?.message || null;
+    } else if (profileRow && typeof profileRow.duty_location === "string") {
+      dutyLocation = profileRow.duty_location.trim().toLowerCase() === "deployment" ? "deployment" : "base";
     }
 
     if (resultsError || profileError) {
@@ -70,6 +77,7 @@ export async function GET() {
     return Response.json({
       ok: true,
       email,
+      dutyLocation,
       results: resultsRows.map((r) => ({
         id: r.id,
         user_id: r.user_id,

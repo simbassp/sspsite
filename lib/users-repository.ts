@@ -13,7 +13,8 @@ import {
   replaceAllUsersInLocalCache,
   updateUser,
 } from "@/lib/storage";
-import { Position, SessionUser, UserPermissions, UserRecord } from "@/lib/types";
+import { normalizeDutyLocation } from "@/lib/duty-location";
+import { DutyLocation, Position, SessionUser, UserPermissions, UserRecord } from "@/lib/types";
 
 type UserRow = {
   id: string;
@@ -32,6 +33,7 @@ type UserRow = {
   can_reset_test_results?: boolean;
   can_view_online?: boolean;
   is_online?: boolean;
+  duty_location?: string | null;
   role: "employee" | "admin";
   status: "active" | "inactive";
 };
@@ -164,6 +166,7 @@ function toUserRecord(row: UserRow): UserRecord {
     status: row.status,
     password: "",
     isOnline: row.is_online === true,
+    dutyLocation: normalizeDutyLocation(row.duty_location),
   };
 }
 
@@ -689,6 +692,43 @@ export async function updateCurrentUserProfile(payload: { name: string; callsign
     };
   }
   return { ok: true as const, name, callsign };
+}
+
+export async function updateCurrentUserDutyLocation(location: DutyLocation) {
+  if (location !== "base" && location !== "deployment") {
+    return { ok: false as const, error: "Некорректное значение места положения." };
+  }
+
+  if (!isSupabaseConfigured) {
+    const current = readClientSession();
+    if (!current) {
+      return { ok: false as const, error: "Сессия не найдена." };
+    }
+    updateUser(current.id, { dutyLocation: location });
+    return { ok: true as const, dutyLocation: location };
+  }
+
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase.rpc("update_my_duty_location", {
+    p_location: location,
+  });
+
+  if (error) {
+    const raw = error.message || "";
+    return {
+      ok: false as const,
+      error: raw ? `Не удалось сохранить: ${raw}` : "Не удалось сохранить место положения.",
+    };
+  }
+
+  if (data !== true) {
+    return {
+      ok: false as const,
+      error: "Запись пользователя не найдена. Выйдите и войдите снова.",
+    };
+  }
+
+  return { ok: true as const, dutyLocation: location };
 }
 
 export async function registerUser(payload: {

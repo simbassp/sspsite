@@ -28,6 +28,7 @@ export const seedData: AppData = {
         online: true,
       },
       status: "active",
+      dutyLocation: "base",
     },
     {
       id: "u-employee-1",
@@ -49,6 +50,7 @@ export const seedData: AppData = {
         online: false,
       },
       status: "active",
+      dutyLocation: "base",
     },
     {
       id: "u-employee-2",
@@ -70,6 +72,7 @@ export const seedData: AppData = {
         online: false,
       },
       status: "active",
+      dutyLocation: "base",
     },
   ],
   news: [

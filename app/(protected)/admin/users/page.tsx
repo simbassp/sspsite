@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { readClientSession } from "@/lib/client-auth";
+import { dutyLocationLabel } from "@/lib/duty-location";
 import { POSITION_OPTIONS, getPositionBadgeClass } from "@/lib/position-ui";
 import { fetchUsers, patchUser, removeUser } from "@/lib/users-repository";
 import type { Position, Role, UserRecord } from "@/lib/types";
@@ -305,6 +306,7 @@ export default function AdminUsersPage() {
               <tr>
                 <th>Пользователь</th>
                 <th>Должность</th>
+                <th>Место</th>
                 <th>Права</th>
                 <th>Действия</th>
               </tr>
@@ -348,6 +350,14 @@ export default function AdminUsersPage() {
                         {user.position}
                       </button>
                     </div>
+                  </td>
+                  <td>
+                    <span
+                      className={`duty-location-badge duty-location-badge--${user.dutyLocation}`}
+                      title={dutyLocationLabel[user.dutyLocation]}
+                    >
+                      {dutyLocationLabel[user.dutyLocation]}
+                    </span>
                   </td>
                   <td>
                     <span className="admin-users-perms-text" title={permissionOptions.filter((opt) => user.permissions[opt.key]).map((opt) => opt.label).join(", ") || "Нет прав"}>
@@ -442,6 +452,11 @@ export default function AdminUsersPage() {
                       {user.position}
                     </button>
                   </div>
+                  <p style={{ marginTop: 8, marginBottom: 0 }}>
+                    <span className={`duty-location-badge duty-location-badge--${user.dutyLocation}`}>
+                      {dutyLocationLabel[user.dutyLocation]}
+                    </span>
+                  </p>
                   <p className="admin-users-perms-text">{getPermissionsSummary(user)}</p>
                   <div className="admin-users-table__actions admin-users-mobile-actions">
                     <button

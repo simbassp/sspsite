@@ -48,8 +48,10 @@ function withNormalizedPermissions(user: UserRecord): UserRecord {
     ...defaultPermissions(user),
     ...(user.permissions ?? {}),
   };
+  const dutyLocation = user.dutyLocation === "deployment" ? "deployment" : "base";
   return {
     ...user,
+    dutyLocation,
     permissions: normalized,
     canManageContent: normalized.news || normalized.tests || normalized.uav || normalized.counteraction,
   };
@@ -76,6 +78,7 @@ export function readData(): AppData {
       withNormalizedPermissions({
         ...user,
         canManageContent: user.canManageContent ?? false,
+        dutyLocation: (user as UserRecord).dutyLocation === "deployment" ? "deployment" : "base",
       } as UserRecord),
     );
     const normalized: AppData = {
@@ -150,6 +153,7 @@ export function registerEmployee(payload: {
       online: false,
     },
     status: "active",
+    dutyLocation: "base",
   };
 
   data.users.unshift(user);
@@ -179,7 +183,9 @@ export function replaceAllUsersInLocalCache(nextUsers: UserRecord[]) {
 
 export function updateUser(
   userId: string,
-  patch: Partial<Pick<UserRecord, "name" | "callsign" | "position" | "status" | "canManageContent" | "permissions" | "role">>,
+  patch: Partial<
+    Pick<UserRecord, "name" | "callsign" | "position" | "status" | "canManageContent" | "permissions" | "role" | "dutyLocation">
+  >,
 ) {
   const data = readData();
   data.users = data.users.map((user) => {

@@ -15,12 +15,14 @@ import {
   removeInviteCode,
   requestPasswordReset,
   updateCurrentUserProfile,
+  updateCurrentUserDutyLocation,
   updateCurrentUserEmail,
   updateCurrentUserPassword,
   updateCurrentUserPasswordWithOldPassword,
 } from "@/lib/users-repository";
 import { getPositionBadgeClass } from "@/lib/position-ui";
-import { TestResult } from "@/lib/types";
+import { dutyLocationLabel } from "@/lib/duty-location";
+import { DutyLocation, TestResult } from "@/lib/types";
 
 export default function ProfilePage() {
   const [session, setSession] = useState<ReturnType<typeof readClientSession>>(null);
@@ -48,6 +50,8 @@ export default function ProfilePage() {
   const [profileNameInput, setProfileNameInput] = useState(() => session?.name ?? "");
   const [profileCallsignInput, setProfileCallsignInput] = useState(() => session?.callsign ?? "");
   const [isOnline, setIsOnline] = useState(true);
+  const [dutyLocation, setDutyLocation] = useState<DutyLocation>("base");
+  const [dutySaving, setDutySaving] = useState(false);
   const [fieldError, setFieldError] = useState<{ name?: string; callsign?: string }>({});
   const [isResettingStats, setIsResettingStats] = useState(false);
   const [showAllAttempts, setShowAllAttempts] = useState(false);
@@ -77,6 +81,7 @@ export default function ProfilePage() {
           ok?: boolean;
           error?: string;
           email?: string;
+          dutyLocation?: DutyLocation;
           results?: Array<Record<string, unknown>>;
           inviteCodes?: Array<Record<string, unknown>>;
         };
@@ -103,6 +108,9 @@ export default function ProfilePage() {
             r.final_attempt_index === null || r.final_attempt_index === undefined ? null : Number(r.final_attempt_index),
         })) as TestResult[];
         setRows(mappedRows.sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)));
+        if (payload.dutyLocation === "deployment" || payload.dutyLocation === "base") {
+          setDutyLocation(payload.dutyLocation);
+        }
         if (typeof payload.email === "string" && payload.email) {
           setEmailInput(payload.email);
         } else {
@@ -406,6 +414,20 @@ export default function ProfilePage() {
     window.alert("Ссылка для сброса пароля отправлена на email.");
   };
 
+  const onDutyChange = async (next: DutyLocation) => {
+    if (!session || next === dutyLocation || dutySaving) return;
+    const prev = dutyLocation;
+    setDutyLocation(next);
+    setDutySaving(true);
+    setSettingsMessage("");
+    const res = await updateCurrentUserDutyLocation(next);
+    setDutySaving(false);
+    if (!res.ok) {
+      setDutyLocation(prev);
+      setSettingsMessage(res.error);
+    }
+  };
+
   const onSaveProfile = async () => {
     setSettingsMessage("");
     setFieldError({});
@@ -670,6 +692,27 @@ export default function ProfilePage() {
                 {session.position}
               </div>
             </div>
+            <div className="profile-hero-duty">
+              <p className="label profile-hero-duty-label">Место положения</p>
+              <div className="profile-duty-toggle" role="group" aria-label="Место положения">
+                <button
+                  type="button"
+                  className={`profile-duty-option${dutyLocation === "base" ? " profile-duty-option--active" : " profile-duty-option--inactive"}`}
+                  onClick={() => void onDutyChange("base")}
+                  disabled={dutySaving}
+                >
+                  На базе
+                </button>
+                <button
+                  type="button"
+                  className={`profile-duty-option${dutyLocation === "deployment" ? " profile-duty-option--active" : " profile-duty-option--inactive"}`}
+                  onClick={() => void onDutyChange("deployment")}
+                  disabled={dutySaving}
+                >
+                  В командировке
+                </button>
+              </div>
+            </div>
             <div className="profile-hero-divider" aria-hidden="true" />
             <div className="profile-hero-status">
               <p className="label" style={{ margin: 0 }}>
@@ -679,6 +722,9 @@ export default function ProfilePage() {
                 <StatusDotIcon online={isOnline} />
                 {isOnline ? "Онлайн" : "Офлайн"}
               </p>
+              <span className={`profile-duty-status-badge profile-duty-status-badge--${dutyLocation}`}>
+                {dutyLocationLabel[dutyLocation]}
+              </span>
             </div>
           </div>
         </div>

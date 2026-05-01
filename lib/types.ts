@@ -8,6 +8,9 @@ export type Position =
   | "Командир взвода";
 
 export type UserStatus = "active" | "inactive";
+
+/** Место положения сотрудника (профиль / админка). */
+export type DutyLocation = "base" | "deployment";
 export type TestType = "trial" | "final";
 export type TestStatus = "passed" | "failed";
 
@@ -38,6 +41,8 @@ export interface UserRecord extends SessionUser {
   password: string;
   status: UserStatus;
   isOnline?: boolean;
+  /** На базе или в командировке; по умолчанию base. */
+  dutyLocation: DutyLocation;
 }
 
 export interface NewsItem {

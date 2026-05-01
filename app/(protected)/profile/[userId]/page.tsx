@@ -5,9 +5,10 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { readClientSession } from "@/lib/client-auth";
 import { formatDateTime } from "@/lib/format";
+import { dutyLocationLabel } from "@/lib/duty-location";
 import { getPositionBadgeClass } from "@/lib/position-ui";
 import { canManageUsers } from "@/lib/permissions";
-import { TestResult } from "@/lib/types";
+import { DutyLocation, TestResult } from "@/lib/types";
 
 type InspectUser = {
   id: string;
@@ -18,6 +19,7 @@ type InspectUser = {
   role: "admin" | "employee";
   status: "active" | "inactive";
   is_online: boolean;
+  duty_location: DutyLocation;
 };
 
 function mapRows(payload: { results?: Array<Record<string, unknown>> }): TestResult[] {
@@ -65,7 +67,8 @@ export default function ProfileUserInspectPage() {
     }
 
     let cancelled = false;
-    (async () => {
+
+    const load = async () => {
       setLoading(true);
       setError("");
       try {
@@ -73,7 +76,7 @@ export default function ProfileUserInspectPage() {
         const payload = (await response.json()) as {
           ok?: boolean;
           error?: string;
-          user?: InspectUser;
+          user?: InspectUser & { duty_location?: string };
           results?: Array<Record<string, unknown>>;
         };
         if (cancelled) return;
@@ -83,16 +86,42 @@ export default function ProfileUserInspectPage() {
           setRows([]);
           return;
         }
-        setInspectUser(payload.user);
+        const u = payload.user;
+        const duty_location: DutyLocation = u.duty_location === "deployment" ? "deployment" : "base";
+        setInspectUser({ ...u, duty_location });
         setRows(mapRows({ results: payload.results }).sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)));
       } catch {
         if (!cancelled) setError("network");
       } finally {
         if (!cancelled) setLoading(false);
       }
-    })();
+    };
+
+    void load();
+    const t = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      void (async () => {
+        try {
+          const response = await fetch(`/api/profile/user/${encodeURIComponent(userId)}`, { cache: "no-store" });
+          const payload = (await response.json()) as {
+            ok?: boolean;
+            user?: InspectUser & { duty_location?: string };
+            results?: Array<Record<string, unknown>>;
+          };
+          if (cancelled || !response.ok || !payload.ok || !payload.user) return;
+          const u = payload.user;
+          const duty_location: DutyLocation =
+            u.duty_location === "deployment" ? "deployment" : "base";
+          setInspectUser({ ...u, duty_location });
+        } catch {
+          /* ignore */
+        }
+      })();
+    }, 20000);
+
     return () => {
       cancelled = true;
+      window.clearInterval(t);
     };
   }, [session, userId, router, canOpen]);
 
@@ -287,6 +316,12 @@ export default function ProfileUserInspectPage() {
                     {inspectUser.position}
                   </div>
                 </div>
+                <div className="profile-hero-duty">
+                  <p className="label profile-hero-duty-label">Место положения</p>
+                  <span className={`profile-duty-status-badge profile-duty-status-badge--${inspectUser.duty_location}`}>
+                    {dutyLocationLabel[inspectUser.duty_location]}
+                  </span>
+                </div>
                 <div className="profile-hero-divider" aria-hidden="true" />
                 <div className="profile-hero-status">
                   <p className="label" style={{ margin: 0 }}>
@@ -296,6 +331,9 @@ export default function ProfileUserInspectPage() {
                     <StatusDotIcon online={inspectUser.is_online} />
                     {inspectUser.is_online ? "Онлайн" : "Офлайн"}
                   </p>
+                  <span className={`profile-duty-status-badge profile-duty-status-badge--${inspectUser.duty_location}`}>
+                    {dutyLocationLabel[inspectUser.duty_location]}
+                  </span>
                 </div>
               </div>
             </div>
