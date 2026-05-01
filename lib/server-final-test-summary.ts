@@ -11,25 +11,31 @@ export async function computeFinalTestSummary(supabase: SupabaseClient, userId: 
   const tiedIds = ctx.linkedUserIds.length ? ctx.linkedUserIds : [userId];
   const countingFrom = effectiveFinalCountingFromUtc(ctx.final_test_counting_from);
 
-  let countQuery = supabase
+  // Вместо count(exact) берём только первые N записей: так намного быстрее на больших таблицах.
+  const attemptsProbeLimit = maxAttempts + 1;
+  let attemptsQuery = supabase
     .from("test_results")
-    .select("id", { count: "exact", head: true })
+    .select("id")
     .in("user_id", tiedIds)
     .eq("type", "final")
-    .gte("created_at", countingFrom);
+    .gte("created_at", countingFrom)
+    .order("created_at", { ascending: false })
+    .limit(attemptsProbeLimit);
 
-  let countRes = await countQuery;
+  let attemptsRes = await attemptsQuery;
 
-  if (countRes.error && isMissingColumnError(countRes.error.message)) {
-    countRes = await supabase
+  if (attemptsRes.error && isMissingColumnError(attemptsRes.error.message)) {
+    attemptsRes = await supabase
       .from("test_results")
-      .select("id", { count: "exact", head: true })
+      .select("id")
       .in("user_id", tiedIds)
       .eq("test_type", "final")
-      .gte("created_at", countingFrom);
+      .gte("created_at", countingFrom)
+      .order("created_at", { ascending: false })
+      .limit(attemptsProbeLimit);
   }
 
-  const usedAttempts = countRes.count ?? 0;
+  const usedAttempts = Array.isArray(attemptsRes.data) ? attemptsRes.data.length : 0;
 
   /** «Сдал» только в текущем окне попыток (после сброса и/или с 1-го числа месяца). */
   let passedQuery = supabase
