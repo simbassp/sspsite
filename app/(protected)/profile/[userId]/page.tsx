@@ -58,6 +58,8 @@ export default function ProfileUserInspectPage() {
   const [rows, setRows] = useState<TestResult[]>([]);
   const [showAllAttempts, setShowAllAttempts] = useState(false);
   const [attemptsPage, setAttemptsPage] = useState(1);
+  const [dutySaving, setDutySaving] = useState(false);
+  const [dutyMessage, setDutyMessage] = useState("");
 
   useEffect(() => {
     if (!session || !userId || !canOpen) return;
@@ -255,6 +257,33 @@ export default function ProfileUserInspectPage() {
     return <p className="page-subtitle">Загружаем...</p>;
   }
 
+  const onDutyChangeForUser = async (next: DutyLocation) => {
+    if (!inspectUser || next === inspectUser.duty_location || dutySaving) return;
+    const snapshot = inspectUser;
+    const prev = snapshot.duty_location;
+    setDutyMessage("");
+    setInspectUser({ ...snapshot, duty_location: next });
+    setDutySaving(true);
+    try {
+      const response = await fetch(`/api/profile/user/${encodeURIComponent(userId)}/duty-location`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ dutyLocation: next }),
+      });
+      const payload = (await response.json()) as { ok?: boolean; error?: string };
+      if (!response.ok || !payload.ok) {
+        setInspectUser({ ...snapshot, duty_location: prev });
+        setDutyMessage(payload.error || "Не удалось сохранить место положения.");
+        return;
+      }
+    } catch {
+      setInspectUser({ ...snapshot, duty_location: prev });
+      setDutyMessage("Ошибка сети. Повторите попытку.");
+    } finally {
+      setDutySaving(false);
+    }
+  };
+
   if (!canOpen) {
     return (
       <section className="profile-page">
@@ -318,9 +347,29 @@ export default function ProfileUserInspectPage() {
                 </div>
                 <div className="profile-hero-duty">
                   <p className="label profile-hero-duty-label">Место положения</p>
-                  <span className={`profile-duty-status-badge profile-duty-status-badge--${inspectUser.duty_location}`}>
-                    {dutyLocationLabel[inspectUser.duty_location]}
-                  </span>
+                  <div className="profile-duty-toggle" role="group" aria-label="Место положения сотрудника">
+                    <button
+                      type="button"
+                      className={`profile-duty-option${inspectUser.duty_location === "base" ? " profile-duty-option--active" : " profile-duty-option--inactive"}`}
+                      onClick={() => void onDutyChangeForUser("base")}
+                      disabled={dutySaving}
+                    >
+                      На базе
+                    </button>
+                    <button
+                      type="button"
+                      className={`profile-duty-option${inspectUser.duty_location === "deployment" ? " profile-duty-option--active" : " profile-duty-option--inactive"}`}
+                      onClick={() => void onDutyChangeForUser("deployment")}
+                      disabled={dutySaving}
+                    >
+                      В командировке
+                    </button>
+                  </div>
+                  {!!dutyMessage && (
+                    <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0, color: "var(--bad)" }}>
+                      {dutyMessage}
+                    </p>
+                  )}
                 </div>
                 <div className="profile-hero-divider" aria-hidden="true" />
                 <div className="profile-hero-status">
