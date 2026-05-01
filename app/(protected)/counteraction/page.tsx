@@ -1,8 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowRight, Pencil, Trash2 } from "lucide-react";
+import { Eye, EyeOff, Info, Pencil, Trash2 } from "lucide-react";
 import { readClientSession } from "@/lib/client-auth";
 import { counteractionBadgeStyle, specHasDisplayValue, splitCategoryLabels } from "@/lib/catalog-badges";
 import { canManageCounteraction } from "@/lib/permissions";
@@ -45,6 +44,12 @@ type InlineDraft = {
   specsText: string[];
 };
 
+const MASK = "••••••";
+
+function specRevealKey(itemId: string, specIndex: number) {
+  return `${itemId}:${specIndex}`;
+}
+
 export default function CounteractionPage() {
   const [items, setItems] = useState<CatalogItem[]>([]);
   const [imageIndexes, setImageIndexes] = useState<Record<string, number>>({});
@@ -56,6 +61,8 @@ export default function CounteractionPage() {
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [activeChipId, setActiveChipId] = useState<string | "all">("all");
+  const [hideTtx, setHideTtx] = useState(false);
+  const [revealedKeys, setRevealedKeys] = useState<Record<string, true>>({});
   const canInlineEdit = canManageCounteraction(readClientSession());
 
   const refresh = async () => {
@@ -242,10 +249,59 @@ export default function CounteractionPage() {
     }
   };
 
+  const revealOne = (key: string) => {
+    setRevealedKeys((prev) => ({ ...prev, [key]: true }));
+  };
+
   return (
     <section style={{ minWidth: 0 }}>
-      <h1 className="page-title">Противодействие</h1>
-      <p className="page-subtitle">Каталог со сжатыми параметрами и переходом в детальные вкладки.</p>
+      <div className="uav-page__head">
+        <div className="uav-page__head-text">
+          <h1 className="page-title" style={{ marginBottom: 4 }}>
+            Противодействие
+          </h1>
+          <p className="page-subtitle" style={{ marginBottom: 0 }}>
+            Каталог со сжатыми параметрами и ключевыми характеристиками.
+          </p>
+        </div>
+        {!!items.length && (
+          <button
+            type="button"
+            className="uav-selfcheck-btn"
+            onClick={() => {
+              if (hideTtx) {
+                setRevealedKeys({});
+              }
+              setHideTtx((v) => !v);
+            }}
+            aria-pressed={hideTtx}
+          >
+            {hideTtx ? (
+              <>
+                <Eye width={18} height={18} strokeWidth={2} aria-hidden />
+                Показать ТТХ
+              </>
+            ) : (
+              <>
+                <EyeOff width={18} height={18} strokeWidth={2} aria-hidden />
+                Скрыть ТТХ
+              </>
+            )}
+          </button>
+        )}
+      </div>
+
+      {hideTtx && !!items.length && (
+        <div className="selfcheck-hint" role="status">
+          <div className="selfcheck-hint__text">
+            <Info width={18} height={18} strokeWidth={2} aria-hidden />
+            <span>
+              Режим самопроверки включён. Характеристики скрыты. Нажмите на значение, чтобы проверить себя.
+            </span>
+          </div>
+        </div>
+      )}
+
       {isLoading && <p className="page-subtitle">Загружаем каталог…</p>}
       {message && <p className="page-subtitle">{message}</p>}
 
@@ -442,60 +498,82 @@ export default function CounteractionPage() {
                             gap: 6,
                           }}
                         >
-                          {filledSpecs.map((spec, specIndex) => (
-                            <div
-                              key={`${item.id}-spec-${specIndex}-${spec.key}`}
-                              style={{
-                                padding: "7px 10px",
-                                background: "var(--glass)",
-                                borderRadius: 10,
-                                border: "1px solid var(--line)",
-                                minWidth: 0,
-                              }}
-                            >
-                              <p style={{ fontSize: 11, color: "var(--muted)", lineHeight: 1.3 }}>{spec.key}</p>
-                              <p
+                          {filledSpecs.map((spec, specIndex) => {
+                            const rk = specRevealKey(item.id, specIndex);
+                            const masked = hideTtx && !revealedKeys[rk];
+                            return (
+                              <div
+                                key={`${item.id}-spec-${specIndex}-${spec.key}`}
                                 style={{
-                                  marginTop: 2,
-                                  fontWeight: 700,
-                                  fontSize: 13,
-                                  overflowWrap: "anywhere",
-                                  wordBreak: "break-word",
+                                  padding: "7px 10px",
+                                  background: "var(--glass)",
+                                  borderRadius: 10,
+                                  border: "1px solid var(--line)",
+                                  minWidth: 0,
                                 }}
                               >
-                                {spec.value}
-                              </p>
-                            </div>
-                          ))}
+                                <p style={{ fontSize: 11, color: "var(--muted)", lineHeight: 1.3 }}>{spec.key}</p>
+                                {masked ? (
+                                  <button
+                                    type="button"
+                                    className="ttx-masked"
+                                    style={{
+                                      marginTop: 2,
+                                      display: "block",
+                                      width: "100%",
+                                      textAlign: "left",
+                                      border: "none",
+                                      background: "transparent",
+                                      font: "inherit",
+                                    }}
+                                    onClick={() => revealOne(rk)}
+                                  >
+                                    {MASK}
+                                  </button>
+                                ) : (
+                                  <p
+                                    style={{
+                                      marginTop: 2,
+                                      fontWeight: 700,
+                                      fontSize: 13,
+                                      overflowWrap: "anywhere",
+                                      wordBreak: "break-word",
+                                    }}
+                                  >
+                                    {spec.value}
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       </>
                     )}
                   </>
                 )}
-                {!editingId && (
+                {canInlineEdit && editingId !== item.id && (
                   <div className="catalog-card-actions">
-                    <Link href={`/counteraction/${item.id}`} className="btn btn-primary btn--icon-text">
-                      <ArrowRight width={18} height={18} strokeWidth={2} aria-hidden />
-                      Подробнее
-                    </Link>
-                    {canInlineEdit && (
-                      <>
-                        <button className="btn btn--icon-text" type="button" title="Редактировать" onClick={() => onEdit(item)}>
-                          <Pencil width={18} height={18} strokeWidth={2} aria-hidden />
-                          Редактировать
-                        </button>
-                        <button
-                          className="btn btn-danger btn--icon-text"
-                          type="button"
-                          title="Удалить"
-                          onClick={() => void onDelete(item.id)}
-                          disabled={busyId === item.id}
-                        >
-                          <Trash2 width={18} height={18} strokeWidth={2} aria-hidden />
-                          Удалить
-                        </button>
-                      </>
-                    )}
+                    <button
+                      className="btn"
+                      style={{ width: 38, height: 34, padding: 0 }}
+                      type="button"
+                      title="Редактировать"
+                      onClick={() => onEdit(item)}
+                    >
+                      <span className="sr-only">Редактировать</span>
+                      <Pencil width={18} height={18} strokeWidth={2} aria-hidden />
+                    </button>
+                    <button
+                      className="btn btn-danger"
+                      style={{ width: 38, height: 34, padding: 0 }}
+                      type="button"
+                      title="Удалить"
+                      onClick={() => void onDelete(item.id)}
+                      disabled={busyId === item.id}
+                    >
+                      <span className="sr-only">Удалить</span>
+                      <Trash2 width={18} height={18} strokeWidth={2} aria-hidden />
+                    </button>
                   </div>
                 )}
               </div>

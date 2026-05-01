@@ -222,8 +222,7 @@ a {
 .selfcheck-hint {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
+  align-items: flex-start;
   gap: 12px;
   padding: 12px 14px;
   border-radius: 12px;
@@ -240,7 +239,7 @@ a {
   align-items: flex-start;
   gap: 10px;
   min-width: 0;
-  flex: 1 1 200px;
+  flex: 1 1 100%;
 }
 
 .selfcheck-hint__text svg {
@@ -251,10 +250,6 @@ a {
 
 html[data-theme="dark"] .selfcheck-hint__text svg {
   color: #93c5fd;
-}
-
-.selfcheck-hint__actions {
-  flex-shrink: 0;
 }
 
 .ttx-masked {

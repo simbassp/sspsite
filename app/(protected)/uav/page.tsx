@@ -68,7 +68,6 @@ export default function UavPage() {
   const canInlineEdit = canManageUav(readClientSession());
 
   const [hideTtx, setHideTtx] = useState(false);
-  const [revealedAll, setRevealedAll] = useState(false);
   const [revealedKeys, setRevealedKeys] = useState<Record<string, true>>({});
   const [activeChipId, setActiveChipId] = useState<string | "all">("all");
 
@@ -256,11 +255,6 @@ export default function UavPage() {
     setRevealedKeys((prev) => ({ ...prev, [key]: true }));
   };
 
-  const showAllValues = () => {
-    setRevealedAll(true);
-    setRevealedKeys({});
-  };
-
   return (
     <section style={{ minWidth: 0 }}>
       <div className="uav-page__head">
@@ -278,7 +272,6 @@ export default function UavPage() {
             className="uav-selfcheck-btn"
             onClick={() => {
               if (hideTtx) {
-                setRevealedAll(false);
                 setRevealedKeys({});
               }
               setHideTtx((v) => !v);
@@ -307,12 +300,6 @@ export default function UavPage() {
             <span>
               Режим самопроверки включён. Характеристики скрыты. Нажмите на значение, чтобы проверить себя.
             </span>
-          </div>
-          <div className="selfcheck-hint__actions">
-            <button type="button" className="btn btn--icon-text" onClick={showAllValues} disabled={revealedAll}>
-              <Eye width={16} height={16} strokeWidth={2} aria-hidden />
-              Показать всё
-            </button>
           </div>
         </div>
       )}
@@ -530,8 +517,7 @@ export default function UavPage() {
                     >
                       {displaySpecs.map((spec, index) => {
                         const rk = specRevealKey(item.id, index);
-                        const masked =
-                          hideTtx && !revealedAll && !revealedKeys[rk] && spec.value.trim().length > 0;
+                        const masked = hideTtx && !revealedKeys[rk] && spec.value.trim().length > 0;
                         return (
                           <div
                             key={`${item.id}-${spec.key}-${index}`}
@@ -581,7 +567,7 @@ export default function UavPage() {
                     </div>
                   </>
                 )}
-                {canInlineEdit && (
+                {canInlineEdit && editingId !== item.id && (
                   <div className="catalog-card-actions">
                     <button
                       className="btn"
