@@ -587,9 +587,10 @@ html[data-theme="dark"] .profile-page .profile-duty-option--active {
 }
 
 .profile-page .profile-duty-option--inactive {
-  background: rgba(207, 46, 46, 0.1);
-  border-color: rgba(207, 46, 46, 0.35);
-  color: color-mix(in srgb, var(--accent) 85%, var(--text));
+  background: color-mix(in srgb, var(--muted) 10%, var(--panel));
+  border-color: color-mix(in srgb, var(--muted) 28%, var(--line));
+  color: var(--muted);
+  font-weight: 600;
 }
 
 .profile-page .profile-duty-status-badge {
