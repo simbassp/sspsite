@@ -140,11 +140,20 @@ export default function AdminTestsPage() {
     if (bankTopicFilter !== "all") {
       list = list.filter((q) => normalizeManualTopic(q.manualTopic) === bankTopicFilter);
     }
-    if (!query) return list;
-    return list.filter((question) => {
-      const textHit = question.text.toLowerCase().includes(query);
-      const optionHit = question.options.some((option) => option.toLowerCase().includes(query));
-      return textHit || optionHit;
+    if (query) {
+      list = list.filter((question) => {
+        const textHit = question.text.toLowerCase().includes(query);
+        const optionHit = question.options.some((option) => option.toLowerCase().includes(query));
+        return textHit || optionHit;
+      });
+    }
+    return [...list].sort((a, b) => {
+      const tb = Date.parse(b.createdAt);
+      const ta = Date.parse(a.createdAt);
+      const nb = Number.isFinite(tb) ? tb : 0;
+      const na = Number.isFinite(ta) ? ta : 0;
+      if (nb !== na) return nb - na;
+      return b.order - a.order;
     });
   }, [questions, searchTerm, bankTopicFilter]);
 
@@ -237,6 +246,9 @@ export default function AdminTestsPage() {
       manualTopic: normalizeManualTopic(question.manualTopic),
     });
     setIsEditingTimeLimit(question.timeLimitSec !== 10);
+    queueMicrotask(() => {
+      document.getElementById("admin-test-question-editor")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   };
 
   const onDelete = async (questionId: string) => {
@@ -523,7 +535,7 @@ export default function AdminTestsPage() {
         </div>
       </article>
 
-      <article className="card" style={{ marginTop: 12 }}>
+      <article id="admin-test-question-editor" className="card" style={{ marginTop: 12 }}>
         <div className="card-body">
           <h3>{draft.id ? "Редактирование вопроса" : "Добавить вопрос"}</h3>
           <div className="form" style={{ marginTop: 10 }}>
