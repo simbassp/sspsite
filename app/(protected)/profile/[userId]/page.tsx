@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { readClientSession } from "@/lib/client-auth";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, formatTotalTestDuration } from "@/lib/format";
 import { dutyLocationLabel } from "@/lib/duty-location";
 import { getPositionBadgeClass } from "@/lib/position-ui";
 import { canManageUsers } from "@/lib/permissions";
@@ -140,13 +140,10 @@ export default function ProfileUserInspectPage() {
         Number.isFinite(Number(item.durationSeconds)) &&
         Number(item.durationSeconds) > 0,
     );
-    const averageTimeSec = completedWithDuration.length
-      ? Math.round(
-          completedWithDuration.reduce((acc, item) => acc + Number(item.durationSeconds || 0), 0) /
-            completedWithDuration.length,
-        )
+    const totalTimeSec = completedWithDuration.length
+      ? Math.round(completedWithDuration.reduce((acc, item) => acc + Number(item.durationSeconds || 0), 0))
       : null;
-    return { total, passed, successRate, averageTimeSec, lastAttempt };
+    return { total, passed, successRate, totalTimeSec, lastAttempt };
   }, [rows]);
 
   const averageDurationByType = useMemo(() => {
@@ -425,12 +422,12 @@ export default function ProfileUserInspectPage() {
                     </div>
                     <div className="card">
                       <div className="card-body">
-                        <p className="label">Среднее время</p>
+                        <p className="label">Общее время</p>
                         <p className="stat-value" style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <span style={iconBubble("rgba(234, 179, 8, 0.14)")}>
                             <ClockIcon color="#b88319" />
                           </span>
-                          {stats.averageTimeSec !== null ? `${stats.averageTimeSec} сек` : "Нет данных"}
+                          {stats.totalTimeSec !== null ? formatTotalTestDuration(stats.totalTimeSec) : "Нет данных"}
                         </p>
                       </div>
                     </div>

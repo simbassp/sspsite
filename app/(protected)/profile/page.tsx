@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { readClientSession } from "@/lib/client-auth";
-import { formatDate, formatDateTime } from "@/lib/format";
+import { formatDate, formatDateTime, formatTotalTestDuration } from "@/lib/format";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import {
   createInviteCode,
@@ -152,7 +152,14 @@ export default function ProfilePage() {
   }, []);
 
   const stats = useMemo(() => {
-    if (!session) return { total: 0, passed: 0, successRate: 0, averageTimeSec: null as number | null, lastAttempt: null as TestResult | null };
+    if (!session)
+      return {
+        total: 0,
+        passed: 0,
+        successRate: 0,
+        totalTimeSec: null as number | null,
+        lastAttempt: null as TestResult | null,
+      };
     const trialRows = rows.filter((r) => r.type === "trial");
     const total = trialRows.length;
     const passed = trialRows.filter((r) => r.status === "passed").length;
@@ -165,13 +172,10 @@ export default function ProfilePage() {
         Number.isFinite(Number(item.durationSeconds)) &&
         Number(item.durationSeconds) > 0,
     );
-    const averageTimeSec = completedWithDuration.length
-      ? Math.round(
-          completedWithDuration.reduce((acc, item) => acc + Number(item.durationSeconds || 0), 0) /
-            completedWithDuration.length,
-        )
+    const totalTimeSec = completedWithDuration.length
+      ? Math.round(completedWithDuration.reduce((acc, item) => acc + Number(item.durationSeconds || 0), 0))
       : null;
-    return { total, passed, successRate, averageTimeSec, lastAttempt };
+    return { total, passed, successRate, totalTimeSec, lastAttempt };
   }, [rows, session]);
 
   const attemptMeta = useMemo(() => {
@@ -984,12 +988,12 @@ export default function ProfilePage() {
                 </div>
                 <div className="card">
                   <div className="card-body">
-                    <p className="label">Среднее время</p>
+                    <p className="label">Общее время</p>
                     <p className="stat-value" style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <span style={iconBubble("rgba(234, 179, 8, 0.14)")}>
                         <ClockIcon color="#b88319" />
                       </span>
-                      {stats.averageTimeSec !== null ? `${stats.averageTimeSec} сек` : "Нет данных"}
+                      {stats.totalTimeSec !== null ? formatTotalTestDuration(stats.totalTimeSec) : "Нет данных"}
                     </p>
                   </div>
                 </div>
