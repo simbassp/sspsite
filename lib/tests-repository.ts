@@ -19,6 +19,7 @@ import { createDefaultQuestionBank } from "@/lib/test-question-bank";
 import { normalizeTestConfig } from "@/lib/test-config";
 import { dedupeQuestionOptions } from "@/lib/answer-equivalence";
 import { withTimeoutAndRetry } from "@/lib/async-utils";
+import { normalizeManualTopic } from "@/lib/manual-topic";
 import { FinalAttemptState, TestConfig, TestQuestion, TestResult, TestType } from "@/lib/types";
 
 type TestResultRow = {
@@ -55,6 +56,7 @@ type TestQuestionRow = {
   is_active?: boolean;
   active?: boolean;
   created_at: string;
+  manual_topic?: string | null;
 };
 
 type TestConfigRow = {
@@ -62,6 +64,8 @@ type TestConfigRow = {
   final_question_count: number;
   time_per_question_sec?: number | null;
   uav_auto_generation?: boolean | null;
+  manual_bank_uav_ttx_enabled?: boolean | null;
+  manual_bank_counteraction_enabled?: boolean | null;
 };
 
 function isMissingColumnError(message: string | undefined) {
@@ -191,6 +195,7 @@ function mapQuestion(row: TestQuestionRow): TestQuestion {
     order: row.order_index,
     isActive: Boolean(row.is_active ?? row.active ?? true),
     createdAt: row.created_at,
+    manualTopic: normalizeManualTopic(row.manual_topic),
   });
 }
 
@@ -218,6 +223,7 @@ function mapUnknownQuestionRow(row: Record<string, unknown>, index: number): Tes
   const timeRaw = row.time_limit_sec ?? row.time_sec ?? row.time_limit ?? 20;
   const orderRaw = row.order_index ?? row.sort_order ?? row.order ?? index + 1;
   const activeRaw = row.is_active ?? row.active ?? row.enabled ?? true;
+  const topicRaw = row.manual_topic ?? row.topic ?? row.bank_topic;
   const createdRaw = row.created_at ?? row.created ?? new Date().toISOString();
   const numericCorrect = Number(correctIndexRaw ?? 0);
   const options = parseQuestionOptions(optionsRaw);
@@ -236,17 +242,26 @@ function mapUnknownQuestionRow(row: Record<string, unknown>, index: number): Tes
     order: Math.max(1, Number(orderRaw || index + 1)),
     isActive: Boolean(activeRaw),
     createdAt: String(createdRaw),
+    manualTopic: normalizeManualTopic(topicRaw),
   });
 }
 
 function mapConfig(row: TestConfigRow): TestConfig {
   const uav =
     typeof row.uav_auto_generation === "boolean" ? row.uav_auto_generation : undefined;
+  const manualUav =
+    typeof row.manual_bank_uav_ttx_enabled === "boolean" ? row.manual_bank_uav_ttx_enabled : undefined;
+  const manualCa =
+    typeof row.manual_bank_counteraction_enabled === "boolean"
+      ? row.manual_bank_counteraction_enabled
+      : undefined;
   return normalizeTestConfig({
     trialQuestionCount: row.trial_question_count,
     finalQuestionCount: row.final_question_count,
     timePerQuestionSec: row.time_per_question_sec ?? undefined,
     uavAutoGeneration: uav,
+    manualBankUavTtxEnabled: manualUav,
+    manualBankCounteractionEnabled: manualCa,
   });
 }
 
@@ -513,12 +528,23 @@ export async function fetchTestQuestions(type: TestType) {
     return listTestQuestions(type).filter((q) => q.isActive);
   }
   const supabase = getSupabaseBrowserClient();
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from("test_questions")
-    .select("id,type,text,options,correct_index,time_limit_sec,order_index,is_active,created_at")
+    .select("id,type,text,options,correct_index,time_limit_sec,order_index,is_active,created_at,manual_topic")
     .eq("type", type)
     .eq("is_active", true)
     .order("order_index", { ascending: true });
+
+  if (error && isMissingColumnError(error.message)) {
+    const noTopic = await supabase
+      .from("test_questions")
+      .select("id,type,text,options,correct_index,time_limit_sec,order_index,is_active,created_at")
+      .eq("type", type)
+      .eq("is_active", true)
+      .order("order_index", { ascending: true });
+    data = noTopic.data as typeof data;
+    error = noTopic.error;
+  }
 
   if (error || !data) {
     return listTestQuestions(type).filter((q) => q.isActive);
@@ -536,13 +562,28 @@ export async function fetchActiveQuestionPool() {
       () =>
         supabase
           .from("test_questions")
-          .select("id,type,text,options,correct_index,time_limit_sec,order_index,is_active,created_at")
+          .select("id,type,text,options,correct_index,time_limit_sec,order_index,is_active,created_at,manual_topic")
           .eq("is_active", true)
           .order("order_index", { ascending: true }),
       7000,
       1,
       "fetch_questions_timeout",
     );
+    if (error && isMissingColumnError(error.message)) {
+      const noTopicRes = await withTimeoutAndRetry(
+        () =>
+          supabase
+            .from("test_questions")
+            .select("id,type,text,options,correct_index,time_limit_sec,order_index,is_active,created_at")
+            .eq("is_active", true)
+            .order("order_index", { ascending: true }),
+        7000,
+        1,
+        "fetch_questions_no_topic_timeout",
+      );
+      data = noTopicRes.data as unknown;
+      error = noTopicRes.error as { message: string } | null;
+    }
     if (error && isMissingColumnError(error.message)) {
       const legacyRes = await withTimeoutAndRetry(
         () =>
@@ -600,9 +641,19 @@ export async function fetchAdminQuestionBank() {
   const supabase = getSupabaseBrowserClient();
   let { data, error } = await supabase
     .from("test_questions")
-    .select("id,type,text,options,correct_index,time_limit_sec,order_index,is_active,created_at")
+    .select("id,type,text,options,correct_index,time_limit_sec,order_index,is_active,created_at,manual_topic")
     .order("type", { ascending: true })
     .order("order_index", { ascending: true });
+
+  if (error && isMissingColumnError(error.message)) {
+    const noTopicRes = await supabase
+      .from("test_questions")
+      .select("id,type,text,options,correct_index,time_limit_sec,order_index,is_active,created_at")
+      .order("type", { ascending: true })
+      .order("order_index", { ascending: true });
+    data = noTopicRes.data as typeof data;
+    error = noTopicRes.error as typeof error;
+  }
 
   if (error && isMissingColumnError(error.message)) {
     const legacyRes = await supabase
@@ -812,13 +863,30 @@ export async function fetchTestConfig() {
       () =>
         supabase
           .from("test_settings")
-          .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
+          .select(
+            "trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation,manual_bank_uav_ttx_enabled,manual_bank_counteraction_enabled",
+          )
           .eq("id", 1)
           .maybeSingle(),
       6000,
       1,
       "fetch_test_config_timeout",
     );
+    if (error && isMissingColumnError(error.message)) {
+      const withoutManualBanks = await withTimeoutAndRetry(
+        () =>
+          supabase
+            .from("test_settings")
+            .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
+            .eq("id", 1)
+            .maybeSingle(),
+        6000,
+        1,
+        "fetch_test_config_no_manual_banks_timeout",
+      );
+      data = withoutManualBanks.data as unknown;
+      error = withoutManualBanks.error as { message: string } | null;
+    }
     if (error && isMissingColumnError(error.message)) {
       const partialTimeRes = await withTimeoutAndRetry(
         () =>
@@ -886,12 +954,16 @@ export async function saveTestConfig(config: TestConfig) {
     final_question_count: normalized.finalQuestionCount,
     time_per_question_sec: normalized.timePerQuestionSec,
     uav_auto_generation: normalized.uavAutoGeneration,
+    manual_bank_uav_ttx_enabled: normalized.manualBankUavTtxEnabled,
+    manual_bank_counteraction_enabled: normalized.manualBankCounteractionEnabled,
     updated_at: new Date().toISOString(),
   };
   let saveRes = await supabase
     .from("test_settings")
     .upsert(payload, { onConflict: "id" })
-    .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
+    .select(
+      "trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation,manual_bank_uav_ttx_enabled,manual_bank_counteraction_enabled",
+    )
     .single();
 
   if (saveRes.error && isMissingColumnError(saveRes.error.message)) {
@@ -902,10 +974,29 @@ export async function saveTestConfig(config: TestConfig) {
       final_question_count: normalized.finalQuestionCount,
       time_per_question_sec: normalized.timePerQuestionSec,
       uav_auto_generation: normalized.uavAutoGeneration,
+      manual_bank_uav_ttx_enabled: normalized.manualBankUavTtxEnabled,
+      manual_bank_counteraction_enabled: normalized.manualBankCounteractionEnabled,
     };
     saveRes = await supabase
       .from("test_settings")
       .upsert(payloadWithoutUpdatedAt, { onConflict: "id" })
+      .select(
+        "trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation,manual_bank_uav_ttx_enabled,manual_bank_counteraction_enabled",
+      )
+      .single();
+  }
+
+  if (saveRes.error && isMissingColumnError(saveRes.error.message)) {
+    const payloadWithoutManualBanks = {
+      id: 1,
+      trial_question_count: normalized.trialQuestionCount,
+      final_question_count: normalized.finalQuestionCount,
+      time_per_question_sec: normalized.timePerQuestionSec,
+      uav_auto_generation: normalized.uavAutoGeneration,
+    };
+    saveRes = await supabase
+      .from("test_settings")
+      .upsert(payloadWithoutManualBanks, { onConflict: "id" })
       .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
       .single();
   }

@@ -6,8 +6,9 @@ import {
   fetchTestConfig,
   seedDefaultQuestionsIfEmpty,
 } from "@/lib/tests-repository";
+import { normalizeManualTopic } from "@/lib/manual-topic";
 import { DEFAULT_TEST_CONFIG, normalizeTestConfig } from "@/lib/test-config";
-import { TestConfig, TestQuestion, TestResult, TestType } from "@/lib/types";
+import { ManualQuestionTopic, TestConfig, TestQuestion, TestResult, TestType } from "@/lib/types";
 
 type DraftQuestion = {
   id?: string;
@@ -17,6 +18,7 @@ type DraftQuestion = {
   correctIndex: number;
   timeLimitSec: number;
   isActive: boolean;
+  manualTopic: ManualQuestionTopic;
 };
 
 const initialDraft: DraftQuestion = {
@@ -26,6 +28,7 @@ const initialDraft: DraftQuestion = {
   correctIndex: 0,
   timeLimitSec: 20,
   isActive: true,
+  manualTopic: "uav_ttx",
 };
 
 export default function AdminTestsPage() {
@@ -40,6 +43,7 @@ export default function AdminTestsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [bankTopicFilter, setBankTopicFilter] = useState<"all" | ManualQuestionTopic>("all");
   const [isClearingManual, setIsClearingManual] = useState(false);
 
   useEffect(() => {
@@ -78,17 +82,24 @@ export default function AdminTestsPage() {
             correctIndex: Number(q.correct_index || 0),
             timeLimitSec: Number(q.time_limit_sec || 10),
             order: Number(q.order_index || 1),
-            isActive: Boolean(q.is_active),
+            isActive: Boolean(q.is_active ?? q.active ?? q.enabled ?? true),
             createdAt: String(q.created_at || ""),
+            manualTopic: normalizeManualTopic(
+              (q as { manual_topic?: unknown }).manual_topic ??
+                (q as { manualTopic?: unknown }).manualTopic,
+            ),
           })) as TestQuestion[],
         );
         if (payload.config) {
+          const cfg = payload.config as Record<string, unknown>;
           setConfig(
             normalizeTestConfig({
-              trialQuestionCount: Number(payload.config.trial_question_count ?? DEFAULT_TEST_CONFIG.trialQuestionCount),
-              finalQuestionCount: Number(payload.config.final_question_count ?? DEFAULT_TEST_CONFIG.finalQuestionCount),
-              timePerQuestionSec: Number(payload.config.time_per_question_sec ?? DEFAULT_TEST_CONFIG.timePerQuestionSec),
-              uavAutoGeneration: Boolean(payload.config.uav_auto_generation ?? DEFAULT_TEST_CONFIG.uavAutoGeneration),
+              trialQuestionCount: Number(cfg.trial_question_count ?? DEFAULT_TEST_CONFIG.trialQuestionCount),
+              finalQuestionCount: Number(cfg.final_question_count ?? DEFAULT_TEST_CONFIG.finalQuestionCount),
+              timePerQuestionSec: Number(cfg.time_per_question_sec ?? DEFAULT_TEST_CONFIG.timePerQuestionSec),
+              uavAutoGeneration: Boolean(cfg.uav_auto_generation ?? DEFAULT_TEST_CONFIG.uavAutoGeneration),
+              manualBankUavTtxEnabled: cfg.manual_bank_uav_ttx_enabled !== false,
+              manualBankCounteractionEnabled: cfg.manual_bank_counteraction_enabled !== false,
             }),
           );
         } else {
@@ -125,13 +136,20 @@ export default function AdminTestsPage() {
 
   const filteredQuestions = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
-    if (!query) return questions;
-    return questions.filter((question) => {
+    let list = questions;
+    if (bankTopicFilter !== "all") {
+      list = list.filter((q) => normalizeManualTopic(q.manualTopic) === bankTopicFilter);
+    }
+    if (!query) return list;
+    return list.filter((question) => {
       const textHit = question.text.toLowerCase().includes(query);
       const optionHit = question.options.some((option) => option.toLowerCase().includes(query));
       return textHit || optionHit;
     });
-  }, [questions, searchTerm]);
+  }, [questions, searchTerm, bankTopicFilter]);
+
+  const topicLabel = (t: ManualQuestionTopic | undefined) =>
+    normalizeManualTopic(t) === "counteraction" ? "Противодействие" : "ТТХ БПЛА";
 
   const onSaveQuestion = async () => {
     if (isSavingQuestion) return;
@@ -181,6 +199,7 @@ export default function AdminTestsPage() {
           timeLimitSec,
           order: Math.max(1, currentOrder),
           isActive: draft.isActive,
+          manualTopic: draft.manualTopic,
         }),
       });
       const payload = (await response.json()) as {
@@ -215,6 +234,7 @@ export default function AdminTestsPage() {
       correctIndex: question.correctIndex,
       timeLimitSec: question.timeLimitSec,
       isActive: question.isActive,
+      manualTopic: normalizeManualTopic(question.manualTopic),
     });
     setIsEditingTimeLimit(question.timeLimitSec !== 10);
   };
@@ -274,6 +294,8 @@ export default function AdminTestsPage() {
           finalQuestionCount?: unknown;
           timePerQuestionSec?: unknown;
           uavAutoGeneration?: unknown;
+          manualBankUavTtxEnabled?: unknown;
+          manualBankCounteractionEnabled?: unknown;
         };
       };
       if (!response.ok || payload.ok !== true || !payload.config) {
@@ -285,6 +307,8 @@ export default function AdminTestsPage() {
         finalQuestionCount: Number(payload.config.finalQuestionCount ?? config.finalQuestionCount),
         timePerQuestionSec: Number(payload.config.timePerQuestionSec ?? config.timePerQuestionSec),
         uavAutoGeneration: payload.config.uavAutoGeneration !== false,
+        manualBankUavTtxEnabled: payload.config.manualBankUavTtxEnabled !== false,
+        manualBankCounteractionEnabled: payload.config.manualBankCounteractionEnabled !== false,
       });
       setConfig(nextConfig);
       setMessage("Настройки тестов сохранены.");
@@ -439,6 +463,53 @@ export default function AdminTestsPage() {
               </button>
             </div>
 
+            <p className="label" style={{ marginTop: 16 }}>
+              Ручной банк: тема «ТТХ БПЛА»
+            </p>
+            <p className="page-subtitle" style={{ marginTop: 4 }}>
+              Выключите, чтобы в тестах не попадали вопросы из банка с этой темой (автовопросы из каталога БПЛА не
+              затрагиваются).
+            </p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+              <button
+                className={`btn${config.manualBankUavTtxEnabled ? " btn-primary" : ""}`}
+                type="button"
+                onClick={() => setConfig((prev) => ({ ...prev, manualBankUavTtxEnabled: true }))}
+              >
+                Включить
+              </button>
+              <button
+                className={`btn${!config.manualBankUavTtxEnabled ? " btn-primary" : ""}`}
+                type="button"
+                onClick={() => setConfig((prev) => ({ ...prev, manualBankUavTtxEnabled: false }))}
+              >
+                Выключить
+              </button>
+            </div>
+
+            <p className="label" style={{ marginTop: 16 }}>
+              Ручной банк: тема «противодействие»
+            </p>
+            <p className="page-subtitle" style={{ marginTop: 4 }}>
+              Аналогично — только для ручных вопросов с темой «противодействие».
+            </p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+              <button
+                className={`btn${config.manualBankCounteractionEnabled ? " btn-primary" : ""}`}
+                type="button"
+                onClick={() => setConfig((prev) => ({ ...prev, manualBankCounteractionEnabled: true }))}
+              >
+                Включить
+              </button>
+              <button
+                className={`btn${!config.manualBankCounteractionEnabled ? " btn-primary" : ""}`}
+                type="button"
+                onClick={() => setConfig((prev) => ({ ...prev, manualBankCounteractionEnabled: false }))}
+              >
+                Выключить
+              </button>
+            </div>
+
             <button
               className="btn btn-primary"
               type="button"
@@ -532,6 +603,24 @@ export default function AdminTestsPage() {
               <option value="inactive">Отключен</option>
             </select>
 
+            <label className="label" htmlFor="manual-topic">
+              Тема вопроса (для фильтра в банке и в тестах)
+            </label>
+            <select
+              id="manual-topic"
+              className="input"
+              value={draft.manualTopic}
+              onChange={(e) =>
+                setDraft((prev) => ({
+                  ...prev,
+                  manualTopic: normalizeManualTopic(e.target.value),
+                }))
+              }
+            >
+              <option value="uav_ttx">ТТХ БПЛА</option>
+              <option value="counteraction">Противодействие</option>
+            </select>
+
             {message && <p className="page-subtitle">{message}</p>}
 
             <button className="btn btn-primary" type="button" onClick={() => void onSaveQuestion()} disabled={isSavingQuestion}>
@@ -565,6 +654,32 @@ export default function AdminTestsPage() {
           >
             {isClearingManual ? "Очищаем..." : "Удалить все ручные вопросы"}
           </button>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8, alignItems: "center" }}>
+            <span className="label" style={{ margin: 0 }}>
+              Тема:
+            </span>
+            <button
+              type="button"
+              className={`btn${bankTopicFilter === "all" ? " btn-primary" : ""}`}
+              onClick={() => setBankTopicFilter("all")}
+            >
+              Все
+            </button>
+            <button
+              type="button"
+              className={`btn${bankTopicFilter === "uav_ttx" ? " btn-primary" : ""}`}
+              onClick={() => setBankTopicFilter("uav_ttx")}
+            >
+              ТТХ БПЛА
+            </button>
+            <button
+              type="button"
+              className={`btn${bankTopicFilter === "counteraction" ? " btn-primary" : ""}`}
+              onClick={() => setBankTopicFilter("counteraction")}
+            >
+              Противодействие
+            </button>
+          </div>
           <input
             className="input"
             type="text"
@@ -578,6 +693,7 @@ export default function AdminTestsPage() {
               <article className="card" key={question.id}>
                 <div className="card-body">
                   <div className="meta">
+                    <span>Тема: {topicLabel(question.manualTopic)}</span>
                     <span>Время: {question.timeLimitSec} сек</span>
                     <span>{question.isActive ? "Активен" : "Отключен"}</span>
                   </div>

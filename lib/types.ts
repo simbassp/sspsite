@@ -115,6 +115,9 @@ export interface TestResult {
   finalAttemptIndex?: number | null;
 }
 
+/** Тема ручного вопроса в банке (админка). Автовопросы из каталога БПЛА к теме не относятся. */
+export type ManualQuestionTopic = "uav_ttx" | "counteraction";
+
 export interface TestQuestion {
   id: string;
   type: TestType;
@@ -125,6 +128,8 @@ export interface TestQuestion {
   order: number;
   isActive: boolean;
   createdAt: string;
+  /** Тема ручного вопроса; по умолчанию ТТХ БПЛА. */
+  manualTopic?: ManualQuestionTopic;
 }
 
 export interface TestConfig {
@@ -134,6 +139,10 @@ export interface TestConfig {
   timePerQuestionSec: number;
   /** Вопросы из ТТХ карточек БПЛА; при выключении — только банк из БД. */
   uavAutoGeneration: boolean;
+  /** Включать в тесты ручные вопросы с темой «ТТХ БПЛА». */
+  manualBankUavTtxEnabled: boolean;
+  /** Включать в тесты ручные вопросы по теме «противодействие». */
+  manualBankCounteractionEnabled: boolean;
 }
 
 export interface FinalAttemptState {

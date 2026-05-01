@@ -1,6 +1,9 @@
+import { dedupeQuestionOptions } from "@/lib/answer-equivalence";
+import { normalizeManualTopic } from "@/lib/manual-topic";
 import { canManageTests } from "@/lib/permissions";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
+import type { TestQuestion } from "@/lib/types";
 
 export const runtime = "nodejs";
 
@@ -31,15 +34,34 @@ function mapQuestionRow(row: Record<string, unknown>, index: number) {
     order_index: Math.max(1, Number(row.order_index ?? row.sort_order ?? row.order ?? index + 1)),
     is_active: Boolean(row.is_active ?? row.active ?? row.enabled ?? true),
     created_at: String(row.created_at ?? row.created ?? new Date().toISOString()),
+    manual_topic: normalizeManualTopic(row.manual_topic ?? row.topic ?? row.bank_topic),
   };
+}
+
+function toClientTestQuestion(m: ReturnType<typeof mapQuestionRow>): TestQuestion {
+  return dedupeQuestionOptions({
+    id: m.id,
+    type: m.type === "trial" ? "trial" : "final",
+    text: m.text,
+    options: m.options,
+    correctIndex: m.correct_index,
+    timeLimitSec: m.time_limit_sec,
+    order: m.order_index,
+    isActive: m.is_active,
+    createdAt: m.created_at,
+    manualTopic: m.manual_topic,
+  });
 }
 
 async function listQuestions() {
   const supabase = getServerSupabaseServiceClient();
   const wildcard = await supabase.from("test_questions").select("*").limit(2000);
-  if (wildcard.error) return { error: wildcard.error.message, data: [] as Array<Record<string, unknown>> };
+  if (wildcard.error) return { error: wildcard.error.message, data: [] as TestQuestion[] };
   const rows = (wildcard.data || []) as Array<Record<string, unknown>>;
-  const mapped = rows.map(mapQuestionRow).sort((a, b) => `${a.type}`.localeCompare(`${b.type}`) || a.order_index - b.order_index);
+  const mapped = rows
+    .map(mapQuestionRow)
+    .sort((a, b) => `${a.type}`.localeCompare(`${b.type}`) || a.order_index - b.order_index)
+    .map(toClientTestQuestion);
   return { error: null as string | null, data: mapped };
 }
 
@@ -179,10 +201,12 @@ export async function POST(request: Request) {
     timeLimitSec?: number;
     order?: number;
     isActive?: boolean;
+    manualTopic?: string;
   };
 
   const supabase = getServerSupabaseServiceClient();
   const normalizedType: "trial" | "final" = body.type === "trial" ? "trial" : "final";
+  const manualTopic = normalizeManualTopic(body.manualTopic);
   const base = {
     type: normalizedType,
     text: String(body.text || ""),
@@ -191,6 +215,7 @@ export async function POST(request: Request) {
     time_limit_sec: Math.max(5, Number(body.timeLimitSec ?? 20)),
     order_index: Math.max(1, Number(body.order ?? 1)),
     is_active: body.isActive !== false,
+    manual_topic: manualTopic,
   };
   const id = body.id ? String(body.id) : null;
   const columns = await getQuestionColumns(supabase);
@@ -223,6 +248,7 @@ export async function POST(request: Request) {
   setIfExists("order", base.order_index);
   setIfExists("is_active", base.is_active);
   setIfExists("active", base.is_active);
+  setIfExists("manual_topic", base.manual_topic);
 
   if (!canIntrospect || columnSet.has("test_id")) {
     const testId = await resolveOrCreateTestId(supabase, base.type);

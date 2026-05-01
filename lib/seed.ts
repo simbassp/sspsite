@@ -171,6 +171,8 @@ export const seedData: AppData = {
     finalQuestionCount: 15,
     timePerQuestionSec: 10,
     uavAutoGeneration: true,
+    manualBankUavTtxEnabled: true,
+    manualBankCounteractionEnabled: true,
   },
   testResults: [
     {

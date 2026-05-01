@@ -9,6 +9,8 @@ type ConfigRow = {
   final_question_count: number;
   time_per_question_sec: number | null;
   uav_auto_generation: boolean | null;
+  manual_bank_uav_ttx_enabled?: boolean | null;
+  manual_bank_counteraction_enabled?: boolean | null;
 };
 
 function isMissingColumnError(message: string | undefined) {
@@ -25,19 +27,41 @@ export async function GET() {
     const t0 = Date.now();
     let configQ = await supabase
       .from("test_settings")
-      .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
+      .select(
+        "trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation,manual_bank_uav_ttx_enabled,manual_bank_counteraction_enabled",
+      )
       .order("updated_at", { ascending: false })
       .limit(1)
       .maybeSingle();
     if ((configQ.error || !configQ.data) && isMissingColumnError(configQ.error?.message)) {
       configQ = await supabase
         .from("test_settings")
-        .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
+        .select(
+          "trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation,manual_bank_uav_ttx_enabled,manual_bank_counteraction_enabled",
+        )
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
     }
+    if (configQ.error && isMissingColumnError(configQ.error.message)) {
+      configQ = await supabase
+        .from("test_settings")
+        .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    }
     if (configQ.error || !configQ.data) {
+      configQ = await supabase
+        .from("test_settings")
+        .select(
+          "trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation,manual_bank_uav_ttx_enabled,manual_bank_counteraction_enabled",
+        )
+        .eq("id", 1)
+        .limit(1)
+        .maybeSingle();
+    }
+    if (configQ.error && isMissingColumnError(configQ.error.message)) {
       configQ = await supabase
         .from("test_settings")
         .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
@@ -69,7 +93,9 @@ export async function GET() {
     if (!configQ.error && !configQ.data) {
       configQ = await supabase
         .from("test_settings")
-        .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
+        .select(
+          "trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation,manual_bank_uav_ttx_enabled,manual_bank_counteraction_enabled",
+        )
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -121,6 +147,8 @@ export async function GET() {
         finalQuestionCount: Number(cfg.final_question_count ?? 15),
         timePerQuestionSec: Number(cfg.time_per_question_sec ?? 10),
         uavAutoGeneration: Boolean(cfg.uav_auto_generation ?? true),
+        manualBankUavTtxEnabled: cfg.manual_bank_uav_ttx_enabled !== false,
+        manualBankCounteractionEnabled: cfg.manual_bank_counteraction_enabled !== false,
       },
       hasOrphanAttempt: Boolean(orphanQ.data?.user_id),
       timingsMs: {

@@ -28,13 +28,23 @@ export async function GET() {
         .limit(2000),
       supabase
         .from("test_questions")
-        .select("id,type,text,options,correct_index,time_limit_sec,order_index,is_active,created_at")
+        .select("id,type,text,options,correct_index,time_limit_sec,order_index,is_active,created_at,manual_topic")
         .order("type", { ascending: true })
         .order("order_index", { ascending: true })
         .limit(2000),
     ]);
     let questionsData = baseQuestionsQ.data as Array<Record<string, unknown>> | null;
     let questionsError = baseQuestionsQ.error;
+    if (questionsError && isMissingColumnError(questionsError.message)) {
+      const withoutTopicQ = await supabase
+        .from("test_questions")
+        .select("id,type,text,options,correct_index,time_limit_sec,order_index,is_active,created_at")
+        .order("type", { ascending: true })
+        .order("order_index", { ascending: true })
+        .limit(2000);
+      questionsData = withoutTopicQ.data as Array<Record<string, unknown>> | null;
+      questionsError = withoutTopicQ.error;
+    }
     if (questionsError && isMissingColumnError(questionsError.message)) {
       const legacyQuestionsQ = await supabase
         .from("test_questions")
@@ -61,19 +71,41 @@ export async function GET() {
 
     let configQ = await supabase
       .from("test_settings")
-      .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
+      .select(
+        "trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation,manual_bank_uav_ttx_enabled,manual_bank_counteraction_enabled",
+      )
       .order("updated_at", { ascending: false })
       .limit(1)
       .maybeSingle();
     if ((configQ.error || !configQ.data) && isMissingColumnError(configQ.error?.message)) {
       configQ = await supabase
         .from("test_settings")
-        .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
+        .select(
+          "trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation,manual_bank_uav_ttx_enabled,manual_bank_counteraction_enabled",
+        )
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
     }
+    if (configQ.error && isMissingColumnError(configQ.error.message)) {
+      configQ = await supabase
+        .from("test_settings")
+        .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    }
     if (configQ.error || !configQ.data) {
+      configQ = await supabase
+        .from("test_settings")
+        .select(
+          "trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation,manual_bank_uav_ttx_enabled,manual_bank_counteraction_enabled",
+        )
+        .eq("id", 1)
+        .limit(1)
+        .maybeSingle();
+    }
+    if (configQ.error && isMissingColumnError(configQ.error.message)) {
       configQ = await supabase
         .from("test_settings")
         .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
@@ -105,7 +137,9 @@ export async function GET() {
     if (!configQ.error && !configQ.data) {
       configQ = await supabase
         .from("test_settings")
-        .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
+        .select(
+          "trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation,manual_bank_uav_ttx_enabled,manual_bank_counteraction_enabled",
+        )
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -131,6 +165,7 @@ export async function GET() {
           time_limit_sec: q.time_limit_sec ?? q.time_sec ?? q.time_limit ?? 20,
           order_index: q.order_index ?? q.sort_order ?? q.order ?? index + 1,
           is_active: q.is_active ?? q.active ?? q.enabled ?? true,
+          manual_topic: q.manual_topic ?? q.topic ?? q.bank_topic ?? "uav_ttx",
           created_at: q.created_at ?? q.created ?? null,
         })) || [],
       config: configQ.data || null,

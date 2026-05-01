@@ -1,4 +1,6 @@
 import { dedupeQuestionOptions } from "@/lib/answer-equivalence";
+import { filterDbPoolByManualTopicSettings, normalizeManualTopic } from "@/lib/manual-topic";
+import { normalizeTestConfig } from "@/lib/test-config";
 import { TestQuestion } from "@/lib/types";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
@@ -16,6 +18,7 @@ type QuestionRow = {
   is_active?: boolean;
   active?: boolean;
   created_at: string;
+  manual_topic?: string | null;
 };
 
 type LegacyQuestionRow = {
@@ -32,6 +35,32 @@ function isMissingColumnError(message: string | undefined) {
   return m.includes("column") && m.includes("does not exist");
 }
 
+async function loadTestConfigForPool(supabase: ReturnType<typeof getServerSupabaseServiceClient>) {
+  let configQ = await supabase
+    .from("test_settings")
+    .select(
+      "trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation,manual_bank_uav_ttx_enabled,manual_bank_counteraction_enabled",
+    )
+    .eq("id", 1)
+    .maybeSingle();
+  if (configQ.error && isMissingColumnError(configQ.error.message)) {
+    configQ = await supabase
+      .from("test_settings")
+      .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
+      .eq("id", 1)
+      .maybeSingle();
+  }
+  const row = (configQ.data || {}) as Record<string, unknown>;
+  return normalizeTestConfig({
+    trialQuestionCount: Number(row.trial_question_count ?? 10),
+    finalQuestionCount: Number(row.final_question_count ?? 15),
+    timePerQuestionSec: Number(row.time_per_question_sec ?? 10),
+    uavAutoGeneration: row.uav_auto_generation !== false,
+    manualBankUavTtxEnabled: row.manual_bank_uav_ttx_enabled !== false,
+    manualBankCounteractionEnabled: row.manual_bank_counteraction_enabled !== false,
+  });
+}
+
 export async function GET() {
   const session = await getServerSession();
   if (!session) return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
@@ -39,6 +68,7 @@ export async function GET() {
   try {
     const supabase = getServerSupabaseServiceClient();
     const t0 = Date.now();
+    const testConfig = await loadTestConfigForPool(supabase);
     const uavQ = supabase
       .from("catalog_items")
       .select("id,title,category,summary,image,specs,details")
@@ -46,24 +76,45 @@ export async function GET() {
       .order("created_at", { ascending: false })
       .limit(200);
 
-    const questionsPrimaryQ = await supabase
+    let questionsData: unknown[] = [];
+    let questionsError: string | null = null;
+
+    const questionsWithTopic = await supabase
       .from("test_questions")
-      .select("id,type,text,options,correct_index,time_limit_sec,order_index,is_active,created_at")
+      .select("id,type,text,options,correct_index,time_limit_sec,order_index,is_active,created_at,manual_topic")
       .eq("is_active", true)
       .order("order_index", { ascending: true })
       .limit(2000);
-    let questionsData: unknown[] = (questionsPrimaryQ.data as unknown[]) || [];
-    let questionsError: string | null = questionsPrimaryQ.error?.message || null;
-    if (questionsPrimaryQ.error && isMissingColumnError(questionsPrimaryQ.error.message)) {
-      const questionsLegacyQ = await supabase
+
+    if (!questionsWithTopic.error) {
+      questionsData = (questionsWithTopic.data as unknown[]) || [];
+      questionsError = null;
+    } else if (isMissingColumnError(questionsWithTopic.error.message)) {
+      const questionsNoTopic = await supabase
         .from("test_questions")
-        .select("id,type,text,options,correct_index,order_index,active,created_at")
-        .eq("active", true)
+        .select("id,type,text,options,correct_index,time_limit_sec,order_index,is_active,created_at")
+        .eq("is_active", true)
         .order("order_index", { ascending: true })
         .limit(2000);
-      questionsData = (questionsLegacyQ.data as unknown[]) || [];
-      questionsError = questionsLegacyQ.error?.message || null;
+      if (!questionsNoTopic.error) {
+        questionsData = (questionsNoTopic.data as unknown[]) || [];
+        questionsError = null;
+      } else if (isMissingColumnError(questionsNoTopic.error.message)) {
+        const questionsLegacyQ = await supabase
+          .from("test_questions")
+          .select("id,type,text,options,correct_index,order_index,active,created_at")
+          .eq("active", true)
+          .order("order_index", { ascending: true })
+          .limit(2000);
+        questionsData = (questionsLegacyQ.data as unknown[]) || [];
+        questionsError = questionsLegacyQ.error?.message || null;
+      } else {
+        questionsError = questionsNoTopic.error.message;
+      }
+    } else {
+      questionsError = questionsWithTopic.error.message;
     }
+
     if (questionsError && isMissingColumnError(questionsError)) {
       const questionsMinimalQ = await supabase
         .from("test_questions")
@@ -95,6 +146,7 @@ export async function GET() {
           order: Number(q.order_index ?? index + 1),
           isActive: Boolean(q.is_active ?? q.active ?? true),
           createdAt: q.created_at,
+          manualTopic: normalizeManualTopic(q.manual_topic),
         } as TestQuestion),
       );
     } else if (isMissingColumnError(questionsError)) {
@@ -112,6 +164,8 @@ export async function GET() {
         } as TestQuestion),
       );
     }
+
+    mappedQuestions = filterDbPoolByManualTopicSettings(mappedQuestions, testConfig);
 
     return Response.json({
       ok: true,

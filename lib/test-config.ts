@@ -5,16 +5,26 @@ export const DEFAULT_TEST_CONFIG: TestConfig = {
   finalQuestionCount: 15,
   timePerQuestionSec: 10,
   uavAutoGeneration: true,
+  manualBankUavTtxEnabled: true,
+  manualBankCounteractionEnabled: true,
 };
 
 export function normalizeTestConfig(raw: Partial<TestConfig> | null | undefined): TestConfig {
   const d = DEFAULT_TEST_CONFIG;
   const uav =
     typeof raw?.uavAutoGeneration === "boolean" ? raw.uavAutoGeneration : d.uavAutoGeneration;
+  const manualUav =
+    typeof raw?.manualBankUavTtxEnabled === "boolean" ? raw.manualBankUavTtxEnabled : d.manualBankUavTtxEnabled;
+  const manualCa =
+    typeof raw?.manualBankCounteractionEnabled === "boolean"
+      ? raw.manualBankCounteractionEnabled
+      : d.manualBankCounteractionEnabled;
   return {
     trialQuestionCount: Math.max(1, Math.floor(Number(raw?.trialQuestionCount) || d.trialQuestionCount)),
     finalQuestionCount: Math.max(1, Math.floor(Number(raw?.finalQuestionCount) || d.finalQuestionCount)),
     timePerQuestionSec: Math.max(5, Math.floor(Number(raw?.timePerQuestionSec) || d.timePerQuestionSec)),
     uavAutoGeneration: uav,
+    manualBankUavTtxEnabled: manualUav,
+    manualBankCounteractionEnabled: manualCa,
   };
 }

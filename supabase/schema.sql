@@ -91,6 +91,7 @@ create table if not exists public.test_questions (
   time_limit_sec integer not null default 45 check (time_limit_sec >= 5),
   order_index integer not null default 1,
   is_active boolean not null default true,
+  manual_topic text not null default 'uav_ttx' check (manual_topic in ('uav_ttx', 'counteraction')),
   created_at timestamptz not null default now()
 );
 
@@ -100,6 +101,8 @@ create table if not exists public.test_settings (
   final_question_count integer not null default 15 check (final_question_count >= 1),
   time_per_question_sec integer not null default 10 check (time_per_question_sec >= 5),
   uav_auto_generation boolean not null default true,
+  manual_bank_uav_ttx_enabled boolean not null default true,
+  manual_bank_counteraction_enabled boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -114,21 +117,46 @@ create table if not exists public.registration_invites (
   check (used_count >= 0)
 );
 
-insert into public.test_settings (id, trial_question_count, final_question_count, time_per_question_sec, uav_auto_generation)
-values (1, 10, 15, 10, true)
+insert into public.test_settings (
+  id,
+  trial_question_count,
+  final_question_count,
+  time_per_question_sec,
+  uav_auto_generation,
+  manual_bank_uav_ttx_enabled,
+  manual_bank_counteraction_enabled
+)
+values (1, 10, 15, 10, true, true, true)
 on conflict (id) do nothing;
 
 alter table public.test_settings add column if not exists time_per_question_sec integer;
 alter table public.test_settings add column if not exists uav_auto_generation boolean;
+alter table public.test_settings add column if not exists manual_bank_uav_ttx_enabled boolean;
+alter table public.test_settings add column if not exists manual_bank_counteraction_enabled boolean;
 update public.test_settings
 set
   time_per_question_sec = coalesce(time_per_question_sec, 10),
-  uav_auto_generation = coalesce(uav_auto_generation, true)
+  uav_auto_generation = coalesce(uav_auto_generation, true),
+  manual_bank_uav_ttx_enabled = coalesce(manual_bank_uav_ttx_enabled, true),
+  manual_bank_counteraction_enabled = coalesce(manual_bank_counteraction_enabled, true)
 where id = 1;
 alter table public.test_settings alter column time_per_question_sec set default 10;
 alter table public.test_settings alter column uav_auto_generation set default true;
+alter table public.test_settings alter column manual_bank_uav_ttx_enabled set default true;
+alter table public.test_settings alter column manual_bank_counteraction_enabled set default true;
 alter table public.test_settings alter column time_per_question_sec set not null;
 alter table public.test_settings alter column uav_auto_generation set not null;
+alter table public.test_settings alter column manual_bank_uav_ttx_enabled set not null;
+alter table public.test_settings alter column manual_bank_counteraction_enabled set not null;
+
+alter table public.test_questions add column if not exists manual_topic text;
+update public.test_questions set manual_topic = 'uav_ttx' where manual_topic is null;
+alter table public.test_questions alter column manual_topic set default 'uav_ttx';
+alter table public.test_questions alter column manual_topic set not null;
+alter table public.test_questions drop constraint if exists test_questions_manual_topic_check;
+alter table public.test_questions
+  add constraint test_questions_manual_topic_check
+  check (manual_topic in ('uav_ttx', 'counteraction'));
 
 create index if not exists idx_app_users_login on public.app_users(login);
 create index if not exists idx_app_users_role on public.app_users(role);

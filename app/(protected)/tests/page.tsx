@@ -16,6 +16,7 @@ import {
   persistFinalAttempt,
   seedDefaultQuestionsIfEmpty,
 } from "@/lib/tests-repository";
+import { filterDbPoolByManualTopicSettings } from "@/lib/manual-topic";
 import { DEFAULT_TEST_CONFIG } from "@/lib/test-config";
 import { generateUavTtxQuestionBank } from "@/lib/uav-test-generator";
 import { fetchUavItems } from "@/lib/uav-repository";
@@ -195,17 +196,18 @@ export default function TestsPage() {
       }
       if (!response.ok || !payload.ok) {
         const [uavItems, dbPool] = await Promise.all([fetchUavItems(), fetchActiveQuestionPool()]);
+        const dbPoolFiltered = filterDbPoolByManualTopicSettings(dbPool, testConfig);
         const fromUav = testConfig.uavAutoGeneration
           ? generateUavTtxQuestionBank(uavItems, testConfig.timePerQuestionSec)
           : [];
         if (fromUav.length > 0) {
           const ids = new Set(fromUav.map((q) => q.id));
-          const merged = [...fromUav, ...dbPool.filter((q) => !ids.has(q.id))];
+          const merged = [...fromUav, ...dbPoolFiltered.filter((q) => !ids.has(q.id))];
           setQuestionPool(merged);
           return merged;
         }
-        setQuestionPool(dbPool);
-        return dbPool;
+        setQuestionPool(dbPoolFiltered);
+        return dbPoolFiltered;
       }
       const dbPool = Array.isArray(payload.questionPool) ? payload.questionPool : [];
       const uavItems = Array.isArray(payload.uavItems) ? payload.uavItems : [];
@@ -225,17 +227,18 @@ export default function TestsPage() {
       }
       try {
         const [uavItems, dbPool] = await Promise.all([fetchUavItems(), fetchActiveQuestionPool()]);
+        const dbPoolFiltered = filterDbPoolByManualTopicSettings(dbPool, testConfig);
         const fromUav = testConfig.uavAutoGeneration
           ? generateUavTtxQuestionBank(uavItems, testConfig.timePerQuestionSec)
           : [];
         if (fromUav.length > 0) {
           const ids = new Set(fromUav.map((q) => q.id));
-          const merged = [...fromUav, ...dbPool.filter((q) => !ids.has(q.id))];
+          const merged = [...fromUav, ...dbPoolFiltered.filter((q) => !ids.has(q.id))];
           setQuestionPool(merged);
           return merged;
         }
-        setQuestionPool(dbPool);
-        return dbPool;
+        setQuestionPool(dbPoolFiltered);
+        return dbPoolFiltered;
       } catch {
         return null;
       }
@@ -302,14 +305,15 @@ export default function TestsPage() {
             fetchTestConfig(),
           ]);
           if (cancelled) return;
+          const dbPoolFiltered = filterDbPoolByManualTopicSettings(dbPool, config);
           const fromUav = config.uavAutoGeneration
             ? generateUavTtxQuestionBank(uavItems, config.timePerQuestionSec)
             : [];
           if (fromUav.length > 0) {
             const ids = new Set(fromUav.map((q) => q.id));
-            setQuestionPool([...fromUav, ...dbPool.filter((q) => !ids.has(q.id))]);
+            setQuestionPool([...fromUav, ...dbPoolFiltered.filter((q) => !ids.has(q.id))]);
           } else {
-            setQuestionPool(dbPool);
+            setQuestionPool(dbPoolFiltered);
           }
           setTestConfig(config);
           setIsConfigLoaded(true);

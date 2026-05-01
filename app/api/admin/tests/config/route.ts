@@ -9,6 +9,8 @@ type Body = {
   finalQuestionCount?: unknown;
   timePerQuestionSec?: unknown;
   uavAutoGeneration?: unknown;
+  manualBankUavTtxEnabled?: unknown;
+  manualBankCounteractionEnabled?: unknown;
 };
 
 function isMissingColumnError(message: string | undefined) {
@@ -21,25 +23,56 @@ function normalizeInput(body: Body) {
   const final = Math.max(1, Number(body.finalQuestionCount || 15));
   const time = Math.max(5, Number(body.timePerQuestionSec || 10));
   const uav = body.uavAutoGeneration !== false;
-  return { trialQuestionCount: trial, finalQuestionCount: final, timePerQuestionSec: time, uavAutoGeneration: uav };
+  const manualUav = body.manualBankUavTtxEnabled !== false;
+  const manualCa = body.manualBankCounteractionEnabled !== false;
+  return {
+    trialQuestionCount: trial,
+    finalQuestionCount: final,
+    timePerQuestionSec: time,
+    uavAutoGeneration: uav,
+    manualBankUavTtxEnabled: manualUav,
+    manualBankCounteractionEnabled: manualCa,
+  };
 }
 
 async function readCurrentConfig(supabase: ReturnType<typeof getServerSupabaseServiceClient>) {
   let q = await supabase
     .from("test_settings")
-    .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
+    .select(
+      "trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation,manual_bank_uav_ttx_enabled,manual_bank_counteraction_enabled",
+    )
     .order("updated_at", { ascending: false })
     .limit(1)
     .maybeSingle();
   if ((q.error || !q.data) && isMissingColumnError(q.error?.message)) {
     q = await supabase
       .from("test_settings")
-      .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
+      .select(
+        "trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation,manual_bank_uav_ttx_enabled,manual_bank_counteraction_enabled",
+      )
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
   }
+  if (q.error && isMissingColumnError(q.error.message)) {
+    q = await supabase
+      .from("test_settings")
+      .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+  }
   if (q.error || !q.data) {
+    q = await supabase
+      .from("test_settings")
+      .select(
+        "trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation,manual_bank_uav_ttx_enabled,manual_bank_counteraction_enabled",
+      )
+      .eq("id", 1)
+      .limit(1)
+      .maybeSingle();
+  }
+  if (q.error && isMissingColumnError(q.error.message)) {
     q = await supabase
       .from("test_settings")
       .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
@@ -50,7 +83,9 @@ async function readCurrentConfig(supabase: ReturnType<typeof getServerSupabaseSe
   if ((q.error || !q.data) && isMissingColumnError(q.error?.message)) {
     q = await supabase
       .from("test_settings")
-      .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
+      .select(
+        "trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation,manual_bank_uav_ttx_enabled,manual_bank_counteraction_enabled",
+      )
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -75,13 +110,17 @@ export async function POST(request: Request) {
       final_question_count: input.finalQuestionCount,
       time_per_question_sec: input.timePerQuestionSec,
       uav_auto_generation: input.uavAutoGeneration,
+      manual_bank_uav_ttx_enabled: input.manualBankUavTtxEnabled,
+      manual_bank_counteraction_enabled: input.manualBankCounteractionEnabled,
       updated_at: new Date().toISOString(),
     };
 
     let saveQ = await supabase
       .from("test_settings")
       .upsert(fullPayload, { onConflict: "id" })
-      .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
+      .select(
+        "trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation,manual_bank_uav_ttx_enabled,manual_bank_counteraction_enabled",
+      )
       .single();
 
     if (saveQ.error && isMissingColumnError(saveQ.error.message)) {
@@ -91,10 +130,29 @@ export async function POST(request: Request) {
         final_question_count: input.finalQuestionCount,
         time_per_question_sec: input.timePerQuestionSec,
         uav_auto_generation: input.uavAutoGeneration,
+        manual_bank_uav_ttx_enabled: input.manualBankUavTtxEnabled,
+        manual_bank_counteraction_enabled: input.manualBankCounteractionEnabled,
       };
       saveQ = await supabase
         .from("test_settings")
         .upsert(withoutUpdatedAt, { onConflict: "id" })
+        .select(
+          "trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation,manual_bank_uav_ttx_enabled,manual_bank_counteraction_enabled",
+        )
+        .single();
+    }
+
+    if (saveQ.error && isMissingColumnError(saveQ.error.message)) {
+      const withoutManualBanks = {
+        id: 1,
+        trial_question_count: input.trialQuestionCount,
+        final_question_count: input.finalQuestionCount,
+        time_per_question_sec: input.timePerQuestionSec,
+        uav_auto_generation: input.uavAutoGeneration,
+      };
+      saveQ = await supabase
+        .from("test_settings")
+        .upsert(withoutManualBanks, { onConflict: "id" })
         .select("trial_question_count,final_question_count,time_per_question_sec,uav_auto_generation")
         .single();
     }
@@ -135,6 +193,8 @@ export async function POST(request: Request) {
             timePerQuestionSec: Number(row.time_per_question_sec ?? input.timePerQuestionSec),
             uavAutoGeneration:
               typeof row.uav_auto_generation === "boolean" ? row.uav_auto_generation : input.uavAutoGeneration,
+            manualBankUavTtxEnabled: input.manualBankUavTtxEnabled,
+            manualBankCounteractionEnabled: input.manualBankCounteractionEnabled,
           },
         });
       }
@@ -173,6 +233,8 @@ export async function POST(request: Request) {
           finalQuestionCount: Number(legacyQ.data?.final_question_count ?? input.finalQuestionCount),
           timePerQuestionSec: input.timePerQuestionSec,
           uavAutoGeneration: input.uavAutoGeneration,
+          manualBankUavTtxEnabled: input.manualBankUavTtxEnabled,
+          manualBankCounteractionEnabled: input.manualBankCounteractionEnabled,
         },
       });
     }
@@ -188,6 +250,11 @@ export async function POST(request: Request) {
         timePerQuestionSec: Number(current?.time_per_question_sec ?? input.timePerQuestionSec),
         uavAutoGeneration:
           typeof current?.uav_auto_generation === "boolean" ? current.uav_auto_generation : input.uavAutoGeneration,
+        manualBankUavTtxEnabled:
+          (current as { manual_bank_uav_ttx_enabled?: boolean | null }).manual_bank_uav_ttx_enabled !== false,
+        manualBankCounteractionEnabled:
+          (current as { manual_bank_counteraction_enabled?: boolean | null }).manual_bank_counteraction_enabled !==
+          false,
       },
     });
   } catch (error) {
