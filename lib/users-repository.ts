@@ -777,19 +777,7 @@ export async function registerUser(payload: {
     // Ignore precheck failures; signup error mapping below still handles conflicts.
   }
 
-  // Best-effort precheck for duplicate emails when app_users stores email.
-  try {
-    const { data: existingByEmail, error: existingByEmailError } = await supabase
-      .from("app_users")
-      .select("id")
-      .ilike("email", payload.email.trim())
-      .limit(1);
-    if (!existingByEmailError && Array.isArray(existingByEmail) && existingByEmail.length > 0) {
-      return { ok: false as const, error: "Пользователь с таким email уже зарегистрирован." };
-    }
-  } catch {
-    // Ignore precheck failures; signup error mapping below still handles conflicts.
-  }
+  // Email uniqueness is enforced by auth.signUp (app_users has no email column).
 
   // Проверка кода сразу перед signUp (после быстрых precheck), чтобы окно гонки с лимитом было короче.
   const inviteCode = await resolveInviteCodeForRegistration(inviteCodeRaw);
