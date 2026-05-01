@@ -16,6 +16,7 @@ type AppUserListRow = {
   id: string;
   name: string;
   callsign: string;
+  position?: string;
   role: string;
   status: string;
   final_test_counting_from?: string | null;
@@ -51,7 +52,7 @@ export async function GET(req: Request) {
 
     let usersPrimary = await supabase
       .from("app_users")
-      .select("id,name,callsign,role,status,final_test_counting_from")
+      .select("id,name,callsign,position,role,status,final_test_counting_from")
       .limit(1000);
 
     let usersRows: AppUserListRow[] | null = usersPrimary.data as AppUserListRow[] | null;
@@ -163,6 +164,7 @@ export async function GET(req: Request) {
           userId: user.id,
           name: user.name,
           callsign: user.callsign,
+          position: String(user.position ?? ""),
           status: statusLabel,
           scorePercent: latestFinal ? latestFinal.score : null,
           questionsCorrect: qc,

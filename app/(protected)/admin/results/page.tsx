@@ -13,6 +13,7 @@ type UserSummary = {
   userId: string;
   name: string;
   callsign: string;
+  position?: string;
   status: "passed" | "failed" | "not_started";
   scorePercent: number | null;
   questionsCorrect: number | null;
@@ -210,9 +211,14 @@ export default function AdminResultsPage() {
             key={row.userId}
           >
             <div className="card-body">
-              <h3>
-                {row.name} ({row.callsign})
-              </h3>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+                <h3 style={{ margin: 0 }}>
+                  {row.name} ({row.callsign})
+                </h3>
+                <p className="page-subtitle" style={{ margin: 0 }}>
+                  {row.position || "—"}
+                </p>
+              </div>
               <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 Статус:{" "}
                 <span
