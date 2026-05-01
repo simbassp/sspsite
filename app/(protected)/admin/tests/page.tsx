@@ -8,7 +8,7 @@ import {
 } from "@/lib/tests-repository";
 import { normalizeManualTopic } from "@/lib/manual-topic";
 import { DEFAULT_TEST_CONFIG, normalizeTestConfig } from "@/lib/test-config";
-import { ManualQuestionTopic, TestConfig, TestQuestion, TestResult, TestType } from "@/lib/types";
+import { ManualQuestionTopic, TestConfig, TestQuestion, TestType } from "@/lib/types";
 
 type DraftQuestion = {
   id?: string;
@@ -32,7 +32,6 @@ const initialDraft: DraftQuestion = {
 };
 
 export default function AdminTestsPage() {
-  const [results, setResults] = useState<TestResult[]>([]);
   const [questions, setQuestions] = useState<TestQuestion[]>([]);
   const [config, setConfig] = useState<TestConfig>(DEFAULT_TEST_CONFIG);
   const [draft, setDraft] = useState<DraftQuestion>(initialDraft);
@@ -57,23 +56,12 @@ export default function AdminTestsPage() {
         const payload = (await response.json()) as {
           ok?: boolean;
           error?: string;
-          results?: Array<Record<string, unknown>>;
           questions?: Array<Record<string, unknown>>;
           config?: Record<string, unknown> | null;
         };
         if (!response.ok || !payload.ok) {
           throw new Error(payload.error || "admin_tests_bootstrap_failed");
         }
-        setResults(
-          (payload.results || []).map((r) => ({
-            id: String(r.id),
-            userId: String(r.user_id),
-            type: r.type === "final" ? "final" : "trial",
-            status: r.status === "passed" ? "passed" : "failed",
-            score: Number(r.score || 0),
-            createdAt: String(r.created_at || ""),
-          })) as TestResult[],
-        );
         setQuestions(
           (payload.questions || []).map((q) => ({
             id: String(q.id),
@@ -115,15 +103,12 @@ export default function AdminTestsPage() {
     })();
   }, []);
 
-  const { trial, final, failedFinal, totalQuestions, activeQuestions } = useMemo(() => {
+  const { totalQuestions, activeQuestions } = useMemo(() => {
     return {
-      trial: results.filter((item) => item.type === "trial").length,
-      final: results.filter((item) => item.type === "final").length,
-      failedFinal: results.filter((item) => item.type === "final" && item.status === "failed").length,
       totalQuestions: questions.length,
       activeQuestions: questions.filter((item) => item.isActive).length,
     };
-  }, [results, questions]);
+  }, [questions]);
 
   const refreshQuestions = async () => {
     const response = await fetch("/api/admin/tests/questions", { cache: "no-store" });
@@ -389,33 +374,33 @@ export default function AdminTestsPage() {
       </p>
       <div className="grid grid-two">
         <div className="card">
-          <div className="card-body">
-            <p className="label">Пробные попытки</p>
-            <p className="stat-value">{trial}</p>
+          <div className="card-body" style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+            <span className="home-icon-wrap is-sky" aria-hidden="true">
+              <svg viewBox="0 0 24 24" className="home-icon-svg">
+                <rect x="4" y="6" width="16" height="13" rx="2" fill="none" stroke="currentColor" strokeWidth="2" />
+                <path d="M8 11h8M8 15h5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                <circle cx="9" cy="5" r="1.5" fill="currentColor" />
+                <circle cx="15" cy="5" r="1.5" fill="currentColor" />
+              </svg>
+            </span>
+            <div>
+              <p className="label">Всего вопросов в банке</p>
+              <p className="stat-value">{totalQuestions}</p>
+            </div>
           </div>
         </div>
         <div className="card">
-          <div className="card-body">
-            <p className="label">Итоговые попытки</p>
-            <p className="stat-value">{final}</p>
-          </div>
-        </div>
-        <div className="card">
-          <div className="card-body">
-            <p className="label">Не сдали итоговый</p>
-            <p className="stat-value">{failedFinal}</p>
-          </div>
-        </div>
-        <div className="card">
-          <div className="card-body">
-            <p className="label">Всего вопросов в банке</p>
-            <p className="stat-value">{totalQuestions}</p>
-          </div>
-        </div>
-        <div className="card">
-          <div className="card-body">
-            <p className="label">Активных вопросов</p>
-            <p className="stat-value">{activeQuestions}</p>
+          <div className="card-body" style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+            <span className="home-icon-wrap is-green" aria-hidden="true">
+              <svg viewBox="0 0 24 24" className="home-icon-svg">
+                <path d="M9 12l2 2 4-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                <rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" strokeWidth="2" />
+              </svg>
+            </span>
+            <div>
+              <p className="label">Активных вопросов</p>
+              <p className="stat-value">{activeQuestions}</p>
+            </div>
           </div>
         </div>
       </div>

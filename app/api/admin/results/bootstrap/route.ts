@@ -220,6 +220,92 @@ export async function GET(req: Request) {
       }
     }
 
+    const userById = new Map(users.map((u) => [u.id, { name: u.name, callsign: u.callsign }]));
+
+    const passedSummaries = summaries.filter((s) => s.status === "passed");
+    const failedSummaries = summaries.filter((s) => s.status === "failed");
+    const notStartedSummaries = summaries.filter((s) => s.status === "not_started");
+
+    const lastPassed = passedSummaries.reduce<{ name: string; callsign: string; at: string } | null>((best, s) => {
+      if (!s.latestFinalAt) return best;
+      if (!best || new Date(s.latestFinalAt) > new Date(best.at)) {
+        return { name: s.name, callsign: s.callsign, at: s.latestFinalAt };
+      }
+      return best;
+    }, null);
+
+    const lastFailed = failedSummaries.reduce<{ name: string; callsign: string; at: string } | null>((best, s) => {
+      if (!s.latestFinalAt) return best;
+      if (!best || new Date(s.latestFinalAt) > new Date(best.at)) {
+        return { name: s.name, callsign: s.callsign, at: s.latestFinalAt };
+      }
+      return best;
+    }, null);
+
+    const cutoffIso = cutoff ? cutoff.toISOString() : null;
+
+    let trialCountQ = supabase.from("test_results").select("id", { count: "exact", head: true }).eq("type", "trial");
+    if (cutoffIso) trialCountQ = trialCountQ.gte("created_at", cutoffIso);
+    let trialCountRes = await trialCountQ;
+    if (trialCountRes.error && isMissingColumnError(trialCountRes.error.message)) {
+      let q = supabase.from("test_results").select("id", { count: "exact", head: true }).eq("test_type", "trial");
+      if (cutoffIso) q = q.gte("created_at", cutoffIso);
+      trialCountRes = await q;
+    }
+
+    let trialLastQ = supabase.from("test_results").select("user_id,created_at").eq("type", "trial");
+    if (cutoffIso) trialLastQ = trialLastQ.gte("created_at", cutoffIso);
+    let trialLastRes = await trialLastQ.order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (trialLastRes.error && isMissingColumnError(trialLastRes.error.message)) {
+      let q = supabase.from("test_results").select("user_id,created_at").eq("test_type", "trial");
+      if (cutoffIso) q = q.gte("created_at", cutoffIso);
+      trialLastRes = await q.order("created_at", { ascending: false }).limit(1).maybeSingle();
+    }
+
+    let finalCountQ = supabase.from("test_results").select("id", { count: "exact", head: true }).eq("type", "final");
+    if (cutoffIso) finalCountQ = finalCountQ.gte("created_at", cutoffIso);
+    let finalCountRes = await finalCountQ;
+    if (finalCountRes.error && isMissingColumnError(finalCountRes.error.message)) {
+      let q = supabase.from("test_results").select("id", { count: "exact", head: true }).eq("test_type", "final");
+      if (cutoffIso) q = q.gte("created_at", cutoffIso);
+      finalCountRes = await q;
+    }
+
+    let finalLastQ = supabase.from("test_results").select("user_id,created_at").eq("type", "final");
+    if (cutoffIso) finalLastQ = finalLastQ.gte("created_at", cutoffIso);
+    let finalLastRes = await finalLastQ.order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (finalLastRes.error && isMissingColumnError(finalLastRes.error.message)) {
+      let q = supabase.from("test_results").select("user_id,created_at").eq("test_type", "final");
+      if (cutoffIso) q = q.gte("created_at", cutoffIso);
+      finalLastRes = await q.order("created_at", { ascending: false }).limit(1).maybeSingle();
+    }
+
+    const trialRow = trialLastRes.data as { user_id?: string; created_at?: string } | null;
+    const finalRow = finalLastRes.data as { user_id?: string; created_at?: string } | null;
+    const trialUser = trialRow?.user_id ? userById.get(String(trialRow.user_id)) : undefined;
+    const finalUser = finalRow?.user_id ? userById.get(String(finalRow.user_id)) : undefined;
+
+    const bannerStats = {
+      passedCount: passedSummaries.length,
+      lastPassed,
+      notPassedCount: failedSummaries.length + notStartedSummaries.length,
+      lastNotPassed: lastFailed,
+      trialAttemptsCount: trialCountRes.count ?? 0,
+      lastTrial:
+        trialRow?.created_at && trialUser
+          ? { name: trialUser.name, callsign: trialUser.callsign, at: String(trialRow.created_at) }
+          : trialRow?.created_at
+            ? { name: "—", callsign: "", at: String(trialRow.created_at) }
+            : null,
+      finalAttemptsCount: finalCountRes.count ?? 0,
+      lastFinal:
+        finalRow?.created_at && finalUser
+          ? { name: finalUser.name, callsign: finalUser.callsign, at: String(finalRow.created_at) }
+          : finalRow?.created_at
+            ? { name: "—", callsign: "", at: String(finalRow.created_at) }
+            : null,
+    };
+
     return Response.json({
       ok: true,
       viewerIsAdmin,
@@ -227,6 +313,7 @@ export async function GET(req: Request) {
       range,
       summaries,
       lastResetAudit,
+      bannerStats,
     });
   } catch (error) {
     return Response.json(
