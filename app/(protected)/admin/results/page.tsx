@@ -42,6 +42,7 @@ export default function AdminResultsPage() {
 
   const [range, setRange] = useState<DateRange>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [searchTerm, setSearchTerm] = useState("");
   const [summaries, setSummaries] = useState<UserSummary[]>([]);
   const [lastResetAudit, setLastResetAudit] = useState<BootstrapPayload["lastResetAudit"]>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -75,8 +76,14 @@ export default function AdminResultsPage() {
   }, [load]);
 
   const visible = useMemo(() => {
-    return summaries.filter((s) => (statusFilter === "all" ? true : s.status === statusFilter));
-  }, [summaries, statusFilter]);
+    const query = searchTerm.trim().toLowerCase();
+    return summaries.filter((s) => {
+      const byStatus = statusFilter === "all" ? true : s.status === statusFilter;
+      if (!byStatus) return false;
+      if (!query) return true;
+      return s.name.toLowerCase().includes(query) || s.callsign.toLowerCase().includes(query);
+    });
+  }, [summaries, statusFilter, searchTerm]);
 
   const onResetAttempts = async (userId: string) => {
     if (!viewerCanReset) return;
@@ -182,6 +189,19 @@ export default function AdminResultsPage() {
           Не проходил
         </button>
       </div>
+
+      <label className="label" htmlFor="results-search" style={{ marginTop: 12 }}>
+        Поиск по имени и позывному
+      </label>
+      <input
+        id="results-search"
+        className="input"
+        type="text"
+        placeholder="Введите имя или позывной"
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+        style={{ marginTop: 6 }}
+      />
 
       <div className="list" style={{ marginTop: 12 }}>
         {visible.map((row) => (
