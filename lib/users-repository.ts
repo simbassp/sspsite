@@ -1249,12 +1249,20 @@ export async function removeUser(userId: string): Promise<
 }
 
 export async function logoutUser() {
-  void fetch("/api/presence", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ online: false }),
-    keepalive: true,
-  }).catch(() => undefined);
+  // Отправить «офлайн» пока cookie сессии ещё есть; иначе POST уходит без auth → 401 в консоли.
+  try {
+    await Promise.race([
+      fetch("/api/presence", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ online: false }),
+        keepalive: true,
+      }).catch(() => undefined),
+      new Promise<void>((resolve) => setTimeout(resolve, 600)),
+    ]);
+  } catch {
+    /* best-effort */
+  }
   document.cookie = clearSessionCookie();
   document.cookie = `${SESSION_COOKIE}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`;
   if (typeof window !== "undefined") {
