@@ -295,8 +295,8 @@ export async function fetchUserResults(userId: string) {
         1,
         "fetch_user_results_legacy_timeout",
       );
-      data = legacyRes.data as unknown;
-      error = legacyRes.error as { message: string } | null;
+      data = legacyRes.data as unknown as typeof data;
+      error = legacyRes.error as unknown as typeof error;
     }
     if (error || !data) {
       return listTestResults().filter((r) => r.userId === userId);
@@ -581,8 +581,8 @@ export async function fetchActiveQuestionPool() {
         1,
         "fetch_questions_no_topic_timeout",
       );
-      data = noTopicRes.data as unknown;
-      error = noTopicRes.error as { message: string } | null;
+      data = noTopicRes.data as unknown as typeof data;
+      error = noTopicRes.error as unknown as typeof error;
     }
     if (error && isMissingColumnError(error.message)) {
       const legacyRes = await withTimeoutAndRetry(
@@ -596,8 +596,8 @@ export async function fetchActiveQuestionPool() {
         1,
         "fetch_questions_legacy_timeout",
       );
-      data = legacyRes.data as unknown;
-      error = legacyRes.error as { message: string } | null;
+      data = legacyRes.data as unknown as typeof data;
+      error = legacyRes.error as unknown as typeof error;
     }
     if (error && isMissingColumnError(error.message)) {
       const minimalRes = await withTimeoutAndRetry(
@@ -606,8 +606,8 @@ export async function fetchActiveQuestionPool() {
         1,
         "fetch_questions_minimal_timeout",
       );
-      data = minimalRes.data as unknown;
-      error = minimalRes.error as { message: string } | null;
+      data = minimalRes.data as unknown as typeof data;
+      error = minimalRes.error as unknown as typeof error;
       if (!error && Array.isArray(data)) {
         const mapped = (data as Array<Record<string, unknown>>).map((row, index) =>
           dedupeQuestionOptions({
@@ -884,8 +884,8 @@ export async function fetchTestConfig() {
         1,
         "fetch_test_config_no_manual_banks_timeout",
       );
-      data = withoutManualBanks.data as unknown;
-      error = withoutManualBanks.error as { message: string } | null;
+      data = withoutManualBanks.data as unknown as typeof data;
+      error = withoutManualBanks.error as unknown as typeof error;
     }
     if (error && isMissingColumnError(error.message)) {
       const partialTimeRes = await withTimeoutAndRetry(
@@ -899,8 +899,8 @@ export async function fetchTestConfig() {
         1,
         "fetch_test_config_partial_time_timeout",
       );
-      data = partialTimeRes.data as unknown;
-      error = partialTimeRes.error as { message: string } | null;
+      data = partialTimeRes.data as unknown as typeof data;
+      error = partialTimeRes.error as unknown as typeof error;
       if (error && isMissingColumnError(error.message)) {
         const partialUavRes = await withTimeoutAndRetry(
           () =>
@@ -913,8 +913,8 @@ export async function fetchTestConfig() {
           1,
           "fetch_test_config_partial_uav_timeout",
         );
-        data = partialUavRes.data as unknown;
-        error = partialUavRes.error as { message: string } | null;
+        data = partialUavRes.data as unknown as typeof data;
+        error = partialUavRes.error as unknown as typeof error;
       }
       if (error && isMissingColumnError(error.message)) {
         const legacyRes = await withTimeoutAndRetry(
@@ -928,8 +928,8 @@ export async function fetchTestConfig() {
           1,
           "fetch_test_config_legacy_timeout",
         );
-        data = legacyRes.data as unknown;
-        error = legacyRes.error as { message: string } | null;
+        data = legacyRes.data as unknown as typeof data;
+        error = legacyRes.error as unknown as typeof error;
       }
     }
     if (error || !data) {
