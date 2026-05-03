@@ -331,6 +331,14 @@ export function listTestResults() {
   return readData().testResults;
 }
 
+/** Удаляет пробные попытки пользователя из офлайн-кэша (после сброса статистики на сервере). */
+export function removeTrialResultsForUser(userId: string) {
+  if (typeof window === "undefined") return;
+  const data = readData();
+  data.testResults = data.testResults.filter((r) => !(r.userId === userId && r.type === "trial"));
+  writeData(data);
+}
+
 export function listTestQuestions(type?: "trial" | "final") {
   const all = readData().testQuestions ?? [];
   const filtered = type ? all.filter((q) => q.type === type) : all;

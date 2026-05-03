@@ -22,6 +22,7 @@ import {
 } from "@/lib/users-repository";
 import { getPositionBadgeClass } from "@/lib/position-ui";
 import { dutyLocationLabel } from "@/lib/duty-location";
+import { removeTrialResultsForUser } from "@/lib/storage";
 import { DutyLocation, TestResult } from "@/lib/types";
 
 export default function ProfilePage() {
@@ -449,6 +450,7 @@ export default function ProfilePage() {
         setSettingsMessage(payload.error || "Не удалось сбросить статистику.");
         return;
       }
+      removeTrialResultsForUser(session.id);
       setSettingsMessage("Статистика профиля сброшена (без сброса итоговых попыток).");
       const refreshed = await fetch("/api/profile/bootstrap", { cache: "no-store" });
       const refreshedPayload = (await refreshed.json()) as { ok?: boolean; results?: Array<Record<string, unknown>> };
