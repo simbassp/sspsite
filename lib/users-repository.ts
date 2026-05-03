@@ -84,8 +84,11 @@ const LOGIN_SERVER_TIMEOUT_MS = 55000;
 const LOGIN_RESOLVE_TIMEOUT_MS = 5000;
 const LOGIN_AUTH_TIMEOUT_MS = 12000;
 const LOGIN_PROFILE_TIMEOUT_MS = 8000;
-const REGISTER_VALIDATE_TIMEOUT_MS = 3000;
-const REGISTER_AUTH_TIMEOUT_MS = 15000;
+/** Медленный LTE/мобильный слабее десктопа — короткие лимиты давали ложные «код неверный» / «сервер не отвечает». */
+const REGISTER_VALIDATE_TIMEOUT_MS = 12000;
+const REGISTER_AUTH_TIMEOUT_MS = 32000;
+const REGISTER_RECHECK_SIGNIN_MS = 16000;
+const REGISTER_RECHECK_SIGNUP_MS = 16000;
 
 function defaultPermissionsFromLegacy(row: {
   role: "employee" | "admin";
@@ -329,7 +332,7 @@ async function resolveInviteCodeForRegistration(inputCode: string) {
   if (!trimmed) return "";
 
   if (typeof window !== "undefined") {
-    try {
+    const tryServerValidate = async () => {
       const res = await fetch("/api/register/validate-invite", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -345,6 +348,18 @@ async function resolveInviteCodeForRegistration(inputCode: string) {
       if (res.ok && payload.ok && payload.valid && typeof payload.canonicalCode === "string" && payload.canonicalCode) {
         return payload.canonicalCode.trim();
       }
+      return null;
+    };
+    try {
+      const first = await tryServerValidate();
+      if (first) return first;
+    } catch {
+      /* пробуем повтор / RPC */
+    }
+    try {
+      await new Promise((r) => setTimeout(r, 450));
+      const second = await tryServerValidate();
+      if (second) return second;
     } catch {
       /* пробуем RPC ниже */
     }
@@ -789,9 +804,24 @@ export async function registerUser(payload: {
   }
 
   const confirmRegistrationCreated = async () => {
-    // Если сетевой ответ потерялся/таймаутнул, проверяем фактический результат:
-    // 1) пробуем повторный signUp: "already registered" считаем успехом
-    // 2) пробуем вход с теми же данными: если вход прошел, аккаунт точно создан
+    // Ответ signUp мог потеряться по сети, хотя пользователь уже в auth/app_users.
+    // Сначала вход — быстрее и надёжнее, чем повторный signUp (лимиты / дубликаты).
+    try {
+      const authTry = await Promise.race([
+        supabase.auth.signInWithPassword({
+          email: payload.email,
+          password: payload.password,
+        }),
+        new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error("register_signin_recheck_timeout")), REGISTER_RECHECK_SIGNIN_MS);
+        }),
+      ]);
+      if (authTry.data?.user) {
+        await supabase.auth.signOut().catch(() => undefined);
+        return true;
+      }
+    } catch {}
+
     try {
       const retry = await Promise.race([
         supabase.auth.signUp({
@@ -800,7 +830,7 @@ export async function registerUser(payload: {
           options: { data: { login: payload.login } },
         }),
         new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error("register_recheck_timeout")), 8000);
+          setTimeout(() => reject(new Error("register_recheck_timeout")), REGISTER_RECHECK_SIGNUP_MS);
         }),
       ]);
       const retryErr = retry.error?.message?.toLowerCase() ?? "";
@@ -809,21 +839,6 @@ export async function registerUser(payload: {
       }
     } catch {}
 
-    try {
-      const authTry = await Promise.race([
-        supabase.auth.signInWithPassword({
-          email: payload.email,
-          password: payload.password,
-        }),
-        new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error("register_signin_recheck_timeout")), 8000);
-        }),
-      ]);
-      if (authTry.data?.user) {
-        await supabase.auth.signOut().catch(() => undefined);
-        return true;
-      }
-    } catch {}
     return false;
   };
 
@@ -861,12 +876,19 @@ export async function registerUser(payload: {
 
   if (error) {
     const low = error.message.toLowerCase();
-    if (
+    const looksLikeTransportOrUnknownFailure =
       low.includes("network") ||
       low.includes("timeout") ||
       low.includes("fetch") ||
-      low.includes("temporarily unavailable")
-    ) {
+      low.includes("failed to fetch") ||
+      low.includes("temporarily unavailable") ||
+      low.includes("503") ||
+      low.includes("502") ||
+      low.includes("504") ||
+      low.includes("request failed") ||
+      low.includes("edge") ||
+      low.trim().length === 0;
+    if (looksLikeTransportOrUnknownFailure) {
       const createdAnyway = await confirmRegistrationCreated();
       if (createdAnyway) {
         await supabase.auth.signOut().catch(() => undefined);
@@ -877,6 +899,11 @@ export async function registerUser(payload: {
   }
 
   if (!data.user) {
+    const createdAnyway = await confirmRegistrationCreated();
+    if (createdAnyway) {
+      await supabase.auth.signOut().catch(() => undefined);
+      return { ok: true as const };
+    }
     return { ok: false as const, error: "Не удалось создать пользователя auth." };
   }
 

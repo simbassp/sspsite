@@ -6,7 +6,8 @@ import { FormEvent, useMemo, useState } from "react";
 import { getPositions } from "@/lib/storage";
 import { registerUser } from "@/lib/users-repository";
 
-const REGISTER_REQUEST_TIMEOUT_MS = 18000;
+/** Один signUp + при сбое сети — перепроверка входом; на мобильном цепочка дольше, чем 15–20 с. */
+const REGISTER_REQUEST_TIMEOUT_MS = 90000;
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -78,7 +79,9 @@ export default function RegisterPage() {
     } catch (err) {
       const message = err instanceof Error ? err.message : "";
       if (message === "request_timeout") {
-        setError("Сервер отвечает слишком долго. Проверьте интернет и попробуйте снова.");
+        setError(
+          "Ожидание ответа заняло слишком много времени. Проверьте интернет. Если вы уже вводили данные — попробуйте войти: аккаунт мог создаться.",
+        );
       } else {
         setError("Ошибка сети: не удалось создать аккаунт. Проверьте интернет и попробуйте снова.");
       }
