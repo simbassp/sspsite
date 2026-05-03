@@ -152,9 +152,6 @@ export default function ProfilePage() {
     };
   }, []);
 
-  /** Только пробный тест — совпадает со сбросом статистики и со счётчиками выше (итоговый тест сбросом не трогается). */
-  const trialHistoryRows = useMemo(() => rows.filter((r) => r.type === "trial"), [rows]);
-
   const stats = useMemo(() => {
     if (!session)
       return {
@@ -164,7 +161,7 @@ export default function ProfilePage() {
         totalTimeSec: null as number | null,
         lastAttempt: null as TestResult | null,
       };
-    const trialRows = trialHistoryRows;
+    const trialRows = rows.filter((r) => r.type === "trial");
     const total = trialRows.length;
     const passed = trialRows.filter((r) => r.status === "passed").length;
     const successRate = total ? Math.round((passed / total) * 100) : 0;
@@ -180,18 +177,22 @@ export default function ProfilePage() {
       ? Math.round(completedWithDuration.reduce((acc, item) => acc + Number(item.durationSeconds || 0), 0))
       : null;
     return { total, passed, successRate, totalTimeSec, lastAttempt };
-  }, [trialHistoryRows, session]);
+  }, [rows, session]);
+
+  /** Плашки сверху и сброс статистики относятся только к пробному тесту — список ниже разделён от итогового. */
+  const trialAttemptRows = useMemo(() => rows.filter((r) => r.type === "trial"), [rows]);
+  const finalAttemptRows = useMemo(() => rows.filter((r) => r.type === "final"), [rows]);
 
   const ATTEMPTS_PER_PAGE = 10;
-  const attemptsTotalPages = Math.max(1, Math.ceil(trialHistoryRows.length / ATTEMPTS_PER_PAGE));
+  const attemptsTotalPages = Math.max(1, Math.ceil(trialAttemptRows.length / ATTEMPTS_PER_PAGE));
   const safeAttemptsPage = Math.min(attemptsPage, attemptsTotalPages);
-  const pagedAttempts = trialHistoryRows.slice(
+  const pagedAttempts = trialAttemptRows.slice(
     (safeAttemptsPage - 1) * ATTEMPTS_PER_PAGE,
     safeAttemptsPage * ATTEMPTS_PER_PAGE,
   );
-  const visibleAttempts = showAllAttempts ? pagedAttempts : trialHistoryRows.slice(0, 3);
-  const canExpandAttempts = trialHistoryRows.length > 3;
-  const canPaginateAttempts = showAllAttempts && attemptsTotalPages > 1;
+  const visibleTrialAttempts = showAllAttempts ? pagedAttempts : trialAttemptRows.slice(0, 3);
+  const canExpandTrialAttempts = trialAttemptRows.length > 3;
+  const canPaginateTrialAttempts = showAllAttempts && attemptsTotalPages > 1;
 
   useEffect(() => {
     if (!showAllAttempts && attemptsPage !== 1) {
@@ -202,6 +203,47 @@ export default function ProfilePage() {
       setAttemptsPage(attemptsTotalPages);
     }
   }, [attemptsPage, attemptsTotalPages, showAllAttempts]);
+
+  const renderAttemptEntry = (item: TestResult) => {
+    const statusText = item.status === "passed" ? "Сдан" : "Не сдан";
+    const testName = item.type === "final" ? "Итоговый тест" : "Пробный тест";
+    const attemptDurationText =
+      item.isCompleted === false
+        ? "Не завершил"
+        : (() => {
+            const sec = Number(item.durationSeconds);
+            if (!Number.isFinite(sec) || sec <= 0) return "Нет данных";
+            return formatTotalTestDuration(sec);
+          })();
+    const dateText = formatDateTime(item.createdAt);
+    return (
+      <article className="card" key={item.id}>
+        <div className="card-body">
+          <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10 }}>
+            <div>
+              <p className="label">Тест</p>
+              <p style={{ marginTop: 6, fontWeight: 700 }}>{testName}</p>
+            </div>
+            <div>
+              <p className="label">Результат</p>
+              <p style={{ marginTop: 6 }}>
+                <span className={`pill ${item.status === "passed" ? "pill-green" : "pill-red"}`}>{statusText}</span>
+              </p>
+              <p style={{ marginTop: 6, fontWeight: 700 }}>{item.score}%</p>
+            </div>
+            <div>
+              <p className="label">Время</p>
+              <p style={{ marginTop: 6, fontWeight: 700 }}>{attemptDurationText}</p>
+            </div>
+            <div>
+              <p className="label">Дата и время</p>
+              <p style={{ marginTop: 6, fontWeight: 700, wordBreak: "break-word" }}>{dateText}</p>
+            </div>
+          </div>
+        </div>
+      </article>
+    );
+  };
 
   if (!sessionResolved) {
     return <p className="page-subtitle">Загружаем профиль...</p>;
@@ -927,7 +969,7 @@ export default function ProfilePage() {
       <article className="card" style={{ marginTop: 12 }}>
         <div className="card-body">
           <h3>Ваша активность</h3>
-          {!trialHistoryRows.length ? (
+          {!rows.length ? (
             <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
               Статистика появится после прохождения первого теста.
             </p>
@@ -1003,9 +1045,9 @@ export default function ProfilePage() {
       <article className="card" style={{ marginTop: 12 }}>
         <div className="card-body">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <h3>Последние попытки</h3>
+            <h3>Последние пробные попытки</h3>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {canExpandAttempts && (
+              {canExpandTrialAttempts && (
                 <button
                   className="btn"
                   type="button"
@@ -1022,55 +1064,22 @@ export default function ProfilePage() {
               </Link>
             </div>
           </div>
-          {!trialHistoryRows.length ? (
+          {!trialAttemptRows.length && !finalAttemptRows.length ? (
             <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
               Пока нет попыток прохождения тестов.
             </p>
           ) : (
             <>
-              <div className="list" style={{ marginTop: 10 }}>
-                {visibleAttempts.map((item) => {
-                  const statusText = item.status === "passed" ? "Сдан" : "Не сдан";
-                  const testName = item.type === "final" ? "Итоговый тест" : "Пробный тест";
-                  const attemptDurationText =
-                    item.isCompleted === false
-                      ? "Не завершил"
-                      : (() => {
-                          const sec = Number(item.durationSeconds);
-                          if (!Number.isFinite(sec) || sec <= 0) return "Нет данных";
-                          return formatTotalTestDuration(sec);
-                        })();
-                  const dateText = formatDateTime(item.createdAt);
-                  return (
-                    <article className="card" key={item.id}>
-                      <div className="card-body">
-                        <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10 }}>
-                          <div>
-                            <p className="label">Тест</p>
-                            <p style={{ marginTop: 6, fontWeight: 700 }}>{testName}</p>
-                          </div>
-                          <div>
-                            <p className="label">Результат</p>
-                            <p style={{ marginTop: 6 }}>
-                              <span className={`pill ${item.status === "passed" ? "pill-green" : "pill-red"}`}>{statusText}</span>
-                            </p>
-                            <p style={{ marginTop: 6, fontWeight: 700 }}>{item.score}%</p>
-                          </div>
-                          <div>
-                            <p className="label">Время</p>
-                            <p style={{ marginTop: 6, fontWeight: 700 }}>{attemptDurationText}</p>
-                          </div>
-                          <div>
-                            <p className="label">Дата и время</p>
-                            <p style={{ marginTop: 6, fontWeight: 700, wordBreak: "break-word" }}>{dateText}</p>
-                          </div>
-                        </div>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-              {canPaginateAttempts && (
+              {!trialAttemptRows.length ? (
+                <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
+                  Нет пробных попыток — пройдите пробный тест в разделе «Тесты».
+                </p>
+              ) : (
+                <>
+                  <div className="list" style={{ marginTop: 10 }}>
+                    {visibleTrialAttempts.map((item) => renderAttemptEntry(item))}
+                  </div>
+                  {canPaginateTrialAttempts && (
                 <div
                   style={{
                     marginTop: 12,
@@ -1116,7 +1125,20 @@ export default function ProfilePage() {
                     ›
                   </button>
                 </div>
+                  )}
+                </>
               )}
+              {finalAttemptRows.length > 0 ? (
+                <>
+                  <h3 style={{ marginTop: trialAttemptRows.length ? 24 : 8 }}>Итоговые попытки</h3>
+                  <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0 }}>
+                    История итогового теста хранится отдельно и не очищается при сбросе статистики профиля (пробные попытки).
+                  </p>
+                  <div className="list" style={{ marginTop: 10 }}>
+                    {finalAttemptRows.map((item) => renderAttemptEntry(item))}
+                  </div>
+                </>
+              ) : null}
             </>
           )}
         </div>
