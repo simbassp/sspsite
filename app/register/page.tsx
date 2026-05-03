@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { getPositions } from "@/lib/storage";
 import { registerUser } from "@/lib/users-repository";
 
@@ -40,10 +40,57 @@ export default function RegisterPage() {
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [passwordMismatch, setPasswordMismatch] = useState(false);
+  const [fieldHints, setFieldHints] = useState<{ email?: string; login?: string }>({});
+  const [availChecking, setAvailChecking] = useState(false);
+
+  useEffect(() => {
+    const email = form.email.trim();
+    const login = form.login.trim();
+    const ac = new AbortController();
+    const t = window.setTimeout(() => {
+      if (!email && !login) {
+        setFieldHints({});
+        setAvailChecking(false);
+        return;
+      }
+      setAvailChecking(true);
+      void (async () => {
+        try {
+          const res = await fetch("/api/register/availability", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ email, login }),
+            signal: ac.signal,
+            cache: "no-store",
+          });
+          const payload = (await res.json()) as {
+            ok?: boolean;
+            emailTaken?: boolean;
+            loginTaken?: boolean;
+          };
+          if (!res.ok || !payload.ok) return;
+          setFieldHints({
+            email: payload.emailTaken ? "Этот email уже зарегистрирован." : undefined,
+            login: payload.loginTaken ? "Этот логин уже занят." : undefined,
+          });
+        } catch (e) {
+          if (e instanceof DOMException && e.name === "AbortError") return;
+        } finally {
+          setAvailChecking(false);
+        }
+      })();
+    }, 420);
+    return () => {
+      window.clearTimeout(t);
+      ac.abort();
+    };
+  }, [form.email, form.login]);
+
+  const availabilityBlocksSubmit = Boolean(fieldHints.email || fieldHints.login);
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (isSubmitting) return;
+    if (isSubmitting || availabilityBlocksSubmit) return;
     setError("");
     setPasswordMismatch(false);
     if (form.password.length < 6) {
@@ -107,6 +154,7 @@ export default function RegisterPage() {
               onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
               required
             />
+            {fieldHints.email && <p style={{ color: "#ff8d8d", fontSize: 13, marginTop: 4 }}>{fieldHints.email}</p>}
 
             <label className="label">Персональный код приглашения</label>
             <input
@@ -125,6 +173,10 @@ export default function RegisterPage() {
               onChange={(e) => setForm((p) => ({ ...p, login: e.target.value }))}
               required
             />
+            {fieldHints.login && <p style={{ color: "#ff8d8d", fontSize: 13, marginTop: 4 }}>{fieldHints.login}</p>}
+            {availChecking && (form.email.trim().length > 0 || form.login.trim().length > 0) && (
+              <p style={{ color: "var(--muted)", fontSize: 12, marginTop: 6 }}>Проверяем логин и email…</p>
+            )}
 
             <label className="label">Имя</label>
             <input
@@ -185,7 +237,7 @@ export default function RegisterPage() {
 
             {error && <p style={{ color: "#ff8d8d", fontSize: 13 }}>{error}</p>}
 
-            <button className="btn btn-primary" type="submit" disabled={isSubmitting}>
+            <button className="btn btn-primary" type="submit" disabled={isSubmitting || availabilityBlocksSubmit}>
               {isSubmitting ? "Создаем аккаунт..." : "Создать аккаунт"}
             </button>
           </form>

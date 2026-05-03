@@ -24,7 +24,7 @@ export async function resolveFinalUserContext(supabase: SupabaseClient, sessionU
     mergeCounting(row.final_test_counting_from);
   }
 
-  let byId = await supabase
+  const byId = await supabase
     .from("app_users")
     .select("id,auth_user_id,final_test_counting_from")
     .eq("id", sessionUserId)
@@ -43,7 +43,7 @@ export async function resolveFinalUserContext(supabase: SupabaseClient, sessionU
     if (!fb.error && fb.data) mergeRow(fb.data as AppUserRow);
   }
 
-  let byAuth = await supabase
+  const byAuth = await supabase
     .from("app_users")
     .select("id,auth_user_id,final_test_counting_from")
     .eq("auth_user_id", sessionUserId)

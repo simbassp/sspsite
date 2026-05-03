@@ -243,7 +243,7 @@ export async function GET(request: Request) {
     });
 
     return Response.json({ ok: true, rows: withAuthorFallback });
-  } catch (error) {
+  } catch {
     return Response.json({ ok: true, rows: fallbackSeedRows(limit), degraded: true });
   }
 }
@@ -281,7 +281,7 @@ export async function POST(request: Request) {
     const created_by = resolvedAuthor.created_by;
     const author_id = resolvedAuthor.author_id;
 
-    let insertPayload: Record<string, unknown> = {
+    const insertPayload: Record<string, unknown> = {
       title,
       body: text,
       priority,

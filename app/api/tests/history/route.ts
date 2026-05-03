@@ -18,7 +18,7 @@ export async function GET() {
     let queryRows: unknown[] = [];
     let queryError: string | null = null;
 
-    let primaryQ = await supabase
+    const primaryQ = await supabase
       .from("test_results")
       .select("id,user_id,type,status,score,created_at,questions_total,questions_correct")
       .in("user_id", userIds)

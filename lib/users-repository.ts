@@ -87,8 +87,9 @@ const LOGIN_PROFILE_TIMEOUT_MS = 8000;
 /** Медленный LTE/мобильный слабее десктопа — короткие лимиты давали ложные «код неверный» / «сервер не отвечает». */
 const REGISTER_VALIDATE_TIMEOUT_MS = 12000;
 const REGISTER_AUTH_TIMEOUT_MS = 32000;
-const REGISTER_RECHECK_SIGNIN_MS = 16000;
-const REGISTER_RECHECK_SIGNUP_MS = 16000;
+/** Перепроверка после таймаута signUp: короче, чтобы не ждать минуту при дубликатах email/логина. */
+const REGISTER_RECHECK_SIGNIN_MS = 7000;
+const REGISTER_RECHECK_SIGNUP_MS = 7000;
 
 function defaultPermissionsFromLegacy(row: {
   role: "employee" | "admin";
@@ -377,6 +378,52 @@ function canUseLocalFallback() {
   if (typeof window === "undefined") return true;
   const host = window.location.hostname;
   return host === "localhost" || host === "127.0.0.1" || host === "::1";
+}
+
+/** Ошибка дубликата email/логина — не гоняем «перепроверку» как при обрыве сети. */
+function isDuplicateRegistrationError(raw: string) {
+  const msg = raw.toLowerCase();
+  return (
+    msg.includes("already registered") ||
+    msg.includes("already been registered") ||
+    msg.includes("email already") ||
+    msg.includes("user already registered") ||
+    msg.includes("app_users_login_key") ||
+    msg.includes("unique constraint") ||
+    msg.includes("unique violation") ||
+    (msg.includes("duplicate key") && (msg.includes("login") || msg.includes("email")))
+  );
+}
+
+async function checkRegistrationAvailability(
+  email: string,
+  login: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (typeof window === "undefined") return { ok: true };
+  try {
+    const res = (await Promise.race([
+      fetch("/api/register/availability", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), login: login.trim() }),
+        cache: "no-store",
+      }),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("availability_timeout")), 7000);
+      }),
+    ])) as Response;
+    const payload = (await res.json()) as { ok?: boolean; emailTaken?: boolean; loginTaken?: boolean };
+    if (!res.ok || !payload.ok) return { ok: true };
+    if (payload.loginTaken) {
+      return { ok: false, error: "Логин уже занят. Укажите другой логин." };
+    }
+    if (payload.emailTaken) {
+      return { ok: false, error: "Пользователь с таким email уже зарегистрирован." };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: true };
+  }
 }
 
 function mapAuthErrorMessage(raw: string) {
@@ -778,21 +825,10 @@ export async function registerUser(payload: {
     return { ok: false as const, error: "Введите персональный код приглашения." };
   }
 
-  // Best-effort precheck to show a clear message for duplicate logins.
-  try {
-    const { data: existingByLogin, error: existingByLoginError } = await supabase
-      .from("app_users")
-      .select("id")
-      .ilike("login", payload.login.trim())
-      .limit(1);
-    if (!existingByLoginError && Array.isArray(existingByLogin) && existingByLogin.length > 0) {
-      return { ok: false as const, error: "Логин уже занят. Укажите другой логин." };
-    }
-  } catch {
-    // Ignore precheck failures; signup error mapping below still handles conflicts.
+  const availability = await checkRegistrationAvailability(payload.email, payload.login);
+  if (!availability.ok) {
+    return { ok: false as const, error: availability.error };
   }
-
-  // Email uniqueness is enforced by auth.signUp (app_users has no email column).
 
   // Проверка кода сразу перед signUp (после быстрых precheck), чтобы окно гонки с лимитом было короче.
   const inviteCode = await resolveInviteCodeForRegistration(inviteCodeRaw);
@@ -875,6 +911,9 @@ export async function registerUser(payload: {
   }
 
   if (error) {
+    if (isDuplicateRegistrationError(error.message)) {
+      return { ok: false as const, error: mapAuthErrorMessage(error.message) };
+    }
     const low = error.message.toLowerCase();
     const looksLikeTransportOrUnknownFailure =
       low.includes("network") ||

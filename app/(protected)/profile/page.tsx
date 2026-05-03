@@ -178,23 +178,6 @@ export default function ProfilePage() {
     return { total, passed, successRate, totalTimeSec, lastAttempt };
   }, [rows, session]);
 
-  const attemptMeta = useMemo(() => {
-    const byType = new Map<"trial" | "final", TestResult[]>();
-    for (const row of rows) {
-      const list = byType.get(row.type) || [];
-      list.push(row);
-      byType.set(row.type, list);
-    }
-    const totalByType = new Map<"trial" | "final", number>();
-    const indexById = new Map<string, number>();
-    for (const [type, list] of byType.entries()) {
-      const asc = [...list].sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt));
-      totalByType.set(type, asc.length);
-      asc.forEach((item, idx) => indexById.set(item.id, idx + 1));
-    }
-    return { totalByType, indexById };
-  }, [rows]);
-
   const averageDurationByType = useMemo(() => {
     const byType: Record<"trial" | "final", number[]> = { trial: [], final: [] };
     for (const row of rows) {

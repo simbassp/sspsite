@@ -75,7 +75,7 @@ function syntheticNearNumericWrongs(correct: string, need: number, seen: Set<str
   const out: string[] = [];
 
   const tryPush = (candRaw: number) => {
-    let c = candRaw;
+    const c = candRaw;
     if (!Number.isFinite(c) || c <= 0) return;
     if (Math.abs(c - n) < 0.04) return;
     const numStr = formatNumberForWrong(correct, c);

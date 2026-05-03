@@ -13,7 +13,7 @@ export async function computeFinalTestSummary(supabase: SupabaseClient, userId: 
 
   // Вместо count(exact) берём только первые N записей: так намного быстрее на больших таблицах.
   const attemptsProbeLimit = maxAttempts + 1;
-  let attemptsQuery = supabase
+  const attemptsQuery = supabase
     .from("test_results")
     .select("id")
     .in("user_id", tiedIds)
@@ -38,7 +38,7 @@ export async function computeFinalTestSummary(supabase: SupabaseClient, userId: 
   const usedAttempts = Array.isArray(attemptsRes.data) ? attemptsRes.data.length : 0;
 
   /** «Сдал» только в текущем окне попыток (после сброса и/или с 1-го числа месяца). */
-  let passedQuery = supabase
+  const passedQuery = supabase
     .from("test_results")
     .select("id")
     .in("user_id", tiedIds)

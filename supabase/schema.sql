@@ -288,6 +288,24 @@ $$;
 revoke all on function public.validate_invite_code(text) from public;
 grant execute on function public.validate_invite_code(text) to anon, authenticated;
 
+create or replace function public.registration_email_taken(p_email text)
+returns boolean
+language sql
+security definer
+set search_path = public, auth
+stable
+as $$
+  select exists (
+    select 1
+    from auth.users u
+    where lower(trim(u.email)) = lower(trim(coalesce(p_email, '')))
+      and length(trim(coalesce(p_email, ''))) > 0
+  );
+$$;
+
+revoke all on function public.registration_email_taken(text) from public;
+grant execute on function public.registration_email_taken(text) to service_role;
+
 create or replace function public.consume_invite_code(p_code text)
 returns boolean
 language plpgsql

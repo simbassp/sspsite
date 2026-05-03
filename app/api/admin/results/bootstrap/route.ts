@@ -50,7 +50,7 @@ export async function GET(req: Request) {
   try {
     const supabase = getServerSupabaseServiceClient();
 
-    let usersPrimary = await supabase
+    const usersPrimary = await supabase
       .from("app_users")
       .select("id,name,callsign,position,role,status,final_test_counting_from")
       .limit(1000);
@@ -70,7 +70,7 @@ export async function GET(req: Request) {
 
     const users = usersRows;
 
-    let resultsPrimary = await supabase
+    const resultsPrimary = await supabase
       .from("test_results")
       .select("id,user_id,type,status,score,created_at,questions_total,questions_correct")
       .eq("type", "final")
