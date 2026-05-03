@@ -409,7 +409,7 @@ async function checkRegistrationAvailability(
         cache: "no-store",
       }),
       new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error("availability_timeout")), 7000);
+        setTimeout(() => reject(new Error("availability_timeout")), 5000);
       }),
     ])) as Response;
     const payload = (await res.json()) as { ok?: boolean; emailTaken?: boolean; loginTaken?: boolean };
@@ -825,13 +825,14 @@ export async function registerUser(payload: {
     return { ok: false as const, error: "Введите персональный код приглашения." };
   }
 
-  const availability = await checkRegistrationAvailability(payload.email, payload.login);
+  // Параллельно: занятость email/логина + валидация кода — быстрее, чем строго по очереди.
+  const [availability, inviteCode] = await Promise.all([
+    checkRegistrationAvailability(payload.email, payload.login),
+    resolveInviteCodeForRegistration(inviteCodeRaw),
+  ]);
   if (!availability.ok) {
     return { ok: false as const, error: availability.error };
   }
-
-  // Проверка кода сразу перед signUp (после быстрых precheck), чтобы окно гонки с лимитом было короче.
-  const inviteCode = await resolveInviteCodeForRegistration(inviteCodeRaw);
   if (!inviteCode) {
     return {
       ok: false as const,

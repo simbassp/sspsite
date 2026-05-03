@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { getPositions } from "@/lib/storage";
 import { registerUser } from "@/lib/users-repository";
 
@@ -42,6 +42,38 @@ export default function RegisterPage() {
   const [passwordMismatch, setPasswordMismatch] = useState(false);
   const [fieldHints, setFieldHints] = useState<{ email?: string; login?: string }>({});
   const [availChecking, setAvailChecking] = useState(false);
+  const [successOpen, setSuccessOpen] = useState(false);
+  const [redirectSec, setRedirectSec] = useState(5);
+  const successIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const goToLogin = () => {
+    if (successIntervalRef.current) {
+      clearInterval(successIntervalRef.current);
+      successIntervalRef.current = null;
+    }
+    router.push("/login");
+  };
+
+  useEffect(() => {
+    if (!successOpen) return;
+    setRedirectSec(5);
+    let n = 5;
+    successIntervalRef.current = setInterval(() => {
+      n -= 1;
+      setRedirectSec(n);
+      if (n <= 0) {
+        if (successIntervalRef.current) clearInterval(successIntervalRef.current);
+        successIntervalRef.current = null;
+        router.push("/login");
+      }
+    }, 1000);
+    return () => {
+      if (successIntervalRef.current) {
+        clearInterval(successIntervalRef.current);
+        successIntervalRef.current = null;
+      }
+    };
+  }, [successOpen, router]);
 
   useEffect(() => {
     const email = form.email.trim();
@@ -122,7 +154,7 @@ export default function RegisterPage() {
         setError(result.error);
         return;
       }
-      router.push("/login");
+      setSuccessOpen(true);
     } catch (err) {
       const message = err instanceof Error ? err.message : "";
       if (message === "request_timeout") {
@@ -139,6 +171,43 @@ export default function RegisterPage() {
 
   return (
     <div className="auth-wrap">
+      {successOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="register-success-title"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+            zIndex: 1000,
+          }}
+        >
+          <article className="card" style={{ width: "min(420px, 100%)", boxShadow: "0 12px 40px rgba(0,0,0,0.25)" }}>
+            <div className="card-body">
+              <h3 id="register-success-title" style={{ marginTop: 0 }}>
+                Аккаунт создан
+              </h3>
+              <p className="page-subtitle" style={{ marginBottom: 16 }}>
+                Регистрация прошла успешно. Войдите на сайт, указав email и пароль, которые вы только что задали.
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <button className="btn btn-primary" type="button" onClick={goToLogin}>
+                  Перейти ко входу
+                </button>
+                <p style={{ fontSize: 13, color: "var(--muted)", margin: 0, textAlign: "center" }}>
+                  {redirectSec > 0 ? `Автоматический переход через ${redirectSec} с…` : "Переход…"}
+                </p>
+              </div>
+            </div>
+          </article>
+        </div>
+      )}
+
       <div className="card auth-card">
         <div className="card-body">
           <h1 className="page-title">Регистрация сотрудника</h1>
