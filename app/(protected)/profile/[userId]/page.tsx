@@ -59,6 +59,8 @@ export default function ProfileUserInspectPage() {
   const [rows, setRows] = useState<TestResult[]>([]);
   const [showAllAttempts, setShowAllAttempts] = useState(false);
   const [attemptsPage, setAttemptsPage] = useState(1);
+  const [showAllFinalAttempts, setShowAllFinalAttempts] = useState(false);
+  const [finalAttemptsPage, setFinalAttemptsPage] = useState(1);
   const [dutySaving, setDutySaving] = useState(false);
   const [dutyMessage, setDutyMessage] = useState("");
 
@@ -161,6 +163,17 @@ export default function ProfileUserInspectPage() {
   const canExpandTrialAttempts = trialAttemptRows.length > 3;
   const canPaginateTrialAttempts = showAllAttempts && attemptsTotalPages > 1;
 
+  const FINAL_ATTEMPTS_PER_PAGE = 5;
+  const finalAttemptsTotalPages = Math.max(1, Math.ceil(finalAttemptRows.length / FINAL_ATTEMPTS_PER_PAGE));
+  const safeFinalAttemptsPage = Math.min(finalAttemptsPage, finalAttemptsTotalPages);
+  const pagedFinalAttempts = finalAttemptRows.slice(
+    (safeFinalAttemptsPage - 1) * FINAL_ATTEMPTS_PER_PAGE,
+    safeFinalAttemptsPage * FINAL_ATTEMPTS_PER_PAGE,
+  );
+  const visibleFinalAttempts = showAllFinalAttempts ? pagedFinalAttempts : finalAttemptRows.slice(0, 3);
+  const canExpandFinalAttempts = finalAttemptRows.length > 3;
+  const canPaginateFinalAttempts = showAllFinalAttempts && finalAttemptsTotalPages > 1;
+
   useEffect(() => {
     if (!showAllAttempts && attemptsPage !== 1) {
       setAttemptsPage(1);
@@ -170,6 +183,16 @@ export default function ProfileUserInspectPage() {
       setAttemptsPage(attemptsTotalPages);
     }
   }, [attemptsPage, attemptsTotalPages, showAllAttempts]);
+
+  useEffect(() => {
+    if (!showAllFinalAttempts && finalAttemptsPage !== 1) {
+      setFinalAttemptsPage(1);
+      return;
+    }
+    if (finalAttemptsPage > finalAttemptsTotalPages) {
+      setFinalAttemptsPage(finalAttemptsTotalPages);
+    }
+  }, [finalAttemptsPage, finalAttemptsTotalPages, showAllFinalAttempts]);
 
   const renderAttemptEntry = (item: TestResult) => {
     const statusText = item.status === "passed" ? "Сдан" : "Не сдан";
@@ -575,13 +598,83 @@ export default function ProfileUserInspectPage() {
                   )}
                   {finalAttemptRows.length > 0 ? (
                     <>
-                      <h3 style={{ marginTop: trialAttemptRows.length ? 24 : 8 }}>Итоговые попытки</h3>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          gap: 8,
+                          flexWrap: "wrap",
+                          marginTop: trialAttemptRows.length ? 24 : 8,
+                        }}
+                      >
+                        <h3 style={{ margin: 0 }}>Итоговые попытки</h3>
+                        {canExpandFinalAttempts ? (
+                          <button
+                            className="btn"
+                            type="button"
+                            onClick={() => {
+                              setShowAllFinalAttempts((prev) => !prev);
+                              setFinalAttemptsPage(1);
+                            }}
+                          >
+                            {showAllFinalAttempts ? "Показать последние 3" : "Показать все"}
+                          </button>
+                        ) : null}
+                      </div>
                       <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0 }}>
                         История итогового теста не очищается при сбросе статистики профиля (пробные попытки).
                       </p>
                       <div className="list" style={{ marginTop: 10 }}>
-                        {finalAttemptRows.map((item) => renderAttemptEntry(item))}
+                        {visibleFinalAttempts.map((item) => renderAttemptEntry(item))}
                       </div>
+                      {canPaginateFinalAttempts ? (
+                        <div
+                          style={{
+                            marginTop: 12,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: 8,
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          <button
+                            className="btn"
+                            type="button"
+                            disabled={safeFinalAttemptsPage <= 1}
+                            onClick={() => setFinalAttemptsPage((prev) => Math.max(1, prev - 1))}
+                          >
+                            ‹
+                          </button>
+                          {Array.from({ length: finalAttemptsTotalPages }, (_, idx) => idx + 1).map((pageNum) => (
+                            <button
+                              key={pageNum}
+                              className="btn"
+                              type="button"
+                              onClick={() => setFinalAttemptsPage(pageNum)}
+                              style={
+                                pageNum === safeFinalAttemptsPage
+                                  ? {
+                                      borderColor: "color-mix(in srgb, var(--accent) 55%, var(--line))",
+                                      background: "color-mix(in srgb, var(--accent) 12%, var(--panel))",
+                                    }
+                                  : undefined
+                              }
+                            >
+                              {pageNum}
+                            </button>
+                          ))}
+                          <button
+                            className="btn"
+                            type="button"
+                            disabled={safeFinalAttemptsPage >= finalAttemptsTotalPages}
+                            onClick={() => setFinalAttemptsPage((prev) => Math.min(finalAttemptsTotalPages, prev + 1))}
+                          >
+                            ›
+                          </button>
+                        </div>
+                      ) : null}
                     </>
                   ) : null}
                 </>

@@ -77,6 +77,11 @@ export default function TestsPage() {
     setIsHydrated(true);
   }, []);
 
+  /** Не оставляем прокрутку «в середину» от предыдущей страницы / восстановления позиции. */
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, []);
+
   const isAnsweringRef = useRef(false);
   isAnsweringRef.current = isAnswering;
 
@@ -359,13 +364,14 @@ export default function TestsPage() {
     };
   }, [currentQuestion?.id]);
 
+  /** Прокрутка к блоку вопроса только после старта ответов — не во время отсчёта и не при первом заходе на страницу. */
   useEffect(() => {
-    if (!activeTest || !currentQuestion) return;
+    if (!activeTest || !currentQuestion || !isTestStarted) return;
     const timer = window.setTimeout(() => {
       testCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 80);
     return () => window.clearTimeout(timer);
-  }, [activeTest, currentQuestion?.id]);
+  }, [activeTest, currentQuestion?.id, isTestStarted]);
 
   useEffect(() => {
     if (!session || activeTest !== "final") return;
