@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseSessionCookie } from "@/lib/auth";
+import { canAccessAdminPanel } from "@/lib/permissions";
 import { SESSION_COOKIE } from "@/lib/seed";
 
 const publicPaths = ["/login", "/register", "/reset-password"];
@@ -26,18 +27,8 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
-  const hasAdminAccess = Boolean(
-    session &&
-      (session.role === "admin" ||
-        session.canManageContent === true ||
-        session.permissions?.users === true ||
-        session.permissions?.results === true ||
-        session.permissions?.resetResults === true ||
-        session.permissions?.news === true ||
-        session.permissions?.tests === true ||
-        session.permissions?.uav === true ||
-        session.permissions?.counteraction === true),
-  );
+  /** Совпадает с app/(protected)/admin/layout.tsx (в т.ч. право «Список пользователей»). */
+  const hasAdminAccess = session ? canAccessAdminPanel(session) : false;
 
   if (session && pathname.startsWith("/admin") && !hasAdminAccess) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
