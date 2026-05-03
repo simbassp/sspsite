@@ -152,6 +152,9 @@ export default function ProfilePage() {
     };
   }, []);
 
+  /** Только пробный тест — совпадает со сбросом статистики и со счётчиками выше (итоговый тест сбросом не трогается). */
+  const trialHistoryRows = useMemo(() => rows.filter((r) => r.type === "trial"), [rows]);
+
   const stats = useMemo(() => {
     if (!session)
       return {
@@ -161,7 +164,7 @@ export default function ProfilePage() {
         totalTimeSec: null as number | null,
         lastAttempt: null as TestResult | null,
       };
-    const trialRows = rows.filter((r) => r.type === "trial");
+    const trialRows = trialHistoryRows;
     const total = trialRows.length;
     const passed = trialRows.filter((r) => r.status === "passed").length;
     const successRate = total ? Math.round((passed / total) * 100) : 0;
@@ -177,17 +180,17 @@ export default function ProfilePage() {
       ? Math.round(completedWithDuration.reduce((acc, item) => acc + Number(item.durationSeconds || 0), 0))
       : null;
     return { total, passed, successRate, totalTimeSec, lastAttempt };
-  }, [rows, session]);
+  }, [trialHistoryRows, session]);
 
   const ATTEMPTS_PER_PAGE = 10;
-  const attemptsTotalPages = Math.max(1, Math.ceil(rows.length / ATTEMPTS_PER_PAGE));
+  const attemptsTotalPages = Math.max(1, Math.ceil(trialHistoryRows.length / ATTEMPTS_PER_PAGE));
   const safeAttemptsPage = Math.min(attemptsPage, attemptsTotalPages);
-  const pagedAttempts = rows.slice(
+  const pagedAttempts = trialHistoryRows.slice(
     (safeAttemptsPage - 1) * ATTEMPTS_PER_PAGE,
     safeAttemptsPage * ATTEMPTS_PER_PAGE,
   );
-  const visibleAttempts = showAllAttempts ? pagedAttempts : rows.slice(0, 3);
-  const canExpandAttempts = rows.length > 3;
+  const visibleAttempts = showAllAttempts ? pagedAttempts : trialHistoryRows.slice(0, 3);
+  const canExpandAttempts = trialHistoryRows.length > 3;
   const canPaginateAttempts = showAllAttempts && attemptsTotalPages > 1;
 
   useEffect(() => {
@@ -924,7 +927,7 @@ export default function ProfilePage() {
       <article className="card" style={{ marginTop: 12 }}>
         <div className="card-body">
           <h3>Ваша активность</h3>
-          {!rows.length ? (
+          {!trialHistoryRows.length ? (
             <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
               Статистика появится после прохождения первого теста.
             </p>
@@ -1019,7 +1022,7 @@ export default function ProfilePage() {
               </Link>
             </div>
           </div>
-          {!rows.length ? (
+          {!trialHistoryRows.length ? (
             <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
               Пока нет попыток прохождения тестов.
             </p>
