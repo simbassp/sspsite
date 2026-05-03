@@ -178,21 +178,6 @@ export default function ProfilePage() {
     return { total, passed, successRate, totalTimeSec, lastAttempt };
   }, [rows, session]);
 
-  const averageDurationByType = useMemo(() => {
-    const byType: Record<"trial" | "final", number[]> = { trial: [], final: [] };
-    for (const row of rows) {
-      if (row.isCompleted === false) continue;
-      const duration = Number(row.durationSeconds ?? 0);
-      if (!Number.isFinite(duration) || duration <= 0) continue;
-      byType[row.type].push(duration);
-    }
-    const toAvg = (arr: number[]) => (arr.length ? Math.round(arr.reduce((acc, v) => acc + v, 0) / arr.length) : null);
-    return {
-      trial: toAvg(byType.trial),
-      final: toAvg(byType.final),
-    } as const;
-  }, [rows]);
-
   const ATTEMPTS_PER_PAGE = 10;
   const attemptsTotalPages = Math.max(1, Math.ceil(rows.length / ATTEMPTS_PER_PAGE));
   const safeAttemptsPage = Math.min(attemptsPage, attemptsTotalPages);
@@ -1042,8 +1027,14 @@ export default function ProfilePage() {
                 {visibleAttempts.map((item) => {
                   const statusText = item.status === "passed" ? "Сдан" : "Не сдан";
                   const testName = item.type === "final" ? "Итоговый тест" : "Пробный тест";
-                  const avgTypeDuration = averageDurationByType[item.type];
-                  const avgDurationText = avgTypeDuration != null ? `${avgTypeDuration} сек` : "Нет данных";
+                  const attemptDurationText =
+                    item.isCompleted === false
+                      ? "Не завершил"
+                      : (() => {
+                          const sec = Number(item.durationSeconds);
+                          if (!Number.isFinite(sec) || sec <= 0) return "Нет данных";
+                          return formatTotalTestDuration(sec);
+                        })();
                   const dateText = formatDateTime(item.createdAt);
                   return (
                     <article className="card" key={item.id}>
@@ -1061,8 +1052,8 @@ export default function ProfilePage() {
                             <p style={{ marginTop: 6, fontWeight: 700 }}>{item.score}%</p>
                           </div>
                           <div>
-                            <p className="label">Сред. время</p>
-                            <p style={{ marginTop: 6, fontWeight: 700 }}>{avgDurationText}</p>
+                            <p className="label">Время</p>
+                            <p style={{ marginTop: 6, fontWeight: 700 }}>{attemptDurationText}</p>
                           </div>
                           <div>
                             <p className="label">Дата и время</p>
