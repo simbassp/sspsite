@@ -13,6 +13,7 @@ import {
   canManageTests,
   canManageUav,
   canManageUsers,
+  canViewUserList,
 } from "@/lib/permissions";
 import { SessionUser } from "@/lib/types";
 
@@ -70,7 +71,7 @@ const mainLinks = [
 export function AppShell({ session, children }: AppShellProps) {
   const pathname = usePathname();
   const bottomLinks = mainLinks;
-  const canEditUsers = canManageUsers(session);
+  const canSeeUserDirectory = canManageUsers(session) || canViewUserList(session);
   const hasAdminAccess = canAccessAdminPanel(session);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
@@ -169,7 +170,7 @@ export function AppShell({ session, children }: AppShellProps) {
     };
   }, []);
   const visibleAdminLinks = [
-    ...(canEditUsers ? [{ href: "/admin/users", label: "Пользователи" }] : []),
+    ...(canSeeUserDirectory ? [{ href: "/admin/users", label: "Пользователи" }] : []),
     ...(canManageResults(session) || canResetTestResults(session)
       ? [{ href: "/admin/results", label: "Результаты" }]
       : []),

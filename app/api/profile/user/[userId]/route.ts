@@ -1,5 +1,5 @@
 import { ONLINE_LAST_SEEN_MAX_MS } from "@/lib/presence-constants";
-import { canManageUsers } from "@/lib/permissions";
+import { canManageUsers, canViewUserList } from "@/lib/permissions";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 
@@ -24,7 +24,7 @@ function looksLikeUuid(id: string) {
 
 export async function GET(_request: Request, context: { params: Promise<{ userId: string }> }) {
   const session = await getServerSession();
-  if (!session || !canManageUsers(session)) {
+  if (!session || (!canManageUsers(session) && !canViewUserList(session))) {
     return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
   }
 

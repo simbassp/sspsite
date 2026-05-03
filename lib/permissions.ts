@@ -9,6 +9,7 @@ const emptyPermissions: UserPermissions = {
   resetResults: false,
   uav: false,
   counteraction: false,
+  userList: false,
   users: false,
   online: false,
 };
@@ -21,6 +22,7 @@ function allPermissions(): UserPermissions {
     resetResults: true,
     uav: true,
     counteraction: true,
+    userList: true,
     users: true,
     online: true,
   };
@@ -47,6 +49,12 @@ export function resolvePermissions(session: SessionLike): UserPermissions {
 export function canManageUsers(session: SessionLike) {
   const permissions = resolvePermissions(session);
   return permissions.users;
+}
+
+/** Список пользователей и просмотр чужих профилей (в т.ч. только просмотр). Полное управление — через canManageUsers. */
+export function canViewUserList(session: SessionLike) {
+  const p = resolvePermissions(session);
+  return p.userList || p.users;
 }
 
 export function canManageNews(session: SessionLike) {
@@ -84,9 +92,11 @@ export function canViewOnline(session: SessionLike) {
 }
 
 export function canAccessAdminPanel(session: SessionLike) {
+  const p = resolvePermissions(session);
   return (
     canManageContent(session) ||
     canManageUsers(session) ||
+    p.userList ||
     canManageResults(session) ||
     canResetTestResults(session)
   );

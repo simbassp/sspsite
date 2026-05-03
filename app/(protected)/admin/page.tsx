@@ -6,6 +6,7 @@ import {
   canManageTests,
   canManageUav,
   canManageUsers,
+  canViewUserList,
 } from "@/lib/permissions";
 import { getServerSession } from "@/lib/server-auth";
 
@@ -61,9 +62,9 @@ const adminOnlyLinks: AdminLinkDef[] = [
   {
     href: "/admin/users",
     title: "Пользователи",
-    text: "Поиск, фильтры, редактирование, деактивация и удаление.",
+    text: "Список и профили; полное управление — при праве «Редактирование и удаление пользователей».",
     color: "red",
-    access: canManageUsers,
+    access: (session) => canManageUsers(session) || canViewUserList(session),
   },
 ];
 

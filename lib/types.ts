@@ -22,6 +22,9 @@ export interface UserPermissions {
   resetResults: boolean;
   uav: boolean;
   counteraction: boolean;
+  /** Просмотр списка пользователей и чужих профилей без редактирования (без смены прав / удаления). */
+  userList: boolean;
+  /** Полное управление пользователями (права, должность, удаление). */
   users: boolean;
   online: boolean;
 }

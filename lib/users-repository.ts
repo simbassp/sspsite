@@ -30,6 +30,7 @@ type UserRow = {
   can_manage_uav?: boolean;
   can_manage_counteraction?: boolean;
   can_manage_users?: boolean;
+  can_view_user_list?: boolean;
   can_reset_test_results?: boolean;
   can_view_online?: boolean;
   is_online?: boolean;
@@ -104,6 +105,7 @@ function defaultPermissionsFromLegacy(row: {
     resetResults: isAdmin,
     uav: isAdmin || legacyContent,
     counteraction: isAdmin || legacyContent,
+    userList: false,
     users: isAdmin,
     online: isAdmin,
   };
@@ -118,6 +120,7 @@ function normalizePermissions(input: {
   can_manage_uav?: boolean;
   can_manage_counteraction?: boolean;
   can_manage_users?: boolean;
+  can_view_user_list?: boolean;
   can_reset_test_results?: boolean;
   can_view_online?: boolean;
   permissions?: Partial<UserPermissions> | undefined;
@@ -133,6 +136,7 @@ function normalizePermissions(input: {
     ...(input.can_manage_uav !== undefined ? { uav: input.can_manage_uav === true } : {}),
     ...(input.can_manage_counteraction !== undefined ? { counteraction: input.can_manage_counteraction === true } : {}),
     ...(input.can_manage_users !== undefined ? { users: input.can_manage_users === true } : {}),
+    ...(input.can_view_user_list !== undefined ? { userList: input.can_view_user_list === true } : {}),
     ...(input.can_view_online !== undefined ? { online: input.can_view_online === true } : {}),
   };
   if (input.role === "admin") {
@@ -143,6 +147,7 @@ function normalizePermissions(input: {
       resetResults: true,
       uav: true,
       counteraction: true,
+      userList: true,
       users: true,
       online: true,
     } satisfies UserPermissions;
@@ -1120,14 +1125,15 @@ export async function patchUser(
       ? {
           ...patch,
           permissions: {
-            news: true,
-            tests: true,
-            results: true,
-            resetResults: true,
-            uav: true,
-            counteraction: true,
-            users: true,
-            online: true,
+    news: true,
+    tests: true,
+    results: true,
+    resetResults: true,
+    uav: true,
+    counteraction: true,
+    userList: true,
+    users: true,
+    online: true,
           },
           canManageContent: true,
         }
@@ -1153,6 +1159,7 @@ export async function patchUser(
     can_manage_uav: true,
     can_manage_counteraction: true,
     can_manage_users: true,
+    can_view_user_list: true,
     can_view_online: true,
     can_reset_test_results: true,
   } as const;
@@ -1177,6 +1184,7 @@ export async function patchUser(
     ...(nextPermissions !== undefined ? { can_manage_uav: nextPermissions.uav } : {}),
     ...(nextPermissions !== undefined ? { can_manage_counteraction: nextPermissions.counteraction } : {}),
     ...(nextPermissions !== undefined ? { can_manage_users: nextPermissions.users } : {}),
+    ...(nextPermissions !== undefined ? { can_view_user_list: nextPermissions.userList } : {}),
     ...(nextPermissions !== undefined ? { can_view_online: nextPermissions.online } : {}),
     ...(nextPermissions !== undefined ? { can_reset_test_results: nextPermissions.resetResults } : {}),
     ...roleFragment,
@@ -1216,6 +1224,7 @@ export async function patchUser(
       ...(nextPermissions !== undefined ? { can_manage_uav: nextPermissions.uav } : {}),
       ...(nextPermissions !== undefined ? { can_manage_counteraction: nextPermissions.counteraction } : {}),
       ...(nextPermissions !== undefined ? { can_manage_users: nextPermissions.users } : {}),
+      ...(nextPermissions !== undefined ? { can_view_user_list: nextPermissions.userList } : {}),
       ...(nextPermissions !== undefined ? { can_view_online: nextPermissions.online } : {}),
       ...roleFragment,
     };

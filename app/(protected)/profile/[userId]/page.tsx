@@ -7,7 +7,7 @@ import { readClientSession } from "@/lib/client-auth";
 import { formatDateTime, formatTotalTestDuration } from "@/lib/format";
 import { dutyLocationLabel } from "@/lib/duty-location";
 import { getPositionBadgeClass } from "@/lib/position-ui";
-import { canManageUsers } from "@/lib/permissions";
+import { canManageUsers, canViewUserList } from "@/lib/permissions";
 import { DutyLocation, TestResult } from "@/lib/types";
 
 type InspectUser = {
@@ -50,7 +50,8 @@ export default function ProfileUserInspectPage() {
   const userId = typeof params?.userId === "string" ? params.userId : "";
 
   const session = useMemo(() => readClientSession(), []);
-  const canOpen = session ? canManageUsers(session) : false;
+  const canOpen = session ? canManageUsers(session) || canViewUserList(session) : false;
+  const canEditDutyForOthers = session ? canManageUsers(session) : false;
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -255,7 +256,7 @@ export default function ProfileUserInspectPage() {
   }
 
   const onDutyChangeForUser = async (next: DutyLocation) => {
-    if (!inspectUser || next === inspectUser.duty_location || dutySaving) return;
+    if (!canEditDutyForOthers || !inspectUser || next === inspectUser.duty_location || dutySaving) return;
     const snapshot = inspectUser;
     const prev = snapshot.duty_location;
     setDutyMessage("");
@@ -344,28 +345,36 @@ export default function ProfileUserInspectPage() {
                 </div>
                 <div className="profile-hero-duty">
                   <p className="label profile-hero-duty-label">Место положения</p>
-                  <div className="profile-duty-toggle" role="group" aria-label="Место положения сотрудника">
-                    <button
-                      type="button"
-                      className={`profile-duty-option${inspectUser.duty_location === "base" ? " profile-duty-option--active" : " profile-duty-option--inactive"}`}
-                      onClick={() => void onDutyChangeForUser("base")}
-                      disabled={dutySaving}
-                    >
-                      На базе
-                    </button>
-                    <button
-                      type="button"
-                      className={`profile-duty-option${inspectUser.duty_location === "deployment" ? " profile-duty-option--active" : " profile-duty-option--inactive"}`}
-                      onClick={() => void onDutyChangeForUser("deployment")}
-                      disabled={dutySaving}
-                    >
-                      В командировке
-                    </button>
-                  </div>
-                  {!!dutyMessage && (
-                    <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0, color: "var(--bad)" }}>
-                      {dutyMessage}
-                    </p>
+                  {canEditDutyForOthers ? (
+                    <>
+                      <div className="profile-duty-toggle" role="group" aria-label="Место положения сотрудника">
+                        <button
+                          type="button"
+                          className={`profile-duty-option${inspectUser.duty_location === "base" ? " profile-duty-option--active" : " profile-duty-option--inactive"}`}
+                          onClick={() => void onDutyChangeForUser("base")}
+                          disabled={dutySaving}
+                        >
+                          На базе
+                        </button>
+                        <button
+                          type="button"
+                          className={`profile-duty-option${inspectUser.duty_location === "deployment" ? " profile-duty-option--active" : " profile-duty-option--inactive"}`}
+                          onClick={() => void onDutyChangeForUser("deployment")}
+                          disabled={dutySaving}
+                        >
+                          В командировке
+                        </button>
+                      </div>
+                      {!!dutyMessage && (
+                        <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0, color: "var(--bad)" }}>
+                          {dutyMessage}
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <span className={`duty-location-badge duty-location-badge--${inspectUser.duty_location}`}>
+                      {dutyLocationLabel[inspectUser.duty_location]}
+                    </span>
                   )}
                 </div>
                 <div className="profile-hero-divider" aria-hidden="true" />

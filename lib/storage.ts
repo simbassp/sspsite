@@ -38,6 +38,7 @@ function defaultPermissions(user: Partial<UserRecord>): UserPermissions {
     resetResults: isAdmin,
     uav: isAdmin || legacyContent,
     counteraction: isAdmin || legacyContent,
+    userList: false,
     users: isAdmin,
     online: isAdmin,
   };
@@ -149,6 +150,7 @@ export function registerEmployee(payload: {
       resetResults: false,
       uav: false,
       counteraction: false,
+      userList: false,
       users: false,
       online: false,
     },

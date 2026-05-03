@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { readClientSession } from "@/lib/client-auth";
 import { dutyLocationLabel } from "@/lib/duty-location";
 import { POSITION_OPTIONS, getPositionBadgeClass } from "@/lib/position-ui";
+import { canManageUsers } from "@/lib/permissions";
 import { fetchUsers, patchUser, removeUser } from "@/lib/users-repository";
 import type { Position, Role, UserRecord } from "@/lib/types";
 
@@ -15,6 +16,7 @@ const permissionOptions = [
   { key: "resetResults", label: "Сброс результатов" },
   { key: "uav", label: "БПЛА" },
   { key: "counteraction", label: "Противодействие" },
+  { key: "userList", label: "Список пользователей" },
   { key: "users", label: "Редактирование и удаление пользователей" },
   { key: "online", label: "Показывать кто онлайн" },
 ] as const;
@@ -26,12 +28,14 @@ const fullAdminPermissions = {
   resetResults: true,
   uav: true,
   counteraction: true,
+  userList: true,
   users: true,
   online: true,
 } as const satisfies UserRecord["permissions"];
 
 export default function AdminUsersPage() {
   const session = useMemo(() => readClientSession(), []);
+  const canEditUsers = session ? canManageUsers(session) : false;
   const canGrantAdminRole = session?.role === "admin";
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [query, setQuery] = useState("");
@@ -151,6 +155,7 @@ export default function AdminUsersPage() {
         if (opt.key === "results") return "Рез.";
         if (opt.key === "uav") return "БПЛА";
         if (opt.key === "counteraction") return "Против.";
+        if (opt.key === "userList") return "Список";
         if (opt.key === "users") return "Польз.";
         if (opt.key === "online") return "Онлайн";
         return "Сброс";
@@ -188,7 +193,11 @@ export default function AdminUsersPage() {
   return (
     <section className="admin-users-page">
       <h1 className="page-title">Админ / Пользователи</h1>
-      <p className="page-subtitle admin-users-page__lead">Управление пользователями и их правами доступа.</p>
+      <p className="page-subtitle admin-users-page__lead">
+        {canEditUsers
+          ? "Управление пользователями и их правами доступа."
+          : "Просмотр списка и профилей без изменения прав и данных."}
+      </p>
 
       <div className="grid grid-two admin-users-page__filters">
         <input
@@ -215,7 +224,7 @@ export default function AdminUsersPage() {
       </div>
       {info && <p className="page-subtitle admin-users-page__info">{info}</p>}
 
-      {permissionsTargetUser && (
+      {canEditUsers && permissionsTargetUser && (
         <div className="card admin-users-page__permissions-editor" ref={permissionEditorRef}>
           <div className="card-body">
             <div className="admin-users-person">
@@ -308,7 +317,7 @@ export default function AdminUsersPage() {
                 <th>Должность</th>
                 <th>Место</th>
                 <th>Права</th>
-                <th>Действия</th>
+                {canEditUsers ? <th>Действия</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -332,23 +341,29 @@ export default function AdminUsersPage() {
                       <span className={`admin-users-role-text ${user.role === "admin" ? "is-admin" : "is-employee"}`}>
                         {user.role === "admin" ? "Администратор" : "Сотрудник"}
                       </span>
-                      <button
-                        type="button"
-                        className={`admin-users-position-badge ${getPositionBadgeClass(user.position)} admin-users-position-badge--editable`}
-                        title="Изменить должность"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setPositionEditUser(user);
-                          setPositionDraft(
-                            (POSITION_OPTIONS as readonly string[]).includes(user.position.trim())
-                              ? (user.position as Position)
-                              : "Специалист",
-                          );
-                        }}
-                      >
-                        {user.position}
-                      </button>
+                      {canEditUsers ? (
+                        <button
+                          type="button"
+                          className={`admin-users-position-badge ${getPositionBadgeClass(user.position)} admin-users-position-badge--editable`}
+                          title="Изменить должность"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setPositionEditUser(user);
+                            setPositionDraft(
+                              (POSITION_OPTIONS as readonly string[]).includes(user.position.trim())
+                                ? (user.position as Position)
+                                : "Специалист",
+                            );
+                          }}
+                        >
+                          {user.position}
+                        </button>
+                      ) : (
+                        <span className={`admin-users-position-badge ${getPositionBadgeClass(user.position)}`} title="Должность">
+                          {user.position}
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td>
@@ -364,52 +379,54 @@ export default function AdminUsersPage() {
                       {getPermissionsSummary(user)}
                     </span>
                   </td>
-                  <td>
-                    <div className="admin-users-table__actions">
-                      <button
-                        className="btn"
-                        style={{ width: 38, height: 34, padding: 0, fontSize: 16, lineHeight: 1 }}
-                        type="button"
-                        title="Редактировать"
-                        aria-label={`Редактировать права ${user.name}`}
-                        onClick={() => {
-                          setPermissionDrafts((prev) => (prev[user.id] ? prev : { ...prev, [user.id]: { ...user.permissions } }));
-                          setPermissionsTargetId((prev) => (prev === user.id ? null : user.id));
-                        }}
-                      >
-                        ✏
-                      </button>
-                      {user.role !== "admin" && (
+                  {canEditUsers ? (
+                    <td>
+                      <div className="admin-users-table__actions">
                         <button
-                          className="btn btn-danger"
+                          className="btn"
                           style={{ width: 38, height: 34, padding: 0, fontSize: 16, lineHeight: 1 }}
                           type="button"
-                          disabled={deletingId === user.id}
-                          title="Удалить"
-                          aria-label={`Удалить ${user.name}`}
-                          onClick={async () => {
-                            const confirmed = window.confirm(`Удалить пользователя ${user.name} (@${user.login})?`);
-                            if (!confirmed) return;
-                            const userId = user.id;
-                            setDeletingId(userId);
-                            try {
-                              const result = await removeUser(userId);
-                              if (!result.ok) {
-                                setInfo(result.error);
-                                return;
-                              }
-                              setInfo("warning" in result && result.warning ? result.warning : "Пользователь удалён.");
-                              await refresh(true);
-                            } finally {
-                              setDeletingId(null);
-                            }
+                          title="Редактировать"
+                          aria-label={`Редактировать права ${user.name}`}
+                          onClick={() => {
+                            setPermissionDrafts((prev) => (prev[user.id] ? prev : { ...prev, [user.id]: { ...user.permissions } }));
+                            setPermissionsTargetId((prev) => (prev === user.id ? null : user.id));
                           }}
                         >
-                          🗑
+                          ✏
                         </button>
-                      )}
-                    </div>
-                  </td>
+                        {user.role !== "admin" && (
+                          <button
+                            className="btn btn-danger"
+                            style={{ width: 38, height: 34, padding: 0, fontSize: 16, lineHeight: 1 }}
+                            type="button"
+                            disabled={deletingId === user.id}
+                            title="Удалить"
+                            aria-label={`Удалить ${user.name}`}
+                            onClick={async () => {
+                              const confirmed = window.confirm(`Удалить пользователя ${user.name} (@${user.login})?`);
+                              if (!confirmed) return;
+                              const userId = user.id;
+                              setDeletingId(userId);
+                              try {
+                                const result = await removeUser(userId);
+                                if (!result.ok) {
+                                  setInfo(result.error);
+                                  return;
+                                }
+                                setInfo("warning" in result && result.warning ? result.warning : "Пользователь удалён.");
+                                await refresh(true);
+                              } finally {
+                                setDeletingId(null);
+                              }
+                            }}
+                          >
+                            🗑
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  ) : null}
                 </tr>
               ))}
             </tbody>
@@ -434,23 +451,29 @@ export default function AdminUsersPage() {
                     <span className={`admin-users-role-text ${user.role === "admin" ? "is-admin" : "is-employee"}`}>
                       {user.role === "admin" ? "Администратор" : "Сотрудник"}
                     </span>
-                    <button
-                      type="button"
-                      className={`admin-users-position-badge ${getPositionBadgeClass(user.position)} admin-users-position-badge--editable`}
-                      title="Изменить должность"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setPositionEditUser(user);
-                        setPositionDraft(
-                          (POSITION_OPTIONS as readonly string[]).includes(user.position.trim())
-                            ? (user.position as Position)
-                            : "Специалист",
-                        );
-                      }}
-                    >
-                      {user.position}
-                    </button>
+                    {canEditUsers ? (
+                      <button
+                        type="button"
+                        className={`admin-users-position-badge ${getPositionBadgeClass(user.position)} admin-users-position-badge--editable`}
+                        title="Изменить должность"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setPositionEditUser(user);
+                          setPositionDraft(
+                            (POSITION_OPTIONS as readonly string[]).includes(user.position.trim())
+                              ? (user.position as Position)
+                              : "Специалист",
+                          );
+                        }}
+                      >
+                        {user.position}
+                      </button>
+                    ) : (
+                      <span className={`admin-users-position-badge ${getPositionBadgeClass(user.position)}`} title="Должность">
+                        {user.position}
+                      </span>
+                    )}
                   </div>
                   <p style={{ marginTop: 8, marginBottom: 0 }}>
                     <span className={`duty-location-badge duty-location-badge--${user.dutyLocation}`}>
@@ -458,47 +481,49 @@ export default function AdminUsersPage() {
                     </span>
                   </p>
                   <p className="admin-users-perms-text">{getPermissionsSummary(user)}</p>
-                  <div className="admin-users-table__actions admin-users-mobile-actions">
-                    <button
-                      className="btn"
-                      style={{ width: 42, height: 38, padding: 0, fontSize: 16, lineHeight: 1 }}
-                      type="button"
-                      title="Редактировать"
-                      onClick={() => {
-                        setPermissionDrafts((prev) => (prev[user.id] ? prev : { ...prev, [user.id]: { ...user.permissions } }));
-                        setPermissionsTargetId((prev) => (prev === user.id ? null : user.id));
-                      }}
-                    >
-                      ✏
-                    </button>
-                    {user.role !== "admin" && (
+                  {canEditUsers ? (
+                    <div className="admin-users-table__actions admin-users-mobile-actions">
                       <button
-                        className="btn btn-danger"
+                        className="btn"
                         style={{ width: 42, height: 38, padding: 0, fontSize: 16, lineHeight: 1 }}
                         type="button"
-                        disabled={deletingId === user.id}
-                        title="Удалить"
-                        onClick={async () => {
-                          const confirmed = window.confirm(`Удалить пользователя ${user.name} (@${user.login})?`);
-                          if (!confirmed) return;
-                          setDeletingId(user.id);
-                          try {
-                            const result = await removeUser(user.id);
-                            if (!result.ok) {
-                              setInfo(result.error);
-                              return;
-                            }
-                            setInfo("warning" in result && result.warning ? result.warning : "Пользователь удалён.");
-                            await refresh(true);
-                          } finally {
-                            setDeletingId(null);
-                          }
+                        title="Редактировать"
+                        onClick={() => {
+                          setPermissionDrafts((prev) => (prev[user.id] ? prev : { ...prev, [user.id]: { ...user.permissions } }));
+                          setPermissionsTargetId((prev) => (prev === user.id ? null : user.id));
                         }}
                       >
-                        🗑
+                        ✏
                       </button>
-                    )}
-                  </div>
+                      {user.role !== "admin" && (
+                        <button
+                          className="btn btn-danger"
+                          style={{ width: 42, height: 38, padding: 0, fontSize: 16, lineHeight: 1 }}
+                          type="button"
+                          disabled={deletingId === user.id}
+                          title="Удалить"
+                          onClick={async () => {
+                            const confirmed = window.confirm(`Удалить пользователя ${user.name} (@${user.login})?`);
+                            if (!confirmed) return;
+                            setDeletingId(user.id);
+                            try {
+                              const result = await removeUser(user.id);
+                              if (!result.ok) {
+                                setInfo(result.error);
+                                return;
+                              }
+                              setInfo("warning" in result && result.warning ? result.warning : "Пользователь удалён.");
+                              await refresh(true);
+                            } finally {
+                              setDeletingId(null);
+                            }
+                          }}
+                        >
+                          🗑
+                        </button>
+                      )}
+                    </div>
+                  ) : null}
                 </div>
               </article>
             ))}
