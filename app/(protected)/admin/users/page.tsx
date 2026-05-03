@@ -36,6 +36,8 @@ const fullAdminPermissions = {
 export default function AdminUsersPage() {
   const session = useMemo(() => readClientSession(), []);
   const canEditUsers = session ? canManageUsers(session) : false;
+  /** Только полные админы по пользователям видят сводку прав; режим «только список» — без этой колонки. */
+  const showPermissionsColumn = canEditUsers;
   const canGrantAdminRole = session?.role === "admin";
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [query, setQuery] = useState("");
@@ -316,7 +318,7 @@ export default function AdminUsersPage() {
                 <th>Пользователь</th>
                 <th>Должность</th>
                 <th>Место</th>
-                <th>Права</th>
+                {showPermissionsColumn ? <th>Права</th> : null}
                 {canEditUsers ? <th>Действия</th> : null}
               </tr>
             </thead>
@@ -374,11 +376,13 @@ export default function AdminUsersPage() {
                       {dutyLocationLabel[user.dutyLocation]}
                     </span>
                   </td>
-                  <td>
-                    <span className="admin-users-perms-text" title={permissionOptions.filter((opt) => user.permissions[opt.key]).map((opt) => opt.label).join(", ") || "Нет прав"}>
-                      {getPermissionsSummary(user)}
-                    </span>
-                  </td>
+                  {showPermissionsColumn ? (
+                    <td>
+                      <span className="admin-users-perms-text" title={permissionOptions.filter((opt) => user.permissions[opt.key]).map((opt) => opt.label).join(", ") || "Нет прав"}>
+                        {getPermissionsSummary(user)}
+                      </span>
+                    </td>
+                  ) : null}
                   {canEditUsers ? (
                     <td>
                       <div className="admin-users-table__actions">
@@ -480,7 +484,7 @@ export default function AdminUsersPage() {
                       {dutyLocationLabel[user.dutyLocation]}
                     </span>
                   </p>
-                  <p className="admin-users-perms-text">{getPermissionsSummary(user)}</p>
+                  {showPermissionsColumn ? <p className="admin-users-perms-text">{getPermissionsSummary(user)}</p> : null}
                   {canEditUsers ? (
                     <div className="admin-users-table__actions admin-users-mobile-actions">
                       <button
