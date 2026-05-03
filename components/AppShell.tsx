@@ -59,7 +59,17 @@ interface AppShellProps {
   children: React.ReactNode;
 }
 
-const mainLinks = [
+type NavIconId =
+  | "home"
+  | "news"
+  | "shield"
+  | "uav"
+  | "clipboard"
+  | "user"
+  | "users"
+  | "chart";
+
+const mainLinks: { href: string; label: string; icon: NavIconId }[] = [
   { href: "/dashboard", label: "Главная", icon: "home" },
   { href: "/news", label: "Новости", icon: "news" },
   { href: "/counteraction", label: "Противодействие", icon: "shield" },
@@ -169,15 +179,19 @@ export function AppShell({ session, children }: AppShellProps) {
       }
     };
   }, []);
-  const visibleAdminLinks = [
-    ...(canSeeUserDirectory ? [{ href: "/admin/users", label: "Пользователи" }] : []),
+  const visibleAdminLinks: { href: string; label: string; icon: NavIconId }[] = [
+    ...(canSeeUserDirectory ? [{ href: "/admin/users", label: "Пользователи", icon: "users" as const }] : []),
     ...(canManageResults(session) || canResetTestResults(session)
-      ? [{ href: "/admin/results", label: "Результаты" }]
+      ? [{ href: "/admin/results", label: "Результаты", icon: "chart" as const }]
       : []),
-    ...(canManageTests(session) ? [{ href: "/admin/tests", label: "Тесты" }] : []),
-    ...(canManageNews(session) ? [{ href: "/admin/news", label: "Новости" }] : []),
-    ...(canManageCounteraction(session) ? [{ href: "/admin/counteraction", label: "Противодействие" }] : []),
-    ...(canManageUav(session) ? [{ href: "/admin/uav", label: "БПЛА" }] : []),
+    ...(canManageTests(session)
+      ? [{ href: "/admin/tests", label: "Тесты", icon: "clipboard" as const }]
+      : []),
+    ...(canManageNews(session) ? [{ href: "/admin/news", label: "Новости", icon: "news" as const }] : []),
+    ...(canManageCounteraction(session)
+      ? [{ href: "/admin/counteraction", label: "Противодействие", icon: "shield" as const }]
+      : []),
+    ...(canManageUav(session) ? [{ href: "/admin/uav", label: "БПЛА", icon: "uav" as const }] : []),
   ];
 
   const withTimeout = (promise: Promise<unknown>, timeoutMs: number) =>
@@ -196,8 +210,25 @@ export function AppShell({ session, children }: AppShellProps) {
     strokeLinejoin: "round" as const,
   };
 
-  const renderBottomIcon = (name: string) => {
+  const renderNavIcon = (name: NavIconId) => {
     switch (name) {
+      case "users":
+        return (
+          <svg viewBox="0 0 24 24" aria-hidden="true" style={iconStyle}>
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+            <circle cx="9" cy="7" r="4" />
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+          </svg>
+        );
+      case "chart":
+        return (
+          <svg viewBox="0 0 24 24" aria-hidden="true" style={iconStyle}>
+            <line x1="18" y1="20" x2="18" y2="10" />
+            <line x1="12" y1="20" x2="12" y2="4" />
+            <line x1="6" y1="20" x2="6" y2="14" />
+          </svg>
+        );
       case "home":
         return (
           <svg viewBox="0 0 24 24" aria-hidden="true" style={iconStyle}>
@@ -273,9 +304,9 @@ export function AppShell({ session, children }: AppShellProps) {
     <div className="app-shell">
       <aside className="desktop-sidebar">
         <div className="brand">
-          <div className="brand-mark">ПВО</div>
+          <div className="brand-mark">ССП</div>
           <div>
-            <h1>ССП ПВО</h1>
+            <h1>ПВО</h1>
             <p>Закрытый контур</p>
           </div>
         </div>
@@ -297,7 +328,8 @@ export function AppShell({ session, children }: AppShellProps) {
                 key={link.href}
                 href={link.href}
               >
-                {link.label}
+                <span className="desktop-nav-link__icon">{renderNavIcon(link.icon)}</span>
+                <span>{link.label}</span>
               </Link>
             );
           })}
@@ -317,7 +349,8 @@ export function AppShell({ session, children }: AppShellProps) {
                   key={link.href}
                   href={link.href}
                 >
-                  {link.label}
+                  <span className="desktop-nav-link__icon">{renderNavIcon(link.icon)}</span>
+                  <span>{link.label}</span>
                 </Link>
               );
             })}
@@ -329,10 +362,10 @@ export function AppShell({ session, children }: AppShellProps) {
         <header className="mobile-header" id="mobile-app-header">
           <div className="brand">
             <Link prefetch={false} href="/dashboard" style={{ display: "contents" }}>
-              <div className="brand-mark">ПВО</div>
+              <div className="brand-mark">ССП</div>
             </Link>
             <div>
-              <h1>ССП ПВО</h1>
+              <h1>ПВО</h1>
               <p>{session.callsign}</p>
             </div>
           </div>
@@ -382,7 +415,7 @@ export function AppShell({ session, children }: AppShellProps) {
               aria-label={link.label}
             >
               <span className="bottom-nav-icon" aria-hidden="true">
-                {renderBottomIcon(link.icon)}
+                {renderNavIcon(link.icon)}
               </span>
               <span className="bottom-nav-label">{link.label}</span>
             </Link>

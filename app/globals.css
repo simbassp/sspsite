@@ -1176,9 +1176,22 @@ html[data-theme="dark"] .chip:not(.active):hover {
   border-radius: 14px;
   border: 1px solid var(--line);
   background: var(--glass);
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   margin-bottom: 8px;
   font-size: 13px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.desktop-nav-link__icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: currentColor;
+  opacity: 0.95;
 }
 
 .desktop-nav-link.active {
