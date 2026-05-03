@@ -92,6 +92,19 @@ const REGISTER_AUTH_TIMEOUT_MS = 32000;
 const REGISTER_RECHECK_SIGNIN_MS = 7000;
 const REGISTER_RECHECK_SIGNUP_MS = 7000;
 
+/** Сообщение PostgREST/Postgres о несуществующей колонке в PATCH. */
+function restErrorMissingColumn(message: string | undefined, column: string) {
+  const m = (message ?? "").toLowerCase();
+  const col = column.toLowerCase();
+  if (!col || !m.includes(col)) return false;
+  return (
+    m.includes("does not exist") ||
+    m.includes("undefined column") ||
+    m.includes("could not find") ||
+    (m.includes("column") && m.includes("unknown"))
+  );
+}
+
 function defaultPermissionsFromLegacy(row: {
   role: "employee" | "admin";
   can_manage_content?: boolean;
@@ -1164,6 +1177,19 @@ export async function patchUser(
     can_reset_test_results: true,
   } as const;
 
+  /** То же назначение админа, если в БД ещё нет колонки `can_view_user_list`. */
+  const adminGrantDbWithoutUserListColumn = {
+    can_manage_content: true,
+    can_manage_news: true,
+    can_manage_tests: true,
+    can_manage_results: true,
+    can_manage_uav: true,
+    can_manage_counteraction: true,
+    can_manage_users: true,
+    can_view_online: true,
+    can_reset_test_results: true,
+  } as const;
+
   const roleFragment =
     patch.role !== undefined
       ? {
@@ -1191,6 +1217,11 @@ export async function patchUser(
   };
   const prevUser = listUsers().find((u) => u.id === userId) || null;
 
+  const localCacheWithoutPersistedUserList =
+    nextPermissions !== undefined
+      ? { ...patchForLocalCache, permissions: { ...nextPermissions, userList: false } }
+      : patchForLocalCache;
+
   const maybeLogPromotion = async () => {
     if (patch.position === undefined || !prevUser || prevUser.position === patch.position || patch.status === "inactive") {
       return;
@@ -1213,6 +1244,22 @@ export async function patchUser(
 
   const { error } = await supabase.from("app_users").update(payload).eq("id", userId);
   if (error) {
+    if (nextPermissions !== undefined && restErrorMissingColumn(error.message, "can_view_user_list")) {
+      const payloadSkipUserList = { ...payload } as Record<string, unknown>;
+      delete payloadSkipUserList.can_view_user_list;
+      const retryNoUserListCol = await supabase.from("app_users").update(payloadSkipUserList).eq("id", userId);
+      if (!retryNoUserListCol.error) {
+        if (process.env.NODE_ENV === "development") {
+          console.warn(
+            "[patchUser] Выполните миграцию с колонкой can_view_user_list — право «Список пользователей» не записано в БД.",
+          );
+        }
+        updateUser(userId, localCacheWithoutPersistedUserList);
+        await maybeLogPromotion();
+        return;
+      }
+    }
+
     const granularWithoutResultsPayload = {
       ...(patch.name !== undefined ? { name: patch.name } : {}),
       ...(patch.callsign !== undefined ? { callsign: patch.callsign } : {}),
@@ -1234,6 +1281,41 @@ export async function patchUser(
       await maybeLogPromotion();
       return;
     }
+
+    const roleFragmentWithoutUserListColumn =
+      patch.role !== undefined
+        ? {
+            role: patch.role,
+            ...(patch.role === "admin" ? adminGrantDbWithoutUserListColumn : {}),
+          }
+        : {};
+
+    const granularWithoutUserListPayload = {
+      ...(patch.name !== undefined ? { name: patch.name } : {}),
+      ...(patch.callsign !== undefined ? { callsign: patch.callsign } : {}),
+      ...(patch.position !== undefined ? { position: patch.position } : {}),
+      ...(patch.status !== undefined ? { status: patch.status } : {}),
+      ...(nextCanManageContent !== undefined ? { can_manage_content: nextCanManageContent } : {}),
+      ...(nextPermissions !== undefined ? { can_manage_news: nextPermissions.news } : {}),
+      ...(nextPermissions !== undefined ? { can_manage_tests: nextPermissions.tests } : {}),
+      ...(nextPermissions !== undefined ? { can_manage_uav: nextPermissions.uav } : {}),
+      ...(nextPermissions !== undefined ? { can_manage_counteraction: nextPermissions.counteraction } : {}),
+      ...(nextPermissions !== undefined ? { can_manage_users: nextPermissions.users } : {}),
+      ...(nextPermissions !== undefined ? { can_view_online: nextPermissions.online } : {}),
+      ...roleFragmentWithoutUserListColumn,
+    };
+    const withoutUserListCol = await supabase.from("app_users").update(granularWithoutUserListPayload).eq("id", userId);
+    if (!withoutUserListCol.error) {
+      if (process.env.NODE_ENV === "development") {
+        console.warn(
+          "[patchUser] Сохранены права без колонки can_view_user_list. Примените миграцию, чтобы работало право «Список пользователей».",
+        );
+      }
+      updateUser(userId, localCacheWithoutPersistedUserList);
+      await maybeLogPromotion();
+      return;
+    }
+
     // Backward-compatible fallback for older schemas without granular permission columns.
     const legacyPayload = {
       ...(patch.name !== undefined ? { name: patch.name } : {}),
