@@ -47,6 +47,7 @@ export default function AdminUsersPage() {
   const [info, setInfo] = useState("");
   const [permissionsTargetId, setPermissionsTargetId] = useState<string | null>(null);
   const [permissionDrafts, setPermissionDrafts] = useState<Record<string, UserRecord["permissions"]>>({});
+  const [savingPermissionsId, setSavingPermissionsId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [positionEditUser, setPositionEditUser] = useState<UserRecord | null>(null);
   const [positionDraft, setPositionDraft] = useState<Position | "">("");
@@ -85,6 +86,61 @@ export default function AdminUsersPage() {
   };
 
   const getDraftPermissions = (user: UserRecord) => permissionDrafts[user.id] ?? user.permissions;
+
+  const openPermissionsEditor = (user: UserRecord) => {
+    setPermissionDrafts((prev) => (prev[user.id] ? prev : { ...prev, [user.id]: { ...user.permissions } }));
+    setPermissionsTargetId((prev) => (prev === user.id ? null : user.id));
+  };
+
+  const savePermissions = async (user: UserRecord) => {
+    if (savingPermissionsId || user.role === "admin") return;
+    const nextPermissions = getDraftPermissions(user);
+    const nextCanManageContent =
+      nextPermissions.news || nextPermissions.tests || nextPermissions.uav || nextPermissions.counteraction;
+    setSavingPermissionsId(user.id);
+    setInfo("");
+    setUsers((prev) =>
+      prev.map((item) =>
+        item.id === user.id
+          ? { ...item, permissions: { ...nextPermissions }, canManageContent: nextCanManageContent }
+          : item,
+      ),
+    );
+    try {
+      await patchUser(user.id, {
+        permissions: nextPermissions,
+        canManageContent: nextCanManageContent,
+      });
+      setInfo("Права сохранены.");
+      setPermissionsTargetId(null);
+      await refresh();
+    } catch {
+      setInfo("Не удалось сохранить права. Проверьте интернет и повторите.");
+      await refresh(true);
+    } finally {
+      setSavingPermissionsId(null);
+    }
+  };
+
+  const deleteManagedUser = async (user: UserRecord) => {
+    if (deletingId) return;
+    const confirmed = window.confirm(`Удалить пользователя ${user.name} (@${user.login})?`);
+    if (!confirmed) return;
+    setDeletingId(user.id);
+    setInfo("");
+    try {
+      const result = await removeUser(user.id);
+      if (!result.ok) {
+        setInfo(result.error);
+        return;
+      }
+      setUsers((prev) => prev.filter((item) => item.id !== user.id));
+      setInfo("warning" in result && result.warning ? result.warning : "Пользователь удалён.");
+      await refresh(true);
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const applyRoleChange = async (user: UserRecord, nextRole: Role) => {
     if (!canGrantAdminRole || user.role === nextRole) return;
@@ -273,31 +329,10 @@ export default function AdminUsersPage() {
                 <button
                   className="btn btn-primary"
                   type="button"
-                  onClick={async () => {
-                    const nextPermissions = getDraftPermissions(permissionsTargetUser);
-                    const nextCanManageContent =
-                      nextPermissions.news || nextPermissions.tests || nextPermissions.uav || nextPermissions.counteraction;
-                    setUsers((prev) =>
-                      prev.map((item) =>
-                        item.id === permissionsTargetUser.id
-                          ? { ...item, permissions: { ...nextPermissions }, canManageContent: nextCanManageContent }
-                          : item,
-                      ),
-                    );
-                    try {
-                      await patchUser(permissionsTargetUser.id, {
-                        permissions: nextPermissions,
-                        canManageContent: nextCanManageContent,
-                      });
-                      setInfo("Права сохранены.");
-                      setPermissionsTargetId(null);
-                      await refresh();
-                    } catch {
-                      setInfo("Не удалось сохранить права. Проверьте интернет и повторите.");
-                    }
-                  }}
+                  disabled={savingPermissionsId === permissionsTargetUser.id}
+                  onClick={() => void savePermissions(permissionsTargetUser)}
                 >
-                  Сохранить
+                  {savingPermissionsId === permissionsTargetUser.id ? "Сохраняем..." : "Сохранить"}
                 </button>
               ) : (
                 <p className="page-subtitle admin-users-page__perm-hint">У администратора полный доступ по всем разделам.</p>
@@ -392,10 +427,7 @@ export default function AdminUsersPage() {
                           type="button"
                           title="Редактировать"
                           aria-label={`Редактировать права ${user.name}`}
-                          onClick={() => {
-                            setPermissionDrafts((prev) => (prev[user.id] ? prev : { ...prev, [user.id]: { ...user.permissions } }));
-                            setPermissionsTargetId((prev) => (prev === user.id ? null : user.id));
-                          }}
+                          onClick={() => openPermissionsEditor(user)}
                         >
                           ✏
                         </button>
@@ -407,23 +439,7 @@ export default function AdminUsersPage() {
                             disabled={deletingId === user.id}
                             title="Удалить"
                             aria-label={`Удалить ${user.name}`}
-                            onClick={async () => {
-                              const confirmed = window.confirm(`Удалить пользователя ${user.name} (@${user.login})?`);
-                              if (!confirmed) return;
-                              const userId = user.id;
-                              setDeletingId(userId);
-                              try {
-                                const result = await removeUser(userId);
-                                if (!result.ok) {
-                                  setInfo(result.error);
-                                  return;
-                                }
-                                setInfo("warning" in result && result.warning ? result.warning : "Пользователь удалён.");
-                                await refresh(true);
-                              } finally {
-                                setDeletingId(null);
-                              }
-                            }}
+                            onClick={() => void deleteManagedUser(user)}
                           >
                             🗑
                           </button>
@@ -492,9 +508,10 @@ export default function AdminUsersPage() {
                         style={{ width: 42, height: 38, padding: 0, fontSize: 16, lineHeight: 1 }}
                         type="button"
                         title="Редактировать"
-                        onClick={() => {
-                          setPermissionDrafts((prev) => (prev[user.id] ? prev : { ...prev, [user.id]: { ...user.permissions } }));
-                          setPermissionsTargetId((prev) => (prev === user.id ? null : user.id));
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          openPermissionsEditor(user);
                         }}
                       >
                         ✏
@@ -506,21 +523,10 @@ export default function AdminUsersPage() {
                           type="button"
                           disabled={deletingId === user.id}
                           title="Удалить"
-                          onClick={async () => {
-                            const confirmed = window.confirm(`Удалить пользователя ${user.name} (@${user.login})?`);
-                            if (!confirmed) return;
-                            setDeletingId(user.id);
-                            try {
-                              const result = await removeUser(user.id);
-                              if (!result.ok) {
-                                setInfo(result.error);
-                                return;
-                              }
-                              setInfo("warning" in result && result.warning ? result.warning : "Пользователь удалён.");
-                              await refresh(true);
-                            } finally {
-                              setDeletingId(null);
-                            }
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          void deleteManagedUser(user);
                           }}
                         >
                           🗑
