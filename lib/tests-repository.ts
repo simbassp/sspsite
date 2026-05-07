@@ -384,23 +384,37 @@ export async function beginFinalAttempt(userId: string) {
   if (!isSupabaseConfigured) {
     return startFinalAttempt(userId);
   }
-  const supabase = getSupabaseBrowserClient();
   const payload = {
     user_id: userId,
     started_at: new Date().toISOString(),
     question_index: 0,
     answers: {},
   };
-  const { error } = await supabase.from("final_attempts").upsert(payload, { onConflict: "user_id" });
-  if (error) {
+  try {
+    const response = await fetch("/api/tests/final-attempt", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        startedAt: payload.started_at,
+        questionIndex: 0,
+        answers: {},
+      }),
+    });
+    const result = (await response.json()) as { ok?: boolean; attempt?: FinalAttemptRow };
+    if (!response.ok || !result.ok) {
+      return startFinalAttempt(userId);
+    }
+    return mapAttempt(
+      (result.attempt || payload) as unknown as {
+        user_id: string;
+        started_at: string;
+        question_index: number;
+        answers: Record<string, string>;
+      },
+    );
+  } catch {
     return startFinalAttempt(userId);
   }
-  return {
-    userId,
-    startedAt: payload.started_at,
-    questionIndex: 0,
-    answers: {},
-  } satisfies FinalAttemptState;
 }
 
 export async function persistFinalAttempt(state: FinalAttemptState) {
@@ -408,17 +422,21 @@ export async function persistFinalAttempt(state: FinalAttemptState) {
     saveFinalAttempt(state);
     return;
   }
-  const supabase = getSupabaseBrowserClient();
-  const { error } = await supabase.from("final_attempts").upsert(
-    {
-      user_id: state.userId,
-      started_at: state.startedAt,
-      question_index: state.questionIndex,
-      answers: state.answers,
-    },
-    { onConflict: "user_id" },
-  );
-  if (error) {
+  try {
+    const response = await fetch("/api/tests/final-attempt", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        startedAt: state.startedAt,
+        questionIndex: state.questionIndex,
+        answers: state.answers,
+      }),
+    });
+    const result = (await response.json()) as { ok?: boolean };
+    if (!response.ok || !result.ok) {
+      saveFinalAttempt(state);
+    }
+  } catch {
     saveFinalAttempt(state);
   }
 }
@@ -428,22 +446,12 @@ export async function loadFinalAttempt(userId: string) {
     return getFinalAttempt(userId);
   }
   try {
-    const supabase = getSupabaseBrowserClient();
-    const { data, error } = await withTimeoutAndRetry(
-      () =>
-        supabase
-          .from("final_attempts")
-          .select("user_id,started_at,question_index,answers")
-          .eq("user_id", userId)
-          .maybeSingle(),
-      6000,
-      1,
-      "load_final_attempt_timeout",
-    );
-    if (error || !data) {
+    const response = await fetch("/api/tests/final-attempt", { cache: "no-store" });
+    const payload = (await response.json()) as { ok?: boolean; attempt?: FinalAttemptRow | null };
+    if (!response.ok || !payload.ok || !payload.attempt) {
       return getFinalAttempt(userId);
     }
-    return mapAttempt(data as FinalAttemptRow);
+    return mapAttempt(payload.attempt);
   } catch {
     return getFinalAttempt(userId);
   }
@@ -488,7 +496,9 @@ export async function finishFinalAttempt(
     return;
   }
 
-  await supabase.from("final_attempts").delete().eq("user_id", userId);
+  try {
+    await fetch("/api/tests/final-attempt", { method: "DELETE" });
+  } catch {}
 }
 
 export async function forceFailFinalAttempt(userId: string) {
@@ -497,14 +507,16 @@ export async function forceFailFinalAttempt(userId: string) {
     return;
   }
   const supabase = getSupabaseBrowserClient();
-  const [{ data: existing }, { data: cfgRow }] = await Promise.all([
-    supabase.from("final_attempts").select("user_id").eq("user_id", userId).maybeSingle(),
+  const [existing, cfgRes] = await Promise.all([
+    loadFinalAttempt(userId),
     supabase.from("test_settings").select("final_question_count").eq("id", 1).maybeSingle(),
   ]);
-
   if (!existing) return;
 
-  const questionsTotal = Math.max(1, Number((cfgRow as { final_question_count?: number } | null)?.final_question_count ?? 15));
+  const questionsTotal = Math.max(
+    1,
+    Number(((cfgRes.data || null) as { final_question_count?: number } | null)?.final_question_count ?? 15),
+  );
 
   const insert = await insertTestResultCompat(supabase, {
     user_id: userId,
@@ -520,7 +532,9 @@ export async function forceFailFinalAttempt(userId: string) {
     return;
   }
 
-  await supabase.from("final_attempts").delete().eq("user_id", userId);
+  try {
+    await fetch("/api/tests/final-attempt", { method: "DELETE" });
+  } catch {}
 }
 
 export async function fetchTestQuestions(type: TestType) {

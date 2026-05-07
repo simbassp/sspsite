@@ -31,6 +31,24 @@ const initialDraft: DraftQuestion = {
   manualTopic: "uav_ttx",
 };
 
+function resolveBulkTimeLimit(questions: TestQuestion[]) {
+  if (!questions.length) return 20;
+  const freq = new Map<number, number>();
+  for (const q of questions) {
+    const sec = Math.max(5, Number(q.timeLimitSec || 20));
+    freq.set(sec, (freq.get(sec) || 0) + 1);
+  }
+  let winner = 20;
+  let winnerCount = -1;
+  for (const [sec, count] of freq.entries()) {
+    if (count > winnerCount) {
+      winner = sec;
+      winnerCount = count;
+    }
+  }
+  return winner;
+}
+
 export default function AdminTestsPage() {
   const [questions, setQuestions] = useState<TestQuestion[]>([]);
   const [config, setConfig] = useState<TestConfig>(DEFAULT_TEST_CONFIG);
@@ -64,8 +82,7 @@ export default function AdminTestsPage() {
         if (!response.ok || !payload.ok) {
           throw new Error(payload.error || "admin_tests_bootstrap_failed");
         }
-        setQuestions(
-          (payload.questions || []).map((q) => ({
+        const nextQuestions = (payload.questions || []).map((q) => ({
             id: String(q.id),
             type: q.type === "trial" ? "trial" : "final",
             text: String(q.text || ""),
@@ -79,8 +96,9 @@ export default function AdminTestsPage() {
               (q as { manual_topic?: unknown }).manual_topic ??
                 (q as { manualTopic?: unknown }).manualTopic,
             ),
-          })) as TestQuestion[],
-        );
+          })) as TestQuestion[];
+        setQuestions(nextQuestions);
+        setBulkTimeLimitSec(resolveBulkTimeLimit(nextQuestions));
         if (payload.config) {
           const cfg = payload.config as Record<string, unknown>;
           setConfig(
@@ -119,7 +137,9 @@ export default function AdminTestsPage() {
       setMessage(payload.error || "Не удалось загрузить банк вопросов.");
       return;
     }
-    setQuestions(payload.questions || []);
+    const nextQuestions = payload.questions || [];
+    setQuestions(nextQuestions);
+    setBulkTimeLimitSec(resolveBulkTimeLimit(nextQuestions));
   };
 
   const filteredQuestions = useMemo(() => {
@@ -230,7 +250,9 @@ export default function AdminTestsPage() {
       setMessage(draft.id ? "Вопрос обновлен." : "Вопрос добавлен.");
       setDraft(initialDraft);
       setIsEditingTimeLimit(false);
-      setQuestions(payload.questions || []);
+      const nextQuestions = payload.questions || [];
+      setQuestions(nextQuestions);
+      setBulkTimeLimitSec(resolveBulkTimeLimit(nextQuestions));
     } finally {
       setIsSavingQuestion(false);
     }
@@ -266,7 +288,9 @@ export default function AdminTestsPage() {
       setIsEditingTimeLimit(false);
     }
     if (response.ok && payload.ok) {
-      setQuestions(payload.questions || []);
+      const nextQuestions = payload.questions || [];
+      setQuestions(nextQuestions);
+      setBulkTimeLimitSec(resolveBulkTimeLimit(nextQuestions));
     } else {
       await refreshQuestions();
     }
@@ -288,7 +312,9 @@ export default function AdminTestsPage() {
         : payload.error || "Не удалось изменить статус вопроса.",
     );
     if (response.ok && payload.ok) {
-      setQuestions(payload.questions || []);
+      const nextQuestions = payload.questions || [];
+      setQuestions(nextQuestions);
+      setBulkTimeLimitSec(resolveBulkTimeLimit(nextQuestions));
     } else {
       await refreshQuestions();
     }
@@ -323,7 +349,9 @@ export default function AdminTestsPage() {
         );
         return;
       }
-      setQuestions(payload.questions || []);
+      const nextQuestions = payload.questions || [];
+      setQuestions(nextQuestions);
+      setBulkTimeLimitSec(resolveBulkTimeLimit(nextQuestions));
       setMessage("Время обновлено для всех вопросов в банке.");
     } finally {
       setIsApplyingBulkTime(false);
