@@ -214,8 +214,8 @@ export default function AdminUsersPage() {
     const labels = permissionOptions
       .filter((opt) => user.permissions[opt.key])
       .map((opt) => {
-        if (opt.key === "news") return "Админ";
-        if (opt.key === "tests") return "Тест";
+        if (opt.key === "news") return "Новости";
+        if (opt.key === "tests") return "Тесты";
         if (opt.key === "results") return "Рез.";
         if (opt.key === "uav") return "БПЛА";
         if (opt.key === "counteraction") return "Против.";
