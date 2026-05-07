@@ -120,7 +120,11 @@ export async function DELETE(_request: Request, context: { params: Promise<{ use
   const { userId } = await context.params;
   const supabase = getServerSupabaseServiceClient();
 
-  const target = await supabase.from("app_users").select("id,name,callsign,role").eq("id", userId).maybeSingle();
+  const target = await supabase
+    .from("app_users")
+    .select("id,auth_user_id,name,callsign,role")
+    .eq("id", userId)
+    .maybeSingle();
   if (target.error) return Response.json({ ok: false, error: target.error.message }, { status: 400 });
   if (!target.data) return Response.json({ ok: false, error: "user_not_found" }, { status: 404 });
   if (target.data.role === "admin") {
@@ -135,6 +139,27 @@ export async function DELETE(_request: Request, context: { params: Promise<{ use
       return Response.json({ ok: false, error: fallbackDelete.error.message || rpc.error?.message || "delete_failed" }, { status: 400 });
     }
     warning = rpc.error?.message || "rpc_fallback_delete";
+  }
+
+  // Ensure the profile row is actually gone before reporting success.
+  const stillExists = await supabase.from("app_users").select("id").eq("id", userId).maybeSingle();
+  if (stillExists.error) {
+    return Response.json({ ok: false, error: stillExists.error.message }, { status: 400 });
+  }
+  if (stillExists.data) {
+    return Response.json({ ok: false, error: "Пользователь не удалён из app_users." }, { status: 400 });
+  }
+
+  // Also remove Supabase auth user if linked, so it disappears from Authentication/users list.
+  const authUserId =
+    target.data.auth_user_id != null && String(target.data.auth_user_id).trim()
+      ? String(target.data.auth_user_id)
+      : null;
+  if (authUserId) {
+    const authDelete = await supabase.auth.admin.deleteUser(authUserId);
+    if (authDelete.error) {
+      warning = warning ? `${warning}; auth_delete_failed: ${authDelete.error.message}` : `auth_delete_failed: ${authDelete.error.message}`;
+    }
   }
 
   await supabase.from("dashboard_events").insert({
