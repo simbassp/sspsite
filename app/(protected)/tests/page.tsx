@@ -34,11 +34,6 @@ function pickRandomQuestions(bank: TestQuestion[], count: number) {
   return cloned.slice(0, Math.max(1, Math.min(count, cloned.length)));
 }
 
-function applySessionTimeLimits(questions: TestQuestion[], sec: number): TestQuestion[] {
-  const t = Math.max(5, Math.floor(sec));
-  return questions.map((q) => ({ ...q, timeLimitSec: t }));
-}
-
 type TrialFeedback = { chosen: number | null; correct: number };
 
 type FinalTestSummary = {
@@ -601,10 +596,7 @@ export default function TestsPage() {
       );
       return;
     }
-    const randomQuestions = applySessionTimeLimits(
-      pickRandomQuestions(pool, testConfig.trialQuestionCount),
-      testConfig.timePerQuestionSec,
-    );
+    const randomQuestions = pickRandomQuestions(pool, testConfig.trialQuestionCount);
     const first = randomQuestions[0];
     expireHandledForQuestionIdRef.current = null;
     setTrialFeedback(null);
@@ -643,10 +635,7 @@ export default function TestsPage() {
       );
       return;
     }
-    const randomQuestions = applySessionTimeLimits(
-      pickRandomQuestions(pool, testConfig.finalQuestionCount),
-      testConfig.timePerQuestionSec,
-    );
+    const randomQuestions = pickRandomQuestions(pool, testConfig.finalQuestionCount);
     const first = randomQuestions[0];
     await beginFinalAttempt(session.id);
     expireHandledForQuestionIdRef.current = null;
@@ -681,10 +670,7 @@ export default function TestsPage() {
       <div className="tests-page-head">
         <h1 className="page-title">Тестирование</h1>
         <p className="page-subtitle">
-          {testConfig.uavAutoGeneration
-            ? "В тест попадают вопросы из ТТХ карточек БПЛА и активные вопросы из банка администратора."
-            : "Используются только вопросы из банка в «Админ / Тесты»."}{" "}
-          Случайная выборка. На каждый вопрос — <strong>{testConfig.timePerQuestionSec}</strong> сек (задаётся в админке).
+          При запуске теста вопросы всегда разные, время ответа на вопрос ограничено.
         </p>
       </div>
 

@@ -324,14 +324,25 @@ export async function PATCH(request: Request) {
   const supabase = getServerSupabaseServiceClient();
   if (applyToAll) {
     const timeLimitSec = Math.max(5, Number(body.timeLimitSec ?? 20));
-    const bulkAttempts = [
-      () => supabase.from("test_questions").update({ time_limit_sec: timeLimitSec }).neq("id", ""),
-      () => supabase.from("test_questions").update({ time_limit_sec: timeLimitSec }).neq("question_id", ""),
-      () => supabase.from("test_questions").update({ time_sec: timeLimitSec }).neq("id", ""),
-      () => supabase.from("test_questions").update({ time_limit: timeLimitSec }).neq("id", ""),
-    ];
-    for (const attempt of bulkAttempts) {
-      const res = await attempt();
+    const columns = await getQuestionColumns(supabase);
+    const canIntrospect = Boolean(columns && columns.length);
+    const columnSet = new Set((columns || []).map((c) => c.column_name.toLowerCase()));
+    const bulkPayload: Record<string, number> = {};
+    const setIfExists = (column: string, value: number) => {
+      if (!canIntrospect || columnSet.has(column)) bulkPayload[column] = value;
+    };
+    setIfExists("time_limit_sec", timeLimitSec);
+    setIfExists("time_sec", timeLimitSec);
+    setIfExists("time_limit", timeLimitSec);
+    if (!Object.keys(bulkPayload).length) {
+      return Response.json({ ok: false, error: "bulk_time_update_no_supported_column" }, { status: 400 });
+    }
+
+    const candidateFilters = canIntrospect
+      ? ["id", "question_id", "order_index", "created_at"].filter((column) => columnSet.has(column))
+      : ["id", "question_id", "order_index", "created_at"];
+    for (const filterColumn of candidateFilters) {
+      const res = await supabase.from("test_questions").update(bulkPayload).not(filterColumn, "is", null);
       if (!res.error) {
         const listed = await listQuestions();
         return Response.json({ ok: true, questions: listed.data });
