@@ -626,9 +626,13 @@ export default function AdminTestsPage() {
                 id="time-limit"
                 className="input"
                 type="number"
-                min={5}
                 value={draft.timeLimitSec}
-                onChange={(e) => setDraft((prev) => ({ ...prev, timeLimitSec: Number(e.target.value) || 5 }))}
+                onChange={(e) =>
+                  setDraft((prev) => ({
+                    ...prev,
+                    timeLimitSec: Number(e.target.value) || 0,
+                  }))
+                }
               />
             )}
 
@@ -704,10 +708,9 @@ export default function AdminTestsPage() {
               id="bulk-time-limit"
               className="input"
               type="number"
-              min={5}
               max={600}
               value={bulkTimeLimitSec}
-              onChange={(e) => setBulkTimeLimitSec(Math.max(5, Number(e.target.value) || 5))}
+              onChange={(e) => setBulkTimeLimitSec(Number(e.target.value) || 0)}
             />
             <button
               className="btn btn-primary"
