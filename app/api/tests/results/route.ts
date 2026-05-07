@@ -11,21 +11,12 @@ type ResultMeta = {
   durationSeconds?: number;
 };
 
-type ResultsRequestBody =
-  | {
-      kind?: "trial";
-      score?: number;
-      meta?: ResultMeta;
-    }
-  | {
-      kind: "final";
-      score?: number;
-      passed?: boolean;
-      meta?: ResultMeta;
-    }
-  | {
-      kind: "force-fail-final";
-    };
+type ResultsRequestBody = {
+  kind?: "trial" | "final" | "force-fail-final";
+  score?: number;
+  passed?: boolean;
+  meta?: ResultMeta;
+};
 
 function isMissingColumnError(message: string | undefined) {
   const m = (message || "").toLowerCase();
