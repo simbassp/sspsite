@@ -45,6 +45,8 @@ export default function AdminTestsPage() {
   const [bankTopicFilter, setBankTopicFilter] = useState<"all" | ManualQuestionTopic>("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [isClearingManual, setIsClearingManual] = useState(false);
+  const [bulkTimeLimitSec, setBulkTimeLimitSec] = useState(20);
+  const [isApplyingBulkTime, setIsApplyingBulkTime] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -289,6 +291,31 @@ export default function AdminTestsPage() {
       setQuestions(payload.questions || []);
     } else {
       await refreshQuestions();
+    }
+  };
+
+  const onApplyTimeToAllQuestions = async () => {
+    if (isApplyingBulkTime) return;
+    setMessage("");
+    setIsApplyingBulkTime(true);
+    try {
+      const response = await fetch("/api/admin/tests/questions", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          applyToAll: true,
+          timeLimitSec: Math.max(5, Number(bulkTimeLimitSec) || 5),
+        }),
+      });
+      const payload = (await response.json()) as { ok?: boolean; error?: string; questions?: TestQuestion[] };
+      if (!response.ok || !payload.ok) {
+        setMessage(payload.error || "Не удалось применить время ко всем вопросам.");
+        return;
+      }
+      setQuestions(payload.questions || []);
+      setMessage("Время обновлено для всех вопросов в банке.");
+    } finally {
+      setIsApplyingBulkTime(false);
     }
   };
 
@@ -669,6 +696,28 @@ export default function AdminTestsPage() {
           >
             {isClearingManual ? "Очищаем..." : "Удалить все ручные вопросы"}
           </button>
+          <div className="form" style={{ marginTop: 10 }}>
+            <label className="label" htmlFor="bulk-time-limit">
+              Время на ответ для всех вопросов банка (сек)
+            </label>
+            <input
+              id="bulk-time-limit"
+              className="input"
+              type="number"
+              min={5}
+              max={600}
+              value={bulkTimeLimitSec}
+              onChange={(e) => setBulkTimeLimitSec(Math.max(5, Number(e.target.value) || 5))}
+            />
+            <button
+              className="btn btn-primary"
+              type="button"
+              onClick={() => void onApplyTimeToAllQuestions()}
+              disabled={isApplyingBulkTime || !questions.length}
+            >
+              {isApplyingBulkTime ? "Применяем..." : "Применить ко всем вопросам"}
+            </button>
+          </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8, alignItems: "center" }}>
             <span className="label" style={{ margin: 0 }}>
               Тема:

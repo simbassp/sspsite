@@ -319,11 +319,30 @@ export async function PATCH(request: Request) {
   if (!session || !canManageTests(session)) {
     return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
   }
-  const body = (await request.json()) as { id?: string; isActive?: boolean };
+  const body = (await request.json()) as { id?: string; isActive?: boolean; applyToAll?: boolean; timeLimitSec?: number };
+  const applyToAll = body.applyToAll === true;
+  const supabase = getServerSupabaseServiceClient();
+  if (applyToAll) {
+    const timeLimitSec = Math.max(5, Number(body.timeLimitSec ?? 20));
+    const bulkAttempts = [
+      () => supabase.from("test_questions").update({ time_limit_sec: timeLimitSec }).neq("id", ""),
+      () => supabase.from("test_questions").update({ time_limit_sec: timeLimitSec }).neq("question_id", ""),
+      () => supabase.from("test_questions").update({ time_sec: timeLimitSec }).neq("id", ""),
+      () => supabase.from("test_questions").update({ time_limit: timeLimitSec }).neq("id", ""),
+    ];
+    for (const attempt of bulkAttempts) {
+      const res = await attempt();
+      if (!res.error) {
+        const listed = await listQuestions();
+        return Response.json({ ok: true, questions: listed.data });
+      }
+    }
+    return Response.json({ ok: false, error: "bulk_time_update_failed" }, { status: 400 });
+  }
+
   const id = String(body.id || "");
   if (!id) return Response.json({ ok: false, error: "missing_id" }, { status: 400 });
   const value = body.isActive !== false;
-  const supabase = getServerSupabaseServiceClient();
   const attempts = [
     () => supabase.from("test_questions").update({ is_active: value }).eq("id", id),
     () => supabase.from("test_questions").update({ active: value }).eq("id", id),
