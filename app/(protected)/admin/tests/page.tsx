@@ -307,9 +307,20 @@ export default function AdminTestsPage() {
           timeLimitSec: Math.max(5, Number(bulkTimeLimitSec) || 5),
         }),
       });
-      const payload = (await response.json()) as { ok?: boolean; error?: string; questions?: TestQuestion[] };
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        error?: string;
+        details?: string[];
+        questions?: TestQuestion[];
+      };
       if (!response.ok || !payload.ok) {
-        setMessage(payload.error || "Не удалось применить время ко всем вопросам.");
+        const details =
+          Array.isArray(payload.details) && payload.details.length ? ` ${payload.details.slice(0, 2).join(" | ")}` : "";
+        setMessage(
+          payload.error === "bulk_time_update_failed"
+            ? `Не удалось применить время ко всем вопросам.${details}`
+            : payload.error || "Не удалось применить время ко всем вопросам.",
+        );
         return;
       }
       setQuestions(payload.questions || []);

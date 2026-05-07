@@ -327,28 +327,31 @@ export async function PATCH(request: Request) {
     const columns = await getQuestionColumns(supabase);
     const canIntrospect = Boolean(columns && columns.length);
     const columnSet = new Set((columns || []).map((c) => c.column_name.toLowerCase()));
-    const bulkPayload: Record<string, number> = {};
-    const setIfExists = (column: string, value: number) => {
-      if (!canIntrospect || columnSet.has(column)) bulkPayload[column] = value;
-    };
-    setIfExists("time_limit_sec", timeLimitSec);
-    setIfExists("time_sec", timeLimitSec);
-    setIfExists("time_limit", timeLimitSec);
-    if (!Object.keys(bulkPayload).length) {
-      return Response.json({ ok: false, error: "bulk_time_update_no_supported_column" }, { status: 400 });
-    }
-
+    const candidateTimeColumns = canIntrospect
+      ? ["time_limit_sec", "time_sec", "time_limit"].filter((column) => columnSet.has(column))
+      : ["time_limit_sec", "time_sec", "time_limit"];
     const candidateFilters = canIntrospect
       ? ["id", "question_id", "order_index", "created_at"].filter((column) => columnSet.has(column))
       : ["id", "question_id", "order_index", "created_at"];
-    for (const filterColumn of candidateFilters) {
-      const res = await supabase.from("test_questions").update(bulkPayload).not(filterColumn, "is", null);
-      if (!res.error) {
-        const listed = await listQuestions();
-        return Response.json({ ok: true, questions: listed.data });
+    const errors: string[] = [];
+
+    for (const timeColumn of candidateTimeColumns) {
+      for (const filterColumn of candidateFilters) {
+        const res = await supabase
+          .from("test_questions")
+          .update({ [timeColumn]: timeLimitSec })
+          .not(filterColumn, "is", null);
+        if (!res.error) {
+          const listed = await listQuestions();
+          return Response.json({ ok: true, questions: listed.data });
+        }
+        errors.push(res.error.message);
       }
     }
-    return Response.json({ ok: false, error: "bulk_time_update_failed" }, { status: 400 });
+    return Response.json(
+      { ok: false, error: "bulk_time_update_failed", details: compactErrors(errors) },
+      { status: 400 },
+    );
   }
 
   const id = String(body.id || "");
