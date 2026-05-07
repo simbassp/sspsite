@@ -1084,12 +1084,33 @@ export async function removeInviteCode(code: string): Promise<{ ok: true } | { o
     return { ok: true as const };
   }
   const supabase = getSupabaseBrowserClient();
-  const pattern = inviteCodeIlikeExact(code);
-  const { data: found, error: findErr } = await supabase.from("registration_invites").select("code").ilike("code", pattern).limit(1);
-  if (findErr) return { ok: false as const, error: findErr.message || "Не удалось удалить код." };
-  if (!found?.length) return { ok: false as const, error: "Код не найден." };
-  const { error } = await supabase.from("registration_invites").delete().ilike("code", pattern);
-  if (error) return { ok: false as const, error: error.message || "Не удалось удалить код." };
+  const raw = code.trim();
+  const candidates = Array.from(new Set([raw, raw.toUpperCase(), raw.toLowerCase()])).filter(Boolean);
+  let deleted = false;
+  let lastError = "";
+
+  for (const candidate of candidates) {
+    const exactDelete = await supabase.from("registration_invites").delete().eq("code", candidate);
+    if (!exactDelete.error) {
+      deleted = true;
+      break;
+    }
+    lastError = exactDelete.error.message || lastError;
+  }
+
+  if (!deleted) {
+    const pattern = inviteCodeIlikeExact(raw);
+    const ilikeDelete = await supabase.from("registration_invites").delete().ilike("code", pattern);
+    if (ilikeDelete.error) {
+      const probe = await supabase.from("registration_invites").select("code").ilike("code", pattern).limit(1);
+      if (probe.error) return { ok: false as const, error: probe.error.message || ilikeDelete.error.message || "Не удалось удалить код." };
+      if (!probe.data?.length) return { ok: false as const, error: "Код не найден." };
+      return { ok: false as const, error: ilikeDelete.error.message || "Не удалось удалить код." };
+    }
+    deleted = true;
+  }
+
+  if (!deleted) return { ok: false as const, error: lastError || "Не удалось удалить код." };
   return { ok: true as const };
 }
 
