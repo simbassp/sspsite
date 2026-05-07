@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { parseSessionCookie } from "@/lib/auth";
 import { canAccessAdminPanel } from "@/lib/permissions";
 import { SESSION_COOKIE } from "@/lib/seed";
+import { clearSessionCookie } from "@/lib/auth";
+import { isSessionStillValid } from "@/lib/server-session-validation";
 
 const publicPaths = ["/login", "/register", "/reset-password"];
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   if (pathname.startsWith("/api/")) {
     return NextResponse.next();
@@ -17,7 +19,16 @@ export function proxy(request: NextRequest) {
       Boolean(request.nextUrl.searchParams.get("code")) ||
       Boolean(request.nextUrl.searchParams.get("token_hash")));
   const raw = request.cookies.get(SESSION_COOKIE)?.value;
-  const session = parseSessionCookie(raw);
+  let session = parseSessionCookie(raw);
+  if (session) {
+    const valid = await isSessionStillValid(session);
+    if (!valid) {
+      session = null;
+      const res = NextResponse.redirect(new URL("/login", request.url));
+      res.headers.append("Set-Cookie", clearSessionCookie());
+      return res;
+    }
+  }
 
   if (!session && !isPublic) {
     return NextResponse.redirect(new URL("/login", request.url));
