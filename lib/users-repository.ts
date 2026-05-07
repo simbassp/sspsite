@@ -1178,184 +1178,37 @@ export async function patchUser(
     return;
   }
 
-  const supabase = getSupabaseBrowserClient();
-  const nextPermissions = patch.permissions;
-  const nextCanManageContent =
-    nextPermissions !== undefined
-      ? nextPermissions.news || nextPermissions.tests || nextPermissions.uav || nextPermissions.counteraction
-      : patch.canManageContent;
-
-  const adminGrantDb = {
-    can_manage_content: true,
-    can_manage_news: true,
-    can_manage_tests: true,
-    can_manage_results: true,
-    can_manage_uav: true,
-    can_manage_counteraction: true,
-    can_manage_users: true,
-    can_view_user_list: true,
-    can_view_online: true,
-    can_reset_test_results: true,
-  } as const;
-
-  /** То же назначение админа, если в БД ещё нет колонки `can_view_user_list`. */
-  const adminGrantDbWithoutUserListColumn = {
-    can_manage_content: true,
-    can_manage_news: true,
-    can_manage_tests: true,
-    can_manage_results: true,
-    can_manage_uav: true,
-    can_manage_counteraction: true,
-    can_manage_users: true,
-    can_view_online: true,
-    can_reset_test_results: true,
-  } as const;
-
-  const roleFragment =
-    patch.role !== undefined
-      ? {
-          role: patch.role,
-          ...(patch.role === "admin" ? adminGrantDb : {}),
-        }
-      : {};
-
-  const payload = {
-    ...(patch.name !== undefined ? { name: patch.name } : {}),
-    ...(patch.callsign !== undefined ? { callsign: patch.callsign } : {}),
-    ...(patch.position !== undefined ? { position: patch.position } : {}),
-    ...(patch.status !== undefined ? { status: patch.status } : {}),
-    ...(nextCanManageContent !== undefined ? { can_manage_content: nextCanManageContent } : {}),
-    ...(nextPermissions !== undefined ? { can_manage_news: nextPermissions.news } : {}),
-    ...(nextPermissions !== undefined ? { can_manage_tests: nextPermissions.tests } : {}),
-    ...(nextPermissions !== undefined ? { can_manage_results: nextPermissions.results } : {}),
-    ...(nextPermissions !== undefined ? { can_manage_uav: nextPermissions.uav } : {}),
-    ...(nextPermissions !== undefined ? { can_manage_counteraction: nextPermissions.counteraction } : {}),
-    ...(nextPermissions !== undefined ? { can_manage_users: nextPermissions.users } : {}),
-    ...(nextPermissions !== undefined ? { can_view_user_list: nextPermissions.userList } : {}),
-    ...(nextPermissions !== undefined ? { can_view_online: nextPermissions.online } : {}),
-    ...(nextPermissions !== undefined ? { can_reset_test_results: nextPermissions.resetResults } : {}),
-    ...roleFragment,
-  };
-  const prevUser = listUsers().find((u) => u.id === userId) || null;
-
-  const localCacheWithoutPersistedUserList =
-    nextPermissions !== undefined
-      ? { ...patchForLocalCache, permissions: { ...nextPermissions, userList: false } }
-      : patchForLocalCache;
-
-  const maybeLogPromotion = async () => {
-    if (patch.position === undefined || !prevUser || prevUser.position === patch.position || patch.status === "inactive") {
-      return;
-    }
-    try {
-      await supabase.from("dashboard_events").insert({
-        kind: "position_promoted",
-        payload: {
-          user_id: userId,
-          name: patch.name ?? prevUser.name,
-          callsign: patch.callsign ?? prevUser.callsign,
-          position: patch.position,
-          previous_position: prevUser.position,
-        },
-      });
-    } catch {
-      // Event logging must not break user updates.
-    }
-  };
-
-  const { error } = await supabase.from("app_users").update(payload).eq("id", userId);
-  if (error) {
-    if (nextPermissions !== undefined && restErrorMissingColumn(error.message, "can_view_user_list")) {
-      const payloadSkipUserList = { ...payload } as Record<string, unknown>;
-      delete payloadSkipUserList.can_view_user_list;
-      const retryNoUserListCol = await supabase.from("app_users").update(payloadSkipUserList).eq("id", userId);
-      if (!retryNoUserListCol.error) {
-        if (process.env.NODE_ENV === "development") {
-          console.warn(
-            "[patchUser] Выполните миграцию с колонкой can_view_user_list — право «Список пользователей» не записано в БД.",
-          );
-        }
-        updateUser(userId, localCacheWithoutPersistedUserList);
-        await maybeLogPromotion();
-        return;
-      }
-    }
-
-    const granularWithoutResultsPayload = {
-      ...(patch.name !== undefined ? { name: patch.name } : {}),
-      ...(patch.callsign !== undefined ? { callsign: patch.callsign } : {}),
-      ...(patch.position !== undefined ? { position: patch.position } : {}),
-      ...(patch.status !== undefined ? { status: patch.status } : {}),
-      ...(nextCanManageContent !== undefined ? { can_manage_content: nextCanManageContent } : {}),
-      ...(nextPermissions !== undefined ? { can_manage_news: nextPermissions.news } : {}),
-      ...(nextPermissions !== undefined ? { can_manage_tests: nextPermissions.tests } : {}),
-      ...(nextPermissions !== undefined ? { can_manage_uav: nextPermissions.uav } : {}),
-      ...(nextPermissions !== undefined ? { can_manage_counteraction: nextPermissions.counteraction } : {}),
-      ...(nextPermissions !== undefined ? { can_manage_users: nextPermissions.users } : {}),
-      ...(nextPermissions !== undefined ? { can_view_user_list: nextPermissions.userList } : {}),
-      ...(nextPermissions !== undefined ? { can_view_online: nextPermissions.online } : {}),
-      ...roleFragment,
-    };
-    const withoutResults = await supabase.from("app_users").update(granularWithoutResultsPayload).eq("id", userId);
-    if (!withoutResults.error) {
-      updateUser(userId, patchForLocalCache);
-      await maybeLogPromotion();
-      return;
-    }
-
-    const roleFragmentWithoutUserListColumn =
-      patch.role !== undefined
-        ? {
-            role: patch.role,
-            ...(patch.role === "admin" ? adminGrantDbWithoutUserListColumn : {}),
-          }
-        : {};
-
-    const granularWithoutUserListPayload = {
-      ...(patch.name !== undefined ? { name: patch.name } : {}),
-      ...(patch.callsign !== undefined ? { callsign: patch.callsign } : {}),
-      ...(patch.position !== undefined ? { position: patch.position } : {}),
-      ...(patch.status !== undefined ? { status: patch.status } : {}),
-      ...(nextCanManageContent !== undefined ? { can_manage_content: nextCanManageContent } : {}),
-      ...(nextPermissions !== undefined ? { can_manage_news: nextPermissions.news } : {}),
-      ...(nextPermissions !== undefined ? { can_manage_tests: nextPermissions.tests } : {}),
-      ...(nextPermissions !== undefined ? { can_manage_uav: nextPermissions.uav } : {}),
-      ...(nextPermissions !== undefined ? { can_manage_counteraction: nextPermissions.counteraction } : {}),
-      ...(nextPermissions !== undefined ? { can_manage_users: nextPermissions.users } : {}),
-      ...(nextPermissions !== undefined ? { can_view_online: nextPermissions.online } : {}),
-      ...roleFragmentWithoutUserListColumn,
-    };
-    const withoutUserListCol = await supabase.from("app_users").update(granularWithoutUserListPayload).eq("id", userId);
-    if (!withoutUserListCol.error) {
-      if (process.env.NODE_ENV === "development") {
-        console.warn(
-          "[patchUser] Сохранены права без колонки can_view_user_list. Примените миграцию, чтобы работало право «Список пользователей».",
-        );
-      }
-      updateUser(userId, localCacheWithoutPersistedUserList);
-      await maybeLogPromotion();
-      return;
-    }
-
-    // Backward-compatible fallback for older schemas without granular permission columns.
-    const legacyPayload = {
-      ...(patch.name !== undefined ? { name: patch.name } : {}),
-      ...(patch.callsign !== undefined ? { callsign: patch.callsign } : {}),
-      ...(patch.position !== undefined ? { position: patch.position } : {}),
-      ...(patch.status !== undefined ? { status: patch.status } : {}),
-      ...(nextCanManageContent !== undefined ? { can_manage_content: nextCanManageContent } : {}),
-      ...roleFragment,
-    };
-    const fallback = await supabase.from("app_users").update(legacyPayload).eq("id", userId);
-    if (fallback.error) {
+  try {
+    const response = await fetch(`/api/admin/users/${encodeURIComponent(userId)}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+    const payload = (await response.json()) as { ok?: boolean; error?: string };
+    if (response.ok && payload.ok) {
       updateUser(userId, patchForLocalCache);
       return;
     }
-    updateUser(userId, patchForLocalCache);
-    await maybeLogPromotion();
-  } else {
-    updateUser(userId, patchForLocalCache);
-    await maybeLogPromotion();
+    const supabase = getSupabaseBrowserClient();
+    const nextPermissions = patch.permissions;
+    const nextCanManageContent =
+      nextPermissions !== undefined
+        ? nextPermissions.news || nextPermissions.tests || nextPermissions.uav || nextPermissions.counteraction
+        : patch.canManageContent;
+    const fallbackPayload = {
+      ...(patch.name !== undefined ? { name: patch.name } : {}),
+      ...(patch.callsign !== undefined ? { callsign: patch.callsign } : {}),
+      ...(patch.position !== undefined ? { position: patch.position } : {}),
+      ...(patch.status !== undefined ? { status: patch.status } : {}),
+      ...(nextCanManageContent !== undefined ? { can_manage_content: nextCanManageContent } : {}),
+      ...(patch.role !== undefined ? { role: patch.role } : {}),
+    };
+    const fallback = await supabase.from("app_users").update(fallbackPayload).eq("id", userId);
+    if (!fallback.error) {
+      updateUser(userId, patchForLocalCache);
+    }
+  } catch {
+    // keep UI stable on transient failures
   }
 }
 
@@ -1374,57 +1227,27 @@ export async function removeUser(userId: string): Promise<
     return { ok: true as const };
   }
 
-  const supabase = getSupabaseBrowserClient();
-  const targetUser = targetPrecheck;
-  let serverWarning: string | undefined;
-
   try {
-    const { data, error } = await withTimeout(
-      supabase.rpc("admin_delete_user", { p_user_id: userId }),
+    const api = await withTimeout(
+      fetch(`/api/admin/users/${encodeURIComponent(userId)}`, { method: "DELETE" }),
       REMOVE_USER_TIMEOUT_MS,
       "remove_user_timeout",
     );
-    const rpcOk = !error && (data as unknown) === true;
-    if (!rpcOk) {
-      const { error: delErr } = await withTimeout(
-        supabase.from("app_users").delete().eq("id", userId),
-        REMOVE_USER_TIMEOUT_MS,
-        "remove_user_delete_timeout",
-      );
-      if (delErr) {
-        serverWarning = delErr.message || error?.message || "server_delete_failed";
-      }
+    const payload = (await api.json()) as { ok?: boolean; error?: string; warning?: string | null };
+    if (!api.ok || !payload.ok) {
+      return { ok: false as const, error: payload.error || "server_delete_failed" };
     }
+    deleteUser(userId);
+    if (payload.warning) {
+      return { ok: true as const, warning: `Список на устройстве обновлён. Сервер: ${payload.warning}` };
+    }
+    return { ok: true as const };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    serverWarning = serverWarning || msg;
+    return { ok: false as const, error: msg || "remove_user_failed" };
   } finally {
-    // Всегда чистим локальный кэш, иначе «фантомы» остаются в UI при сбоях/зависаниях RPC
-    deleteUser(userId);
+    // no-op
   }
-
-  if (targetUser) {
-    try {
-      await supabase.from("dashboard_events").insert({
-        kind: "user_deleted",
-        payload: {
-          user_id: targetUser.id,
-          name: targetUser.name,
-          callsign: targetUser.callsign,
-        },
-      });
-    } catch {
-      // Event logging must not break deletion flow.
-    }
-  }
-
-  if (serverWarning) {
-    return {
-      ok: true as const,
-      warning: `Список на устройстве обновлён. Сервер: ${serverWarning}`,
-    };
-  }
-  return { ok: true as const };
 }
 
 export async function logoutUser() {
