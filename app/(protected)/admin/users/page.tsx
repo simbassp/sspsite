@@ -34,7 +34,8 @@ const fullAdminPermissions = {
 } as const satisfies UserRecord["permissions"];
 
 export default function AdminUsersPage() {
-  const session = useMemo(() => readClientSession(), []);
+  const [isHydrated, setIsHydrated] = useState(false);
+  const session = useMemo(() => (isHydrated ? readClientSession() : null), [isHydrated]);
   const canEditUsers = session ? canManageUsers(session) : false;
   /** Только полные админы по пользователям видят сводку прав; режим «только список» — без этой колонки. */
   const showPermissionsColumn = canEditUsers;
@@ -55,8 +56,22 @@ export default function AdminUsersPage() {
   const permissionEditorRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    void fetchUsers().then((next) => setUsers(next));
+    setIsHydrated(true);
   }, []);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    void fetchUsers().then((next) => setUsers(next));
+  }, [isHydrated]);
+
+  if (!isHydrated) {
+    return (
+      <section className="admin-users-page">
+        <h1 className="page-title">Админ / Пользователи</h1>
+        <p className="page-subtitle">Загрузка...</p>
+      </section>
+    );
+  }
 
   const refresh = async (force = false) => {
     const next = await fetchUsers();

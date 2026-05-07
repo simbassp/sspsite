@@ -39,14 +39,11 @@ export async function GET() {
     let onlineFromFlagOnly = false;
     let dutyFromDb = true;
     if (primaryQ.error && isMissingColumnError(primaryQ.error.message)) {
-      dutyFromDb = false;
-      const fallbackQ = await supabase
-        .from("app_users")
-        .select("id,name,callsign,position,role,status,can_manage_content,is_online")
-        .limit(1000);
+      const fallbackQ = await supabase.from("app_users").select("*").limit(1000);
       rows = (fallbackQ.data || []) as Array<Record<string, unknown>>;
       queryError = fallbackQ.error?.message || null;
-      onlineFromFlagOnly = true;
+      dutyFromDb = rows.some((row) => Object.prototype.hasOwnProperty.call(row, "duty_location"));
+      onlineFromFlagOnly = !rows.some((row) => Object.prototype.hasOwnProperty.call(row, "last_seen_at"));
     }
     if (queryError) return Response.json({ ok: false, error: queryError }, { status: 500 });
     const normalized = rows.map((r) => ({
