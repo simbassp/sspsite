@@ -64,15 +64,6 @@ export default function AdminUsersPage() {
     void fetchUsers().then((next) => setUsers(next));
   }, [isHydrated]);
 
-  if (!isHydrated) {
-    return (
-      <section className="admin-users-page">
-        <h1 className="page-title">Админ / Пользователи</h1>
-        <p className="page-subtitle">Загрузка...</p>
-      </section>
-    );
-  }
-
   const refresh = async (force = false) => {
     const next = await fetchUsers();
     setUsers(next);
@@ -272,6 +263,9 @@ export default function AdminUsersPage() {
           : "Просмотр списка и профилей без изменения прав и данных."}
       </p>
 
+      {!isHydrated ? (
+        <p className="page-subtitle">Загрузка...</p>
+      ) : (
       <div className="grid grid-two admin-users-page__filters">
         <input
           className="input"
@@ -295,9 +289,10 @@ export default function AdminUsersPage() {
           <option value="admin">Администратор</option>
         </select>
       </div>
+      )}
       {info && <p className="page-subtitle admin-users-page__info">{info}</p>}
 
-      {canEditUsers && permissionsTargetUser && (
+      {isHydrated && canEditUsers && permissionsTargetUser && (
         <div className="card admin-users-page__permissions-editor" ref={permissionEditorRef}>
           <div className="card-body">
             <div className="admin-users-person">
@@ -360,6 +355,7 @@ export default function AdminUsersPage() {
         </div>
       )}
 
+      {isHydrated && (
       <div className="admin-users-table-wrap card">
         <div className="card-body">
           <table className="admin-users-table">
@@ -573,8 +569,9 @@ export default function AdminUsersPage() {
           </div>
         </div>
       </div>
+      )}
 
-      {positionEditUser && (
+      {isHydrated && positionEditUser && (
         <div
           role="dialog"
           aria-modal="true"
