@@ -844,7 +844,7 @@ export default function TestsPage() {
               </span>
               <div>
                 <p>Доступно время</p>
-                <strong>{activeTest ? `${timeLeft} c` : "—"}</strong>
+                <strong>{Math.max(1, Number(testConfig.timePerQuestionSec || 0))} сек</strong>
               </div>
             </div>
             <div className="tests-ref-metric">
