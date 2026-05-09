@@ -1999,3 +1999,241 @@ html[data-theme="dark"] .trial-feedback-btn--dim {
     white-space: normal;
   }
 }
+
+/* Tests page redesign (reference layout) */
+.tests-ref-info {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  border: 1px solid color-mix(in srgb, #3b82f6 14%, var(--line));
+  background: color-mix(in srgb, #3b82f6 4%, var(--panel));
+  border-radius: 10px;
+  padding: 11px 14px;
+}
+
+.tests-ref-info__left,
+.tests-ref-info__right {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.tests-ref-info__left p,
+.tests-ref-info__right p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.tests-ref-info__right strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+}
+
+.tests-ref-info__icon,
+.tests-ref-info__calendar {
+  color: #64748b;
+  margin-top: 1px;
+}
+
+.tests-ref-shell .card-body {
+  padding: 14px;
+}
+
+.tests-ref-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.tests-ref-test-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 13px;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+}
+
+.tests-ref-test-card__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.tests-ref-test-card__head h4 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.tests-ref-test-card__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #c42b2b;
+  background: color-mix(in srgb, #c42b2b 12%, var(--panel));
+  flex-shrink: 0;
+}
+
+.tests-ref-chip {
+  display: inline-flex;
+  margin-top: 2px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.tests-ref-chip--neutral {
+  color: #64748b;
+  background: color-mix(in srgb, #94a3b8 18%, var(--panel));
+}
+
+.tests-ref-chip--danger {
+  color: #b91c1c;
+  background: color-mix(in srgb, #ef4444 18%, var(--panel));
+}
+
+.tests-ref-test-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.4;
+  font-size: 13px;
+}
+
+.tests-ref-btn-outline {
+  margin-top: 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line));
+  color: var(--accent);
+  background: transparent;
+  min-height: 38px;
+}
+
+.tests-ref-btn-solid {
+  margin-top: 12px;
+  min-height: 38px;
+}
+
+.tests-ref-metrics {
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 10px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.tests-ref-metric {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+}
+
+.tests-ref-metric svg {
+  color: #64748b;
+}
+
+.tests-ref-metric p {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.tests-ref-metric strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 20px;
+  line-height: 1.1;
+}
+
+.tests-ref-history__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.tests-ref-history__btn {
+  padding: 7px 11px;
+  font-size: 12px;
+  border-radius: 10px;
+}
+
+.tests-ref-table-wrap {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.tests-ref-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.tests-ref-table th,
+.tests-ref-table td {
+  padding: 10px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  text-align: left;
+  font-size: 12px;
+}
+
+.tests-ref-table th {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.tests-ref-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+@media (min-width: 820px) {
+  .tests-page .tests-history {
+    display: none;
+  }
+}
+
+@media (max-width: 819px) {
+  .tests-ref-info {
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .tests-ref-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tests-ref-test-card__head h4 {
+    font-size: 17px;
+  }
+
+  .tests-ref-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .tests-ref-metric strong {
+    font-size: 18px;
+  }
+
+  .tests-ref-table-wrap {
+    display: none;
+  }
+
+  .tests-ref-shell .card-body {
+    padding: 12px;
+  }
+
+  .tests-ref-test-card {
+    padding: 12px;
+  }
+}

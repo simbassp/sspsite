@@ -667,112 +667,174 @@ export default function TestsPage() {
   const timerColor = `hsl(${timerHue}, 70%, 45%)`;
   const nextAutoResetText =
     finalTest?.nextAutoResetAt ? formatDateTime(finalTest.nextAutoResetAt) : "25 числа следующего месяца";
+  const finalStatusText =
+    finalTest == null
+      ? "—"
+      : finalTest.hasPassedFinal
+        ? "Сдан"
+        : finalTest.canStartFinal
+          ? "Доступен"
+          : "Ограничено";
+  const visibleHistory = results.slice(0, 8);
 
   return (
     <section className="tests-page">
-      <div className="tests-page-head">
-        <h1 className="page-title">Тестирование</h1>
-        <p className="page-subtitle">
-          При запуске теста вопросы всегда разные, время ответа на вопрос ограничено.
-        </p>
-        <div className="selfcheck-hint" style={{ marginBottom: 0 }}>
-          Если попытки итогового теста исчерпаны, они сбрасываются администратором вручную или автоматически 25-го числа
-          каждого месяца. Следующий автосброс: {nextAutoResetText}.
+      <h1 className="page-title" style={{ marginBottom: 6 }}>
+        Тестирование
+      </h1>
+      <p className="page-subtitle" style={{ marginBottom: 12 }}>
+        Доступно два типа тестов: пробный для практики и итоговый для проверки знаний.
+      </p>
+
+      <div className="tests-ref-info">
+        <div className="tests-ref-info__left">
+          <span className="tests-ref-info__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 11v5" />
+              <circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none" />
+            </svg>
+          </span>
+          <div>
+            <p>При запуске итогового теста вопросы всегда разные, время ответа ограничено.</p>
+            <p>При исчерпании попыток доступ будет заблокирован до ручного сброса.</p>
+          </div>
+        </div>
+        <div className="tests-ref-info__right">
+          <span className="tests-ref-info__calendar" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="5" width="18" height="16" rx="3" />
+              <path d="M8 3v4M16 3v4M3 10h18" />
+              <path d="M13 15l2 2 4-4" />
+            </svg>
+          </span>
+          <div>
+            <p>Следующий автосброс:</p>
+            <strong>{nextAutoResetText}</strong>
+          </div>
         </div>
       </div>
 
-      {isBootstrapping && (
-        <article className="card" style={{ marginTop: 12 }}>
-          <div className="card-body">
-            <p className="page-subtitle">Загрузка тестовых данных...</p>
+      <section className="card tests-ref-shell" style={{ marginTop: 12 }}>
+        <div className="card-body">
+          <h3 style={{ marginBottom: 12 }}>Выберите тест</h3>
+          <div className="tests-ref-grid">
+            <article className="tests-ref-test-card">
+              <div className="tests-ref-test-card__head">
+                <span className="tests-ref-test-card__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M14 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2v-4" />
+                    <path d="M4 3h8a2 2 0 0 1 2 2v4H6a2 2 0 0 0-2 2V3Z" />
+                    <path d="M9 14l7-7 2 2-7 7-3 1 1-3Z" />
+                  </svg>
+                </span>
+                <div>
+                  <h4>Пробный тест</h4>
+                  <span className="tests-ref-chip tests-ref-chip--neutral">Без штрафов</span>
+                </div>
+              </div>
+              <p>Без ограничений по времени и попыткам. Подсветка верного варианта после ответа.</p>
+              <button
+                className="btn tests-ref-btn-outline"
+                type="button"
+                onClick={onTrial}
+                disabled={isBootstrapping || isPoolLoading || !isConfigLoaded}
+              >
+                Начать пробный тест
+              </button>
+            </article>
+
+            <article className="tests-ref-test-card">
+              <div className="tests-ref-test-card__head">
+                <span className="tests-ref-test-card__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="5" y="6" width="14" height="14" rx="2" />
+                    <path d="M9 6V4a3 3 0 0 1 6 0v2" />
+                    <circle cx="12" cy="13" r="2.2" />
+                    <path d="M12 15.2v2.3" />
+                  </svg>
+                </span>
+                <div>
+                  <h4>Итоговый тест</h4>
+                  <span className="tests-ref-chip tests-ref-chip--danger">Ограничено</span>
+                </div>
+              </div>
+              <p>Ограничение по времени и количеству попыток. Результат засчитывается в систему.</p>
+              {activeTest !== "final" && (
+                <button
+                  className="btn btn-primary tests-ref-btn-solid"
+                  type="button"
+                  onClick={startFinal}
+                  disabled={
+                    isBootstrapping ||
+                    isPoolLoading ||
+                    !isConfigLoaded ||
+                    finalTest == null ||
+                    finalTest.hasPassedFinal ||
+                    !finalTest.canStartFinal
+                  }
+                  title={
+                    finalTest != null && finalTest.hasPassedFinal
+                      ? "Итоговый тест уже успешно сдан в текущем окне попыток."
+                      : finalTest != null && finalTest.attemptsExhausted
+                        ? "Попытки итогового теста израсходованы. Нужен ручной или автоматический сброс (25-е число)."
+                        : finalTest != null && !finalTest.canStartFinal
+                          ? "Сейчас нельзя начать итоговый тест."
+                          : undefined
+                  }
+                >
+                  Начать итоговый тест
+                </button>
+              )}
+            </article>
           </div>
-        </article>
-      )}
+
+          <div className="tests-ref-metrics">
+            <div className="tests-ref-metric">
+              <span aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4Z" />
+                  <path d="m9 12 2 2 4-4" />
+                </svg>
+              </span>
+              <div>
+                <p>Попытки (итоговый тест)</p>
+                <strong>
+                  {finalTest?.usedAttempts ?? 0} / {FINAL_TEST_MAX_ATTEMPTS}
+                </strong>
+              </div>
+            </div>
+            <div className="tests-ref-metric">
+              <span aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M12 7v5l3 2" />
+                </svg>
+              </span>
+              <div>
+                <p>Доступно время</p>
+                <strong>{activeTest ? `${timeLeft} c` : "—"}</strong>
+              </div>
+            </div>
+            <div className="tests-ref-metric">
+              <span aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="5" y="10" width="14" height="10" rx="2" />
+                  <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+                </svg>
+              </span>
+              <div>
+                <p>Статус</p>
+                <strong>{finalStatusText}</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {isBootstrapping && <p className="page-subtitle" style={{ marginTop: 10 }}>Загрузка тестовых данных...</p>}
       {!isBootstrapping && !!bootstrapError && <p className="page-subtitle">{bootstrapError}</p>}
       {isPoolLoading && <p className="page-subtitle">Подготавливаем вопросы для запуска теста...</p>}
-
-      <div className="tests-page-main">
-      <div className="grid grid-two">
-        <article className="card">
-          <div className="card-body">
-            <h3>Пробный тест</h3>
-            <p className="page-subtitle" style={{ marginTop: 8 }}>
-              Без штрафов за выход. Можно проходить многократно. После ответа или истечения времени показывается подсветка
-              верного варианта.
-            </p>
-            <button className="btn btn-primary" type="button" onClick={onTrial} disabled={isBootstrapping || isPoolLoading || !isConfigLoaded}>
-              Начать пробный тест
-            </button>
-          </div>
-        </article>
-        <article className="card">
-          <div className="card-body">
-            <h3>Итоговый тест</h3>
-            <p className="page-subtitle" style={{ marginTop: 8 }}>
-              При обновлении страницы, закрытии вкладки или выходе попытка засчитывается как не сдал.
-            </p>
-            {finalTest && (
-              <>
-                <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
-                  {finalTest.attemptsExhausted && !finalTest.hasPassedFinal
-                    ? `Попытки исчерпаны: ${finalTest.usedAttempts} / ${FINAL_TEST_MAX_ATTEMPTS}`
-                    : `Попытки: ${finalTest.usedAttempts} / ${FINAL_TEST_MAX_ATTEMPTS}`}
-                </p>
-                <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
-                  Доступно {FINAL_TEST_MAX_ATTEMPTS} попытки. Если итоговый тест не сдан за {FINAL_TEST_MAX_ATTEMPTS}{" "}
-                  попытки, доступ будет заблокирован до ручного сброса администратором или автосброса 25-го числа.
-                </p>
-                {finalTest.attemptsExhausted && !finalTest.hasPassedFinal && (
-                  <div className="selfcheck-hint" style={{ marginTop: 8, marginBottom: 0 }}>
-                    Итоговый тест недоступен: попытки израсходованы. Сброс выполняет администратор вручную или автоматически
-                    25-го числа каждого месяца (следующий автосброс: {nextAutoResetText}).
-                  </div>
-                )}
-              </>
-            )}
-            {!finalTest && !isBootstrapping && (
-              <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0, color: "var(--muted)" }}>
-                Не удалось загрузить сводку по попыткам. Обновите страницу.
-              </p>
-            )}
-            {activeTest !== "final" && (
-              <button
-                className="btn btn-primary"
-                type="button"
-                onClick={startFinal}
-                disabled={
-                  isBootstrapping ||
-                  isPoolLoading ||
-                  !isConfigLoaded ||
-                  finalTest == null ||
-                  finalTest.hasPassedFinal ||
-                  !finalTest.canStartFinal
-                }
-                style={{ marginTop: 10 }}
-                title={
-                  finalTest != null && finalTest.hasPassedFinal
-                    ? "Итоговый тест уже успешно сдан в текущем окне попыток."
-                    : finalTest != null && finalTest.attemptsExhausted
-                      ? "Попытки итогового теста израсходованы. Нужен ручной или автоматический сброс (25-е число)."
-                      : finalTest != null && !finalTest.canStartFinal
-                        ? "Сейчас нельзя начать итоговый тест."
-                        : undefined
-                }
-              >
-                {finalTest == null
-                  ? "Начать итоговый тест"
-                  : finalTest.hasPassedFinal
-                    ? "Итоговый тест уже сдан"
-                    : finalTest.attemptsExhausted
-                      ? "Попытки закончились — недоступно"
-                      : !finalTest.canStartFinal
-                        ? "Недоступно — нет попыток"
-                        : "Начать итоговый тест"}
-              </button>
-            )}
-          </div>
-        </article>
-      </div>
 
       {activeTest && currentQuestion && (
         <article className="card" style={{ marginTop: 12 }} ref={testCardRef}>
@@ -851,14 +913,62 @@ export default function TestsPage() {
           </div>
         </article>
       )}
-      </div>
 
-      <div className="tests-history-section" id="tests-history">
-        <h2 className="page-title tests-history tests-history-title">
-          История попыток
-        </h2>
-        <div className="list tests-history">
-          {results.map((result) => {
+      <section className="card tests-ref-history" style={{ marginTop: 14 }} id="tests-history">
+        <div className="card-body">
+          <div className="tests-ref-history__head">
+            <h3 style={{ margin: 0 }}>История попыток</h3>
+            <button
+              className="btn tests-ref-history__btn"
+              type="button"
+              onClick={() => {
+                document.getElementById("tests-history-list-mobile")?.scrollIntoView({ behavior: "smooth", block: "start" });
+              }}
+            >
+              Смотреть все
+            </button>
+          </div>
+          <div className="tests-ref-table-wrap">
+            <table className="tests-ref-table">
+              <thead>
+                <tr>
+                  <th>Тест</th>
+                  <th>Результат</th>
+                  <th>Баллы</th>
+                  <th>Время</th>
+                  <th>Дата</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleHistory.map((result) => {
+                  const defaultTotal =
+                    result.type === "final" ? testConfig.finalQuestionCount : testConfig.trialQuestionCount;
+                  const rawTotal = result.questionsTotal;
+                  const total = rawTotal != null && Number.isFinite(rawTotal) ? rawTotal : defaultTotal;
+                  const rawCorr = result.questionsCorrect;
+                  const correct =
+                    rawCorr != null && Number.isFinite(rawCorr)
+                      ? rawCorr
+                      : Math.round((result.score / 100) * Math.max(total, 1));
+                  const passed = result.status === "passed";
+                  return (
+                    <tr key={result.id}>
+                      <td>{result.type === "final" ? "Итоговый тест" : "Пробный тест"}</td>
+                      <td>
+                        <span className={`pill ${passed ? "pill-green" : "pill-red"}`}>{passed ? "Сдал" : "Не сдал"}</span>
+                      </td>
+                      <td>{result.score}% ({correct}/{total})</td>
+                      <td>—</td>
+                      <td>{formatDateTime(result.createdAt)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="list tests-history" id="tests-history-list-mobile">
+            {results.map((result) => {
             const defaultTotal =
               result.type === "final" ? testConfig.finalQuestionCount : testConfig.trialQuestionCount;
             const rawTotal = result.questionsTotal;
@@ -903,8 +1013,9 @@ export default function TestsPage() {
           {isHistoryLoading && <p className="page-subtitle">Загрузка истории попыток...</p>}
           {!isHistoryLoading && !!historyError && <p className="page-subtitle">{historyError}</p>}
           {!isHistoryLoading && !historyError && !results.length && <p className="page-subtitle">Попыток пока нет.</p>}
+          </div>
         </div>
-      </div>
+      </section>
     </section>
   );
 }
