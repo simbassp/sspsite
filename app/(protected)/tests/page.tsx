@@ -381,6 +381,15 @@ export default function TestsPage() {
     return () => window.clearTimeout(timer);
   }, [activeTest, currentQuestion?.id, isTestStarted, startCountdown]);
 
+  /** При появлении отсчёта перед стартом вопроса прокручиваем к карточке с таймером (особенно важно на мобильных). */
+  useEffect(() => {
+    if (!activeTest || !currentQuestion || isTestStarted || startCountdown == null) return;
+    const timer = window.setTimeout(() => {
+      testCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
+    return () => window.clearTimeout(timer);
+  }, [activeTest, currentQuestion?.id, isTestStarted, startCountdown]);
+
   useEffect(() => {
     if (!session || activeTest !== "final") return;
     const onExit = () => void forceFailFinalAttempt(session.id);
