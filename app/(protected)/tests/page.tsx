@@ -42,6 +42,7 @@ type FinalTestSummary = {
   hasPassedFinal: boolean;
   canStartFinal: boolean;
   attemptsExhausted: boolean;
+  nextAutoResetAt?: string;
 };
 
 export default function TestsPage() {
@@ -120,7 +121,7 @@ export default function TestsPage() {
     setMessage((prev) =>
       prev.trim()
         ? prev
-        : "Попытки итогового теста израсходованы. Обратитесь к администратору для сброса попыток.",
+        : "Попытки итогового теста израсходованы. Сброс выполняет администратор или автосброс 25-го числа.",
     );
   }, [finalTest]);
 
@@ -618,7 +619,7 @@ export default function TestsPage() {
     }
     if (finalTest && !finalTest.canStartFinal) {
       setMessage(
-        "Итоговый тест недоступен: попытки израсходованы. Обратитесь к администратору для сброса попыток.",
+        "Итоговый тест недоступен: попытки израсходованы. Сброс выполняет администратор или автосброс 25-го числа.",
       );
       return;
     }
@@ -664,6 +665,8 @@ export default function TestsPage() {
     currentQuestion && currentQuestion.timeLimitSec > 0 ? Math.max(0, Math.min(1, timeLeft / currentQuestion.timeLimitSec)) : 0;
   const timerHue = Math.round(120 * timerRatio);
   const timerColor = `hsl(${timerHue}, 70%, 45%)`;
+  const nextAutoResetText =
+    finalTest?.nextAutoResetAt ? formatDateTime(finalTest.nextAutoResetAt) : "25 числа следующего месяца";
 
   return (
     <section className="tests-page">
@@ -713,12 +716,13 @@ export default function TestsPage() {
                 </p>
                 <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
                   Доступно {FINAL_TEST_MAX_ATTEMPTS} попытки. Если итоговый тест не сдан за {FINAL_TEST_MAX_ATTEMPTS}{" "}
-                  попытки, доступ будет заблокирован до сброса попыток администратором.
+                  попытки, доступ будет заблокирован до ручного сброса администратором или автосброса 25-го числа.
                 </p>
                 {finalTest.attemptsExhausted && !finalTest.hasPassedFinal && (
-                  <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0, color: "var(--muted)" }}>
-                    Итоговый тест недоступен — попытки израсходованы. Для продолжения нужен сброс попыток администратором.
-                  </p>
+                  <div className="selfcheck-hint" style={{ marginTop: 8, marginBottom: 0 }}>
+                    Итоговый тест недоступен: попытки израсходованы. Сброс выполняет администратор вручную или автоматически
+                    25-го числа каждого месяца (следующий автосброс: {nextAutoResetText}).
+                  </div>
                 )}
               </>
             )}
@@ -745,7 +749,7 @@ export default function TestsPage() {
                   finalTest != null && finalTest.hasPassedFinal
                     ? "Итоговый тест уже успешно сдан в текущем окне попыток."
                     : finalTest != null && finalTest.attemptsExhausted
-                      ? "Попытки итогового теста израсходованы. Нужен сброс попыток администратором."
+                      ? "Попытки итогового теста израсходованы. Нужен ручной или автоматический сброс (25-е число)."
                       : finalTest != null && !finalTest.canStartFinal
                         ? "Сейчас нельзя начать итоговый тест."
                         : undefined

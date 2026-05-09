@@ -145,3 +145,42 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
     );
   }
 }
+
+export async function PATCH(request: Request, context: { params: Promise<{ userId: string }> }) {
+  const session = await getServerSession();
+  if (!session || !canManageUsers(session)) {
+    return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+  }
+
+  const { userId } = await context.params;
+  if (!userId || !looksLikeUuid(userId)) {
+    return Response.json({ ok: false, error: "invalid_user_id" }, { status: 400 });
+  }
+
+  let body: { name?: string; callsign?: string };
+  try {
+    body = (await request.json()) as { name?: string; callsign?: string };
+  } catch {
+    return Response.json({ ok: false, error: "invalid_json" }, { status: 400 });
+  }
+
+  const name = String(body.name ?? "").trim();
+  const callsign = String(body.callsign ?? "").trim();
+  if (!name || !callsign) {
+    return Response.json({ ok: false, error: "missing_name_or_callsign" }, { status: 400 });
+  }
+
+  try {
+    const supabase = getServerSupabaseServiceClient();
+    const upd = await supabase.from("app_users").update({ name, callsign }).eq("id", userId);
+    if (upd.error) {
+      return Response.json({ ok: false, error: upd.error.message }, { status: 500 });
+    }
+    return Response.json({ ok: true, name, callsign });
+  } catch (error) {
+    return Response.json(
+      { ok: false, error: error instanceof Error ? error.message : "profile_user_patch_exception" },
+      { status: 500 },
+    );
+  }
+}

@@ -7,7 +7,7 @@ import { dutyLocationLabel } from "@/lib/duty-location";
 import { POSITION_OPTIONS, getPositionBadgeClass } from "@/lib/position-ui";
 import { canManageUsers } from "@/lib/permissions";
 import { fetchUsers, patchUser, removeUser } from "@/lib/users-repository";
-import type { Position, Role, UserRecord } from "@/lib/types";
+import type { DutyLocation, Position, Role, UserRecord } from "@/lib/types";
 
 const permissionOptions = [
   { key: "news", label: "Новости" },
@@ -42,7 +42,8 @@ export default function AdminUsersPage() {
   const canGrantAdminRole = session?.role === "admin";
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [query, setQuery] = useState("");
-  const [roleFilter, setRoleFilter] = useState<"all" | Role>("all");
+  const [positionFilter, setPositionFilter] = useState<"all" | Position>("all");
+  const [dutyFilter, setDutyFilter] = useState<"all" | DutyLocation>("all");
   const [pageSize, setPageSize] = useState(10);
   const [page, setPage] = useState(1);
   const [info, setInfo] = useState("");
@@ -233,8 +234,9 @@ export default function AdminUsersPage() {
     const matchesText = `${item.name} ${item.callsign} ${item.login} ${item.position}`
       .toLowerCase()
       .includes(query.toLowerCase().trim());
-    const matchesRole = roleFilter === "all" ? true : item.role === roleFilter;
-    return matchesText && matchesRole;
+    const matchesPosition = positionFilter === "all" ? true : item.position === positionFilter;
+    const matchesDuty = dutyFilter === "all" ? true : item.dutyLocation === dutyFilter;
+    return matchesText && matchesPosition && matchesDuty;
   });
   const pages = Math.max(1, Math.ceil(visible.length / pageSize));
   const currentPage = Math.min(page, pages);
@@ -278,17 +280,37 @@ export default function AdminUsersPage() {
         />
         <select
           className="select"
-          value={roleFilter}
+          value={positionFilter}
           onChange={(e) => {
-            setRoleFilter(e.target.value as typeof roleFilter);
+            setPositionFilter(e.target.value as typeof positionFilter);
             setPage(1);
           }}
         >
-          <option value="all">Все роли</option>
-          <option value="employee">Сотрудник</option>
-          <option value="admin">Администратор</option>
+          <option value="all">Все должности</option>
+          {POSITION_OPTIONS.map((position) => (
+            <option key={position} value={position}>
+              {position}
+            </option>
+          ))}
+        </select>
+        <select
+          className="select"
+          value={dutyFilter}
+          onChange={(e) => {
+            setDutyFilter(e.target.value as typeof dutyFilter);
+            setPage(1);
+          }}
+        >
+          <option value="all">Все места</option>
+          <option value="base">На базе</option>
+          <option value="deployment">В командировке</option>
         </select>
       </div>
+      )}
+      {isHydrated && (
+        <p className="page-subtitle" style={{ marginBottom: 10 }}>
+          Фильтрация по должности и месту положения (на базе / в командировке).
+        </p>
       )}
       {info && <p className="page-subtitle admin-users-page__info">{info}</p>}
 

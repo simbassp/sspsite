@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { effectiveFinalCountingFromUtc } from "@/lib/final-effective-counting";
+import { effectiveFinalCountingFromUtc, nextAutoResetUtcIso } from "@/lib/final-effective-counting";
 import { FINAL_TEST_MAX_ATTEMPTS } from "@/lib/final-test-constants";
 import { isMissingColumnError, resolveFinalUserContext } from "@/lib/server-final-user-context";
 
@@ -70,5 +70,6 @@ export async function computeFinalTestSummary(supabase: SupabaseClient, userId: 
     hasPassedFinal,
     canStartFinal,
     attemptsExhausted,
+    nextAutoResetAt: nextAutoResetUtcIso(),
   };
 }

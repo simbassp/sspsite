@@ -42,6 +42,7 @@ type BootstrapPayload = {
   ok?: boolean;
   error?: string;
   viewerIsAdmin?: boolean;
+  nextAutoResetAt?: string;
   summaries?: UserSummary[];
   bannerStats?: BannerStats;
   lastResetAudit?: {
@@ -83,6 +84,7 @@ export default function AdminResultsPage() {
   const [loadError, setLoadError] = useState("");
   const [resetBusyId, setResetBusyId] = useState<string | null>(null);
   const [resetMessage, setResetMessage] = useState("");
+  const [nextAutoResetAt, setNextAutoResetAt] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -98,10 +100,12 @@ export default function AdminResultsPage() {
       setSummaries(Array.isArray(payload.summaries) ? payload.summaries : []);
       setBannerStats(payload.bannerStats ?? emptyBannerStats);
       setLastResetAudit(payload.lastResetAudit ?? null);
+      setNextAutoResetAt(payload.nextAutoResetAt ?? null);
     } catch {
       setLoadError("Не удалось получить данные результатов. Попробуйте обновить страницу.");
       setSummaries([]);
       setBannerStats(emptyBannerStats);
+      setNextAutoResetAt(null);
     } finally {
       setIsLoading(false);
     }
@@ -157,6 +161,7 @@ export default function AdminResultsPage() {
     }
     return "—";
   };
+  const autoResetText = nextAutoResetAt ? formatDateTime(nextAutoResetAt) : "25-го числа следующего месяца";
 
   return (
     <section>
@@ -170,6 +175,10 @@ export default function AdminResultsPage() {
       )}
 
       <p className="page-subtitle">Фильтр по дате последней попытки и статусу итогового теста.</p>
+      <div className="selfcheck-hint" style={{ marginBottom: 10 }}>
+        Сброс попыток доступен вручную (администратором или пользователем с правом сброса) и автоматически 25-го числа
+        каждого месяца. Следующий автосброс: {autoResetText}.
+      </div>
       {isLoading && <p className="page-subtitle">Загружаем результаты…</p>}
       {loadError && <p className="page-subtitle">{loadError}</p>}
       {!!resetMessage && <p className="page-subtitle">{resetMessage}</p>}

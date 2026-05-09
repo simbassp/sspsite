@@ -52,6 +52,7 @@ export default function ProfileUserInspectPage() {
   const session = useMemo(() => readClientSession(), []);
   const canOpen = session ? canManageUsers(session) || canViewUserList(session) : false;
   const canEditDutyForOthers = session ? canManageUsers(session) : false;
+  const canEditProfileFields = session ? canManageUsers(session) : false;
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -63,6 +64,10 @@ export default function ProfileUserInspectPage() {
   const [finalAttemptsPage, setFinalAttemptsPage] = useState(1);
   const [dutySaving, setDutySaving] = useState(false);
   const [dutyMessage, setDutyMessage] = useState("");
+  const [editName, setEditName] = useState("");
+  const [editCallsign, setEditCallsign] = useState("");
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileMessage, setProfileMessage] = useState("");
 
   useEffect(() => {
     if (!session || !userId || !canOpen) return;
@@ -94,6 +99,8 @@ export default function ProfileUserInspectPage() {
         const u = payload.user;
         const duty_location: DutyLocation = u.duty_location === "deployment" ? "deployment" : "base";
         setInspectUser({ ...u, duty_location });
+        setEditName(String(u.name || ""));
+        setEditCallsign(String(u.callsign || ""));
         setRows(mapRows({ results: payload.results }).sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)));
       } catch {
         if (!cancelled) setError("network");
@@ -118,6 +125,8 @@ export default function ProfileUserInspectPage() {
           const duty_location: DutyLocation =
             u.duty_location === "deployment" ? "deployment" : "base";
           setInspectUser({ ...u, duty_location });
+          setEditName(String(u.name || ""));
+          setEditCallsign(String(u.callsign || ""));
         } catch {
           /* ignore */
         }
@@ -340,6 +349,40 @@ export default function ProfileUserInspectPage() {
     }
   };
 
+  const onSaveProfileFields = async () => {
+    if (!canEditProfileFields || !inspectUser || profileSaving) return;
+    const name = editName.trim();
+    const callsign = editCallsign.trim();
+    if (!name || !callsign) {
+      setProfileMessage("Имя и позывной обязательны.");
+      return;
+    }
+    if (name === inspectUser.name && callsign === inspectUser.callsign) {
+      setProfileMessage("Изменений нет.");
+      return;
+    }
+    setProfileSaving(true);
+    setProfileMessage("");
+    try {
+      const response = await fetch(`/api/profile/user/${encodeURIComponent(userId)}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name, callsign }),
+      });
+      const payload = (await response.json()) as { ok?: boolean; error?: string };
+      if (!response.ok || !payload.ok) {
+        setProfileMessage(payload.error || "Не удалось сохранить профиль.");
+        return;
+      }
+      setInspectUser((prev) => (prev ? { ...prev, name, callsign } : prev));
+      setProfileMessage("Имя и позывной обновлены.");
+    } catch {
+      setProfileMessage("Ошибка сети. Повторите попытку.");
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
   if (!canOpen) {
     return (
       <section className="profile-page">
@@ -382,10 +425,49 @@ export default function ProfileUserInspectPage() {
                 </div>
                 <div className="profile-hero-main">
                   <p className="profile-hero-kicker">Пользовательский профиль</p>
-                  <p className="profile-hero-name">{inspectUser.name || "—"}</p>
-                  <p className="profile-hero-callsign">
-                    Позывной: <strong>{inspectUser.callsign.trim() || "—"}</strong>
-                  </p>
+                  {canEditProfileFields ? (
+                    <div className="form" style={{ marginTop: 8, maxWidth: 380 }}>
+                      <label className="label" htmlFor="inspect-name">
+                        Имя
+                      </label>
+                      <input
+                        id="inspect-name"
+                        className="input"
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        placeholder="Введите имя"
+                        disabled={profileSaving}
+                      />
+                      <label className="label" htmlFor="inspect-callsign">
+                        Позывной
+                      </label>
+                      <input
+                        id="inspect-callsign"
+                        className="input"
+                        value={editCallsign}
+                        onChange={(e) => setEditCallsign(e.target.value)}
+                        placeholder="Введите позывной"
+                        disabled={profileSaving}
+                      />
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        <button className="btn btn-primary" type="button" onClick={() => void onSaveProfileFields()} disabled={profileSaving}>
+                          {profileSaving ? "Сохранение..." : "Сохранить"}
+                        </button>
+                      </div>
+                      {profileMessage ? (
+                        <p className="page-subtitle" style={{ margin: 0, color: profileMessage.includes("обновлены") ? "var(--ok)" : "var(--bad)" }}>
+                          {profileMessage}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <>
+                      <p className="profile-hero-name">{inspectUser.name || "—"}</p>
+                      <p className="profile-hero-callsign">
+                        Позывной: <strong>{inspectUser.callsign.trim() || "—"}</strong>
+                      </p>
+                    </>
+                  )}
                   <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
                     @{inspectUser.login}
                     {inspectUser.status === "inactive" ? (

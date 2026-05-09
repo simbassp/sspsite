@@ -1,4 +1,4 @@
-import { effectiveFinalCountingFromUtc } from "@/lib/final-effective-counting";
+import { effectiveFinalCountingFromUtc, nextAutoResetUtcIso } from "@/lib/final-effective-counting";
 import { FINAL_TEST_MAX_ATTEMPTS } from "@/lib/final-test-constants";
 import { canManageResults, canResetTestResults } from "@/lib/permissions";
 import { getServerSession } from "@/lib/server-auth";
@@ -151,9 +151,8 @@ export async function GET(req: Request) {
         const qt = latestFinal?.questions_total ?? null;
         const qc = latestFinal?.questions_correct ?? null;
 
-        /** Сброс: право «Сброс результатов»; себе можно сбросить даже при зачёте в окне. */
-        const showResetAttempts =
-          viewerCanResetAttempts && (!hasPassedFinal || session.id === user.id);
+        /** Сброс доступен пользователям с правом resetResults (в т.ч. для уже сдавших). */
+        const showResetAttempts = viewerCanResetAttempts;
 
         let statusLabel: "passed" | "failed" | "not_started";
         if (hasPassedFinal) statusLabel = "passed";
@@ -310,6 +309,7 @@ export async function GET(req: Request) {
       ok: true,
       viewerIsAdmin,
       viewerCanResetAttempts,
+      nextAutoResetAt: nextAutoResetUtcIso(),
       range,
       summaries,
       lastResetAudit,
