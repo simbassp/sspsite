@@ -43,6 +43,24 @@ function formatAttemptDuration(value: number | null | undefined) {
   return rem > 0 ? `${min} мин ${rem} сек` : `${min} мин`;
 }
 
+function resolveBankTimeFromQuestions(questions: TestQuestion[]) {
+  if (!questions.length) return null;
+  const freq = new Map<number, number>();
+  for (const q of questions) {
+    const sec = Math.max(5, Number(q.timeLimitSec || 10));
+    freq.set(sec, (freq.get(sec) || 0) + 1);
+  }
+  let winner = 10;
+  let count = -1;
+  for (const [sec, c] of freq.entries()) {
+    if (c > count) {
+      winner = sec;
+      count = c;
+    }
+  }
+  return winner;
+}
+
 type TrialFeedback = { chosen: number | null; correct: number };
 
 type FinalTestSummary = {
@@ -77,6 +95,7 @@ export default function TestsPage() {
   const [isTestStarted, setIsTestStarted] = useState(false);
   const [startCountdown, setStartCountdown] = useState<number | null>(null);
   const [finalTest, setFinalTest] = useState<FinalTestSummary | null>(null);
+  const [bankQuestionTimeSec, setBankQuestionTimeSec] = useState<number | null>(null);
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [historyPage, setHistoryPage] = useState(1);
 
@@ -274,6 +293,7 @@ export default function TestsPage() {
           error?: string;
           config?: TestConfig;
           hasOrphanAttempt?: boolean;
+          bankQuestionTimeSec?: number | null;
           timingsMs?: Record<string, number>;
           finalTest?: FinalTestSummary | null;
         };
@@ -286,6 +306,11 @@ export default function TestsPage() {
         }
         const config = payload.config || DEFAULT_TEST_CONFIG;
         setTestConfig(config);
+        setBankQuestionTimeSec(
+          Number.isFinite(Number(payload.bankQuestionTimeSec))
+            ? Math.max(5, Number(payload.bankQuestionTimeSec))
+            : null,
+        );
         setIsConfigLoaded(true);
         if (payload.finalTest) {
           setFinalTest(payload.finalTest);
@@ -319,6 +344,7 @@ export default function TestsPage() {
           ]);
           if (cancelled) return;
           const dbPoolFiltered = filterDbPoolByManualTopicSettings(dbPool, config);
+          setBankQuestionTimeSec(resolveBankTimeFromQuestions(dbPool));
           const fromUav = config.uavAutoGeneration
             ? generateUavTtxQuestionBank(uavItems, config.timePerQuestionSec)
             : [];
@@ -853,7 +879,7 @@ export default function TestsPage() {
               </span>
               <div>
                 <p>Доступно время</p>
-                <strong>{Math.max(1, Number(testConfig.timePerQuestionSec || 0))} сек</strong>
+                <strong>{Math.max(5, Number(bankQuestionTimeSec ?? 10))} сек</strong>
               </div>
             </div>
             <div className="tests-ref-metric">

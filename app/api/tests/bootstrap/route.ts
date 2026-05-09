@@ -18,6 +18,25 @@ function isMissingColumnError(message: string | undefined) {
   return m.includes("column") && m.includes("does not exist");
 }
 
+function resolveBankQuestionTimeSec(rows: Array<{ time_limit_sec?: unknown }>) {
+  if (!rows.length) return null;
+  const freq = new Map<number, number>();
+  for (const row of rows) {
+    const sec = Math.max(5, Number(row.time_limit_sec ?? 10));
+    const normalized = Number.isFinite(sec) ? sec : 10;
+    freq.set(normalized, (freq.get(normalized) || 0) + 1);
+  }
+  let winner = 10;
+  let count = -1;
+  for (const [sec, c] of freq.entries()) {
+    if (c > count) {
+      winner = sec;
+      count = c;
+    }
+  }
+  return winner;
+}
+
 export async function GET() {
   const session = await getServerSession();
   if (!session) return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
@@ -103,6 +122,11 @@ export async function GET() {
     const t1 = Date.now();
 
     const orphanQ = await supabase.from("final_attempts").select("user_id").eq("user_id", session.id).maybeSingle();
+    const bankTimeQ = await supabase
+      .from("test_questions")
+      .select("time_limit_sec")
+      .eq("is_active", true)
+      .limit(2000);
     const t2 = Date.now();
     if (configQ.error) {
       if (process.env.NODE_ENV !== "production") {
@@ -126,6 +150,9 @@ export async function GET() {
     const t3 = Date.now();
 
     const cfg = (configQ.data || {}) as Partial<ConfigRow>;
+    const bankQuestionTimeSec = !bankTimeQ.error
+      ? resolveBankQuestionTimeSec((bankTimeQ.data as Array<{ time_limit_sec?: unknown }>) || [])
+      : null;
     if (process.env.NODE_ENV !== "production") {
       console.debug("[api/tests/bootstrap] ok", {
         userId: session.id,
@@ -151,6 +178,7 @@ export async function GET() {
         manualBankCounteractionEnabled: cfg.manual_bank_counteraction_enabled !== false,
       },
       hasOrphanAttempt: Boolean(orphanQ.data?.user_id),
+      bankQuestionTimeSec,
       timingsMs: {
         testSettings: t1 - t0,
         orphanAttempt: t2 - t1,
