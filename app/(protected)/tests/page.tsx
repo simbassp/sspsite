@@ -675,6 +675,10 @@ export default function TestsPage() {
         <p className="page-subtitle">
           При запуске теста вопросы всегда разные, время ответа на вопрос ограничено.
         </p>
+        <div className="selfcheck-hint" style={{ marginBottom: 0 }}>
+          Если попытки итогового теста исчерпаны, они сбрасываются администратором вручную или автоматически 25-го числа
+          каждого месяца. Следующий автосброс: {nextAutoResetText}.
+        </div>
       </div>
 
       {isBootstrapping && (
