@@ -461,6 +461,13 @@ export default function TestsPage() {
     return () => window.clearInterval(id);
   }, [activeTest, currentQuestion?.id, trialFeedback, isTestStarted]);
 
+  useEffect(() => {
+    if (!historyExpanded && historyPage !== 1) setHistoryPage(1);
+    const historyVisibleCount = historyExpanded ? results.length : Math.min(results.length, 5);
+    const nextPages = historyExpanded ? Math.max(1, Math.ceil(historyVisibleCount / 10)) : 1;
+    if (historyExpanded && historyPage > nextPages) setHistoryPage(nextPages);
+  }, [historyExpanded, historyPage, results.length]);
+
   if (!isHydrated) {
     return <p className="page-subtitle">Загрузка тестов...</p>;
   }
@@ -700,11 +707,6 @@ export default function TestsPage() {
   const pagedHistory = historyExpanded
     ? historyVisible.slice((safeHistoryPage - 1) * historyPageSize, safeHistoryPage * historyPageSize)
     : historyVisible;
-
-  useEffect(() => {
-    if (!historyExpanded && historyPage !== 1) setHistoryPage(1);
-    if (historyExpanded && historyPage > historyPages) setHistoryPage(historyPages);
-  }, [historyExpanded, historyPage, historyPages]);
 
   return (
     <section className="tests-page">
