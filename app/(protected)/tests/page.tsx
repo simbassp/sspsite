@@ -34,6 +34,15 @@ function pickRandomQuestions(bank: TestQuestion[], count: number) {
   return cloned.slice(0, Math.max(1, Math.min(count, cloned.length)));
 }
 
+function formatAttemptDuration(value: number | null | undefined) {
+  const sec = Number(value);
+  if (!Number.isFinite(sec) || sec <= 0) return "—";
+  if (sec < 60) return `${Math.round(sec)} сек`;
+  const min = Math.floor(sec / 60);
+  const rem = Math.round(sec % 60);
+  return rem > 0 ? `${min} мин ${rem} сек` : `${min} мин`;
+}
+
 type TrialFeedback = { chosen: number | null; correct: number };
 
 type FinalTestSummary = {
@@ -68,6 +77,8 @@ export default function TestsPage() {
   const [isTestStarted, setIsTestStarted] = useState(false);
   const [startCountdown, setStartCountdown] = useState<number | null>(null);
   const [finalTest, setFinalTest] = useState<FinalTestSummary | null>(null);
+  const [historyExpanded, setHistoryExpanded] = useState(false);
+  const [historyPage, setHistoryPage] = useState(1);
 
   useEffect(() => {
     setIsHydrated(true);
@@ -152,6 +163,7 @@ export default function TestsPage() {
           status: r.status === "passed" ? "passed" : "failed",
           score: Number(r.score || 0),
           createdAt: String(r.created_at),
+          durationSeconds: r.duration_seconds != null ? Number(r.duration_seconds) : undefined,
           questionsTotal: r.questions_total != null ? Number(r.questions_total) : undefined,
           questionsCorrect: r.questions_correct != null ? Number(r.questions_correct) : undefined,
           finalAttemptIndex: Number.isFinite(n) && n > 0 ? n : undefined,
@@ -362,12 +374,12 @@ export default function TestsPage() {
 
   /** Прокрутка к блоку вопроса только после старта ответов — не во время отсчёта и не при первом заходе на страницу. */
   useEffect(() => {
-    if (!activeTest || !currentQuestion || !isTestStarted) return;
+    if (!activeTest || !currentQuestion || !isTestStarted || startCountdown != null) return;
     const timer = window.setTimeout(() => {
       testCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 80);
     return () => window.clearTimeout(timer);
-  }, [activeTest, currentQuestion?.id, isTestStarted]);
+  }, [activeTest, currentQuestion?.id, isTestStarted, startCountdown]);
 
   useEffect(() => {
     if (!session || activeTest !== "final") return;
@@ -584,6 +596,9 @@ export default function TestsPage() {
   };
 
   const onTrial = async () => {
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
     const pool = await ensureQuestionPoolLoaded();
     if (!pool) {
       setMessage("Не удалось подготовить вопросы. Проверьте интернет.");
@@ -613,6 +628,9 @@ export default function TestsPage() {
   };
 
   const startFinal = async () => {
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
     if (finalTest?.hasPassedFinal) {
       setMessage("Итоговый тест уже успешно сдан.");
       return;
@@ -675,7 +693,18 @@ export default function TestsPage() {
         : finalTest.canStartFinal
           ? "Доступен"
           : "Ограничено";
-  const visibleHistory = results.slice(0, 8);
+  const historyPageSize = 10;
+  const historyVisible = historyExpanded ? results : results.slice(0, 5);
+  const historyPages = historyExpanded ? Math.max(1, Math.ceil(historyVisible.length / historyPageSize)) : 1;
+  const safeHistoryPage = Math.min(historyPage, historyPages);
+  const pagedHistory = historyExpanded
+    ? historyVisible.slice((safeHistoryPage - 1) * historyPageSize, safeHistoryPage * historyPageSize)
+    : historyVisible;
+
+  useEffect(() => {
+    if (!historyExpanded && historyPage !== 1) setHistoryPage(1);
+    if (historyExpanded && historyPage > historyPages) setHistoryPage(historyPages);
+  }, [historyExpanded, historyPage, historyPages]);
 
   return (
     <section className="tests-page">
@@ -918,14 +947,8 @@ export default function TestsPage() {
         <div className="card-body">
           <div className="tests-ref-history__head">
             <h3 style={{ margin: 0 }}>История попыток</h3>
-            <button
-              className="btn tests-ref-history__btn"
-              type="button"
-              onClick={() => {
-                document.getElementById("tests-history-list-mobile")?.scrollIntoView({ behavior: "smooth", block: "start" });
-              }}
-            >
-              Смотреть все
+            <button className="btn tests-ref-history__btn" type="button" onClick={() => setHistoryExpanded((v) => !v)}>
+              {historyExpanded ? "Скрыть" : "Смотреть все"}
             </button>
           </div>
           <div className="tests-ref-table-wrap">
@@ -940,7 +963,7 @@ export default function TestsPage() {
                 </tr>
               </thead>
               <tbody>
-                {visibleHistory.map((result) => {
+                {pagedHistory.map((result) => {
                   const defaultTotal =
                     result.type === "final" ? testConfig.finalQuestionCount : testConfig.trialQuestionCount;
                   const rawTotal = result.questionsTotal;
@@ -953,12 +976,29 @@ export default function TestsPage() {
                   const passed = result.status === "passed";
                   return (
                     <tr key={result.id}>
-                      <td>{result.type === "final" ? "Итоговый тест" : "Пробный тест"}</td>
+                      <td>
+                        <span className="tests-ref-type">
+                          <span className="tests-ref-type__icon" aria-hidden="true">
+                            {result.type === "final" ? (
+                              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
+                                <rect x="5" y="6" width="14" height="14" rx="2" />
+                                <path d="M9 6V4a3 3 0 0 1 6 0v2" />
+                              </svg>
+                            ) : (
+                              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M14 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2v-4" />
+                                <path d="M4 3h8a2 2 0 0 1 2 2v4H6a2 2 0 0 0-2 2V3Z" />
+                              </svg>
+                            )}
+                          </span>
+                          {result.type === "final" ? "Итоговый тест" : "Пробный тест"}
+                        </span>
+                      </td>
                       <td>
                         <span className={`pill ${passed ? "pill-green" : "pill-red"}`}>{passed ? "Сдал" : "Не сдал"}</span>
                       </td>
                       <td>{result.score}% ({correct}/{total})</td>
-                      <td>—</td>
+                      <td>{formatAttemptDuration(result.durationSeconds)}</td>
                       <td>{formatDateTime(result.createdAt)}</td>
                     </tr>
                   );
@@ -966,9 +1006,20 @@ export default function TestsPage() {
               </tbody>
             </table>
           </div>
+          {historyExpanded && historyPages > 1 ? (
+            <div className="tests-ref-pager">
+              <button className="btn" type="button" disabled={safeHistoryPage <= 1} onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}>
+                ‹
+              </button>
+              <span>{safeHistoryPage} / {historyPages}</span>
+              <button className="btn" type="button" disabled={safeHistoryPage >= historyPages} onClick={() => setHistoryPage((p) => Math.min(historyPages, p + 1))}>
+                ›
+              </button>
+            </div>
+          ) : null}
 
           <div className="list tests-history" id="tests-history-list-mobile">
-            {results.map((result) => {
+            {pagedHistory.map((result) => {
             const defaultTotal =
               result.type === "final" ? testConfig.finalQuestionCount : testConfig.trialQuestionCount;
             const rawTotal = result.questionsTotal;
@@ -988,7 +1039,22 @@ export default function TestsPage() {
               >
                 <div className="card-body">
                   <h3 style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    {result.type === "final" ? "Итоговый тест" : "Пробный тест"}{" "}
+                    <span className="tests-ref-type">
+                      <span className="tests-ref-type__icon" aria-hidden="true">
+                        {result.type === "final" ? (
+                          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
+                            <rect x="5" y="6" width="14" height="14" rx="2" />
+                            <path d="M9 6V4a3 3 0 0 1 6 0v2" />
+                          </svg>
+                        ) : (
+                          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M14 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2v-4" />
+                            <path d="M4 3h8a2 2 0 0 1 2 2v4H6a2 2 0 0 0-2 2V3Z" />
+                          </svg>
+                        )}
+                      </span>
+                      {result.type === "final" ? "Итоговый тест" : "Пробный тест"}
+                    </span>{" "}
                     <span className={`pill ${passed ? "pill-green" : "pill-red"}`}>
                       {passed ? "Сдал" : "Не сдал"}
                     </span>
@@ -1006,10 +1072,24 @@ export default function TestsPage() {
                   <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
                     {formatDateTime(result.createdAt)}
                   </p>
+                  <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0 }}>
+                    Время: {formatAttemptDuration(result.durationSeconds)}
+                  </p>
                 </div>
               </article>
             );
           })}
+          {historyExpanded && historyPages > 1 ? (
+            <div className="tests-ref-pager">
+              <button className="btn" type="button" disabled={safeHistoryPage <= 1} onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}>
+                ‹
+              </button>
+              <span>{safeHistoryPage} / {historyPages}</span>
+              <button className="btn" type="button" disabled={safeHistoryPage >= historyPages} onClick={() => setHistoryPage((p) => Math.min(historyPages, p + 1))}>
+                ›
+              </button>
+            </div>
+          ) : null}
           {isHistoryLoading && <p className="page-subtitle">Загрузка истории попыток...</p>}
           {!isHistoryLoading && !!historyError && <p className="page-subtitle">{historyError}</p>}
           {!isHistoryLoading && !historyError && !results.length && <p className="page-subtitle">Попыток пока нет.</p>}

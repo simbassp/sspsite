@@ -2196,6 +2196,35 @@ html[data-theme="dark"] .trial-feedback-btn--dim {
   border-bottom: none;
 }
 
+.tests-ref-type {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tests-ref-type__icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #c42b2b;
+  background: color-mix(in srgb, #c42b2b 10%, var(--panel));
+  flex-shrink: 0;
+}
+
+.tests-ref-pager {
+  margin-top: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tests-ref-pager .btn {
+  min-width: 38px;
+}
+
 @media (min-width: 820px) {
   .tests-page .tests-history {
     display: none;

@@ -20,7 +20,7 @@ export async function GET() {
 
     const primaryQ = await supabase
       .from("test_results")
-      .select("id,user_id,type,status,score,created_at,questions_total,questions_correct")
+      .select("id,user_id,type,status,score,created_at,questions_total,questions_correct,duration_seconds")
       .in("user_id", userIds)
       .order("created_at", { ascending: false })
       .limit(40);
@@ -30,7 +30,7 @@ export async function GET() {
     } else if (primaryQ.error && isMissingColumnError(primaryQ.error.message)) {
       const retry = await supabase
         .from("test_results")
-        .select("id,user_id,type,status,score,created_at")
+        .select("id,user_id,type,status,score,created_at,duration_seconds")
         .in("user_id", userIds)
         .order("created_at", { ascending: false })
         .limit(40);
@@ -71,6 +71,7 @@ export async function GET() {
         created_at: r.created_at,
         questions_total: r.questions_total ?? null,
         questions_correct: r.questions_correct ?? null,
+        duration_seconds: r.duration_seconds ?? null,
       };
     });
 
@@ -93,6 +94,7 @@ export async function GET() {
         created_at: r.created_at,
         questions_total: r.questions_total,
         questions_correct: r.questions_correct,
+        duration_seconds: r.duration_seconds ?? null,
         final_attempt_index: isFinal ? idxById.get(String(r.id)) ?? null : null,
         max_final_attempts: FINAL_TEST_MAX_ATTEMPTS,
       };
