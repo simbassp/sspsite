@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { CSSProperties } from "react";
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { AuthPasswordInput } from "@/components/AuthPasswordInput";
 import { SESSION_COOKIE } from "@/lib/seed";
 import { mapLoginErrorForDisplay } from "@/lib/login-ui";
 
@@ -263,15 +264,12 @@ export default function LoginPage() {
                 autoComplete="username"
               />
 
-              <label className="label label--center" htmlFor="password">
-                Пароль
-              </label>
-              <input
+              <AuthPasswordInput
                 id="password"
-                type="password"
-                className="input"
+                label="Пароль"
+                labelClassName="label label--center"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={setPassword}
                 required
                 disabled={isSubmitting}
                 autoComplete="current-password"

@@ -1165,6 +1165,44 @@ html[data-theme="dark"] .chip:not(.active):hover {
   text-underline-offset: 3px;
 }
 
+.auth-password-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.auth-password-wrap__input {
+  padding-right: 44px;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.auth-password-wrap__toggle {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  line-height: 0;
+}
+
+.auth-password-wrap__toggle:hover:not(:disabled) {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.auth-password-wrap__toggle:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .stat-value {
   font-size: 30px;
   font-weight: 800;

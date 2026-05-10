@@ -4,7 +4,7 @@ import { clearSessionCookie, serializeSessionCookie } from "@/lib/auth";
 import { readClientSession } from "@/lib/client-auth";
 import { SESSION_COOKIE } from "@/lib/seed";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
-import { withTimeout, withTimeoutAndRetry } from "@/lib/async-utils";
+import { withRetry, withTimeout, withTimeoutAndRetry } from "@/lib/async-utils";
 import {
   authenticate,
   deleteUser,
@@ -86,11 +86,14 @@ const LOGIN_RESOLVE_TIMEOUT_MS = 5000;
 const LOGIN_AUTH_TIMEOUT_MS = 12000;
 const LOGIN_PROFILE_TIMEOUT_MS = 8000;
 /** Медленный LTE/мобильный слабее десктопа — короткие лимиты давали ложные «код неверный» / «сервер не отвечает». */
-const REGISTER_VALIDATE_TIMEOUT_MS = 12000;
-const REGISTER_AUTH_TIMEOUT_MS = 32000;
-/** Перепроверка после таймаута signUp: короче, чтобы не ждать минуту при дубликатах email/логина. */
-const REGISTER_RECHECK_SIGNIN_MS = 7000;
-const REGISTER_RECHECK_SIGNUP_MS = 7000;
+const REGISTER_VALIDATE_TIMEOUT_MS = 22000;
+/** Один запрос signUp к Supabase на плохой сети может занимать десятки секунд — не обрывать раньше клиента. */
+const REGISTER_AUTH_TIMEOUT_MS = 90000;
+/** Перепроверка «создался ли аккаунт» после обрыва — на LTE вход/повторный signUp тоже могут быть медленными. */
+const REGISTER_RECHECK_SIGNIN_MS = 28000;
+const REGISTER_RECHECK_SIGNUP_MS = 28000;
+/** Повторная проверка занятости email/логина при обрыве до ответа API. */
+const REGISTER_AVAILABILITY_FETCH_MS = 16000;
 
 /** Сообщение PostgREST/Postgres о несуществующей колонке в PATCH. */
 function restErrorMissingColumn(message: string | undefined, column: string) {
@@ -419,17 +422,22 @@ async function checkRegistrationAvailability(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (typeof window === "undefined") return { ok: true };
   try {
-    const res = (await Promise.race([
-      fetch("/api/register/availability", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), login: login.trim() }),
-        cache: "no-store",
-      }),
-      new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error("availability_timeout")), 5000);
-      }),
-    ])) as Response;
+    const res = (await withRetry(
+      async () =>
+        Promise.race([
+          fetch("/api/register/availability", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ email: email.trim(), login: login.trim() }),
+            cache: "no-store",
+          }),
+          new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error("availability_timeout")), REGISTER_AVAILABILITY_FETCH_MS);
+          }),
+        ]) as Promise<Response>,
+      1,
+      500,
+    )) as Response;
     const payload = (await res.json()) as { ok?: boolean; emailTaken?: boolean; loginTaken?: boolean };
     if (!res.ok || !payload.ok) return { ok: true };
     if (payload.loginTaken) {
@@ -470,6 +478,18 @@ function mapAuthErrorMessage(raw: string) {
   }
   if (msg.includes("database error saving new user")) {
     return "Регистрация отклонена из-за конфликта данных. Проверьте логин и email, затем повторите попытку.";
+  }
+  if (
+    msg.includes("failed to fetch") ||
+    msg.includes("networkerror") ||
+    msg.includes("network request failed") ||
+    msg.includes("load failed") ||
+    msg.includes("connection") ||
+    msg.includes("interrupted") ||
+    msg.includes("timed out") ||
+    (msg.includes("timeout") && !msg.includes("validate"))
+  ) {
+    return "Не удалось связаться с сервером (слабый интернет или обрыв связи). Подождите немного и нажмите «Создать аккаунт» снова. Если аккаунт уже создался — попробуйте войти с тем же email и паролем.";
   }
   return raw;
 }
@@ -859,48 +879,50 @@ export async function registerUser(payload: {
   }
 
   const confirmRegistrationCreated = async () => {
-    // Ответ signUp мог потеряться по сети, хотя пользователь уже в auth/app_users.
-    // Сначала вход — быстрее и надёжнее, чем повторный signUp (лимиты / дубликаты).
-    try {
-      const authTry = await Promise.race([
-        supabase.auth.signInWithPassword({
-          email: payload.email,
-          password: payload.password,
-        }),
-        new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error("register_signin_recheck_timeout")), REGISTER_RECHECK_SIGNIN_MS);
-        }),
-      ]);
-      if (authTry.data?.user) {
-        await supabase.auth.signOut().catch(() => undefined);
-        return true;
-      }
-    } catch {}
+    const runOnce = async (): Promise<boolean> => {
+      try {
+        const authTry = await Promise.race([
+          supabase.auth.signInWithPassword({
+            email: payload.email,
+            password: payload.password,
+          }),
+          new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error("register_signin_recheck_timeout")), REGISTER_RECHECK_SIGNIN_MS);
+          }),
+        ]);
+        if (authTry.data?.user) {
+          await supabase.auth.signOut().catch(() => undefined);
+          return true;
+        }
+      } catch {}
 
-    try {
-      const retry = await Promise.race([
-        supabase.auth.signUp({
-          email: payload.email,
-          password: payload.password,
-          options: { data: { login: payload.login } },
-        }),
-        new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error("register_recheck_timeout")), REGISTER_RECHECK_SIGNUP_MS);
-        }),
-      ]);
-      const retryErr = retry.error?.message?.toLowerCase() ?? "";
-      if (retryErr.includes("already registered") || retryErr.includes("already been registered")) {
-        return true;
-      }
-    } catch {}
+      try {
+        const retry = await Promise.race([
+          supabase.auth.signUp({
+            email: payload.email,
+            password: payload.password,
+            options: { data: { login: payload.login } },
+          }),
+          new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error("register_recheck_timeout")), REGISTER_RECHECK_SIGNUP_MS);
+          }),
+        ]);
+        const retryErr = retry.error?.message?.toLowerCase() ?? "";
+        if (retryErr.includes("already registered") || retryErr.includes("already been registered")) {
+          return true;
+        }
+      } catch {}
 
-    return false;
+      return false;
+    };
+
+    if (await runOnce()) return true;
+    await new Promise((r) => setTimeout(r, 2200));
+    return runOnce();
   };
 
-  let data: { user?: unknown } | null = null;
-  let error: { message: string } | null = null;
-  try {
-    const result = (await Promise.race([
+  const runPrimarySignUp = () =>
+    Promise.race([
       supabase.auth.signUp({
         email: payload.email,
         password: payload.password,
@@ -917,16 +939,32 @@ export async function registerUser(payload: {
       new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error("register_auth_timeout")), REGISTER_AUTH_TIMEOUT_MS);
       }),
-    ])) as Awaited<ReturnType<typeof supabase.auth.signUp>>;
+    ]) as Promise<Awaited<ReturnType<typeof supabase.auth.signUp>>>;
+
+  let data: { user?: unknown } | null = null;
+  let error: { message: string } | null = null;
+  try {
+    const result = (await runPrimarySignUp()) as Awaited<ReturnType<typeof supabase.auth.signUp>>;
     data = result.data as { user?: unknown };
     error = result.error as { message: string } | null;
   } catch {
-    const createdAnyway = await confirmRegistrationCreated();
-    if (createdAnyway) {
-      await supabase.auth.signOut().catch(() => undefined);
-      return { ok: true as const };
+    await new Promise((r) => setTimeout(r, 1500));
+    try {
+      const result = (await runPrimarySignUp()) as Awaited<ReturnType<typeof supabase.auth.signUp>>;
+      data = result.data as { user?: unknown };
+      error = result.error as { message: string } | null;
+    } catch {
+      const createdAnyway = await confirmRegistrationCreated();
+      if (createdAnyway) {
+        await supabase.auth.signOut().catch(() => undefined);
+        return { ok: true as const };
+      }
+      return {
+        ok: false as const,
+        error:
+          "Не удалось завершить регистрацию из‑за сети. Подождите и нажмите «Создать аккаунт» снова или попробуйте войти — аккаунт мог уже создаться.",
+      };
     }
-    return { ok: false as const, error: "Сервер регистрации не отвечает. Повторите попытку через 10-20 секунд." };
   }
 
   if (error) {

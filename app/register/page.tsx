@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { AuthPasswordInput } from "@/components/AuthPasswordInput";
 import { getPositions } from "@/lib/storage";
 import { registerUser } from "@/lib/users-repository";
 
@@ -265,29 +266,31 @@ export default function RegisterPage() {
               required
             />
 
-            <label className="label">Пароль</label>
-            <input
-              type="password"
-              className="input"
+            <AuthPasswordInput
+              id="register-password"
+              label="Пароль"
               placeholder="Внимательно заполняйте пароль"
               value={form.password}
-              onChange={(e) => {
-                setForm((p) => ({ ...p, password: e.target.value }));
+              onChange={(v) => {
+                setForm((p) => ({ ...p, password: v }));
                 if (passwordMismatch) setPasswordMismatch(false);
               }}
               required
+              disabled={isSubmitting}
+              autoComplete="new-password"
             />
 
-            <label className="label">Повторите пароль</label>
-            <input
-              type="password"
-              className="input"
+            <AuthPasswordInput
+              id="register-password-repeat"
+              label="Повторите пароль"
               value={form.repeatPassword}
-              onChange={(e) => {
-                setForm((p) => ({ ...p, repeatPassword: e.target.value }));
+              onChange={(v) => {
+                setForm((p) => ({ ...p, repeatPassword: v }));
                 if (passwordMismatch) setPasswordMismatch(false);
               }}
               required
+              disabled={isSubmitting}
+              autoComplete="new-password"
             />
             {passwordMismatch && <p style={{ color: "#ff8d8d", fontSize: 13 }}>Пароль в этих двух строках должен совпадать.</p>}
 
