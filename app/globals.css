@@ -110,7 +110,9 @@ a {
   position: relative;
   z-index: 1;
   max-width: 1200px;
+  width: 100%;
   margin: 0 auto;
+  min-width: 0;
   /* Запас под фиксированный bottom-nav + safe area (история и низ страницы не прячутся на телефоне) */
   padding-bottom: calc(110px + env(safe-area-inset-bottom, 0px));
 }
@@ -144,6 +146,9 @@ a {
   padding: 8px 16px;
   border-bottom: 1px solid var(--line);
   margin-bottom: 12px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 @media (max-width: 819px) {
@@ -168,6 +173,7 @@ a {
 /* Якоря карточек каталога (БПЛА / противодействие): не уезжают под липкую полосу чипов */
 .catalog-card-anchor {
   scroll-margin-top: calc(132px + env(safe-area-inset-top, 0px));
+  min-width: 0;
 }
 
 @media (min-width: 820px) {
@@ -387,6 +393,7 @@ html[data-theme="dark"] .selfcheck-hint__text svg {
 
 .screen {
   padding: 16px;
+  min-width: 0;
 }
 
 .app-site-footer {
@@ -423,10 +430,22 @@ html[data-theme="dark"] .selfcheck-hint__text svg {
   border-radius: 20px;
   box-shadow: var(--shadow);
   overflow: hidden;
+  min-width: 0;
+}
+
+.card-body h3 {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .card-body {
   padding: 16px;
+  min-width: 0;
+}
+
+.card-body .page-subtitle {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .page-title {
@@ -444,10 +463,11 @@ html[data-theme="dark"] .selfcheck-hint__text svg {
 .grid {
   display: grid;
   gap: 12px;
+  min-width: 0;
 }
 
 .grid-two {
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .btn,
@@ -860,8 +880,11 @@ html[data-theme="dark"] .duty-location-badge--deployment {
 
 .chips {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  overflow: auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
   padding-bottom: 4px;
 }
 
@@ -1236,10 +1259,15 @@ html[data-theme="dark"] .chip:not(.active):hover {
   background: rgba(207, 46, 46, 0.16);
 }
 
+.app-shell > main {
+  min-width: 0;
+  overflow-x: clip;
+}
+
 @media (min-width: 820px) {
   .app-shell {
     display: grid;
-    grid-template-columns: 250px 1fr;
+    grid-template-columns: 250px minmax(0, 1fr);
     padding-bottom: 24px;
   }
 
