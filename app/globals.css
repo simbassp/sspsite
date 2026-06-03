@@ -157,6 +157,23 @@ a {
     top: var(--uav-sticky-below-header, calc(128px + env(safe-area-inset-top, 0px)));
   }
 
+  /* Одна строка + горизонтальный свайп: не перекрывает карточки при скролле */
+  .uav-model-nav .chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .uav-model-nav .chips::-webkit-scrollbar {
+    display: none;
+  }
+
+  .uav-model-nav .chip {
+    flex-shrink: 0;
+  }
+
   /* Prevent auto-scrolled cards from hiding under sticky mobile header */
   .tests-page .card {
     scroll-margin-top: calc(150px + env(safe-area-inset-top, 0px));
@@ -168,11 +185,16 @@ a {
     top: 0;
     margin: 0;
   }
+
+  .uav-model-nav .chips {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
 }
 
 /* Якоря карточек каталога (БПЛА / противодействие): не уезжают под липкую полосу чипов */
 .catalog-card-anchor {
-  scroll-margin-top: calc(132px + env(safe-area-inset-top, 0px));
+  scroll-margin-top: calc(var(--uav-sticky-below-header, 128px) + 52px + env(safe-area-inset-top, 0px));
   min-width: 0;
 }
 
