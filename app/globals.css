@@ -155,15 +155,25 @@ a {
   .uav-model-nav {
     /* Set dynamically from #mobile-app-header height in uav/page.tsx */
     top: var(--uav-sticky-below-header, calc(128px + env(safe-area-inset-top, 0px)));
+    overflow: visible;
+    padding-left: 0;
+    padding-right: 0;
   }
 
-  /* Одна строка + горизонтальный свайп: не перекрывает карточки при скролле */
+  /* Одна строка + горизонтальный свайп; симметричные отступы слева и справа */
   .uav-model-nav .chips {
     flex-wrap: nowrap;
     overflow-x: auto;
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
+    max-width: none;
+    width: 100%;
+    margin: 0;
+    padding-left: calc(16px + env(safe-area-inset-left, 0px));
+    padding-right: calc(16px + env(safe-area-inset-right, 0px));
+    scroll-padding-inline: calc(16px + env(safe-area-inset-left, 0px))
+      calc(16px + env(safe-area-inset-right, 0px));
   }
 
   .uav-model-nav .chips::-webkit-scrollbar {
