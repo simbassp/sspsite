@@ -1,5 +1,6 @@
 "use client";
 
+import { POSITION_OPTIONS } from "@/lib/position-ui";
 import { seedData, STORAGE_KEY } from "@/lib/seed";
 import { normalizeTestConfig } from "@/lib/test-config";
 import { createDefaultQuestionBank } from "@/lib/test-question-bank";
@@ -16,13 +17,9 @@ import {
   UserRecord,
 } from "@/lib/types";
 
-const positions: Position[] = [
-  "Младший специалист",
-  "Специалист",
-  "Ведущий специалист",
-  "Главный специалист",
-  "Командир взвода",
-];
+export function getPositions() {
+  return [...POSITION_OPTIONS];
+}
 
 function uid(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
@@ -56,10 +53,6 @@ function withNormalizedPermissions(user: UserRecord): UserRecord {
     permissions: normalized,
     canManageContent: normalized.news || normalized.tests || normalized.uav || normalized.counteraction,
   };
-}
-
-export function getPositions() {
-  return positions;
 }
 
 export function readData(): AppData {

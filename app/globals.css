@@ -1605,6 +1605,11 @@ html[data-theme="dark"] .chip:not(.active):hover {
   line-height: 1.25;
 }
 
+.admin-users-position-badge.is-trainee {
+  background: rgba(100, 116, 139, 0.16);
+  color: #64748b;
+}
+
 .admin-users-position-badge.is-junior {
   background: rgba(245, 158, 11, 0.15);
   color: #d97706;

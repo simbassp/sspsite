@@ -13,6 +13,7 @@ import {
 } from "@/lib/news-repository";
 import { applyMarkupToSelection, isUpdateNews, NewsBody } from "@/lib/news-text";
 import { isPlaceholderNewsAuthor } from "@/lib/news-author";
+import { getPositionBadgeClass } from "@/lib/position-ui";
 import { NewsItem } from "@/lib/types";
 
 export default function AdminNewsPage() {
@@ -110,16 +111,6 @@ export default function AdminNewsPage() {
       textarea.focus();
       textarea.setSelectionRange(next.caretStart, next.caretEnd);
     });
-  };
-
-  const getPositionBadgeClass = (position?: string | null) => {
-    const normalized = (position || "").trim().toLowerCase();
-    if (normalized === "младший специалист") return "is-junior";
-    if (normalized === "специалист") return "is-specialist";
-    if (normalized === "ведущий специалист") return "is-lead";
-    if (normalized === "главный специалист") return "is-chief";
-    if (normalized === "командир взвода") return "is-commander";
-    return "is-default";
   };
 
   const visibleNews = news.filter((item) => {

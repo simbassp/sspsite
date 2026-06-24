@@ -5,14 +5,9 @@ import { readClientSession } from "@/lib/client-auth";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { withTimeoutAndRetry } from "@/lib/async-utils";
 import { NewsItem, NewsTextStyle, Position } from "@/lib/types";
+import { POSITION_OPTIONS } from "@/lib/position-ui";
 
-const AUTHOR_POSITIONS: readonly Position[] = [
-  "Младший специалист",
-  "Специалист",
-  "Ведущий специалист",
-  "Главный специалист",
-  "Командир взвода",
-];
+const AUTHOR_POSITIONS: readonly Position[] = POSITION_OPTIONS;
 
 function normalizeAuthorPosition(value: string | null | undefined): Position | null {
   if (value == null || value.trim() === "") return null;

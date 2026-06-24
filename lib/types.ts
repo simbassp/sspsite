@@ -1,6 +1,7 @@
 export type Role = "employee" | "admin";
 
 export type Position =
+  | "Стажер"
   | "Младший специалист"
   | "Специалист"
   | "Ведущий специалист"
