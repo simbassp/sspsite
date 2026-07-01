@@ -18,21 +18,13 @@ import {
 } from "@/lib/tests-repository";
 import { filterDbPoolByManualTopicSettings } from "@/lib/manual-topic";
 import { DEFAULT_TEST_CONFIG } from "@/lib/test-config";
+import { loadRecentQuestionIds, pickTestQuestions, rememberQuestionIds } from "@/lib/test-question-selection";
 import { generateUavTtxQuestionBank } from "@/lib/uav-test-generator";
 import { fetchUavItems } from "@/lib/uav-repository";
 import { TestConfig, TestQuestion, TestResult } from "@/lib/types";
 
 const TRIAL_FEEDBACK_MS = 2600;
 const QUESTION_START_COUNTDOWN_SEC = 3;
-
-function pickRandomQuestions(bank: TestQuestion[], count: number) {
-  const cloned = [...bank];
-  for (let i = cloned.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [cloned[i], cloned[j]] = [cloned[j], cloned[i]];
-  }
-  return cloned.slice(0, Math.max(1, Math.min(count, cloned.length)));
-}
 
 function formatAttemptDuration(value: number | null | undefined) {
   const sec = Number(value);
@@ -206,8 +198,7 @@ export default function TestsPage() {
     }
   };
 
-  const ensureQuestionPoolLoaded = async (): Promise<TestQuestion[] | null> => {
-    if (questionPool.length > 0) return questionPool;
+  const loadQuestionPool = async (): Promise<TestQuestion[] | null> => {
     setIsPoolLoading(true);
     try {
       const response = await fetch("/api/tests/pool", { cache: "no-store" });
@@ -641,7 +632,7 @@ export default function TestsPage() {
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
-    const pool = await ensureQuestionPoolLoaded();
+    const pool = await loadQuestionPool();
     if (!pool) {
       setMessage("Не удалось подготовить вопросы. Проверьте интернет.");
       return;
@@ -654,7 +645,9 @@ export default function TestsPage() {
       );
       return;
     }
-    const randomQuestions = pickRandomQuestions(pool, testConfig.trialQuestionCount);
+    const recentIds = session ? loadRecentQuestionIds(session.id) : [];
+    const randomQuestions = pickTestQuestions(pool, testConfig.trialQuestionCount, recentIds);
+    if (session) rememberQuestionIds(session.id, randomQuestions.map((q) => q.id));
     const first = randomQuestions[0];
     expireHandledForQuestionIdRef.current = null;
     setTrialFeedback(null);
@@ -683,7 +676,7 @@ export default function TestsPage() {
       );
       return;
     }
-    const pool = await ensureQuestionPoolLoaded();
+    const pool = await loadQuestionPool();
     if (!pool) {
       setMessage("Не удалось подготовить вопросы. Проверьте интернет.");
       return;
@@ -696,7 +689,9 @@ export default function TestsPage() {
       );
       return;
     }
-    const randomQuestions = pickRandomQuestions(pool, testConfig.finalQuestionCount);
+    const recentIds = session ? loadRecentQuestionIds(session.id) : [];
+    const randomQuestions = pickTestQuestions(pool, testConfig.finalQuestionCount, recentIds);
+    if (session) rememberQuestionIds(session.id, randomQuestions.map((q) => q.id));
     const first = randomQuestions[0];
     await beginFinalAttempt(session.id);
     expireHandledForQuestionIdRef.current = null;

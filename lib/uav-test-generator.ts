@@ -4,6 +4,7 @@ import {
   normalizeUnitToken,
   parseValueParts,
 } from "@/lib/answer-equivalence";
+import { shuffleQuestions } from "@/lib/test-question-selection";
 import { CatalogItem, TestQuestion, TestType } from "@/lib/types";
 
 const DEFAULT_TYPE: TestType = "trial";
@@ -358,5 +359,5 @@ export function generateUavTtxQuestionBank(items: CatalogItem[], timeLimitSec = 
     });
   }
 
-  return out;
+  return shuffleQuestions(out);
 }
