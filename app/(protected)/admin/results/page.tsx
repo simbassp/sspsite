@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { readClientSession } from "@/lib/client-auth";
 import { canResetTestResults } from "@/lib/permissions";
@@ -353,7 +354,10 @@ export default function AdminResultsPage() {
             <div className="card-body">
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
                 <h3 style={{ margin: 0 }}>
-                  {row.name} ({row.callsign})
+                  <Link href={`/profile/${row.userId}`} prefetch={false} className="admin-users-profile-link">
+                    {row.name}
+                    {row.callsign ? ` (${row.callsign})` : ""}
+                  </Link>
                 </h3>
                 <span className={`admin-users-position-badge ${getPositionBadgeClass(row.position || "")}`}>
                   {row.position || "—"}
