@@ -72,8 +72,7 @@ export async function GET(req: Request) {
 
     const resultsPrimary = await supabase
       .from("test_results")
-      .select("id,user_id,type,status,score,created_at,questions_total,questions_correct")
-      .eq("type", "final")
+      .select("id,user_id,type,status,score,created_at,questions_total,questions_correct,final_attempt_index")
       .order("created_at", { ascending: false })
       .limit(8000);
 
@@ -86,7 +85,6 @@ export async function GET(req: Request) {
       const resultsMid = await supabase
         .from("test_results")
         .select("id,user_id,type,status,score,created_at")
-        .eq("type", "final")
         .order("created_at", { ascending: false })
         .limit(8000);
       resultsRows = resultsMid.data as Array<Record<string, unknown>> | null;
@@ -97,7 +95,6 @@ export async function GET(req: Request) {
       const resultsLegacy = await supabase
         .from("test_results")
         .select("id,user_id,test_type,status,score,created_at")
-        .eq("test_type", "final")
         .order("created_at", { ascending: false })
         .limit(8000);
       resultsRows = resultsLegacy.data as Array<Record<string, unknown>> | null;
@@ -108,18 +105,34 @@ export async function GET(req: Request) {
       return Response.json({ ok: false, error: resultsErr.message || "results_failed" }, { status: 500 });
     }
 
-    const finalRows = (resultsRows || [])
-      .filter((r) => (r.type ?? r.test_type) === "final")
-      .map((r) => ({
-        id: String(r.id),
-        user_id: String(r.user_id),
-        type: "final" as const,
-        status: r.status === "passed" ? ("passed" as const) : ("failed" as const),
-        score: Number(r.score ?? 0),
-        created_at: String(r.created_at ?? ""),
-        questions_total: r.questions_total != null ? Number(r.questions_total) : null,
-        questions_correct: r.questions_correct != null ? Number(r.questions_correct) : null,
-      }));
+    type NormalizedResult = {
+      id: string;
+      user_id: string;
+      type: "trial" | "final";
+      status: "passed" | "failed";
+      score: number;
+      created_at: string;
+      questions_total: number | null;
+      questions_correct: number | null;
+      final_attempt_index: number | null;
+    };
+
+    const allRows: NormalizedResult[] = (resultsRows || []).map((r) => ({
+      id: String(r.id),
+      user_id: String(r.user_id),
+      type: (r.type ?? r.test_type) === "final" ? ("final" as const) : ("trial" as const),
+      status: r.status === "passed" ? ("passed" as const) : ("failed" as const),
+      score: Number(r.score ?? 0),
+      created_at: String(r.created_at ?? ""),
+      questions_total: r.questions_total != null ? Number(r.questions_total) : null,
+      questions_correct: r.questions_correct != null ? Number(r.questions_correct) : null,
+      final_attempt_index:
+        r.final_attempt_index != null && Number.isFinite(Number(r.final_attempt_index))
+          ? Number(r.final_attempt_index)
+          : null,
+    }));
+
+    const finalRows = allRows.filter((r) => r.type === "final");
 
     const finalsByUser = new Map<string, typeof finalRows>();
     for (const row of finalRows) {
@@ -129,6 +142,7 @@ export async function GET(req: Request) {
     }
 
     const cutoff = rangeStartIso(range);
+    const cutoffMs = cutoff ? cutoff.getTime() : null;
 
     /** Сотрудники и администраторы — админ видит себя и может сбросить себе попытки. */
     const summaries = users
@@ -219,7 +233,49 @@ export async function GET(req: Request) {
       }
     }
 
-    const userById = new Map(users.map((u) => [u.id, { name: u.name, callsign: u.callsign }]));
+    const userById = new Map(
+      users.map((u) => [
+        u.id,
+        { name: u.name, callsign: u.callsign, position: String(u.position ?? "") },
+      ]),
+    );
+
+    const attempts = allRows
+      .filter((row) => {
+        if (cutoffMs == null) return true;
+        const t = new Date(row.created_at).getTime();
+        return Number.isFinite(t) && t >= cutoffMs;
+      })
+      .map((row) => {
+        const user = userById.get(row.user_id);
+        return {
+          id: row.id,
+          userId: row.user_id,
+          name: user?.name ?? "—",
+          callsign: user?.callsign ?? "",
+          position: user?.position ?? "",
+          type: row.type,
+          status: row.status,
+          scorePercent: row.score,
+          questionsCorrect: row.questions_correct,
+          questionsTotal: row.questions_total,
+          createdAt: row.created_at,
+          finalAttemptIndex: row.final_attempt_index,
+          showResetAttempts: false,
+        };
+      })
+      .filter((row) => userById.has(row.userId));
+
+    for (const summary of summaries) {
+      if (!summary.showResetAttempts || !summary.latestFinalAt) continue;
+      const match = attempts.find(
+        (a) =>
+          a.userId === summary.userId &&
+          a.type === "final" &&
+          a.createdAt === summary.latestFinalAt,
+      );
+      if (match) match.showResetAttempts = true;
+    }
 
     const passedSummaries = summaries.filter((s) => s.status === "passed");
     const failedSummaries = summaries.filter((s) => s.status === "failed");
@@ -312,6 +368,7 @@ export async function GET(req: Request) {
       nextAutoResetAt: nextAutoResetUtcIso(),
       range,
       summaries,
+      attempts,
       lastResetAudit,
       bannerStats,
     });

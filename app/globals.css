@@ -1054,6 +1054,16 @@ html[data-theme="dark"] .chip:not(.active):hover {
   color: #f0cb79;
 }
 
+.pill-orange {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+
+.pill-blue {
+  background: rgba(59, 130, 246, 0.14);
+  color: #60a5fa;
+}
+
 .bottom-nav {
   position: fixed;
   left: 0;

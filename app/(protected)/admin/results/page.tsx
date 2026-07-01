@@ -5,10 +5,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { readClientSession } from "@/lib/client-auth";
 import { canResetTestResults } from "@/lib/permissions";
 import { getPositionBadgeClass } from "@/lib/position-ui";
-import { FINAL_TEST_MAX_ATTEMPTS } from "@/lib/final-test-constants";
 import { formatDateTime } from "@/lib/format";
 
 type DateRange = "all" | "today" | "7d" | "30d";
+type TestTypeFilter = "all" | "trial" | "final";
 type StatusFilter = "all" | "passed" | "failed" | "not_started";
 
 type UserSummary = {
@@ -23,6 +23,22 @@ type UserSummary = {
   latestFinalAt: string | null;
   usedFinalAttempts: number;
   maxFinalAttempts: number;
+  showResetAttempts: boolean;
+};
+
+type AttemptRow = {
+  id: string;
+  userId: string;
+  name: string;
+  callsign: string;
+  position?: string;
+  type: "trial" | "final";
+  status: "passed" | "failed";
+  scorePercent: number;
+  questionsCorrect: number | null;
+  questionsTotal: number | null;
+  createdAt: string;
+  finalAttemptIndex: number | null;
   showResetAttempts: boolean;
 };
 
@@ -45,6 +61,7 @@ type BootstrapPayload = {
   viewerIsAdmin?: boolean;
   nextAutoResetAt?: string;
   summaries?: UserSummary[];
+  attempts?: AttemptRow[];
   bannerStats?: BannerStats;
   lastResetAudit?: {
     created_at: string;
@@ -71,14 +88,28 @@ function formatLastPersonLine(row: LastPersonAt | null) {
   return `Последний: ${who} · ${formatDateTime(row.at)}`;
 }
 
+function fractionLabel(row: { questionsTotal: number | null; questionsCorrect: number | null; scorePercent: number | null }) {
+  const qt = row.questionsTotal;
+  const qc = row.questionsCorrect;
+  if (qt != null && qc != null && qt > 0) {
+    return `${qc} / ${qt}`;
+  }
+  if (row.scorePercent != null) {
+    return `${row.scorePercent}%`;
+  }
+  return "—";
+}
+
 export default function AdminResultsPage() {
   const session = readClientSession();
   const viewerCanReset = session ? canResetTestResults(session) : false;
 
   const [range, setRange] = useState<DateRange>("all");
+  const [typeFilter, setTypeFilter] = useState<TestTypeFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [summaries, setSummaries] = useState<UserSummary[]>([]);
+  const [attempts, setAttempts] = useState<AttemptRow[]>([]);
   const [bannerStats, setBannerStats] = useState<BannerStats>(emptyBannerStats);
   const [lastResetAudit, setLastResetAudit] = useState<BootstrapPayload["lastResetAudit"]>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -99,12 +130,14 @@ export default function AdminResultsPage() {
         throw new Error(payload.error || "admin_results_bootstrap_failed");
       }
       setSummaries(Array.isArray(payload.summaries) ? payload.summaries : []);
+      setAttempts(Array.isArray(payload.attempts) ? payload.attempts : []);
       setBannerStats(payload.bannerStats ?? emptyBannerStats);
       setLastResetAudit(payload.lastResetAudit ?? null);
       setNextAutoResetAt(payload.nextAutoResetAt ?? null);
     } catch {
       setLoadError("Не удалось получить данные результатов. Попробуйте обновить страницу.");
       setSummaries([]);
+      setAttempts([]);
       setBannerStats(emptyBannerStats);
       setNextAutoResetAt(null);
     } finally {
@@ -116,15 +149,32 @@ export default function AdminResultsPage() {
     void load();
   }, [load]);
 
-  const visible = useMemo(() => {
+  useEffect(() => {
+    if (typeFilter === "trial" && statusFilter === "not_started") {
+      setStatusFilter("all");
+    }
+  }, [typeFilter, statusFilter]);
+
+  const visibleAttempts = useMemo(() => {
+    if (statusFilter === "not_started") return [];
     const query = searchTerm.trim().toLowerCase();
-    return summaries.filter((s) => {
-      const byStatus = statusFilter === "all" ? true : s.status === statusFilter;
-      if (!byStatus) return false;
+    return attempts.filter((row) => {
+      if (typeFilter !== "all" && row.type !== typeFilter) return false;
+      if (statusFilter !== "all" && row.status !== statusFilter) return false;
       if (!query) return true;
-      return s.name.toLowerCase().includes(query) || s.callsign.toLowerCase().includes(query);
+      return row.name.toLowerCase().includes(query) || row.callsign.toLowerCase().includes(query);
     });
-  }, [summaries, statusFilter, searchTerm]);
+  }, [attempts, typeFilter, statusFilter, searchTerm]);
+
+  const visibleNotStarted = useMemo(() => {
+    if (statusFilter !== "not_started" || typeFilter === "trial") return [];
+    const query = searchTerm.trim().toLowerCase();
+    return summaries.filter((row) => {
+      if (row.status !== "not_started") return false;
+      if (!query) return true;
+      return row.name.toLowerCase().includes(query) || row.callsign.toLowerCase().includes(query);
+    });
+  }, [summaries, statusFilter, typeFilter, searchTerm]);
 
   const onResetAttempts = async (userId: string) => {
     if (!viewerCanReset) return;
@@ -151,18 +201,8 @@ export default function AdminResultsPage() {
     }
   };
 
-  const fractionLabel = (s: UserSummary) => {
-    const qt = s.questionsTotal;
-    const qc = s.questionsCorrect;
-    if (qt != null && qc != null && qt > 0) {
-      return `${qc} / ${qt}`;
-    }
-    if (s.scorePercent != null) {
-      return `${s.scorePercent}%`;
-    }
-    return "—";
-  };
   const autoResetText = nextAutoResetAt ? formatDateTime(nextAutoResetAt) : "25-го числа следующего месяца";
+  const showNotStartedFilter = typeFilter !== "trial";
 
   return (
     <section>
@@ -175,7 +215,9 @@ export default function AdminResultsPage() {
         </p>
       )}
 
-      <p className="page-subtitle">Фильтр по дате последней попытки и статусу итогового теста.</p>
+      <p className="page-subtitle">
+        Пробные и итоговые попытки, фильтр по периоду, типу теста и результату.
+      </p>
       <div className="selfcheck-hint" style={{ marginBottom: 10 }}>
         Сброс попыток доступен вручную (администратором или пользователем с правом сброса) и автоматически 25-го числа
         каждого месяца. Следующий автосброс: {autoResetText}.
@@ -202,9 +244,36 @@ export default function AdminResultsPage() {
         </button>
       </div>
 
+      <div className="chips" style={{ marginBottom: 8 }}>
+        <span className="label" style={{ width: "100%", marginBottom: 4 }}>
+          Тип теста
+        </span>
+        <button
+          className={`chip ${typeFilter === "all" ? "active" : ""}`}
+          type="button"
+          onClick={() => setTypeFilter("all")}
+        >
+          Все
+        </button>
+        <button
+          className={`chip ${typeFilter === "trial" ? "active" : ""}`}
+          type="button"
+          onClick={() => setTypeFilter("trial")}
+        >
+          Пробный
+        </button>
+        <button
+          className={`chip ${typeFilter === "final" ? "active" : ""}`}
+          type="button"
+          onClick={() => setTypeFilter("final")}
+        >
+          Итоговый
+        </button>
+      </div>
+
       <div className="chips">
         <span className="label" style={{ width: "100%", marginBottom: 4 }}>
-          Статус
+          Результат
         </span>
         <button
           className={`chip ${statusFilter === "all" ? "active" : ""}`}
@@ -227,13 +296,15 @@ export default function AdminResultsPage() {
         >
           Не сдал
         </button>
-        <button
-          className={`chip ${statusFilter === "not_started" ? "active" : ""}`}
-          type="button"
-          onClick={() => setStatusFilter("not_started")}
-        >
-          Не проходил
-        </button>
+        {showNotStartedFilter && (
+          <button
+            className={`chip ${statusFilter === "not_started" ? "active" : ""}`}
+            type="button"
+            onClick={() => setStatusFilter("not_started")}
+          >
+            Не проходил итог
+          </button>
+        )}
       </div>
 
       {!isLoading && !loadError && (
@@ -249,7 +320,7 @@ export default function AdminResultsPage() {
                 </span>
                 <div style={{ minWidth: 0 }}>
                   <p className="label" style={{ marginBottom: 4 }}>
-                    Сдали
+                    Сдали итог
                   </p>
                   <p className="stat-value" style={{ margin: 0 }}>
                     {bannerStats.passedCount}
@@ -270,7 +341,7 @@ export default function AdminResultsPage() {
                 </span>
                 <div style={{ minWidth: 0 }}>
                   <p className="label" style={{ marginBottom: 4 }}>
-                    Не сдали
+                    Не сдали итог
                   </p>
                   <p className="stat-value" style={{ margin: 0 }}>
                     {bannerStats.notPassedCount}
@@ -346,10 +417,10 @@ export default function AdminResultsPage() {
       />
 
       <div className="list" style={{ marginTop: 12 }}>
-        {visible.map((row) => (
+        {visibleAttempts.map((row) => (
           <article
             className={`card admin-results-card admin-results-card--${row.status}`}
-            key={row.userId}
+            key={row.id}
           >
             <div className="card-body">
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
@@ -364,24 +435,23 @@ export default function AdminResultsPage() {
                 </span>
               </div>
               <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                Статус:{" "}
-                <span
-                  className={`pill ${row.status === "passed" ? "pill-green" : row.status === "failed" ? "pill-red" : "pill-yellow"}`}
-                >
-                  {row.status === "passed" ? "Сдал" : row.status === "failed" ? "Не сдал" : "Не проходил"}
+                <span className={`pill ${row.type === "trial" ? "pill-orange" : "pill-blue"}`}>
+                  {row.type === "trial" ? "Пробный" : "Итоговый"}
+                </span>
+                <span className={`pill ${row.status === "passed" ? "pill-green" : "pill-red"}`}>
+                  {row.status === "passed" ? "Сдал" : "Не сдал"}
                 </span>
               </p>
-              {row.status !== "not_started" && (
+              <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0 }}>
+                Результат: {row.scorePercent}% ({fractionLabel(row)})
+              </p>
+              {row.type === "final" && row.finalAttemptIndex != null && row.finalAttemptIndex > 0 && (
                 <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0 }}>
-                  Результат:{" "}
-                  {row.scorePercent != null ? `${row.scorePercent}% (${fractionLabel(row)})` : fractionLabel(row)}
+                  Попытка итога №{row.finalAttemptIndex}
                 </p>
               )}
               <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0 }}>
-                Попытки: {row.usedFinalAttempts} / {row.maxFinalAttempts ?? FINAL_TEST_MAX_ATTEMPTS}
-              </p>
-              <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0 }}>
-                Последняя попытка: {row.latestFinalAt ? formatDateTime(row.latestFinalAt) : "—"}
+                Дата: {row.createdAt ? formatDateTime(row.createdAt) : "—"}
               </p>
               {row.showResetAttempts && (
                 <button
@@ -391,12 +461,41 @@ export default function AdminResultsPage() {
                   disabled={resetBusyId === row.userId}
                   onClick={() => void onResetAttempts(row.userId)}
                 >
-                  {resetBusyId === row.userId ? "Сброс…" : "Сбросить попытки"}
+                  {resetBusyId === row.userId ? "Сброс…" : "Сбросить попытки итога"}
                 </button>
               )}
             </div>
           </article>
         ))}
+
+        {visibleNotStarted.map((row) => (
+          <article className="card admin-results-card admin-results-card--not_started" key={`ns-${row.userId}`}>
+            <div className="card-body">
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+                <h3 style={{ margin: 0 }}>
+                  <Link href={`/profile/${row.userId}`} prefetch={false} className="admin-users-profile-link">
+                    {row.name}
+                    {row.callsign ? ` (${row.callsign})` : ""}
+                  </Link>
+                </h3>
+                <span className={`admin-users-position-badge ${getPositionBadgeClass(row.position || "")}`}>
+                  {row.position || "—"}
+                </span>
+              </div>
+              <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span className="pill pill-blue">Итоговый</span>
+                <span className="pill pill-yellow">Не проходил</span>
+              </p>
+              <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0 }}>
+                Итоговый тест ещё не сдавался в выбранном периоде.
+              </p>
+            </div>
+          </article>
+        ))}
+
+        {!isLoading && !loadError && visibleAttempts.length === 0 && visibleNotStarted.length === 0 && (
+          <p className="page-subtitle">Нет записей по выбранным фильтрам.</p>
+        )}
       </div>
     </section>
   );
