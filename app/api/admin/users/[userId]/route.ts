@@ -48,6 +48,24 @@ function getAdminGrant() {
   } as const;
 }
 
+async function recordPositionPromoted(
+  supabase: ReturnType<typeof getServerSupabaseServiceClient>,
+  user: { id: string; name: unknown; callsign: unknown },
+  position: string,
+) {
+  const label = String(position || "").trim();
+  if (!label) return;
+  await supabase.from("dashboard_events").insert({
+    kind: "position_promoted",
+    payload: {
+      user_id: user.id,
+      name: user.name,
+      callsign: user.callsign,
+      position: label,
+    },
+  });
+}
+
 export async function PATCH(request: Request, context: { params: Promise<{ userId: string }> }) {
   const session = await getServerSession();
   if (!session || !canManageUsers(session)) {
@@ -56,6 +74,14 @@ export async function PATCH(request: Request, context: { params: Promise<{ userI
   const { userId } = await context.params;
   const body = (await request.json()) as PatchBody;
   const supabase = getServerSupabaseServiceClient();
+
+  const beforeQ = await supabase
+    .from("app_users")
+    .select("id,name,callsign,position")
+    .eq("id", userId)
+    .maybeSingle();
+  if (beforeQ.error) return Response.json({ ok: false, error: beforeQ.error.message }, { status: 400 });
+  if (!beforeQ.data) return Response.json({ ok: false, error: "user_not_found" }, { status: 404 });
 
   const nextPermissions = body.permissions;
   const nextCanManageContent =
@@ -89,14 +115,28 @@ export async function PATCH(request: Request, context: { params: Promise<{ userI
     ...roleFragment,
   };
 
+  const positionChanged =
+    body.position !== undefined &&
+    String(body.position).trim() !== String(beforeQ.data.position ?? "").trim();
+
   const attempt = await supabase.from("app_users").update(payload).eq("id", userId);
-  if (!attempt.error) return Response.json({ ok: true });
+  if (!attempt.error) {
+    if (positionChanged) {
+      await recordPositionPromoted(supabase, beforeQ.data, String(body.position));
+    }
+    return Response.json({ ok: true });
+  }
 
   if (nextPermissions !== undefined && restErrorMissingColumn(attempt.error.message, "can_view_user_list")) {
     const fallback = { ...payload } as Record<string, unknown>;
     delete fallback.can_view_user_list;
     const noUserList = await supabase.from("app_users").update(fallback).eq("id", userId);
-    if (!noUserList.error) return Response.json({ ok: true, warning: "no_user_list_column" });
+    if (!noUserList.error) {
+      if (positionChanged) {
+        await recordPositionPromoted(supabase, beforeQ.data, String(body.position));
+      }
+      return Response.json({ ok: true, warning: "no_user_list_column" });
+    }
   }
 
   const legacyPayload = {
@@ -108,7 +148,12 @@ export async function PATCH(request: Request, context: { params: Promise<{ userI
     ...(body.role !== undefined ? { role: body.role } : {}),
   };
   const legacy = await supabase.from("app_users").update(legacyPayload).eq("id", userId);
-  if (!legacy.error) return Response.json({ ok: true, warning: "legacy_permissions_fallback" });
+  if (!legacy.error) {
+    if (positionChanged) {
+      await recordPositionPromoted(supabase, beforeQ.data, String(body.position));
+    }
+    return Response.json({ ok: true, warning: "legacy_permissions_fallback" });
+  }
   return Response.json({ ok: false, error: legacy.error.message || attempt.error.message }, { status: 400 });
 }
 
