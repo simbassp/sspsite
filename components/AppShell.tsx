@@ -15,6 +15,10 @@ import {
   canManageUsers,
   canViewUserList,
 } from "@/lib/permissions";
+import {
+  PRESENCE_HEARTBEAT_MS,
+  PRESENCE_HIDDEN_OFFLINE_DELAY_MS,
+} from "@/lib/presence-constants";
 import { SessionUser } from "@/lib/types";
 
 const mobileHeaderIconSvg = {
@@ -99,15 +103,20 @@ export function AppShell({ session, children }: AppShellProps) {
   }, []);
 
   useEffect(() => {
-    const conn =
-      typeof navigator !== "undefined" && "connection" in navigator
-        ? (navigator as Navigator & {
-            connection?: { effectiveType?: string; saveData?: boolean };
-          }).connection
-        : undefined;
-    let HEARTBEAT_MS = 90_000;
-    if (conn?.saveData) HEARTBEAT_MS = 180_000;
-    else if (conn?.effectiveType === "slow-2g" || conn?.effectiveType === "2g") HEARTBEAT_MS = 180_000;
+    let HEARTBEAT_MS = PRESENCE_HEARTBEAT_MS;
+    try {
+      const conn =
+        typeof navigator !== "undefined" && "connection" in navigator
+          ? (navigator as Navigator & {
+              connection?: { effectiveType?: string; saveData?: boolean };
+            }).connection
+          : undefined;
+      if (conn?.saveData || conn?.effectiveType === "slow-2g" || conn?.effectiveType === "2g") {
+        HEARTBEAT_MS = PRESENCE_HEARTBEAT_MS * 2;
+      }
+    } catch {
+      /* ignore */
+    }
 
     const postPresence = (online: boolean, keepalive?: boolean) => {
       if (isLoggingOutRef.current) return;
@@ -120,10 +129,20 @@ export function AppShell({ session, children }: AppShellProps) {
     };
 
     let heartbeat: ReturnType<typeof setInterval> | undefined;
+    let hiddenOfflineTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const clearHiddenOfflineTimer = () => {
+      if (hiddenOfflineTimer) {
+        clearTimeout(hiddenOfflineTimer);
+        hiddenOfflineTimer = undefined;
+      }
+    };
+
     const stopHeartbeat = () => {
       if (heartbeat) clearInterval(heartbeat);
       heartbeat = undefined;
     };
+
     const startHeartbeat = () => {
       stopHeartbeat();
       heartbeat = setInterval(() => {
@@ -136,10 +155,19 @@ export function AppShell({ session, children }: AppShellProps) {
     const onHidden = () => {
       if (isLoggingOutRef.current) return;
       stopHeartbeat();
-      postPresence(false, true);
+      clearHiddenOfflineTimer();
+      // Не сразу офлайн: иначе Alt+Tab / шторка телефона выкидывают из списка.
+      hiddenOfflineTimer = setTimeout(() => {
+        hiddenOfflineTimer = undefined;
+        if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+          postPresence(false, true);
+        }
+      }, PRESENCE_HIDDEN_OFFLINE_DELAY_MS);
     };
+
     const onVisible = () => {
       if (isLoggingOutRef.current) return;
+      clearHiddenOfflineTimer();
       postPresence(true);
       startHeartbeat();
     };
@@ -150,29 +178,22 @@ export function AppShell({ session, children }: AppShellProps) {
       else onVisible();
     };
 
-    const onBlur = () => {
+    const onPageHide = () => {
       if (isLoggingOutRef.current) return;
+      clearHiddenOfflineTimer();
       stopHeartbeat();
       postPresence(false, true);
-    };
-    const onFocus = () => {
-      if (isLoggingOutRef.current) return;
-      postPresence(true);
-      if (typeof document !== "undefined" && document.visibilityState === "visible") startHeartbeat();
     };
 
     postPresence(true);
     if (typeof document !== "undefined" && document.visibilityState === "visible") startHeartbeat();
     document.addEventListener("visibilitychange", onVisibility);
-    window.addEventListener("pagehide", onHidden);
-    window.addEventListener("blur", onBlur);
-    window.addEventListener("focus", onFocus);
+    window.addEventListener("pagehide", onPageHide);
 
     return () => {
       document.removeEventListener("visibilitychange", onVisibility);
-      window.removeEventListener("pagehide", onHidden);
-      window.removeEventListener("blur", onBlur);
-      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("pagehide", onPageHide);
+      clearHiddenOfflineTimer();
       stopHeartbeat();
       if (!isLoggingOutRef.current) {
         postPresence(false, true);

@@ -11,10 +11,11 @@ export async function POST(request: Request) {
     const body = (await request.json()) as { online?: unknown };
     const online = body.online === true;
     const supabase = getServerSupabaseServiceClient();
-    const q = await supabase
-      .from("app_users")
-      .update({ is_online: online, last_seen_at: new Date().toISOString() })
-      .eq("id", session.id);
+    // При уходе в офлайн не трогаем last_seen — иначе после logout человек ещё «свежий» по времени.
+    const patch = online
+      ? { is_online: true, last_seen_at: new Date().toISOString() }
+      : { is_online: false };
+    const q = await supabase.from("app_users").update(patch).eq("id", session.id);
     if (q.error) return Response.json({ ok: false, error: q.error.message || "presence_update_failed" }, { status: 500 });
     return Response.json({ ok: true });
   } catch (error) {

@@ -257,12 +257,18 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!sessionResolved) return;
     let cancelled = false;
-    (async () => {
+    const run = async () => {
       await refresh();
       if (cancelled) return;
-    })();
+    };
+    void run();
+    // Список онлайн обновляем периодически — иначе «залипает» до перезагрузки страницы.
+    const timer = setInterval(() => {
+      void run();
+    }, 45_000);
     return () => {
       cancelled = true;
+      clearInterval(timer);
     };
   }, [sessionResolved]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -271,12 +277,12 @@ export default function DashboardPage() {
     const total = usersSummary.totalUsers;
     const online = usersSummary.onlineUsers;
     if (!online.length) return `Пользователей: ${total} · Онлайн: 0`;
-    const shown = online.slice(0, 3).map((item) => {
+    const shown = online.slice(0, 8).map((item) => {
       const name = item.name || "Пользователь";
       return item.callsign ? `${name} ${item.callsign}` : name;
     });
-    const extra = online.length > 3 ? ` +${online.length - 3}` : "";
-    return `Пользователей: ${total} · Онлайн: ${online.length} - ${shown.join(", ")}${extra}`;
+    const extra = online.length > 8 ? ` +${online.length - 8}` : "";
+    return `Пользователей: ${total} · Онлайн: ${online.length} — ${shown.join(", ")}${extra}`;
   }, [usersSummary]);
 
   return (
