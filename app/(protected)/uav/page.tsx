@@ -6,7 +6,7 @@ import { readClientSession } from "@/lib/client-auth";
 import { splitCategoryLabels, uavBadgeStyle } from "@/lib/catalog-badges";
 import { canManageUav } from "@/lib/permissions";
 import { publicUploadDisplayUrl } from "@/lib/public-asset-url";
-import { UAV_CATEGORIES, itemMatchesUavCategory } from "@/lib/uav-categories";
+import { buildUavCategoryOptions, findCanonicalUavCategory, isBuiltinUavCategory, itemMatchesUavCategory } from "@/lib/uav-categories";
 import { UAV_ENGINE_TYPES, UavEngineType, appendEngineSpec, detectEngineType } from "@/lib/uav-engine";
 import { deleteUavItem, fetchUavItems, saveUavItem } from "@/lib/uav-repository";
 import { CatalogItem } from "@/lib/types";
@@ -34,6 +34,21 @@ function normalizeSpecs(lines: string[]) {
 }
 
 const MASK = "••••••";
+const otherCategoryValue = "__other__";
+const customCategoriesLsKey = "ssp:uav_custom_categories";
+
+function readLocalCustomCategories(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(customCategoriesLsKey);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((x) => String(x || "").trim()).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
 
 function specRevealKey(itemId: string, index: number) {
   return `${itemId}:${index}`;
@@ -67,6 +82,36 @@ export default function UavPage() {
   const [activeChipId, setActiveChipId] = useState<string | "all">("all");
   /** null — список категорий; иначе выбранная категория и чипы моделей внутри неё */
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [customCategories, setCustomCategories] = useState<string[]>([]);
+
+  const categoryOptions = useMemo(() => {
+    const fromItems = items
+      .flatMap((item) =>
+        item.category
+          .split(/\s*[/|]\s*/)
+          .map((s) => s.trim())
+          .filter(Boolean),
+      );
+    return buildUavCategoryOptions([...customCategories, ...fromItems]);
+  }, [customCategories, items]);
+
+  const refreshCustomCategories = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/uav/categories", { cache: "no-store" });
+      const payload = (await res.json()) as { ok?: boolean; custom?: string[]; migrationRequired?: boolean };
+      if (res.ok && payload.ok) {
+        if (payload.migrationRequired) {
+          setCustomCategories(readLocalCustomCategories().filter((c) => !isBuiltinUavCategory(c)));
+          return;
+        }
+        setCustomCategories(Array.isArray(payload.custom) ? payload.custom : []);
+        return;
+      }
+    } catch {
+      /* local fallback */
+    }
+    setCustomCategories(readLocalCustomCategories().filter((c) => !isBuiltinUavCategory(c)));
+  }, []);
 
   const load = async () => {
     setLoading(true);
@@ -74,6 +119,7 @@ export default function UavPage() {
     try {
       const rows = await fetchUavItems();
       setItems(rows);
+      await refreshCustomCategories();
     } catch {
       setLoadError("Не удалось загрузить карточки БПЛА. Проверьте интернет и повторите попытку.");
       setItems([]);
@@ -223,10 +269,27 @@ export default function UavPage() {
     setBusyId(draft.id);
     setMessage("");
     try {
+      const categoryLabel = draft.category.trim();
+      if (
+        categoryLabel &&
+        !findCanonicalUavCategory(categoryLabel, categoryOptions) &&
+        !isBuiltinUavCategory(categoryLabel) &&
+        canInlineEdit
+      ) {
+        try {
+          await fetch("/api/admin/uav/categories", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ label: categoryLabel }),
+          });
+        } catch {
+          /* категория карточки сохранится даже если список пресетов недоступен */
+        }
+      }
       await saveUavItem({
         id: draft.id,
         title: draft.title.trim(),
-        category: draft.category.trim() || "Без категории",
+        category: categoryLabel || "Без категории",
         image: draft.image.trim(),
         summary: draft.summary.trim(),
         specs: appendEngineSpec(specs.slice(0, 6), draft.engineType),
@@ -339,7 +402,7 @@ export default function UavPage() {
           <div className="chips">
             {!selectedCategory ? (
               <>
-                {UAV_CATEGORIES.map((category) => {
+                {categoryOptions.map((category) => {
                   const count = items.filter((item) => itemMatchesUavCategory(item.category, category)).length;
                   return (
                     <button
@@ -477,20 +540,22 @@ export default function UavPage() {
                     <select
                       className="select"
                       value={
-                        UAV_CATEGORIES.some((c) => c === draft.category.trim())
-                          ? draft.category.trim()
+                        findCanonicalUavCategory(draft.category, categoryOptions)
+                          ? findCanonicalUavCategory(draft.category, categoryOptions)!
                           : draft.category.trim()
-                            ? "__other__"
+                            ? otherCategoryValue
                             : ""
                       }
                       onChange={(e) => {
                         const next = e.target.value;
-                        if (next === "__other__") {
+                        if (next === otherCategoryValue) {
                           setDraft((prev) =>
                             prev
                               ? {
                                   ...prev,
-                                  category: UAV_CATEGORIES.some((c) => c === prev.category.trim()) ? "" : prev.category,
+                                  category: findCanonicalUavCategory(prev.category, categoryOptions)
+                                    ? ""
+                                    : prev.category,
                                 }
                               : prev,
                           );
@@ -502,14 +567,14 @@ export default function UavPage() {
                       <option value="" disabled>
                         Категория
                       </option>
-                      {UAV_CATEGORIES.map((option) => (
+                      {categoryOptions.map((option) => (
                         <option key={option} value={option}>
                           {option}
                         </option>
                       ))}
-                      <option value="__other__">Другое</option>
+                      <option value={otherCategoryValue}>Другое</option>
                     </select>
-                    {!UAV_CATEGORIES.some((c) => c === draft.category.trim()) && (
+                    {!findCanonicalUavCategory(draft.category, categoryOptions) && (
                       <input
                         className="input"
                         placeholder="Своя категория"

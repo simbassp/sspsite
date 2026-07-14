@@ -4,7 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GripVertical } from "lucide-react";
 import { splitCategoryLabels, uavBadgeStyle } from "@/lib/catalog-badges";
 import { publicUploadDisplayUrl } from "@/lib/public-asset-url";
-import { UAV_CATEGORIES, isPresetUavCategory, itemMatchesUavCategory } from "@/lib/uav-categories";
+import {
+  buildUavCategoryOptions,
+  findCanonicalUavCategory,
+  isBuiltinUavCategory,
+  itemMatchesUavCategory,
+} from "@/lib/uav-categories";
 import { UAV_ENGINE_TYPES, UavEngineType, appendEngineSpec, detectEngineType } from "@/lib/uav-engine";
 import { deleteUavItem, fetchUavItems, reorderUavItems, saveUavItem } from "@/lib/uav-repository";
 import { CatalogItem } from "@/lib/types";
@@ -28,9 +33,27 @@ const emptyDraft: DraftUav = {
   engineType: "",
 };
 
-const categoryOptions = UAV_CATEGORIES;
 const otherCategoryValue = "__other__";
 const maxUploadSizeMb = 8;
+const customCategoriesLsKey = "ssp:uav_custom_categories";
+
+function readLocalCustomCategories(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(customCategoriesLsKey);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((x) => String(x || "").trim()).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalCustomCategories(list: string[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(customCategoriesLsKey, JSON.stringify(list));
+}
 
 function normalizeSpecs(lines: string[]) {
   return lines
@@ -91,6 +114,10 @@ export default function AdminUavPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string | "all">("all");
+  const [customCategories, setCustomCategories] = useState<string[]>([]);
+  const [categoryModeOther, setCategoryModeOther] = useState(false);
+  const [categoryBusy, setCategoryBusy] = useState(false);
+  const [categoryHint, setCategoryHint] = useState("");
   const [reorderSaving, setReorderSaving] = useState(false);
   const [reorderMessage, setReorderMessage] = useState("");
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -112,13 +139,133 @@ export default function AdminUavPage() {
   }, [orderedItems, categoryFilter]);
   visibleIdsRef.current = visibleItems.map((item) => item.id);
 
-  const isPresetCategory = isPresetUavCategory(draft.category);
-  const categorySelectValue = isPresetCategory
-    ? (categoryOptions.find((option) => option.trim().toLowerCase() === draft.category.trim().toLowerCase()) ??
-      otherCategoryValue)
-    : draft.category.trim()
+  const categoryOptions = useMemo(() => buildUavCategoryOptions(customCategories), [customCategories]);
+  const isKnownCategory = Boolean(findCanonicalUavCategory(draft.category, categoryOptions));
+  const categorySelectValue = isKnownCategory
+    ? (findCanonicalUavCategory(draft.category, categoryOptions) ?? "")
+    : draft.category.trim() || categoryModeOther
       ? otherCategoryValue
       : "";
+
+  const refreshCustomCategories = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/uav/categories", { cache: "no-store" });
+      const payload = (await res.json()) as { ok?: boolean; custom?: string[]; migrationRequired?: boolean };
+      if (res.ok && payload.ok) {
+        const fromApi = Array.isArray(payload.custom) ? payload.custom : [];
+        if (payload.migrationRequired) {
+          const local = readLocalCustomCategories();
+          setCustomCategories(buildUavCategoryOptions(local).filter((c) => !isBuiltinUavCategory(c)));
+          setCategoryHint("Пользовательские категории пока в этом браузере (нужна миграция в Supabase).");
+          return;
+        }
+        setCustomCategories(fromApi);
+        writeLocalCustomCategories(fromApi);
+        setCategoryHint("");
+        return;
+      }
+    } catch {
+      /* fallback below */
+    }
+    const local = readLocalCustomCategories();
+    setCustomCategories(local.filter((c) => !isBuiltinUavCategory(c)));
+  }, []);
+
+  const saveCustomCategory = async (rawLabel: string) => {
+    const label = rawLabel.trim();
+    if (!label) {
+      setCategoryHint("Введите название категории.");
+      return;
+    }
+    if (isBuiltinUavCategory(label)) {
+      const canonical = findCanonicalUavCategory(label, categoryOptions) || label;
+      setDraft((prev) => ({ ...prev, category: canonical }));
+      setCategoryModeOther(false);
+      setCategoryHint("");
+      return;
+    }
+    setCategoryBusy(true);
+    setCategoryHint("");
+    try {
+      const res = await fetch("/api/admin/uav/categories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label }),
+      });
+      const payload = (await res.json()) as {
+        ok?: boolean;
+        label?: string;
+        error?: string;
+        message?: string;
+      };
+      if (res.ok && payload.ok) {
+        const saved = String(payload.label || label).trim();
+        setCustomCategories((prev) => buildUavCategoryOptions([...prev, saved]).filter((c) => !isBuiltinUavCategory(c)));
+        writeLocalCustomCategories(
+          buildUavCategoryOptions([...customCategories, saved]).filter((c) => !isBuiltinUavCategory(c)),
+        );
+        setDraft((prev) => ({ ...prev, category: saved }));
+        setCategoryModeOther(false);
+        setCategoryHint("Категория сохранена в списке.");
+        return;
+      }
+      if (payload.error === "migration_required_uav_category_presets") {
+        const next = buildUavCategoryOptions([...customCategories, label]).filter((c) => !isBuiltinUavCategory(c));
+        setCustomCategories(next);
+        writeLocalCustomCategories(next);
+        setDraft((prev) => ({ ...prev, category: label }));
+        setCategoryModeOther(false);
+        setCategoryHint("Сохранено в этом браузере. Для общего списка выполните миграцию uav_category_presets.");
+        return;
+      }
+      setCategoryHint(payload.message || payload.error || "Не удалось сохранить категорию.");
+    } catch {
+      const next = buildUavCategoryOptions([...customCategories, label]).filter((c) => !isBuiltinUavCategory(c));
+      setCustomCategories(next);
+      writeLocalCustomCategories(next);
+      setDraft((prev) => ({ ...prev, category: label }));
+      setCategoryModeOther(false);
+      setCategoryHint("Сохранено локально (сервер недоступен).");
+    } finally {
+      setCategoryBusy(false);
+    }
+  };
+
+  const deleteCustomCategory = async (label: string) => {
+    if (isBuiltinUavCategory(label)) return;
+    setCategoryBusy(true);
+    try {
+      const res = await fetch(`/api/admin/uav/categories?label=${encodeURIComponent(label)}`, {
+        method: "DELETE",
+      });
+      const payload = (await res.json()) as { ok?: boolean; error?: string; message?: string };
+      const next = customCategories.filter(
+        (c) => c.trim().toLowerCase() !== label.trim().toLowerCase() && !isBuiltinUavCategory(c),
+      );
+      if ((res.ok && payload.ok) || payload.error === "migration_required_uav_category_presets" || !res.ok) {
+        setCustomCategories(next);
+        writeLocalCustomCategories(next);
+        if (draft.category.trim().toLowerCase() === label.trim().toLowerCase()) {
+          setDraft((prev) => ({ ...prev, category: "" }));
+          setCategoryModeOther(false);
+        }
+        if (categoryFilter === label) setCategoryFilter("all");
+        setCategoryHint(payload.error === "migration_required_uav_category_presets" ? "Удалено в этом браузере." : "");
+        return;
+      }
+      setCategoryHint(payload.message || payload.error || "Не удалось удалить.");
+    } catch {
+      const next = customCategories.filter((c) => c.trim().toLowerCase() !== label.trim().toLowerCase());
+      setCustomCategories(next);
+      writeLocalCustomCategories(next);
+      if (draft.category.trim().toLowerCase() === label.trim().toLowerCase()) {
+        setDraft((prev) => ({ ...prev, category: "" }));
+      }
+      if (categoryFilter === label) setCategoryFilter("all");
+    } finally {
+      setCategoryBusy(false);
+    }
+  };
 
   const refresh = async () => {
     setIsLoading(true);
@@ -126,6 +273,7 @@ export default function AdminUavPage() {
     try {
       const list = await fetchUavItems();
       setItems(sortCatalogItems(list));
+      await refreshCustomCategories();
     } catch {
       setLoadError("Не удалось загрузить карточки БПЛА. Попробуйте снова.");
       setItems([]);
@@ -216,6 +364,11 @@ export default function AdminUavPage() {
     const specs = normalizeSpecs(draft.specsText);
     if (specs.length < 6) return setMessage("Заполните 6 строк ТТХ.");
 
+    const categoryLabel = draft.category.trim();
+    if (!findCanonicalUavCategory(categoryLabel, categoryOptions) && !isBuiltinUavCategory(categoryLabel)) {
+      await saveCustomCategory(categoryLabel);
+    }
+
     try {
       await saveUavItem({
         id: draft.id,
@@ -233,6 +386,8 @@ export default function AdminUavPage() {
       });
       setMessage(draft.id ? "Карточка БПЛА обновлена." : "Карточка БПЛА добавлена.");
       setDraft(emptyDraft);
+      setCategoryModeOther(false);
+      setCategoryHint("");
       await refresh();
     } catch {
       setMessage("Не удалось сохранить карточку в основной базе. Проверьте права/подключение и повторите.");
@@ -277,6 +432,9 @@ export default function AdminUavPage() {
 
   const onEdit = (item: CatalogItem) => {
     setMessage("");
+    const known = Boolean(findCanonicalUavCategory(item.category, categoryOptions));
+    setCategoryModeOther(!known && Boolean(item.category.trim()));
+    setCategoryHint("");
     setDraft({
       id: item.id,
       title: item.title,
@@ -332,39 +490,96 @@ export default function AdminUavPage() {
             />
 
             <label className="label">Категория</label>
-            <select
-              className="select"
-              value={categorySelectValue || ""}
-              onChange={(e) => {
-                const nextValue = e.target.value;
-                if (nextValue === otherCategoryValue) {
+            <p className="page-subtitle" style={{ marginBottom: 8 }}>
+              Выберите из списка или «Другое» — введите название и сохраните. Крестик удаляет только свои категории.
+            </p>
+            <div className="chips" style={{ marginBottom: 8 }}>
+              {categoryOptions.map((option) => {
+                const selected =
+                  !categoryModeOther &&
+                  findCanonicalUavCategory(draft.category, [option]) === option;
+                const canDelete = !isBuiltinUavCategory(option);
+                return (
+                  <span
+                    key={option}
+                    className={`chip${selected ? " active" : ""}`}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}
+                    onClick={() => {
+                      setCategoryModeOther(false);
+                      setDraft((prev) => ({ ...prev, category: option }));
+                      setCategoryHint("");
+                    }}
+                  >
+                    {option}
+                    {canDelete && (
+                      <button
+                        type="button"
+                        aria-label={`Удалить категорию ${option}`}
+                        title="Удалить из списка"
+                        disabled={categoryBusy}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void deleteCustomCategory(option);
+                        }}
+                        style={{
+                          border: "none",
+                          background: "transparent",
+                          color: "inherit",
+                          cursor: "pointer",
+                          padding: 0,
+                          lineHeight: 1,
+                          fontSize: 14,
+                          opacity: 0.85,
+                        }}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </span>
+                );
+              })}
+              <button
+                type="button"
+                className={`chip${categorySelectValue === otherCategoryValue ? " active" : ""}`}
+                disabled={categoryBusy}
+                onClick={() => {
+                  setCategoryModeOther(true);
                   setDraft((prev) => ({
                     ...prev,
-                    category: isPresetUavCategory(prev.category) ? "" : prev.category,
+                    category: findCanonicalUavCategory(prev.category, categoryOptions) ? "" : prev.category,
                   }));
-                  return;
-                }
-                setDraft((prev) => ({ ...prev, category: nextValue }));
-              }}
-            >
-              <option value="" disabled>
-                Выберите категорию
-              </option>
-              {categoryOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-              <option value={otherCategoryValue}>Другое</option>
-            </select>
+                }}
+              >
+                Другое
+              </button>
+            </div>
             {categorySelectValue === otherCategoryValue && (
-              <input
-                className="input"
-                placeholder="Укажите свою категорию"
-                value={draft.category}
-                onChange={(e) => setDraft((prev) => ({ ...prev, category: e.target.value }))}
-              />
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                <input
+                  className="input"
+                  style={{ flex: "1 1 200px" }}
+                  placeholder="Название новой категории"
+                  value={draft.category}
+                  disabled={categoryBusy}
+                  onChange={(e) => setDraft((prev) => ({ ...prev, category: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      void saveCustomCategory(draft.category);
+                    }
+                  }}
+                />
+                <button
+                  className="btn btn-primary"
+                  type="button"
+                  disabled={categoryBusy || !draft.category.trim()}
+                  onClick={() => void saveCustomCategory(draft.category)}
+                >
+                  {categoryBusy ? "Сохраняем…" : "Сохранить в список"}
+                </button>
+              </div>
             )}
+            {categoryHint && <p className="page-subtitle">{categoryHint}</p>}
 
             <label className="label">Изображение</label>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -467,7 +682,15 @@ export default function AdminUavPage() {
               {draft.id ? "Сохранить карточку" : "Добавить карточку"}
             </button>
             {draft.id && (
-              <button className="btn" type="button" onClick={() => setDraft(emptyDraft)}>
+              <button
+                className="btn"
+                type="button"
+                onClick={() => {
+                  setDraft(emptyDraft);
+                  setCategoryModeOther(false);
+                  setCategoryHint("");
+                }}
+              >
                 Отменить редактирование
               </button>
             )}
@@ -490,7 +713,7 @@ export default function AdminUavPage() {
           >
             Все ({orderedItems.length})
           </button>
-          {UAV_CATEGORIES.map((category) => {
+          {categoryOptions.map((category) => {
             const count = orderedItems.filter((item) => itemMatchesUavCategory(item.category, category)).length;
             return (
               <button

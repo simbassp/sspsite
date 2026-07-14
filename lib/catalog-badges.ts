@@ -34,6 +34,13 @@ export function uavBadgeStyle(label: string): SoftBadgeStyle {
       border: "1px solid rgba(14, 165, 233, 0.28)",
     };
   }
+  if (includesAny(n, ["реактивн", "турбореакт"])) {
+    return {
+      background: "rgba(239, 68, 68, 0.14)",
+      color: "#dc2626",
+      border: "1px solid rgba(239, 68, 68, 0.28)",
+    };
+  }
   // «Ударные Эл.» / электрические ударные — до общего «ударн»
   if (includesAny(n, ["ударн"]) && includesAny(n, ["эл", "электр", "fpv"])) {
     return {
