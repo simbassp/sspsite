@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Eye, EyeOff, Info, Pencil, Trash2 } from "lucide-react";
 import { readClientSession } from "@/lib/client-auth";
 import { splitCategoryLabels, uavBadgeStyle } from "@/lib/catalog-badges";
 import { canManageUav } from "@/lib/permissions";
 import { publicUploadDisplayUrl } from "@/lib/public-asset-url";
+import { UAV_CATEGORIES, itemMatchesUavCategory } from "@/lib/uav-categories";
 import { deleteUavItem, fetchUavItems, saveUavItem } from "@/lib/uav-repository";
 import { CatalogItem } from "@/lib/types";
 
@@ -70,6 +71,8 @@ export default function UavPage() {
   const [hideTtx, setHideTtx] = useState(false);
   const [revealedKeys, setRevealedKeys] = useState<Record<string, true>>({});
   const [activeChipId, setActiveChipId] = useState<string | "all">("all");
+  /** null — список категорий; иначе выбранная категория и чипы моделей внутри неё */
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -132,13 +135,18 @@ export default function UavPage() {
     };
   }, [zoomedSrc]);
 
+  const filteredItems = useMemo(() => {
+    if (!selectedCategory) return items;
+    return items.filter((item) => itemMatchesUavCategory(item.category, selectedCategory));
+  }, [items, selectedCategory]);
+
   const computeActiveChipId = useCallback((): string | "all" => {
     if (typeof window === "undefined") return "all";
     if (window.scrollY < 40) return "all";
     const yRef = window.innerHeight * 0.22;
     let best: string | "all" = "all";
     let bestDist = 1e9;
-    for (const item of items) {
+    for (const item of filteredItems) {
       const el = cardRefs.current[item.id];
       if (!el) continue;
       const r = el.getBoundingClientRect();
@@ -151,10 +159,10 @@ export default function UavPage() {
       }
     }
     return best;
-  }, [items]);
+  }, [filteredItems]);
 
   useEffect(() => {
-    if (!items.length) return;
+    if (!filteredItems.length || !selectedCategory) return;
     let t: ReturnType<typeof setTimeout> | undefined;
     const onScroll = () => {
       if (t) clearTimeout(t);
@@ -168,7 +176,7 @@ export default function UavPage() {
       window.removeEventListener("resize", onScroll);
       if (t) clearTimeout(t);
     };
-  }, [items, computeActiveChipId]);
+  }, [filteredItems, selectedCategory, computeActiveChipId]);
 
   const scrollToCard = (id: string) => {
     cardRefs.current[id]?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -177,6 +185,18 @@ export default function UavPage() {
   const scrollToListTop = () => {
     if (typeof window === "undefined") return;
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const onBackToCategories = () => {
+    setSelectedCategory(null);
+    setActiveChipId("all");
+    scrollToListTop();
+  };
+
+  const onSelectCategory = (category: string) => {
+    setSelectedCategory(category);
+    setActiveChipId("all");
+    scrollToListTop();
   };
 
   const onChipNavigate = (target: string | "all") => {
@@ -323,29 +343,55 @@ export default function UavPage() {
       {!!items.length && (
         <div className="uav-model-nav">
           <div className="chips">
-            <button
-              type="button"
-              className={`chip${activeChipId === "all" ? " active" : ""}`}
-              onClick={() => onChipNavigate("all")}
-            >
-              Все
-            </button>
-            {items.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={`chip${activeChipId === item.id ? " active" : ""}`}
-                onClick={() => onChipNavigate(item.id)}
-              >
-                {item.title}
-              </button>
-            ))}
+            {!selectedCategory ? (
+              <>
+                {UAV_CATEGORIES.map((category) => {
+                  const count = items.filter((item) => itemMatchesUavCategory(item.category, category)).length;
+                  return (
+                    <button
+                      key={category}
+                      type="button"
+                      className="chip"
+                      onClick={() => onSelectCategory(category)}
+                      disabled={count === 0}
+                      title={count === 0 ? "Пока нет карточек в этой категории" : undefined}
+                    >
+                      {category}
+                      {count > 0 ? ` (${count})` : ""}
+                    </button>
+                  );
+                })}
+              </>
+            ) : (
+              <>
+                <button type="button" className="chip active" onClick={onBackToCategories}>
+                  ← Категории
+                </button>
+                <button
+                  type="button"
+                  className={`chip${activeChipId === "all" ? " active" : ""}`}
+                  onClick={() => onChipNavigate("all")}
+                >
+                  Все · {selectedCategory}
+                </button>
+                {filteredItems.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`chip${activeChipId === item.id ? " active" : ""}`}
+                    onClick={() => onChipNavigate(item.id)}
+                  >
+                    {item.title}
+                  </button>
+                ))}
+              </>
+            )}
           </div>
         </div>
       )}
 
       <div className="grid grid-two">
-        {items.map((item) => {
+        {(selectedCategory ? filteredItems : items).map((item) => {
           const imageSrc = publicUploadDisplayUrl(item.image);
           const badges = splitCategoryLabels(item.category);
           const displaySpecs = item.specs.slice(0, 7);
@@ -434,11 +480,49 @@ export default function UavPage() {
                       value={draft.title}
                       onChange={(e) => setDraft((prev) => (prev ? { ...prev, title: e.target.value } : prev))}
                     />
-                    <input
-                      className="input"
-                      value={draft.category}
-                      onChange={(e) => setDraft((prev) => (prev ? { ...prev, category: e.target.value } : prev))}
-                    />
+                    <select
+                      className="select"
+                      value={
+                        UAV_CATEGORIES.some((c) => c === draft.category.trim())
+                          ? draft.category.trim()
+                          : draft.category.trim()
+                            ? "__other__"
+                            : ""
+                      }
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        if (next === "__other__") {
+                          setDraft((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  category: UAV_CATEGORIES.some((c) => c === prev.category.trim()) ? "" : prev.category,
+                                }
+                              : prev,
+                          );
+                          return;
+                        }
+                        setDraft((prev) => (prev ? { ...prev, category: next } : prev));
+                      }}
+                    >
+                      <option value="" disabled>
+                        Категория
+                      </option>
+                      {UAV_CATEGORIES.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                      <option value="__other__">Другое</option>
+                    </select>
+                    {!UAV_CATEGORIES.some((c) => c === draft.category.trim()) && (
+                      <input
+                        className="input"
+                        placeholder="Своя категория"
+                        value={draft.category}
+                        onChange={(e) => setDraft((prev) => (prev ? { ...prev, category: e.target.value } : prev))}
+                      />
+                    )}
                     <textarea
                       className="input"
                       rows={2}
@@ -597,6 +681,12 @@ export default function UavPage() {
           );
         })}
       </div>
+
+      {selectedCategory && !loading && filteredItems.length === 0 && (
+        <p className="page-subtitle" style={{ marginTop: 12 }}>
+          В категории «{selectedCategory}» пока нет карточек. Назначьте категорию при редактировании в админке.
+        </p>
+      )}
 
       {zoomedSrc && (
         <div

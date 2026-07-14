@@ -27,11 +27,26 @@ export function uavBadgeStyle(label: string): SoftBadgeStyle {
       border: "1px solid rgba(59, 130, 246, 0.28)",
     };
   }
-  if (includesAny(n, ["fpv"])) {
+  if (includesAny(n, ["крыло"])) {
+    return {
+      background: "rgba(14, 165, 233, 0.14)",
+      color: "#0284c7",
+      border: "1px solid rgba(14, 165, 233, 0.28)",
+    };
+  }
+  // «Ударные Эл.» / электрические ударные — до общего «ударн»
+  if (includesAny(n, ["ударн"]) && includesAny(n, ["эл", "электр", "fpv"])) {
     return {
       background: "rgba(139, 92, 246, 0.16)",
       color: "#7c3aed",
       border: "1px solid rgba(139, 92, 246, 0.32)",
+    };
+  }
+  if (includesAny(n, ["ударн", "strike"]) && includesAny(n, ["двс"])) {
+    return {
+      background: "rgba(236, 72, 153, 0.14)",
+      color: "#db2777",
+      border: "1px solid rgba(236, 72, 153, 0.28)",
     };
   }
   if (includesAny(n, ["ударн", "strike"])) {
@@ -46,6 +61,13 @@ export function uavBadgeStyle(label: string): SoftBadgeStyle {
       background: "rgba(34, 197, 94, 0.14)",
       color: "#15803d",
       border: "1px solid rgba(34, 197, 94, 0.28)",
+    };
+  }
+  if (includesAny(n, ["fpv"])) {
+    return {
+      background: "rgba(139, 92, 246, 0.16)",
+      color: "#7c3aed",
+      border: "1px solid rgba(139, 92, 246, 0.32)",
     };
   }
   if (includesAny(n, ["барраж", "loiter"])) {

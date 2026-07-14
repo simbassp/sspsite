@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { splitCategoryLabels, uavBadgeStyle } from "@/lib/catalog-badges";
 import { publicUploadDisplayUrl } from "@/lib/public-asset-url";
+import { UAV_CATEGORIES, isPresetUavCategory } from "@/lib/uav-categories";
 import { deleteUavItem, fetchUavItems, saveUavItem } from "@/lib/uav-repository";
 import { CatalogItem } from "@/lib/types";
 
@@ -24,7 +26,7 @@ const emptyDraft: DraftUav = {
   engineType: "электрический",
 };
 
-const categoryOptions = ["Ударный", "Разведывательный"] as const;
+const categoryOptions = UAV_CATEGORIES;
 const otherCategoryValue = "__other__";
 const maxUploadSizeMb = 8;
 
@@ -71,8 +73,13 @@ export default function AdminUavPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const sortedItems = useMemo(() => [...items].sort((a, b) => a.title.localeCompare(b.title)), [items]);
-  const isPresetCategory = categoryOptions.some((option) => option === draft.category.trim());
-  const categorySelectValue = isPresetCategory ? draft.category.trim() : otherCategoryValue;
+  const isPresetCategory = isPresetUavCategory(draft.category);
+  const categorySelectValue = isPresetCategory
+    ? (categoryOptions.find((option) => option.trim().toLowerCase() === draft.category.trim().toLowerCase()) ??
+      otherCategoryValue)
+    : draft.category.trim()
+      ? otherCategoryValue
+      : "";
 
   const refresh = async () => {
     setIsLoading(true);
@@ -216,21 +223,27 @@ export default function AdminUavPage() {
             <label className="label">Категория</label>
             <select
               className="select"
-              value={categorySelectValue}
+              value={categorySelectValue || ""}
               onChange={(e) => {
                 const nextValue = e.target.value;
                 if (nextValue === otherCategoryValue) {
                   setDraft((prev) => ({
                     ...prev,
-                    category: categoryOptions.some((option) => option === prev.category.trim()) ? "" : prev.category,
+                    category: isPresetUavCategory(prev.category) ? "" : prev.category,
                   }));
                   return;
                 }
                 setDraft((prev) => ({ ...prev, category: nextValue }));
               }}
             >
-              <option value="Ударный">Ударный</option>
-              <option value="Разведывательный">Разведывательный</option>
+              <option value="" disabled>
+                Выберите категорию
+              </option>
+              {categoryOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
               <option value={otherCategoryValue}>Другое</option>
             </select>
             {categorySelectValue === otherCategoryValue && (
@@ -279,6 +292,18 @@ export default function AdminUavPage() {
                   loading="lazy"
                   style={{ width: "100%", maxWidth: 360, height: 160, objectFit: "cover", borderRadius: 12, border: "1px solid var(--line)" }}
                 />
+                {draft.category.trim() && (
+                  <div className="catalog-badge-row" style={{ marginTop: 8 }}>
+                    {splitCategoryLabels(draft.category).map((label, bi) => {
+                      const tone = uavBadgeStyle(label);
+                      return (
+                        <span key={`preview-cat-${bi}-${label}`} className="catalog-badge" style={tone} title={label}>
+                          {label}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 
@@ -342,7 +367,18 @@ export default function AdminUavPage() {
             <div className="card-body" style={{ padding: 12 }}>
               <h3 style={{ marginBottom: 6 }}>{item.title}</h3>
               <div className="meta" style={{ marginTop: 0 }}>
-                <span className="pill">{item.category}</span>
+                {item.category.trim() ? (
+                  splitCategoryLabels(item.category).map((label, bi) => {
+                    const tone = uavBadgeStyle(label);
+                    return (
+                      <span key={`${item.id}-cat-${bi}`} className="catalog-badge" style={tone} title={label}>
+                        {label}
+                      </span>
+                    );
+                  })
+                ) : (
+                  <span className="pill">Без категории</span>
+                )}
                 <span>{item.specs.length} характеристик</span>
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
