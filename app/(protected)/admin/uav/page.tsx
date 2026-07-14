@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { splitCategoryLabels, uavBadgeStyle } from "@/lib/catalog-badges";
 import { publicUploadDisplayUrl } from "@/lib/public-asset-url";
 import { UAV_CATEGORIES, isPresetUavCategory } from "@/lib/uav-categories";
+import { UAV_ENGINE_TYPES, UavEngineType, appendEngineSpec, detectEngineType } from "@/lib/uav-engine";
 import { deleteUavItem, fetchUavItems, saveUavItem } from "@/lib/uav-repository";
 import { CatalogItem } from "@/lib/types";
 
@@ -14,7 +15,7 @@ type DraftUav = {
   image: string;
   summary: string;
   specsText: string[];
-  engineType: "электрический" | "двс" | "гибридный";
+  engineType: UavEngineType;
 };
 
 const emptyDraft: DraftUav = {
@@ -23,7 +24,7 @@ const emptyDraft: DraftUav = {
   image: "",
   summary: "",
   specsText: ["", "", "", "", "", ""],
-  engineType: "электрический",
+  engineType: "",
 };
 
 const categoryOptions = UAV_CATEGORIES;
@@ -52,15 +53,6 @@ function specsToText(specs: CatalogItem["specs"]) {
     .map((item) => `${item.key}: ${item.value}`);
   while (lines.length < 6) lines.push("");
   return lines;
-}
-
-function detectEngineType(
-  specs: CatalogItem["specs"],
-): "электрический" | "двс" | "гибридный" {
-  const candidate = specs.find((item) => item.key.trim().toLowerCase() === "тип двигателя")?.value.trim().toLowerCase();
-  if (candidate === "двс") return "двс";
-  if (candidate === "гибридный") return "гибридный";
-  return "электрический";
 }
 
 export default function AdminUavPage() {
@@ -115,7 +107,7 @@ export default function AdminUavPage() {
         category: draft.category.trim() || "Без категории",
         image: draft.image.trim(),
         summary: draft.summary.trim(),
-        specs: [...specs.slice(0, 6), { key: "Тип двигателя", value: draft.engineType }],
+        specs: appendEngineSpec(specs.slice(0, 6), draft.engineType),
         details: {
           overview: "",
           tth: "",
@@ -339,13 +331,16 @@ export default function AdminUavPage() {
               onChange={(e) =>
                 setDraft((prev) => ({
                   ...prev,
-                  engineType: e.target.value as DraftUav["engineType"],
+                  engineType: e.target.value as UavEngineType,
                 }))
               }
             >
-              <option value="электрический">электрический</option>
-              <option value="двс">двс</option>
-              <option value="гибридный">гибридный</option>
+              <option value="">Не указан</option>
+              {UAV_ENGINE_TYPES.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
             </select>
 
             {message && <p className="page-subtitle">{message}</p>}
