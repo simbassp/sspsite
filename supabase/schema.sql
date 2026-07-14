@@ -63,6 +63,7 @@ create table if not exists public.catalog_items (
   image text not null,
   specs jsonb not null default '[]'::jsonb,
   details jsonb not null default '{}'::jsonb,
+  sort_order integer not null default 0,
   created_at timestamptz not null default now()
 );
 
@@ -166,6 +167,7 @@ create index if not exists idx_test_results_type_status on public.test_results(t
 create index if not exists idx_test_results_user_created_desc on public.test_results(user_id, created_at desc);
 create index if not exists idx_catalog_items_kind on public.catalog_items(kind);
 create index if not exists idx_catalog_items_kind_created_desc on public.catalog_items(kind, created_at desc);
+create index if not exists idx_catalog_items_kind_sort_order on public.catalog_items(kind, sort_order asc, created_at asc);
 create index if not exists idx_test_questions_type_order on public.test_questions(type, order_index);
 create index if not exists idx_test_questions_active_order on public.test_questions(is_active, order_index);
 

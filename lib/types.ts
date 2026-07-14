@@ -94,6 +94,8 @@ export interface CatalogItem {
     usage: string;
     materials: string;
   };
+  /** Порядок отображения (меньше — выше в списке). */
+  sortOrder?: number;
 }
 
 export interface TestResult {

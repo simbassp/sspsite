@@ -2081,6 +2081,73 @@ html[data-theme="dark"] .trial-feedback-btn--dim {
   text-underline-offset: 2px;
 }
 
+.admin-uav-sort-list {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-uav-sort-item__body {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px !important;
+}
+
+.admin-uav-sort-handle {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--glass);
+  color: var(--muted);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.admin-uav-sort-handle:active {
+  cursor: grabbing;
+}
+
+.admin-uav-sort-handle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.admin-uav-sort-item.is-dragging {
+  opacity: 0.78;
+  box-shadow: var(--shadow-strong);
+}
+
+.admin-uav-sort-item__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .admin-uav-sort-item__body {
+    flex-wrap: wrap;
+  }
+
+  .admin-uav-sort-item__main {
+    flex: 1 1 calc(100% - 56px);
+  }
+
+  .admin-uav-sort-item__actions {
+    width: 100%;
+    justify-content: flex-start;
+    padding-left: 50px;
+  }
+}
+
 @media (max-width: 1100px) {
   .home-sections-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));

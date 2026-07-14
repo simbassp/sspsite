@@ -71,9 +71,10 @@ export async function GET() {
     const testConfig = await loadTestConfigForPool(supabase);
     const uavQ = supabase
       .from("catalog_items")
-      .select("id,title,category,summary,image,specs,details")
+      .select("id,title,category,summary,image,specs,details,sort_order")
       .eq("kind", "uav")
-      .order("created_at", { ascending: false })
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true })
       .limit(200);
 
     let questionsData: unknown[] = [];
@@ -123,7 +124,15 @@ export async function GET() {
       questionsData = (questionsMinimalQ.data as unknown[]) || [];
       questionsError = questionsMinimalQ.error?.message || null;
     }
-    const uavRes = await uavQ;
+    let uavRes: { data: unknown; error: { message?: string } | null } = await uavQ;
+    if (uavRes.error && isMissingColumnError(uavRes.error.message)) {
+      uavRes = await supabase
+        .from("catalog_items")
+        .select("id,title,category,summary,image,specs,details")
+        .eq("kind", "uav")
+        .order("created_at", { ascending: false })
+        .limit(200);
+    }
     const t1 = Date.now();
 
     if (uavRes.error) {

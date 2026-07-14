@@ -28,6 +28,7 @@ type CatalogRow = {
     usage?: string;
     materials?: string;
   } | unknown;
+  sort_order?: number | null;
 };
 
 type TimedOut = { __timeout: true };
@@ -68,6 +69,7 @@ function toCatalogItem(row: CatalogRow): CatalogItem {
       usage: details.usage ?? "",
       materials: details.materials ?? "",
     },
+    sortOrder: Number.isFinite(Number(row.sort_order)) ? Number(row.sort_order) : 0,
   };
 }
 
@@ -94,14 +96,33 @@ async function fetchCatalogItems(
   if (!isSupabaseConfigured) return fallback();
   const useFallback = shouldUseLocalFallback(allowLocalFallback);
   const supabase = getSupabaseBrowserClient();
-  const response = await Promise.race([
+  type CatalogFetchResult =
+    | TimedOut
+    | { data: CatalogRow[] | null; error: { message?: string } | null };
+
+  let response: CatalogFetchResult = await Promise.race([
     supabase
       .from("catalog_items")
-      .select("id,slug,kind,title,category,summary,image,specs,details")
+      .select("id,slug,kind,title,category,summary,image,specs,details,sort_order")
       .eq("kind", kind)
-      .order("created_at", { ascending: false }),
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true }),
     timeoutResult(7000),
   ]);
+
+  if (!("__timeout" in response) && response.error) {
+    const msg = (response.error.message || "").toLowerCase();
+    if (msg.includes("sort_order") || (msg.includes("column") && msg.includes("does not exist"))) {
+      response = await Promise.race([
+        supabase
+          .from("catalog_items")
+          .select("id,slug,kind,title,category,summary,image,specs,details")
+          .eq("kind", kind)
+          .order("created_at", { ascending: false }),
+        timeoutResult(7000),
+      ]);
+    }
+  }
 
   if ("__timeout" in response) {
     return useFallback ? fallback() : [];
@@ -158,7 +179,7 @@ async function saveCatalogItem(
   const useFallback = shouldUseLocalFallback(allowLocalFallback);
   const supabase = getSupabaseBrowserClient();
   const baseSlug = slugify(input.title) || `${kind}-item`;
-  const payload = {
+  const payload: Record<string, unknown> = {
     kind,
     slug: input.id ? `${baseSlug}-${input.id.slice(0, 6)}` : `${baseSlug}-${Date.now().toString(36)}`,
     title: input.title,
@@ -168,19 +189,61 @@ async function saveCatalogItem(
     specs: input.specs,
     details: input.details,
   };
+  if (typeof input.sortOrder === "number" && Number.isFinite(input.sortOrder)) {
+    payload.sort_order = Math.max(0, Math.floor(input.sortOrder));
+  } else if (!input.id) {
+    // Новая карточка — в конец списка текущего kind.
+    const maxQ = await supabase
+      .from("catalog_items")
+      .select("sort_order")
+      .eq("kind", kind)
+      .order("sort_order", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const maxOrder = Number((maxQ.data as { sort_order?: number } | null)?.sort_order);
+    payload.sort_order = Number.isFinite(maxOrder) ? maxOrder + 1 : 0;
+  }
   const payloadWithId = input.id ? { ...payload, id: input.id } : payload;
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from("catalog_items")
     .upsert(payloadWithId, { onConflict: "id" })
-    .select("id,slug,kind,title,category,summary,image,specs,details")
+    .select("id,slug,kind,title,category,summary,image,specs,details,sort_order")
     .single();
+
+  if (error) {
+    const msg = (error.message || "").toLowerCase();
+    if (msg.includes("sort_order") || (msg.includes("column") && msg.includes("does not exist"))) {
+      const { sort_order: _ignored, ...withoutSort } = payloadWithId as Record<string, unknown> & {
+        sort_order?: unknown;
+      };
+      const legacy = await supabase
+        .from("catalog_items")
+        .upsert(withoutSort, { onConflict: "id" })
+        .select("id,slug,kind,title,category,summary,image,specs,details")
+        .single();
+      data = legacy.data as typeof data;
+      error = legacy.error;
+    }
+  }
 
   if (error || !data) {
     if (useFallback) return fallback(input);
     throw new Error(error?.message || "remote_save_failed");
   }
   return toCatalogItem(data as CatalogRow);
+}
+
+export async function reorderUavItems(orderedIds: string[]) {
+  const response = await fetch("/api/admin/uav/reorder", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ orderedIds }),
+  });
+  const payload = (await response.json()) as { ok?: boolean; error?: string; message?: string };
+  if (!response.ok || !payload.ok) {
+    throw new Error(payload.message || payload.error || "reorder_failed");
+  }
 }
 
 async function deleteCatalogItem(
