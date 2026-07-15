@@ -1,9 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Eye, EyeOff, Info, Pencil, Trash2 } from "lucide-react";
 import { readClientSession } from "@/lib/client-auth";
 import { counteractionBadgeStyle, specHasDisplayValue, splitCategoryLabels } from "@/lib/catalog-badges";
+import {
+  buildCounteractionCategoryOptions,
+  findCanonicalCounteractionCategory,
+  isBuiltinCounteractionCategory,
+  itemMatchesCounteractionCategory,
+} from "@/lib/counteraction-categories";
 import { canManageCounteraction } from "@/lib/permissions";
 import { publicUploadDisplayUrl } from "@/lib/public-asset-url";
 import { deleteCounteractionItem, fetchCounteractionItems, saveCounteractionItem } from "@/lib/uav-repository";
@@ -45,6 +51,21 @@ type InlineDraft = {
 };
 
 const MASK = "••••••";
+const otherCategoryValue = "__other__";
+const customCategoriesLsKey = "ssp:counteraction_custom_categories";
+
+function readLocalCustomCategories(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(customCategoriesLsKey);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((x) => String(x || "").trim()).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
 
 function specRevealKey(itemId: string, specIndex: number) {
   return `${itemId}:${specIndex}`;
@@ -63,13 +84,44 @@ export default function CounteractionPage() {
   const [activeChipId, setActiveChipId] = useState<string | "all">("all");
   const [hideTtx, setHideTtx] = useState(false);
   const [revealedKeys, setRevealedKeys] = useState<Record<string, true>>({});
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [customCategories, setCustomCategories] = useState<string[]>([]);
   const canInlineEdit = canManageCounteraction(readClientSession());
+
+  const categoryOptions = useMemo(() => {
+    const fromItems = items.flatMap((item) => splitCategoryLabels(item.category));
+    return buildCounteractionCategoryOptions([...customCategories, ...fromItems]);
+  }, [customCategories, items]);
+
+  const filteredItems = useMemo(() => {
+    if (!selectedCategory) return items;
+    return items.filter((item) => itemMatchesCounteractionCategory(item.category, selectedCategory));
+  }, [items, selectedCategory]);
+
+  const refreshCustomCategories = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/counteraction/categories", { cache: "no-store" });
+      const payload = (await res.json()) as { ok?: boolean; custom?: string[]; migrationRequired?: boolean };
+      if (res.ok && payload.ok) {
+        if (payload.migrationRequired) {
+          setCustomCategories(readLocalCustomCategories().filter((c) => !isBuiltinCounteractionCategory(c)));
+          return;
+        }
+        setCustomCategories(Array.isArray(payload.custom) ? payload.custom : []);
+        return;
+      }
+    } catch {
+      /* local */
+    }
+    setCustomCategories(readLocalCustomCategories().filter((c) => !isBuiltinCounteractionCategory(c)));
+  }, []);
 
   const refresh = async () => {
     setIsLoading(true);
     try {
       const rows = await fetchCounteractionItems();
       setItems(rows);
+      await refreshCustomCategories();
       if (!rows.length) {
         setMessage((prev) => prev || "Данные временно недоступны или ещё не добавлены.");
       }
@@ -119,6 +171,18 @@ export default function CounteractionPage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const onSelectCategory = (category: string) => {
+    setSelectedCategory(category);
+    setActiveChipId("all");
+    scrollToListTop();
+  };
+
+  const onBackToCategories = () => {
+    setSelectedCategory(null);
+    setActiveChipId("all");
+    scrollToListTop();
+  };
+
   const onChipNavigate = (target: string | "all") => {
     setActiveChipId(target);
     if (target === "all") scrollToListTop();
@@ -131,7 +195,7 @@ export default function CounteractionPage() {
     const yRef = window.innerHeight * 0.22;
     let best: string | "all" = "all";
     let bestDist = 1e9;
-    for (const item of items) {
+    for (const item of filteredItems) {
       const el = cardRefs.current[item.id];
       if (!el) continue;
       const r = el.getBoundingClientRect();
@@ -144,10 +208,10 @@ export default function CounteractionPage() {
       }
     }
     return best;
-  }, [items]);
+  }, [filteredItems]);
 
   useEffect(() => {
-    if (!items.length) return;
+    if (!filteredItems.length || !selectedCategory) return;
     let t: ReturnType<typeof setTimeout> | undefined;
     const onScroll = () => {
       if (t) clearTimeout(t);
@@ -161,7 +225,7 @@ export default function CounteractionPage() {
       window.removeEventListener("resize", onScroll);
       if (t) clearTimeout(t);
     };
-  }, [items, computeActiveChipId]);
+  }, [filteredItems, selectedCategory, computeActiveChipId]);
 
   useEffect(() => {
     if (!zoomedSrc) return;
@@ -198,10 +262,27 @@ export default function CounteractionPage() {
     setBusyId(draft.id);
     setMessage("");
     try {
+      const categoryLabel = draft.category.trim();
+      if (
+        categoryLabel &&
+        !findCanonicalCounteractionCategory(categoryLabel, categoryOptions) &&
+        !isBuiltinCounteractionCategory(categoryLabel) &&
+        canInlineEdit
+      ) {
+        try {
+          await fetch("/api/admin/counteraction/categories", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ label: categoryLabel }),
+          });
+        } catch {
+          /* ignore */
+        }
+      }
       await saveCounteractionItem({
         id: draft.id,
         title: draft.title.trim(),
-        category: draft.category.trim() || "Без категории",
+        category: categoryLabel || "Без категории",
         image: draft.image.trim(),
         summary: draft.summary.trim(),
         specs,
@@ -307,29 +388,55 @@ export default function CounteractionPage() {
       {!!items.length && (
         <div className="uav-model-nav">
           <div className="chips">
-            <button
-              type="button"
-              className={`chip${activeChipId === "all" ? " active" : ""}`}
-              onClick={() => onChipNavigate("all")}
-            >
-              Все
-            </button>
-            {items.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={`chip${activeChipId === item.id ? " active" : ""}`}
-                onClick={() => onChipNavigate(item.id)}
-              >
-                {item.title}
-              </button>
-            ))}
+            {!selectedCategory ? (
+              <>
+                {categoryOptions.map((category) => {
+                  const count = items.filter((item) => itemMatchesCounteractionCategory(item.category, category)).length;
+                  return (
+                    <button
+                      key={category}
+                      type="button"
+                      className="chip"
+                      onClick={() => onSelectCategory(category)}
+                      disabled={count === 0}
+                      title={count === 0 ? "Пока нет карточек в этой категории" : undefined}
+                    >
+                      {category}
+                      {count > 0 ? ` (${count})` : ""}
+                    </button>
+                  );
+                })}
+              </>
+            ) : (
+              <>
+                <button type="button" className="chip active" onClick={onBackToCategories}>
+                  ← Категории
+                </button>
+                <button
+                  type="button"
+                  className={`chip${activeChipId === "all" ? " active" : ""}`}
+                  onClick={() => onChipNavigate("all")}
+                >
+                  Все · {selectedCategory}
+                </button>
+                {filteredItems.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`chip${activeChipId === item.id ? " active" : ""}`}
+                    onClick={() => onChipNavigate(item.id)}
+                  >
+                    {item.title}
+                  </button>
+                ))}
+              </>
+            )}
           </div>
         </div>
       )}
 
       <div className="grid grid-two">
-        {items.map((item) => {
+        {(selectedCategory ? filteredItems : items).map((item) => {
           const images = parseImages(item.image).map(publicUploadDisplayUrl).filter(Boolean);
           const activeIndex = Math.min(imageIndexes[item.id] ?? 0, Math.max(images.length - 1, 0));
           const imageSrc = images[activeIndex] ?? "";
@@ -416,11 +523,51 @@ export default function CounteractionPage() {
                       value={draft.title}
                       onChange={(e) => setDraft((prev) => (prev ? { ...prev, title: e.target.value } : prev))}
                     />
-                    <input
-                      className="input"
-                      value={draft.category}
-                      onChange={(e) => setDraft((prev) => (prev ? { ...prev, category: e.target.value } : prev))}
-                    />
+                    <select
+                      className="select"
+                      value={
+                        findCanonicalCounteractionCategory(draft.category, categoryOptions)
+                          ? findCanonicalCounteractionCategory(draft.category, categoryOptions)!
+                          : draft.category.trim()
+                            ? otherCategoryValue
+                            : ""
+                      }
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        if (next === otherCategoryValue) {
+                          setDraft((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  category: findCanonicalCounteractionCategory(prev.category, categoryOptions)
+                                    ? ""
+                                    : prev.category,
+                                }
+                              : prev,
+                          );
+                          return;
+                        }
+                        setDraft((prev) => (prev ? { ...prev, category: next } : prev));
+                      }}
+                    >
+                      <option value="" disabled>
+                        Категория
+                      </option>
+                      {categoryOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                      <option value={otherCategoryValue}>Другое</option>
+                    </select>
+                    {!findCanonicalCounteractionCategory(draft.category, categoryOptions) && (
+                      <input
+                        className="input"
+                        placeholder="Своя категория"
+                        value={draft.category}
+                        onChange={(e) => setDraft((prev) => (prev ? { ...prev, category: e.target.value } : prev))}
+                      />
+                    )}
                     <textarea
                       className="input"
                       rows={2}

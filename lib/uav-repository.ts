@@ -246,6 +246,18 @@ export async function reorderUavItems(orderedIds: string[]) {
   }
 }
 
+export async function reorderCounteractionItems(orderedIds: string[]) {
+  const response = await fetch("/api/admin/counteraction/reorder", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ orderedIds }),
+  });
+  const payload = (await response.json()) as { ok?: boolean; error?: string; message?: string };
+  if (!response.ok || !payload.ok) {
+    throw new Error(payload.message || payload.error || "reorder_failed");
+  }
+}
+
 async function deleteCatalogItem(
   kind: "counteraction" | "uav",
   itemId: string,
