@@ -87,15 +87,99 @@ export function uavBadgeStyle(label: string): SoftBadgeStyle {
   return gray;
 }
 
+const BADGE_PALETTE: SoftBadgeStyle[] = [
+  {
+    background: "rgba(59, 130, 246, 0.14)",
+    color: "#2563eb",
+    border: "1px solid rgba(59, 130, 246, 0.28)",
+  },
+  {
+    background: "rgba(34, 197, 94, 0.14)",
+    color: "#15803d",
+    border: "1px solid rgba(34, 197, 94, 0.28)",
+  },
+  {
+    background: "rgba(249, 115, 22, 0.16)",
+    color: "#c2410c",
+    border: "1px solid rgba(249, 115, 22, 0.3)",
+  },
+  {
+    background: "rgba(139, 92, 246, 0.16)",
+    color: "#7c3aed",
+    border: "1px solid rgba(139, 92, 246, 0.32)",
+  },
+  {
+    background: "rgba(236, 72, 153, 0.14)",
+    color: "#be185d",
+    border: "1px solid rgba(236, 72, 153, 0.28)",
+  },
+  {
+    background: "rgba(20, 184, 166, 0.14)",
+    color: "#0f766e",
+    border: "1px solid rgba(20, 184, 166, 0.28)",
+  },
+  {
+    background: "rgba(234, 179, 8, 0.16)",
+    color: "#a16207",
+    border: "1px solid rgba(234, 179, 8, 0.32)",
+  },
+  {
+    background: "rgba(239, 68, 68, 0.14)",
+    color: "#dc2626",
+    border: "1px solid rgba(239, 68, 68, 0.28)",
+  },
+  {
+    background: "rgba(14, 165, 233, 0.14)",
+    color: "#0284c7",
+    border: "1px solid rgba(14, 165, 233, 0.28)",
+  },
+  {
+    background: "rgba(168, 85, 247, 0.14)",
+    color: "#7e22ce",
+    border: "1px solid rgba(168, 85, 247, 0.28)",
+  },
+];
+
+function hashPaletteStyle(label: string): SoftBadgeStyle {
+  let hash = 0;
+  const s = label.trim().toLowerCase();
+  for (let i = 0; i < s.length; i += 1) {
+    hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
+  }
+  return BADGE_PALETTE[hash % BADGE_PALETTE.length]!;
+}
+
 /** Плашки категорий противодействия. */
 export function counteractionBadgeStyle(label: string): SoftBadgeStyle {
   const n = label.trim().toLowerCase();
   if (!n) return gray;
-  if (includesAny(n, ["обнаружен", "радар", "дозор"])) {
+
+  if (includesAny(n, ["средств", "связ", "радиосвяз", "коммуникац"])) {
     return {
       background: "rgba(59, 130, 246, 0.14)",
       color: "#2563eb",
       border: "1px solid rgba(59, 130, 246, 0.28)",
+    };
+  }
+  if (includesAny(n, ["обнаружен", "радар", "дозор", "развед"])) {
+    return {
+      background: "rgba(14, 165, 233, 0.14)",
+      color: "#0284c7",
+      border: "1px solid rgba(14, 165, 233, 0.28)",
+    };
+  }
+  if (includesAny(n, ["оружи", "стрелков", "вооружен"])) {
+    return {
+      background: "rgba(239, 68, 68, 0.14)",
+      color: "#dc2626",
+      border: "1px solid rgba(239, 68, 68, 0.28)",
+    };
+  }
+  if (includesAny(n, ["подавлен", "глушил", "jammer"])) {
+    return {
+      background: "rgba(249, 115, 22, 0.16)",
+      color: "#c2410c",
+      border: "1px solid rgba(249, 115, 22, 0.3)",
     };
   }
   if (includesAny(n, ["маскировк"])) {
@@ -105,49 +189,65 @@ export function counteractionBadgeStyle(label: string): SoftBadgeStyle {
       border: "1px solid rgba(34, 197, 94, 0.28)",
     };
   }
-  if (includesAny(n, ["укрыти", "укрытие"])) {
+  if (includesAny(n, ["укрыти"])) {
     return {
       background: "rgba(100, 116, 139, 0.16)",
       color: "#475569",
       border: "1px solid rgba(100, 116, 139, 0.3)",
     };
   }
-  if (includesAny(n, ["реб", "рэб", "радиоэлектрон"])) {
+  if (includesAny(n, ["реб", "рэб", "радиоэлектрон", "электронн"])) {
     return {
       background: "rgba(139, 92, 246, 0.16)",
       color: "#7c3aed",
       border: "1px solid rgba(139, 92, 246, 0.32)",
     };
   }
-  if (includesAny(n, ["оповещен"])) {
+  if (includesAny(n, ["оповещен", "сигнал", "тревог"])) {
     return {
-      background: "rgba(249, 115, 22, 0.16)",
-      color: "#c2410c",
-      border: "1px solid rgba(249, 115, 22, 0.3)",
+      background: "rgba(234, 179, 8, 0.16)",
+      color: "#a16207",
+      border: "1px solid rgba(234, 179, 8, 0.32)",
     };
   }
-  if (includesAny(n, ["действия группы", "действия при атак", "атаке", "группы"])) {
+  if (includesAny(n, ["действия", "группы", "атак", "тактик"])) {
     return {
       background: "rgba(236, 72, 153, 0.14)",
       color: "#be185d",
       border: "1px solid rgba(236, 72, 153, 0.28)",
     };
   }
-  if (includesAny(n, ["инженерн"])) {
+  if (includesAny(n, ["инженерн", "сапёр", "сапер", "фортифик"])) {
     return {
       background: "rgba(20, 184, 166, 0.14)",
       color: "#0f766e",
       border: "1px solid rgba(20, 184, 166, 0.28)",
     };
   }
-  if (includesAny(n, ["медицин", "первая помощь", "помощь"])) {
+  if (includesAny(n, ["медицин", "первая помощь", "помощь", "медпункт"])) {
     return {
       background: "rgba(244, 114, 182, 0.16)",
       color: "#be185d",
       border: "1px solid rgba(244, 114, 182, 0.3)",
     };
   }
-  return gray;
+  if (includesAny(n, ["транспорт", "машин", "техник"])) {
+    return {
+      background: "rgba(168, 85, 247, 0.14)",
+      color: "#7e22ce",
+      border: "1px solid rgba(168, 85, 247, 0.28)",
+    };
+  }
+  if (includesAny(n, ["оптик", "прицел", "наблюден"])) {
+    return {
+      background: "rgba(6, 182, 212, 0.14)",
+      color: "#0e7490",
+      border: "1px solid rgba(6, 182, 212, 0.28)",
+    };
+  }
+
+  // Любая своя категория — стабильный цвет по названию, не серый.
+  return hashPaletteStyle(n);
 }
 
 /** Несколько плашек из поля category, если задано через « / » или «|». */
