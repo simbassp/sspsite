@@ -390,7 +390,27 @@ export default function CounteractionPage() {
       {!!items.length && (
         <div className="uav-model-nav">
           <div className="chips">
-            {!selectedCategory ? (
+            {!showCategoryNav ? (
+              <>
+                <button
+                  type="button"
+                  className={`chip${activeChipId === "all" ? " active" : ""}`}
+                  onClick={() => onChipNavigate("all")}
+                >
+                  Все
+                </button>
+                {items.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`chip${activeChipId === item.id ? " active" : ""}`}
+                    onClick={() => onChipNavigate(item.id)}
+                  >
+                    {item.title}
+                  </button>
+                ))}
+              </>
+            ) : !selectedCategory ? (
               <>
                 {categoryOptions.map((category) => {
                   const count = items.filter((item) => itemMatchesCounteractionCategory(item.category, category)).length;
@@ -438,7 +458,7 @@ export default function CounteractionPage() {
       )}
 
       <div className="grid grid-two">
-        {(selectedCategory ? filteredItems : items).map((item) => {
+        {(showCategoryNav && selectedCategory ? filteredItems : items).map((item) => {
           const images = parseImages(item.image).map(publicUploadDisplayUrl).filter(Boolean);
           const activeIndex = Math.min(imageIndexes[item.id] ?? 0, Math.max(images.length - 1, 0));
           const imageSrc = images[activeIndex] ?? "";
