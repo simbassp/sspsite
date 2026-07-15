@@ -88,15 +88,17 @@ export default function CounteractionPage() {
   const [customCategories, setCustomCategories] = useState<string[]>([]);
   const canInlineEdit = canManageCounteraction(readClientSession());
 
-  const categoryOptions = useMemo(() => {
-    const fromItems = items.flatMap((item) => splitCategoryLabels(item.category));
-    return buildCounteractionCategoryOptions([...customCategories, ...fromItems]);
-  }, [customCategories, items]);
+  const categoryOptions = useMemo(
+    () => buildCounteractionCategoryOptions(customCategories),
+    [customCategories],
+  );
 
   const filteredItems = useMemo(() => {
     if (!selectedCategory) return items;
     return items.filter((item) => itemMatchesCounteractionCategory(item.category, selectedCategory));
   }, [items, selectedCategory]);
+
+  const showCategoryNav = categoryOptions.length > 0;
 
   const refreshCustomCategories = useCallback(async () => {
     try {
