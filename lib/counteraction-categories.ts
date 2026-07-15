@@ -1,17 +1,7 @@
-/** Базовые категории противодействия (нельзя удалить). */
-export const COUNTERACTION_BUILTIN_CATEGORIES = [
-  "Оружие",
-  "Подавление",
-  "РЭБ",
-  "Маскировка",
-  "Укрытие",
-  "Инженерные",
-  "Медицина",
-  "Оповещение",
-  "Действия группы",
-] as const;
+/** Базовые категории больше не зашиты — список ведётся через пресеты / «Другое». */
+export const COUNTERACTION_BUILTIN_CATEGORIES = [] as const;
 
-export type CounteractionBuiltinCategory = (typeof COUNTERACTION_BUILTIN_CATEGORIES)[number];
+export type CounteractionBuiltinCategory = string;
 
 export function normalizeCounteractionCategoryLabel(value: string): string {
   return value
@@ -21,9 +11,8 @@ export function normalizeCounteractionCategoryLabel(value: string): string {
     .replace(/\s+/g, " ");
 }
 
-export function isBuiltinCounteractionCategory(value: string): boolean {
-  const n = normalizeCounteractionCategoryLabel(value);
-  return COUNTERACTION_BUILTIN_CATEGORIES.some((c) => normalizeCounteractionCategoryLabel(c) === n);
+export function isBuiltinCounteractionCategory(_value: string): boolean {
+  return false;
 }
 
 export function findCanonicalCounteractionCategory(value: string, pool: readonly string[]): string | null {
@@ -49,7 +38,7 @@ export function mergeCounteractionCategoryLists(...lists: Array<readonly string[
 }
 
 export function buildCounteractionCategoryOptions(custom: readonly string[] = []): string[] {
-  return mergeCounteractionCategoryLists(COUNTERACTION_BUILTIN_CATEGORIES, custom);
+  return mergeCounteractionCategoryLists(custom);
 }
 
 export function itemMatchesCounteractionCategory(categoryField: string, selected: string): boolean {
@@ -62,14 +51,5 @@ export function itemMatchesCounteractionCategory(categoryField: string, selected
     .filter(Boolean);
   const candidates = parts.length ? parts : [categoryField.trim()].filter(Boolean);
 
-  return candidates.some((label) => {
-    const n = normalizeCounteractionCategoryLabel(label);
-    if (n === selectedNorm) return true;
-    if (selectedNorm === "реб" && (n.includes("рэб") || n.includes("реб") || n.includes("радиоэлектрон"))) return true;
-    if (selectedNorm.startsWith("подавлен") && n.includes("подавлен")) return true;
-    if (selectedNorm.startsWith("медицин") && (n.includes("медицин") || n.includes("помощ"))) return true;
-    if (selectedNorm.startsWith("инженерн") && n.includes("инженерн")) return true;
-    if (selectedNorm.startsWith("действия") && (n.includes("действи") || n.includes("атак"))) return true;
-    return false;
-  });
+  return candidates.some((label) => normalizeCounteractionCategoryLabel(label) === selectedNorm);
 }
