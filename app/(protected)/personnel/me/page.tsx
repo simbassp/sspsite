@@ -8,7 +8,7 @@ export default function PersonnelMeRedirectPage() {
   const router = useRouter();
   useEffect(() => {
     const session = readClientSession();
-    if (session?.id) router.replace(`/personnel/${session.id}`);
+    if (session?.id) router.replace("/profile");
     else router.replace("/login");
   }, [router]);
   return <p className="page-subtitle">Переход в профиль…</p>;

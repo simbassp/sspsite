@@ -18,7 +18,7 @@ import {
   useResetTestStatsModal,
 } from "@/components/profile/ResetTestStatsModal";
 import { getPositionBadgeClass } from "@/lib/position-ui";
-import { canManageUsers, canResetTestResults, canViewUserList } from "@/lib/permissions";
+import { canManageUsers, canResetTestResults, canViewUserList, canModeratePersonnel } from "@/lib/permissions";
 import { removeTestResultsForUser } from "@/lib/storage";
 import { DutyLocation, TestResult, TestResultsResetScope, UnitAssignment } from "@/lib/types";
 
@@ -69,7 +69,9 @@ export default function ProfileUserInspectPage() {
   const userId = typeof params?.userId === "string" ? params.userId : "";
 
   const session = useMemo(() => readClientSession(), []);
-  const canOpen = session ? canManageUsers(session) || canViewUserList(session) : false;
+  const canOpen = session
+    ? canManageUsers(session) || canViewUserList(session) || canModeratePersonnel(session)
+    : false;
   const canEditDutyForOthers = session ? canManageUsers(session) : false;
   const canEditProfileFields = session ? canManageUsers(session) : false;
   const canResetStats = session ? canResetTestResults(session) : false;
@@ -489,8 +491,15 @@ export default function ProfileUserInspectPage() {
   return (
     <section className="profile-page">
       <div style={{ marginBottom: 12 }}>
-        <Link href="/admin/users" prefetch={false} className="page-subtitle" style={{ textDecoration: "none", fontWeight: 600 }}>
-          ← К списку пользователей
+        <Link
+          href={session && (canManageUsers(session) || canViewUserList(session)) ? "/admin/users" : "/personnel"}
+          prefetch={false}
+          className="page-subtitle"
+          style={{ textDecoration: "none", fontWeight: 600 }}
+        >
+          {session && (canManageUsers(session) || canViewUserList(session))
+            ? "← К списку пользователей"
+            : "← Сотрудники"}
         </Link>
       </div>
 

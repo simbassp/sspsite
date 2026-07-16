@@ -8,8 +8,10 @@ import {
   examTypeShortLabel,
   IconUavHit,
 } from "@/components/personnel/PersonnelIcons";
+import { readClientSession } from "@/lib/client-auth";
 import { dutyLocationLabel } from "@/lib/duty-location";
 import { formatDate } from "@/lib/format";
+import { resolvePersonnelProfilePath } from "@/lib/personnel-profile-path";
 import { PERSONNEL_EXAM_TYPES, personnelExamLabel, rotaUnitLabel } from "@/lib/personnel-catalog";
 import { getPositionBadgeClass } from "@/lib/position-ui";
 import type { Position } from "@/lib/types";
@@ -32,6 +34,7 @@ type UserRow = {
 type Tab = "all" | "top";
 
 export default function PersonnelListPage() {
+  const session = useMemo(() => readClientSession(), []);
   const [tab, setTab] = useState<Tab>("all");
   const [platoon, setPlatoon] = useState<"all" | "1" | "2">("all");
   const [section, setSection] = useState<"all" | "1" | "2" | "3" | "4">("all");
@@ -93,6 +96,8 @@ export default function PersonnelListPage() {
     return m;
   }, [users]);
 
+  const profilePath = (id: string) => resolvePersonnelProfilePath(session, id);
+
   return (
     <section className="screen personnel-page">
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
@@ -100,7 +105,7 @@ export default function PersonnelListPage() {
           <h1 className="page-title">Сотрудники</h1>
           <p className="page-subtitle">4 рота — личное дело и статистика</p>
         </div>
-        <Link href={`/personnel/me`} className="btn btn-primary">
+        <Link href="/profile" className="btn btn-primary">
           Мой профиль
         </Link>
       </div>
@@ -210,7 +215,7 @@ export default function PersonnelListPage() {
                   {users.map((u) => (
                     <tr key={u.id}>
                       <td>
-                        <Link href={`/personnel/${u.id}`} style={{ fontWeight: 700, color: "inherit" }}>
+                        <Link href={profilePath(u.id)} style={{ fontWeight: 700, color: "inherit" }}>
                           {u.name}
                         </Link>
                         <div style={{ color: "var(--muted)", fontSize: 13 }}>{u.callsign}</div>
@@ -247,7 +252,7 @@ export default function PersonnelListPage() {
               {users.map((u) => (
                 <article key={u.id} className="card">
                   <div className="card-body">
-                    <Link href={`/personnel/${u.id}`} style={{ fontWeight: 700 }}>
+                    <Link href={profilePath(u.id)} style={{ fontWeight: 700 }}>
                       {u.name} ({u.callsign})
                     </Link>
                     <p className="page-subtitle" style={{ margin: "6px 0" }}>
@@ -279,7 +284,7 @@ export default function PersonnelListPage() {
                 <ol>
                   {list.map((u, idx) => (
                     <li key={u.id}>
-                      <Link href={`/personnel/${u.id}`}>{idx + 1}. {u.name}</Link> — {fmt(u)}
+                      <Link href={profilePath(u.id)}>{idx + 1}. {u.name}</Link> — {fmt(u)}
                     </li>
                   ))}
                 </ol>
