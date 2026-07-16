@@ -728,7 +728,7 @@ export default function ProfilePage() {
         <div className="card-body">
           <div className="profile-hero">
             <div className="profile-hero-avatar" aria-hidden="true">
-              <UserIcon color="#c42b2b" size={36} />
+              <UserIcon color="#c42b2b" size={28} />
             </div>
             <div className="profile-hero-main">
               <p className="profile-hero-kicker">Пользовательский профиль</p>
@@ -751,6 +751,16 @@ export default function ProfilePage() {
                 Позывной:{" "}
                 <strong>{(profileCallsignInput || session.callsign || "").trim() || "—"}</strong>
               </p>
+              <div className="profile-hero-status-inline">
+                <span className="profile-hero-status-value">
+                  <StatusDotIcon online={isOnline} />
+                  {isOnline ? "Онлайн" : "Офлайн"}
+                </span>
+                <span className={`profile-duty-status-badge profile-duty-status-badge--${dutyLocation}`}>
+                  {dutyLocationLabel[dutyLocation]}
+                </span>
+                <span className="unit-assignment-badge">{unitAssignmentLabelOrEmpty(unitAssignment)}</span>
+              </div>
               <div
                 className={`admin-users-position-badge ${getPositionBadgeClass(session.position)}`}
                 title="Должность"
@@ -808,22 +818,6 @@ export default function ProfilePage() {
                 onChangePassword={() => setPasswordModalOpen(true)}
                 message={settingsMessage}
               />
-            </div>
-            <div className="profile-hero-divider" aria-hidden="true" />
-            <div className="profile-hero-status">
-              <p className="label" style={{ margin: 0 }}>
-                Статус
-              </p>
-              <p className="profile-hero-status-value">
-                <StatusDotIcon online={isOnline} />
-                {isOnline ? "Онлайн" : "Офлайн"}
-              </p>
-              <span className={`profile-duty-status-badge profile-duty-status-badge--${dutyLocation}`}>
-                {dutyLocationLabel[dutyLocation]}
-              </span>
-              <span className="unit-assignment-badge">
-                {unitAssignmentLabelOrEmpty(unitAssignment)}
-              </span>
             </div>
           </div>
         </div>

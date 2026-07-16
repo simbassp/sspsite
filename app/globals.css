@@ -563,16 +563,20 @@ html[data-theme="dark"] .select option {
 }
 
 /* Профиль: герой-блок, секции настроек, опасная зона */
+.profile-page .profile-hero-card .card-body {
+  padding: 12px 14px;
+}
+
 .profile-page .profile-hero {
   display: flex;
-  align-items: center;
-  gap: 20px;
+  align-items: flex-start;
+  gap: 14px;
   flex-wrap: wrap;
 }
 
 .profile-page .profile-hero-avatar {
-  width: 72px;
-  height: 72px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
   background: rgba(196, 43, 43, 0.14);
   display: flex;
@@ -582,20 +586,20 @@ html[data-theme="dark"] .select option {
 }
 
 .profile-page .profile-hero-main {
-  flex: 1 1 200px;
+  flex: 1 1 180px;
   min-width: 0;
 }
 
 .profile-page .profile-hero-kicker {
   margin: 0;
-  font-size: 13px;
+  font-size: 11px;
   color: var(--muted);
   font-weight: 500;
 }
 
 .profile-page .profile-hero-name {
-  margin: 4px 0 0;
-  font-size: 22px;
+  margin: 2px 0 0;
+  font-size: 18px;
   font-weight: 800;
   line-height: 1.25;
   color: var(--text);
@@ -605,8 +609,8 @@ html[data-theme="dark"] .select option {
 .profile-page .profile-hero-name-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 4px;
+  gap: 6px;
+  margin-top: 2px;
 }
 
 .profile-page .profile-hero-name-row .profile-hero-name {
@@ -614,8 +618,8 @@ html[data-theme="dark"] .select option {
 }
 
 .profile-page .profile-hero-edit-btn {
-  width: 34px;
-  height: 34px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -624,13 +628,13 @@ html[data-theme="dark"] .select option {
 }
 
 .profile-page .profile-hero-controls {
-  flex: 0 1 260px;
+  flex: 1 1 280px;
+  max-width: 420px;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  align-self: stretch;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 10px;
+  align-self: flex-start;
 }
 
 .profile-page .profile-hero-controls .profile-hero-duty {
@@ -639,18 +643,20 @@ html[data-theme="dark"] .select option {
 }
 
 .profile-page .profile-hero-login {
-  padding-top: 10px;
+  grid-column: 1 / -1;
+  padding-top: 6px;
+  margin-top: 2px;
   border-top: 1px solid var(--line);
 }
 
 .profile-page .profile-hero-login-label {
-  margin: 0 0 4px;
-  font-size: 12px;
+  margin: 0 0 2px;
+  font-size: 11px;
 }
 
 .profile-page .profile-hero-login-email {
-  margin: 0 0 8px;
-  font-size: 13px;
+  margin: 0 0 6px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text);
   word-break: break-all;
@@ -658,17 +664,18 @@ html[data-theme="dark"] .select option {
 
 .profile-page .profile-hero-login .profile-login-row {
   margin-top: 0;
+  gap: 6px;
 }
 
 .profile-page .profile-hero-login-btn {
-  font-size: 12px;
-  padding: 6px 10px;
+  font-size: 11px;
+  padding: 5px 8px;
 }
 
 .profile-page .profile-hero-callsign {
-  margin: 6px 0 0;
-  font-size: 14px;
-  line-height: 1.4;
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.35;
   color: var(--muted);
 }
 
@@ -677,34 +684,58 @@ html[data-theme="dark"] .select option {
   color: var(--text);
 }
 
+.profile-page .profile-hero-status-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.profile-page .profile-hero-status-inline .profile-hero-status-value {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+}
+
+.profile-page .profile-hero-status-inline .profile-duty-status-badge {
+  margin-top: 0;
+}
+
 .profile-page .profile-hero-main .admin-users-position-badge {
-  margin-top: 10px;
+  margin-top: 8px;
+  font-size: 11px;
+  padding: 3px 8px;
 }
 
 .profile-page .profile-hero-duty {
-  flex: 0 1 220px;
+  flex: 0 1 auto;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  align-self: center;
+  gap: 4px;
+  align-self: stretch;
 }
 
 .profile-page .profile-hero-duty-label {
   margin: 0;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .profile-page .profile-duty-toggle {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  flex-direction: row;
+  gap: 4px;
 }
 
 .profile-page .profile-duty-option {
-  border-radius: 10px;
-  padding: 8px 12px;
-  font-size: 13px;
+  border-radius: 8px;
+  padding: 5px 8px;
+  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
   border: 1px solid var(--line);
@@ -712,6 +743,8 @@ html[data-theme="dark"] .select option {
   color: var(--text);
   text-align: center;
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .profile-page .profile-duty-option:disabled {
@@ -811,66 +844,29 @@ html[data-theme="dark"] .unit-assignment-badge {
 }
 
 .profile-unit-select {
-  min-width: 140px;
+  min-width: 0;
   max-width: 100%;
-}
-
-.profile-page .profile-hero-divider {
-  width: 1px;
-  align-self: stretch;
-  min-height: 56px;
-  background: var(--line);
-  flex-shrink: 0;
-}
-
-.profile-page .profile-hero-status {
-  flex: 0 0 auto;
-  min-width: 120px;
-}
-
-.profile-page .profile-hero-status-value {
-  margin: 4px 0 0;
-  font-weight: 800;
-  font-size: 15px;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--text);
+  font-size: 12px;
+  padding: 5px 8px;
 }
 
 @media (max-width: 700px) {
-  .profile-page .profile-hero-divider {
-    display: none;
-  }
-
   .profile-page .profile-hero-controls {
     flex: 1 1 100%;
     width: 100%;
-    padding-top: 12px;
+    max-width: none;
+    padding-top: 10px;
     border-top: 1px solid var(--line);
+    grid-template-columns: 1fr;
   }
 
   .profile-page .profile-hero-duty {
     flex: 1 1 100%;
     width: 100%;
-    padding-top: 0;
-    border-top: none;
-  }
-
-  .profile-page .profile-duty-toggle {
-    flex-direction: row;
-    flex-wrap: wrap;
   }
 
   .profile-page .profile-duty-option {
-    flex: 1 1 calc(50% - 4px);
-    min-width: 120px;
-  }
-
-  .profile-page .profile-hero-status {
-    width: 100%;
-    padding-top: 12px;
-    border-top: 1px solid var(--line);
+    flex: 1 1 calc(50% - 2px);
     min-width: 0;
   }
 }

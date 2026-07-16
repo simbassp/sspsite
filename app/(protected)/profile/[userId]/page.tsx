@@ -442,7 +442,7 @@ export default function ProfileUserInspectPage() {
             <div className="card-body">
               <div className="profile-hero">
                 <div className="profile-hero-avatar" aria-hidden="true">
-                  <UserIcon color="#c42b2b" size={36} />
+                  <UserIcon color="#c42b2b" size={28} />
                 </div>
                 <div className="profile-hero-main">
                   <p className="profile-hero-kicker">Пользовательский профиль</p>
@@ -469,6 +469,17 @@ export default function ProfileUserInspectPage() {
                   <p className="profile-hero-callsign">
                     Позывной: <strong>{inspectUser.callsign.trim() || "—"}</strong>
                   </p>
+                  <div className="profile-hero-status-inline">
+                    <span className="profile-hero-status-value">
+                      <StatusDotIcon online={inspectUser.is_online} />
+                      {inspectUser.is_online ? "Онлайн" : "Офлайн"}
+                    </span>
+                    <span
+                      className={`profile-duty-status-badge profile-duty-status-badge--${inspectUser.duty_location}`}
+                    >
+                      {dutyLocationLabel[inspectUser.duty_location]}
+                    </span>
+                  </div>
                   <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
                     @{inspectUser.login}
                     {inspectUser.status === "inactive" ? (
@@ -525,19 +536,6 @@ export default function ProfileUserInspectPage() {
                       </span>
                     )}
                   </div>
-                </div>
-                <div className="profile-hero-divider" aria-hidden="true" />
-                <div className="profile-hero-status">
-                  <p className="label" style={{ margin: 0 }}>
-                    Статус
-                  </p>
-                  <p className="profile-hero-status-value">
-                    <StatusDotIcon online={inspectUser.is_online} />
-                    {inspectUser.is_online ? "Онлайн" : "Офлайн"}
-                  </p>
-                  <span className={`profile-duty-status-badge profile-duty-status-badge--${inspectUser.duty_location}`}>
-                    {dutyLocationLabel[inspectUser.duty_location]}
-                  </span>
                 </div>
               </div>
             </div>
