@@ -4,16 +4,13 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { PersonnelPreviewBanner } from "@/components/personnel/PersonnelPreviewBanner";
 import {
-  ExamStatusIcon,
-  examTypeShortLabel,
   IconUavHit,
+  PersonnelExamRosterIcon,
 } from "@/components/personnel/PersonnelIcons";
 import { readClientSession } from "@/lib/client-auth";
 import { dutyLocationLabel } from "@/lib/duty-location";
-import { formatDate } from "@/lib/format";
 import { resolvePersonnelProfilePath } from "@/lib/personnel-profile-path";
-import { PERSONNEL_EXAM_TYPES, personnelExamLabel, rotaUnitLabel } from "@/lib/personnel-catalog";
-import { getPositionBadgeClass } from "@/lib/position-ui";
+import { PERSONNEL_EXAM_TYPES, rotaUnitLabel } from "@/lib/personnel-catalog";
 import type { Position } from "@/lib/types";
 
 type UserRow = {
@@ -222,13 +219,11 @@ export default function PersonnelListPage() {
                       </td>
                       <td>{rotaUnitLabel(u.rotaPlatoon, u.rotaSection)}</td>
                       <td>
-                        <div style={{ display: "flex", gap: 4 }}>
+                        <div className="personnel-roster-exams">
                           {PERSONNEL_EXAM_TYPES.map((t) => {
                             const st = examMap.get(u.id)?.get(t);
                             return (
-                              <span key={t} title={personnelExamLabel[t]} style={{ display: "inline-flex" }}>
-                                <ExamStatusIcon passed={st === "passed"} />
-                              </span>
+                              <PersonnelExamRosterIcon key={t} type={t} passed={st === "passed"} />
                             );
                           })}
                         </div>

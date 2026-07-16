@@ -1,4 +1,4 @@
-import type { PersonnelExamType } from "@/lib/personnel-catalog";
+import { personnelExamLabel, type PersonnelExamType } from "@/lib/personnel-catalog";
 
 const svgBase = {
   width: 20,
@@ -263,6 +263,21 @@ export function examTypeShortLabel(type: PersonnelExamType) {
     default:
       return type;
   }
+}
+
+export function PersonnelExamRosterIcon({ type, passed }: { type: PersonnelExamType; passed: boolean }) {
+  return (
+    <span
+      className={`personnel-roster-exam ${passed ? "personnel-roster-exam--passed" : "personnel-roster-exam--failed"}`}
+      title={`${personnelExamLabel[type]}: ${passed ? "Сдан" : "Не сдан"}`}
+    >
+      <span
+        className={`personnel-exam-card__type-icon personnel-exam-card__type-icon--${examTypeIconTone(type)} personnel-roster-exam__bubble`}
+      >
+        <ExamTypeIcon type={type} size={14} />
+      </span>
+    </span>
+  );
 }
 
 export function PersonnelBarChart({ data }: { data: Array<{ month: string; days: number }> }) {
