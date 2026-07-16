@@ -2,7 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { PersonnelPreviewBanner } from "@/components/personnel/PersonnelPreviewBanner";
-import { personnelRequestTypeLabel } from "@/lib/personnel-catalog";
+import {
+  formatPersonnelRequestDetails,
+  personnelRequestTypeLabel,
+  type PersonnelRequestType,
+} from "@/lib/personnel-catalog";
 
 type PendingRow = {
   id: string;
@@ -101,22 +105,23 @@ export default function AdminPersonnelPage() {
                 ? `${row.app_users.name}${row.app_users.callsign ? ` (${row.app_users.callsign})` : ""}`
                 : "Сотрудник";
               const type =
-                personnelRequestTypeLabel[row.request_type as keyof typeof personnelRequestTypeLabel] ??
-                row.request_type;
+                personnelRequestTypeLabel[row.request_type as PersonnelRequestType] ?? row.request_type;
+              const details = formatPersonnelRequestDetails(
+                row.request_type as PersonnelRequestType,
+                row.payload ?? {},
+              );
               return (
                 <li key={row.id} className="card">
                   <div className="card-body">
                     <strong>{who}</strong> — {type}
-                    <pre
-                      style={{
-                        margin: "8px 0",
-                        fontSize: 12,
-                        whiteSpace: "pre-wrap",
-                        color: "var(--muted)",
-                      }}
-                    >
-                      {JSON.stringify(row.payload, null, 2)}
-                    </pre>
+                    <dl className="personnel-request-details">
+                      {details.map((item) => (
+                        <div key={item.label} className="personnel-request-details__row">
+                          <dt>{item.label}</dt>
+                          <dd>{item.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
                     <div style={{ display: "flex", gap: 8 }}>
                       <button type="button" className="btn btn-primary" onClick={() => void review(row.id, true)}>
                         Одобрить

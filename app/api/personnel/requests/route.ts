@@ -1,4 +1,5 @@
 import { getPersonnelContext } from "@/lib/personnel-api-guard";
+import { formatPersonnelRequestNotificationBody } from "@/lib/personnel-catalog";
 import {
   createPersonnelRequest,
   loadNotifications,
@@ -59,7 +60,7 @@ export async function POST(req: Request) {
 
   await notifyModerators(
     "Новая заявка в личное дело",
-    `Тип: ${requestType}`,
+    formatPersonnelRequestNotificationBody(requestType, body.payload ?? {}),
     "/admin/personnel",
   );
 

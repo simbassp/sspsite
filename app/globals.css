@@ -2934,6 +2934,34 @@ html[data-theme="dark"] .final-review-answer--correct {
   align-items: center;
 }
 
+.personnel-request-details {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel2) 55%, var(--panel));
+  display: grid;
+  gap: 8px;
+}
+
+.personnel-request-details__row {
+  display: grid;
+  grid-template-columns: minmax(90px, 120px) 1fr;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.personnel-request-details__row dt {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.personnel-request-details__row dd {
+  margin: 0;
+  font-weight: 600;
+}
+
 @media (max-width: 819px) {
   .personnel-hero {
     grid-template-columns: 1fr;
