@@ -22,6 +22,14 @@ import {
   type PersonnelActivitySegment,
 } from "@/components/personnel/PersonnelIcons";
 import { PersonnelTestActivityBlock } from "@/components/personnel/PersonnelTestActivityBlock";
+import {
+  ResetTestStatsButton,
+  ResetTestStatsModal,
+  useResetTestStatsModal,
+} from "@/components/profile/ResetTestStatsModal";
+import { readClientSession } from "@/lib/client-auth";
+import { canResetTestResults } from "@/lib/permissions";
+import { removeTestResultsForUser } from "@/lib/storage";
 import { dutyLocationLabel } from "@/lib/duty-location";
 import { formatDate } from "@/lib/format";
 import {
@@ -34,7 +42,13 @@ import {
   rotaUnitLabel,
 } from "@/lib/personnel-catalog";
 import { getPositionBadgeClass } from "@/lib/position-ui";
-import type { Position } from "@/lib/types";
+import type { Position, TestResultsResetScope } from "@/lib/types";
+
+const RESET_SCOPE_LABELS: Record<TestResultsResetScope, string> = {
+  trial: "пробные тесты",
+  final: "итоговые тесты",
+  all: "все попытки",
+};
 
 type Tab = "overview" | "exams" | "deployments" | "medals" | "premiums";
 
@@ -72,6 +86,8 @@ type Profile = {
 export default function PersonnelProfilePage() {
   const params = useParams<{ userId: string }>();
   const userId = params.userId;
+  const session = useMemo(() => readClientSession(), []);
+  const canResetStats = session ? canResetTestResults(session) : false;
   const [tab, setTab] = useState<Tab>("overview");
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isPreview, setIsPreview] = useState(false);
@@ -81,6 +97,9 @@ export default function PersonnelProfilePage() {
   const [requestType, setRequestType] = useState<"medal" | "deployment" | "exam">("deployment");
   const [requestMsg, setRequestMsg] = useState("");
   const [requestSaving, setRequestSaving] = useState(false);
+  const [isResettingStats, setIsResettingStats] = useState(false);
+  const [resetStatsMessage, setResetStatsMessage] = useState("");
+  const resetStatsModal = useResetTestStatsModal("all");
 
   const load = useCallback(async () => {
     setLoadError("");
@@ -124,6 +143,32 @@ export default function PersonnelProfilePage() {
     () => filterPersonnelActivityByMonth(profile?.activityByMonth ?? [], "service"),
     [profile?.activityByMonth],
   );
+
+  const onConfirmResetStats = async () => {
+    if (isResettingStats || !userId) return;
+    setIsResettingStats(true);
+    setResetStatsMessage("");
+    try {
+      const response = await fetch("/api/admin/results/reset-stats", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ targetUserId: userId, scope: resetStatsModal.scope }),
+      });
+      const payload = (await response.json()) as { ok?: boolean; error?: string };
+      if (!response.ok || !payload.ok) {
+        setResetStatsMessage(payload.error || "Не удалось сбросить статистику.");
+        return;
+      }
+      removeTestResultsForUser(userId, resetStatsModal.scope);
+      resetStatsModal.setOpen(false);
+      setResetStatsMessage(`Статистика сброшена: ${RESET_SCOPE_LABELS[resetStatsModal.scope]}.`);
+      await load();
+    } catch {
+      setResetStatsMessage("Ошибка сети. Попробуйте ещё раз.");
+    } finally {
+      setIsResettingStats(false);
+    }
+  };
 
   const onRequestSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -192,7 +237,7 @@ export default function PersonnelProfilePage() {
   }
 
   return (
-    <section className="screen personnel-page">
+    <section className="screen personnel-page profile-page">
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
         <div>
           <Link href="/personnel" className="page-subtitle" style={{ textDecoration: "none" }}>
@@ -258,6 +303,39 @@ export default function PersonnelProfilePage() {
           <strong>{profile.premiumsTotal.toLocaleString("ru-RU")} ₽</strong>
         </div>
       </div>
+
+      {canResetStats && (
+        <article className="card profile-danger-card" style={{ marginTop: 12 }}>
+          <div className="card-body profile-danger-inner">
+            <div className="profile-danger-copy">
+              <div>
+                <h4 style={{ margin: 0 }}>Сброс статистики</h4>
+                <p className="page-subtitle" style={{ margin: "6px 0 0" }}>
+                  Удаление попыток тестов пользователя {profile.callsign || profile.name}. Действие необратимо.
+                </p>
+                {resetStatsMessage ? (
+                  <p className="page-subtitle" style={{ margin: "8px 0 0", color: "var(--muted)" }}>
+                    {resetStatsMessage}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+            <ResetTestStatsButton busy={isResettingStats} onClick={() => resetStatsModal.setOpen(true)} />
+          </div>
+        </article>
+      )}
+
+      <ResetTestStatsModal
+        open={resetStatsModal.open}
+        saving={isResettingStats}
+        scope={resetStatsModal.scope}
+        onScopeChange={resetStatsModal.setScope}
+        onClose={() => {
+          if (isResettingStats) return;
+          resetStatsModal.setOpen(false);
+        }}
+        onConfirm={() => void onConfirmResetStats()}
+      />
 
       <div className="personnel-tabs">
         {(
