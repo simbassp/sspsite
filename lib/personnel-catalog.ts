@@ -9,8 +9,17 @@ export const personnelExamLabel: Record<PersonnelExamType, string> = {
   shooting: "Стрельба",
 };
 
-export const PERSONNEL_LICENSE_CATEGORIES = ["B", "C", "CE"] as const;
+export const PERSONNEL_LICENSE_CATEGORIES = ["M", "A", "B", "C", "D"] as const;
 export type PersonnelLicenseCategory = (typeof PERSONNEL_LICENSE_CATEGORIES)[number];
+
+export function isPersonnelLicenseCategory(value: unknown): value is PersonnelLicenseCategory {
+  return typeof value === "string" && (PERSONNEL_LICENSE_CATEGORIES as readonly string[]).includes(value);
+}
+
+export function normalizePersonnelLicenseCategories(values: unknown): PersonnelLicenseCategory[] {
+  if (!Array.isArray(values)) return [];
+  return values.filter(isPersonnelLicenseCategory);
+}
 
 export const PERSONNEL_MEDAL_SVO_TYPE = "svo_victory_contribution" as const;
 

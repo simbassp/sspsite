@@ -5,6 +5,7 @@ import {
   PERSONNEL_EXAM_TYPES,
   type PersonnelExamType,
   type PersonnelLicenseCategory,
+  normalizePersonnelLicenseCategories,
 } from "@/lib/personnel-catalog";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 
@@ -232,10 +233,7 @@ async function loadLicenses(userIds: string[]) {
   if (res.error) return map;
   for (const row of res.data ?? []) {
     const r = row as { user_id: string; categories?: string[] };
-    map.set(
-      String(r.user_id),
-      (r.categories ?? []).filter((c): c is PersonnelLicenseCategory => c === "B" || c === "C" || c === "CE"),
-    );
+    map.set(String(r.user_id), normalizePersonnelLicenseCategories(r.categories));
   }
   return map;
 }
@@ -401,9 +399,9 @@ export async function loadPersonnelProfile(userId: string): Promise<PersonnelPro
   const standalonePremiumsTotal = premiums.reduce((sum, p) => sum + p.amount, 0);
 
   const exams = (examRes.data ?? []).map((row) => mapExamRow(row as Record<string, unknown>));
-  const licenseCategories = (
-    (licenseRes.data as { categories?: string[] } | null)?.categories ?? []
-  ).filter((c): c is PersonnelLicenseCategory => c === "B" || c === "C" || c === "CE");
+  const licenseCategories = normalizePersonnelLicenseCategories(
+    (licenseRes.data as { categories?: string[] } | null)?.categories,
+  );
 
   const monthNames = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"];
   const activityByMonth = monthNames.slice(0, 7).map((month, idx) => ({
@@ -690,9 +688,7 @@ export async function updatePersonnelRecord(input: {
   const d = input.data;
 
   if (input.entity === "licenses") {
-    const categories = Array.isArray(d.categories)
-      ? d.categories.filter((c): c is PersonnelLicenseCategory => c === "B" || c === "C" || c === "CE")
-      : [];
+    const categories = normalizePersonnelLicenseCategories(d.categories);
     const res = await supabase.from("personnel_licenses").upsert(
       {
         user_id: input.userId,
