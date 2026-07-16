@@ -16,7 +16,6 @@ import {
   IconLicense,
   IconMedal,
   IconPremium,
-  IconRank,
   IconUavHit,
   PersonnelBarChart,
   PersonnelPieChart,
@@ -31,7 +30,6 @@ import {
   personnelExamLabel,
   personnelRequestTypeLabel,
   PERSONNEL_SUMMARY_ADJUSTMENT_PREMIUM_TITLE,
-  rotaUnitLabel,
 } from "@/lib/personnel-catalog";
 import type { Position } from "@/lib/types";
 
@@ -150,48 +148,18 @@ export function PersonnelProfileStats({ userId }: { userId: string }) {
     [profile?.deployments],
   );
 
-  const otherStandalonePremiumsTotal = useMemo(
-    () =>
-      profile?.premiums
-        .filter((p) => p.title !== PERSONNEL_SUMMARY_ADJUSTMENT_PREMIUM_TITLE)
-        .reduce((sum, p) => sum + p.amount, 0) ?? 0,
-    [profile?.premiums],
-  );
-
-  const minSummaryPremiumTotal = deploymentPremiumsTotal + otherStandalonePremiumsTotal;
-
   const saveSummaryPremiumTotal = async (totalPremium: number) => {
     if (!profile) return;
-    const adjustment = profile.premiums.find((p) => p.title === PERSONNEL_SUMMARY_ADJUSTMENT_PREMIUM_TITLE);
-    const neededAdjustment = totalPremium - minSummaryPremiumTotal;
-
-    if (neededAdjustment < 0) {
-      throw new Error(
-        `Итого не может быть меньше ${minSummaryPremiumTotal.toLocaleString("ru-RU")} ₽ (сумма по командировкам и другим премиям).`,
-      );
+    if (!Number.isFinite(totalPremium) || totalPremium < 0) {
+      throw new Error("Введите сумму от 0 ₽");
     }
 
-    if (neededAdjustment === 0) {
-      if (adjustment) {
-        await postPersonnelManage({ action: "delete", entity: "premium", userId, id: adjustment.id });
-      }
-      return;
+    for (const premium of profile.premiums) {
+      await postPersonnelManage({ action: "delete", entity: "premium", userId, id: premium.id });
     }
 
-    if (adjustment) {
-      await postPersonnelManage({
-        action: "update",
-        entity: "premium",
-        userId,
-        id: adjustment.id,
-        data: {
-          title: PERSONNEL_SUMMARY_ADJUSTMENT_PREMIUM_TITLE,
-          amount: neededAdjustment,
-          awardedAt: toDateInput(adjustment.awardedAt) || new Date().toISOString().slice(0, 10),
-        },
-      });
-      return;
-    }
+    const standaloneNeeded = Math.max(0, totalPremium - deploymentPremiumsTotal);
+    if (standaloneNeeded === 0) return;
 
     await postPersonnelManage({
       action: "create",
@@ -199,7 +167,7 @@ export function PersonnelProfileStats({ userId }: { userId: string }) {
       userId,
       data: {
         title: PERSONNEL_SUMMARY_ADJUSTMENT_PREMIUM_TITLE,
-        amount: neededAdjustment,
+        amount: standaloneNeeded,
         awardedAt: new Date().toISOString().slice(0, 10),
       },
     });
@@ -404,18 +372,6 @@ export function PersonnelProfileStats({ userId }: { userId: string }) {
           <div>
             <p className="label">Премия за сбитие</p>
             <strong>{profile.premiumsTotal.toLocaleString("ru-RU")} ₽</strong>
-          </div>
-        </div>
-        <div className="personnel-stat-card personnel-stat-card--icon personnel-stat-card--rank">
-          <span className="personnel-stat-card__icon personnel-stat-card__icon--purple">
-            <IconRank size={20} />
-          </span>
-          <div>
-            <p className="label">Должность</p>
-            <strong style={{ fontSize: 16 }}>{profile.position}</strong>
-            <p className="page-subtitle" style={{ margin: "4px 0 0" }}>
-              {rotaUnitLabel(profile.rotaPlatoon, profile.rotaSection)}
-            </p>
           </div>
         </div>
       </div>
@@ -824,22 +780,16 @@ export function PersonnelProfileStats({ userId }: { userId: string }) {
                   <>
                     <p className="page-subtitle" style={{ marginTop: 0, marginBottom: 0 }}>
                       По командировкам: {deploymentPremiumsTotal.toLocaleString("ru-RU")} ₽
-                      {otherStandalonePremiumsTotal > 0
-                        ? ` · Другие премии: ${otherStandalonePremiumsTotal.toLocaleString("ru-RU")} ₽`
-                        : ""}
                     </p>
                     <label className="label">Итого премия за сбитие, ₽</label>
                     <input
                       className="input"
                       type="number"
                       name="totalPremium"
-                      min={minSummaryPremiumTotal}
+                      min={0}
                       defaultValue={profile.premiumsTotal}
                       required
                     />
-                    <p className="page-subtitle" style={{ margin: 0 }}>
-                      Минимум: {minSummaryPremiumTotal.toLocaleString("ru-RU")} ₽
-                    </p>
                   </>
                 )}
                 {editModal.kind === "deployment" && (
