@@ -284,7 +284,6 @@ function addOverviewSheet(workbook: ExcelJS.Workbook, bundle: PersonnelProfileEx
   addPairs([
     ["ФИО", bundle.user.name || "—"],
     ["Позывной", bundle.user.callsign || "—"],
-    ["Логин", bundle.user.login || "—"],
     ["Должность", bundle.user.position || "—"],
     ["Подразделение", bundle.user.unitAssignment || "—"],
     ["Взвод / отделение", bundle.user.rotaUnit],
@@ -764,7 +763,6 @@ function addSummarySheet(
   sheet.columns = [
     { width: 18 },
     { width: 12 },
-    { width: 11 },
     { width: 22 },
     { width: 20 },
     { width: 16 },
@@ -779,7 +777,7 @@ function addSummarySheet(
   ];
 
   const title = sheet.addRow([meta.title]);
-  sheet.mergeCells(title.number, 1, title.number, 14);
+  sheet.mergeCells(title.number, 1, title.number, 13);
   styleSectionTitle(title.getCell(1));
   title.height = 24;
 
@@ -790,7 +788,6 @@ function addSummarySheet(
   const header = sheet.addRow([
     "ФИО",
     "Позывной",
-    "Логин",
     "Должность",
     "Взвод / отделение",
     "Место",
@@ -810,7 +807,6 @@ function addSummarySheet(
     const row = sheet.addRow([
       bundle.user.name || "—",
       bundle.user.callsign || "—",
-      bundle.user.login || "—",
       bundle.user.position || "—",
       bundle.user.rotaUnit,
       bundle.user.dutyLocation,
@@ -825,7 +821,7 @@ function addSummarySheet(
     ]);
     applyCompactRow(row);
     row.eachCell((cell, col) => {
-      const centerCols = new Set([9, 10, 11, 13]);
+      const centerCols = new Set([8, 9, 10, 12]);
       styleCompactTableCell(cell, centerCols.has(col) ? "center" : "left");
     });
   }
