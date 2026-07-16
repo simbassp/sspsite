@@ -3059,6 +3059,27 @@ html[data-theme="dark"] .final-review-answer--correct {
   font-size: 18px;
 }
 
+.personnel-deploy-summary__value {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.personnel-deploy-summary__value strong {
+  margin-top: 0;
+}
+
+.personnel-deploy-summary__edit {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
 .personnel-link-btn {
   margin-top: 12px;
   border: none;

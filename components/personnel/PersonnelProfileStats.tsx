@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { Pencil } from "lucide-react";
 import { PersonnelMedalBadge } from "@/components/personnel/PersonnelMedalBadge";
 import { PersonnelModActions, postPersonnelManage } from "@/components/personnel/PersonnelModerationTools";
 import { PersonnelPreviewBanner } from "@/components/personnel/PersonnelPreviewBanner";
@@ -29,6 +30,7 @@ import {
   getMedalDisplayTitle,
   personnelExamLabel,
   personnelRequestTypeLabel,
+  PERSONNEL_SUMMARY_ADJUSTMENT_PREMIUM_TITLE,
   rotaUnitLabel,
 } from "@/lib/personnel-catalog";
 import type { Position } from "@/lib/types";
@@ -71,7 +73,8 @@ type EditModal =
   | { kind: "deployment"; record: DeploymentRow }
   | { kind: "premium"; record: ProfilePayload["premiums"][number] }
   | { kind: "medal"; record: ProfilePayload["medals"][number] }
-  | { kind: "exam"; examType: string; status: string; passedAt: string | null };
+  | { kind: "exam"; examType: string; status: string; passedAt: string | null }
+  | { kind: "deploySummaryPremium" };
 
 function formatPeriod(from: string, to: string) {
   return `${formatDate(from)} — ${formatDate(to)}`;
@@ -141,6 +144,66 @@ export function PersonnelProfileStats({ userId }: { userId: string }) {
   const failedExamsCount = useMemo(() => {
     return PERSONNEL_EXAM_TYPES.filter((t) => examByType.get(t)?.status !== "passed").length;
   }, [examByType]);
+
+  const deploymentPremiumsTotal = useMemo(
+    () => profile?.deployments.reduce((sum, d) => sum + d.premiumAmount, 0) ?? 0,
+    [profile?.deployments],
+  );
+
+  const otherStandalonePremiumsTotal = useMemo(
+    () =>
+      profile?.premiums
+        .filter((p) => p.title !== PERSONNEL_SUMMARY_ADJUSTMENT_PREMIUM_TITLE)
+        .reduce((sum, p) => sum + p.amount, 0) ?? 0,
+    [profile?.premiums],
+  );
+
+  const minSummaryPremiumTotal = deploymentPremiumsTotal + otherStandalonePremiumsTotal;
+
+  const saveSummaryPremiumTotal = async (totalPremium: number) => {
+    if (!profile) return;
+    const adjustment = profile.premiums.find((p) => p.title === PERSONNEL_SUMMARY_ADJUSTMENT_PREMIUM_TITLE);
+    const neededAdjustment = totalPremium - minSummaryPremiumTotal;
+
+    if (neededAdjustment < 0) {
+      throw new Error(
+        `Итого не может быть меньше ${minSummaryPremiumTotal.toLocaleString("ru-RU")} ₽ (сумма по командировкам и другим премиям).`,
+      );
+    }
+
+    if (neededAdjustment === 0) {
+      if (adjustment) {
+        await postPersonnelManage({ action: "delete", entity: "premium", userId, id: adjustment.id });
+      }
+      return;
+    }
+
+    if (adjustment) {
+      await postPersonnelManage({
+        action: "update",
+        entity: "premium",
+        userId,
+        id: adjustment.id,
+        data: {
+          title: PERSONNEL_SUMMARY_ADJUSTMENT_PREMIUM_TITLE,
+          amount: neededAdjustment,
+          awardedAt: toDateInput(adjustment.awardedAt) || new Date().toISOString().slice(0, 10),
+        },
+      });
+      return;
+    }
+
+    await postPersonnelManage({
+      action: "create",
+      entity: "premium",
+      userId,
+      data: {
+        title: PERSONNEL_SUMMARY_ADJUSTMENT_PREMIUM_TITLE,
+        amount: neededAdjustment,
+        awardedAt: new Date().toISOString().slice(0, 10),
+      },
+    });
+  };
 
   const onDelete = async (
     entity: "deployment" | "premium" | "medal" | "exam",
@@ -221,6 +284,8 @@ export function PersonnelProfileStats({ userId }: { userId: string }) {
             awardedAt: form.get("awardedAt"),
           },
         });
+      } else if (editModal.kind === "deploySummaryPremium") {
+        await saveSummaryPremiumTotal(Number(form.get("totalPremium") || 0));
       } else {
         await postPersonnelManage({
           action: "update",
@@ -399,7 +464,20 @@ export function PersonnelProfileStats({ userId }: { userId: string }) {
               </div>
               <div>
                 <span className="label">Премия за сбитие</span>
-                <strong>{profile.premiumsTotal.toLocaleString("ru-RU")} ₽</strong>
+                <div className="personnel-deploy-summary__value">
+                  <strong>{profile.premiumsTotal.toLocaleString("ru-RU")} ₽</strong>
+                  {canModerate && (
+                    <button
+                      type="button"
+                      className="btn personnel-deploy-summary__edit"
+                      title="Редактировать итоговую премию"
+                      aria-label="Редактировать итоговую премию"
+                      onClick={() => setEditModal({ kind: "deploySummaryPremium" })}
+                    >
+                      <Pencil width={16} height={16} strokeWidth={2} aria-hidden />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -738,8 +816,32 @@ export function PersonnelProfileStats({ userId }: { userId: string }) {
         >
           <article className="card personnel-modal" onClick={(e) => e.stopPropagation()}>
             <div className="card-body">
-              <h3 style={{ marginTop: 0 }}>Изменить запись</h3>
+              <h3 style={{ marginTop: 0 }}>
+                {editModal.kind === "deploySummaryPremium" ? "Итоговая премия за сбитие" : "Изменить запись"}
+              </h3>
               <form className="form" onSubmit={onEditSubmit}>
+                {editModal.kind === "deploySummaryPremium" && (
+                  <>
+                    <p className="page-subtitle" style={{ marginTop: 0, marginBottom: 0 }}>
+                      По командировкам: {deploymentPremiumsTotal.toLocaleString("ru-RU")} ₽
+                      {otherStandalonePremiumsTotal > 0
+                        ? ` · Другие премии: ${otherStandalonePremiumsTotal.toLocaleString("ru-RU")} ₽`
+                        : ""}
+                    </p>
+                    <label className="label">Итого премия за сбитие, ₽</label>
+                    <input
+                      className="input"
+                      type="number"
+                      name="totalPremium"
+                      min={minSummaryPremiumTotal}
+                      defaultValue={profile.premiumsTotal}
+                      required
+                    />
+                    <p className="page-subtitle" style={{ margin: 0 }}>
+                      Минимум: {minSummaryPremiumTotal.toLocaleString("ru-RU")} ₽
+                    </p>
+                  </>
+                )}
                 {editModal.kind === "deployment" && (
                   <>
                     <label className="label">С</label>

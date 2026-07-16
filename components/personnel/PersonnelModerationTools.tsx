@@ -2,7 +2,7 @@
 
 import { Pencil, Trash2 } from "lucide-react";
 
-type ManageAction = "delete" | "update";
+type ManageAction = "delete" | "update" | "create";
 
 export type ManageEntity = "deployment" | "premium" | "medal" | "exam" | "licenses";
 

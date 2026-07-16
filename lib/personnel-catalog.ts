@@ -46,6 +46,9 @@ export function getMedalShortTitle(medalType?: string | null, title?: string | n
 export const PERSONNEL_REQUEST_TYPES = ["medal", "premium", "deployment", "exam"] as const;
 export type PersonnelRequestType = (typeof PERSONNEL_REQUEST_TYPES)[number];
 
+/** Отдельная премия для корректировки итога в сводке командировок (редактируют админ/модератор). */
+export const PERSONNEL_SUMMARY_ADJUSTMENT_PREMIUM_TITLE = "Доп. премия за сбитие";
+
 export const personnelRequestTypeLabel: Record<PersonnelRequestType, string> = {
   medal: "Медаль",
   premium: "Премия",

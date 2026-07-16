@@ -2,6 +2,7 @@ import { resolvePersonnelProfileViewAccess } from "@/lib/personnel-profile-acces
 import {
   deletePersonnelRecord,
   type PersonnelManageEntity,
+  createPersonnelRecord,
   updatePersonnelRecord,
 } from "@/lib/personnel-server";
 import { getServerSession } from "@/lib/server-auth";
@@ -15,7 +16,7 @@ export async function POST(req: Request) {
   }
 
   const body = (await req.json()) as {
-    action?: "delete" | "update";
+    action?: "delete" | "update" | "create";
     entity?: PersonnelManageEntity;
     userId?: string;
     id?: string;
@@ -36,7 +37,9 @@ export async function POST(req: Request) {
   const result =
     action === "delete"
       ? await deletePersonnelRecord({ userId, entity, id, examType })
-      : await updatePersonnelRecord({ userId, entity, id, examType, data: data ?? {} });
+      : action === "create"
+        ? await createPersonnelRecord({ userId, entity, data: data ?? {} })
+        : await updatePersonnelRecord({ userId, entity, id, examType, data: data ?? {} });
 
   if (!result.ok) {
     return Response.json({ ok: false, error: result.error }, { status: 400 });
