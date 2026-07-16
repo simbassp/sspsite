@@ -296,14 +296,23 @@ export type PersonnelActivityMonth = {
   total: number;
 };
 
+export function personnelActivityPieData(segments: PersonnelActivitySegment[]) {
+  const nonEmpty = segments.filter((seg) => seg.value > 0);
+  if (!nonEmpty.length) {
+    return [{ label: "Нет данных", value: 1, color: "#94a3b8" }];
+  }
+  return nonEmpty.map((seg) => ({ label: seg.label, value: seg.value, color: seg.color }));
+}
+
 export function PersonnelActivityLegend({ segments }: { segments: PersonnelActivitySegment[] }) {
   const unique = segments.filter((seg, idx, arr) => arr.findIndex((x) => x.key === seg.key) === idx);
   return (
     <ul className="personnel-activity-legend">
       {unique.map((seg) => (
-        <li key={seg.key}>
-          <span style={{ background: seg.color }} />
+        <li key={seg.key} className={seg.value === 0 ? "is-zero" : undefined}>
+          <span style={{ background: seg.color, opacity: seg.value === 0 ? 0.35 : 1 }} />
           {seg.label}
+          {seg.value > 0 ? ` (${seg.value})` : ""}
         </li>
       ))}
     </ul>

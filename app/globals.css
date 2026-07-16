@@ -2920,6 +2920,10 @@ html[data-theme="dark"] .final-review-answer--correct {
   color: var(--muted);
 }
 
+.personnel-activity-legend li.is-zero {
+  opacity: 0.55;
+}
+
 .personnel-activity-legend span {
   width: 10px;
   height: 10px;

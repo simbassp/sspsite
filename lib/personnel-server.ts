@@ -8,6 +8,7 @@ import {
   type PersonnelLicenseCategory,
   normalizePersonnelLicenseCategories,
 } from "@/lib/personnel-catalog";
+import { resolveFinalUserContext } from "@/lib/server-final-user-context";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 
 export type PersonnelModuleSettings = {
@@ -158,8 +159,10 @@ const ACTIVITY_MONTH_LABELS = ["Янв", "Фев", "Мар", "Апр", "Май",
 const ACTIVITY_CATEGORY_DEFS = [
   { key: "deployments", label: "Командировки", color: "#3b82f6" },
   { key: "hits", label: "Сбития БПЛА", color: "#c42b2b" },
-  { key: "trialTests", label: "Пробные тесты", color: "#10b981" },
-  { key: "finalTests", label: "Итоговые тесты", color: "#059669" },
+  { key: "trialPassed", label: "Пробные (сданы)", color: "#10b981" },
+  { key: "trialFailed", label: "Пробные (не сданы)", color: "#86efac" },
+  { key: "finalPassed", label: "Итоговые (сданы)", color: "#059669" },
+  { key: "finalFailed", label: "Итоговые (не сданы)", color: "#6ee7b7" },
   { key: "exams", label: "Зачёты", color: "#8b5cf6" },
   { key: "medals", label: "Медали", color: "#f59e0b" },
   { key: "premiums", label: "Премии", color: "#d97706" },
@@ -218,10 +221,13 @@ function buildPersonnelActivityStats(input: {
   }
 
   for (const test of input.testResults) {
-    if (test.status !== "passed") continue;
+    if (!test.createdAt) continue;
     const bucketKey = monthKeyFromDate(test.createdAt);
-    if (test.type === "final") add(bucketKey, "finalTests");
-    else add(bucketKey, "trialTests");
+    if (test.type === "final") {
+      add(bucketKey, test.status === "passed" ? "finalPassed" : "finalFailed");
+    } else {
+      add(bucketKey, test.status === "passed" ? "trialPassed" : "trialFailed");
+    }
   }
 
   for (const exam of input.exams) {
@@ -257,11 +263,7 @@ function buildPersonnelActivityStats(input: {
     label: def.label,
     value: totals[def.key],
     color: def.color,
-  })).filter((item) => item.value > 0);
-
-  if (!activitySummary.length) {
-    activitySummary.push({ key: "empty", label: "Нет данных", value: 1, color: "#94a3b8" });
-  }
+  }));
 
   return { activityByMonth, activitySummary };
 }
@@ -463,7 +465,9 @@ export async function loadPersonnelProfile(userId: string): Promise<PersonnelPro
   if (!basic) return null;
 
   const supabase = getServerSupabaseServiceClient();
-  const [depRes, medalRes, premiumRes, examRes, licenseRes, pendingRes, testRes] = await Promise.all([
+  const { linkedUserIds } = await resolveFinalUserContext(supabase, userId);
+
+  const [depRes, medalRes, premiumRes, examRes, licenseRes, pendingRes, testPrimaryRes] = await Promise.all([
     supabase.from("personnel_deployments").select("*").eq("user_id", userId).order("date_from", { ascending: false }),
     supabase.from("personnel_medals").select("*").eq("user_id", userId).order("awarded_at", { ascending: false }),
     supabase.from("personnel_premiums").select("*").eq("user_id", userId).order("awarded_at", { ascending: false }),
@@ -474,8 +478,17 @@ export async function loadPersonnelProfile(userId: string): Promise<PersonnelPro
       .select("id", { count: "exact", head: true })
       .eq("user_id", userId)
       .eq("status", "pending"),
-    supabase.from("test_results").select("type,test_type,status,created_at").eq("user_id", userId),
+    supabase.from("test_results").select("type,status,created_at").in("user_id", linkedUserIds),
   ]);
+
+  let testRows = (testPrimaryRes.data ?? []) as Array<Record<string, unknown>>;
+  if (testPrimaryRes.error && isMissingColumnError(testPrimaryRes.error.message)) {
+    const testLegacyRes = await supabase
+      .from("test_results")
+      .select("test_type,status,created_at")
+      .in("user_id", linkedUserIds);
+    testRows = (testLegacyRes.data ?? []) as Array<Record<string, unknown>>;
+  }
 
   const deployments: PersonnelDeploymentRow[] = (depRes.data ?? []).map((row) => {
     const r = row as {
@@ -549,7 +562,7 @@ export async function loadPersonnelProfile(userId: string): Promise<PersonnelPro
     (licenseRes.data as { categories?: string[] } | null)?.categories,
   );
 
-  const testResults = (testRes.data ?? []).map((row) => {
+  const testResults = testRows.map((row) => {
     const r = row as { type?: string; test_type?: string; status?: string; created_at?: string };
     const type = r.type === "final" || r.test_type === "final" ? "final" : "trial";
     return {

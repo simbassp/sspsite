@@ -15,6 +15,7 @@ import {
   PersonnelPieChart,
   PersonnelStackedBarChart,
   PersonnelActivityLegend,
+  personnelActivityPieData,
   type PersonnelActivityMonth,
   type PersonnelActivitySegment,
 } from "@/components/personnel/PersonnelIcons";
@@ -324,20 +325,14 @@ export default function PersonnelProfilePage() {
             <article className="card">
               <div className="card-body">
                 <h3 style={{ marginTop: 0 }}>Общая статистика</h3>
-                <PersonnelPieChart
-                  data={profile.activitySummary.map((item) => ({
-                    label: item.label,
-                    value: item.value,
-                    color: item.color,
-                  }))}
-                />
+                <PersonnelPieChart data={personnelActivityPieData(profile.activitySummary)} />
               </div>
             </article>
           </div>
-          {profile.activitySummary.some((item) => item.key !== "empty") && (
+          {profile.activitySummary.some((item) => item.value > 0) && (
             <div className="personnel-activity-mini-grid" style={{ marginTop: 12 }}>
               {profile.activitySummary
-                .filter((item) => item.key !== "empty")
+                .filter((item) => item.value > 0)
                 .map((item) => (
                   <article key={item.key} className="card personnel-activity-mini-card">
                     <div className="card-body">
