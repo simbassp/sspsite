@@ -11,8 +11,12 @@ import {
   IconLicense,
   IconPremium,
   IconUavHit,
-  PersonnelBarChart,
+  PersonnelMiniBarChart,
   PersonnelPieChart,
+  PersonnelStackedBarChart,
+  PersonnelActivityLegend,
+  type PersonnelActivityMonth,
+  type PersonnelActivitySegment,
 } from "@/components/personnel/PersonnelIcons";
 import { dutyLocationLabel } from "@/lib/duty-location";
 import { formatDate } from "@/lib/format";
@@ -56,8 +60,8 @@ type Profile = {
   }>;
   medals: Array<{ id: string; medalType?: string; title: string; awardedAt: string }>;
   premiums: Array<{ id: string; title: string; amount: number; awardedAt: string }>;
-  activityByMonth: Array<{ month: string; days: number }>;
-  hitsByUavType: Array<{ label: string; value: number }>;
+  activityByMonth: PersonnelActivityMonth[];
+  activitySummary: PersonnelActivitySegment[];
   pendingRequests: number;
 };
 
@@ -313,16 +317,46 @@ export default function PersonnelProfilePage() {
             <article className="card">
               <div className="card-body">
                 <h3 style={{ marginTop: 0 }}>Активность по месяцам</h3>
-                <PersonnelBarChart data={profile.activityByMonth} />
+                <PersonnelStackedBarChart data={profile.activityByMonth} />
+                <PersonnelActivityLegend segments={profile.activitySummary} />
               </div>
             </article>
             <article className="card">
               <div className="card-body">
-                <h3 style={{ marginTop: 0 }}>Сбития по типам БПЛА</h3>
-                <PersonnelPieChart data={profile.hitsByUavType} />
+                <h3 style={{ marginTop: 0 }}>Общая статистика</h3>
+                <PersonnelPieChart
+                  data={profile.activitySummary.map((item) => ({
+                    label: item.label,
+                    value: item.value,
+                    color: item.color,
+                  }))}
+                />
               </div>
             </article>
           </div>
+          {profile.activitySummary.some((item) => item.key !== "empty") && (
+            <div className="personnel-activity-mini-grid" style={{ marginTop: 12 }}>
+              {profile.activitySummary
+                .filter((item) => item.key !== "empty")
+                .map((item) => (
+                  <article key={item.key} className="card personnel-activity-mini-card">
+                    <div className="card-body">
+                      <p className="label" style={{ margin: 0 }}>
+                        {item.label}
+                      </p>
+                      <strong style={{ fontSize: 20 }}>{item.value}</strong>
+                      <PersonnelMiniBarChart
+                        color={item.color}
+                        data={profile.activityByMonth.map((month) => ({
+                          month: month.month,
+                          value: month.segments.find((seg) => seg.key === item.key)?.value ?? 0,
+                        }))}
+                      />
+                    </div>
+                  </article>
+                ))}
+            </div>
+          )}
         </>
       )}
 

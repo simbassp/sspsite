@@ -283,15 +283,101 @@ export function PersonnelBarChart({ data }: { data: Array<{ month: string; days:
   );
 }
 
-export function PersonnelPieChart({ data }: { data: Array<{ label: string; value: number }> }) {
+export type PersonnelActivitySegment = {
+  key: string;
+  label: string;
+  value: number;
+  color: string;
+};
+
+export type PersonnelActivityMonth = {
+  month: string;
+  segments: PersonnelActivitySegment[];
+  total: number;
+};
+
+export function PersonnelActivityLegend({ segments }: { segments: PersonnelActivitySegment[] }) {
+  const unique = segments.filter((seg, idx, arr) => arr.findIndex((x) => x.key === seg.key) === idx);
+  return (
+    <ul className="personnel-activity-legend">
+      {unique.map((seg) => (
+        <li key={seg.key}>
+          <span style={{ background: seg.color }} />
+          {seg.label}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export function PersonnelStackedBarChart({ data }: { data: PersonnelActivityMonth[] }) {
+  const max = Math.max(1, ...data.map((d) => d.total));
+  return (
+    <div className="personnel-bar-chart personnel-bar-chart--stacked" aria-label="Активность по месяцам">
+      {data.map((item) => (
+        <div key={item.month} className="personnel-bar-chart__col">
+          <div
+            className="personnel-bar-chart__stack"
+            style={{ height: `${Math.max(item.total > 0 ? 8 : 2, (item.total / max) * 100)}%` }}
+            title={`${item.month}: ${item.total}`}
+          >
+            {item.segments
+              .filter((seg) => seg.value > 0)
+              .map((seg) => (
+                <div
+                  key={seg.key}
+                  className="personnel-bar-chart__segment"
+                  style={{ flex: seg.value, background: seg.color }}
+                  title={`${seg.label}: ${seg.value}`}
+                />
+              ))}
+          </div>
+          <span>{item.month}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function PersonnelMiniBarChart({
+  data,
+  color,
+}: {
+  data: Array<{ month: string; value: number }>;
+  color: string;
+}) {
+  const max = Math.max(1, ...data.map((d) => d.value));
+  return (
+    <div className="personnel-mini-bar-chart" aria-hidden>
+      {data.map((item) => (
+        <div
+          key={item.month}
+          className="personnel-mini-bar-chart__bar"
+          style={{
+            height: `${Math.max(item.value > 0 ? 20 : 4, (item.value / max) * 100)}%`,
+            background: color,
+          }}
+          title={`${item.month}: ${item.value}`}
+        />
+      ))}
+    </div>
+  );
+}
+
+export function PersonnelPieChart({
+  data,
+}: {
+  data: Array<{ label: string; value: number; color?: string }>;
+}) {
   const total = data.reduce((s, d) => s + d.value, 0) || 1;
   let acc = 0;
-  const colors = ["#c42b2b", "#3b82f6", "#10b981", "#f59e0b"];
+  const fallbackColors = ["#c42b2b", "#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#d97706", "#059669"];
   const stops = data.map((d, i) => {
     const start = (acc / total) * 100;
     acc += d.value;
     const end = (acc / total) * 100;
-    return `${colors[i % colors.length]} ${start}% ${end}%`;
+    const color = d.color ?? fallbackColors[i % fallbackColors.length];
+    return `${color} ${start}% ${end}%`;
   });
   return (
     <div className="personnel-pie-wrap">
@@ -303,7 +389,7 @@ export function PersonnelPieChart({ data }: { data: Array<{ label: string; value
       <ul className="personnel-pie-legend">
         {data.map((d, i) => (
           <li key={d.label}>
-            <span style={{ background: colors[i % colors.length] }} />
+            <span style={{ background: d.color ?? fallbackColors[i % fallbackColors.length] }} />
             {d.label} ({d.value})
           </li>
         ))}

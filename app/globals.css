@@ -2887,6 +2887,71 @@ html[data-theme="dark"] .final-review-answer--correct {
   color: var(--muted);
 }
 
+.personnel-bar-chart--stacked .personnel-bar-chart__stack {
+  width: 100%;
+  max-width: 28px;
+  margin-top: auto;
+  display: flex;
+  flex-direction: column-reverse;
+  border-radius: 6px 6px 2px 2px;
+  overflow: hidden;
+  min-height: 4px;
+}
+
+.personnel-bar-chart__segment {
+  width: 100%;
+  min-height: 2px;
+}
+
+.personnel-activity-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0;
+}
+
+.personnel-activity-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.personnel-activity-legend span {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.personnel-activity-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.personnel-activity-mini-card .card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.personnel-mini-bar-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 48px;
+}
+
+.personnel-mini-bar-chart__bar {
+  flex: 1;
+  border-radius: 3px 3px 1px 1px;
+  min-height: 4px;
+}
+
 .personnel-pie-wrap {
   display: grid;
   grid-template-columns: 120px 1fr;

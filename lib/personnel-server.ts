@@ -67,14 +67,27 @@ export type PersonnelUserCard = {
   licenseCategories: PersonnelLicenseCategory[];
 };
 
+export type PersonnelActivitySegment = {
+  key: string;
+  label: string;
+  value: number;
+  color: string;
+};
+
+export type PersonnelActivityMonth = {
+  month: string;
+  segments: PersonnelActivitySegment[];
+  total: number;
+};
+
 export type PersonnelProfilePayload = PersonnelUserCard & {
   deployments: PersonnelDeploymentRow[];
   medals: PersonnelMedalRow[];
   premiums: PersonnelPremiumRow[];
   pendingRequests: number;
   daysInSystem: number;
-  activityByMonth: Array<{ month: string; days: number }>;
-  hitsByUavType: Array<{ label: string; value: number }>;
+  activityByMonth: PersonnelActivityMonth[];
+  activitySummary: PersonnelActivitySegment[];
 };
 
 function isMissingColumnError(message: string | undefined) {
@@ -138,6 +151,119 @@ function daysInSystemSince(createdAt: string) {
   const start = new Date(createdAt);
   const now = new Date();
   return Math.max(1, Math.round((now.getTime() - start.getTime()) / 86400000));
+}
+
+const ACTIVITY_MONTH_LABELS = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"];
+
+const ACTIVITY_CATEGORY_DEFS = [
+  { key: "deployments", label: "Командировки", color: "#3b82f6" },
+  { key: "hits", label: "Сбития БПЛА", color: "#c42b2b" },
+  { key: "trialTests", label: "Пробные тесты", color: "#10b981" },
+  { key: "finalTests", label: "Итоговые тесты", color: "#059669" },
+  { key: "exams", label: "Зачёты", color: "#8b5cf6" },
+  { key: "medals", label: "Медали", color: "#f59e0b" },
+  { key: "premiums", label: "Премии", color: "#d97706" },
+] as const;
+
+type ActivityCategoryKey = (typeof ACTIVITY_CATEGORY_DEFS)[number]["key"];
+
+function monthKeyFromDate(iso: string) {
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return null;
+  return `${d.getFullYear()}-${String(d.getMonth()).padStart(2, "0")}`;
+}
+
+function last12MonthBuckets() {
+  const now = new Date();
+  const items: Array<{ key: string; label: string }> = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    items.push({
+      key: `${d.getFullYear()}-${String(d.getMonth()).padStart(2, "0")}`,
+      label: ACTIVITY_MONTH_LABELS[d.getMonth()],
+    });
+  }
+  return items;
+}
+
+function buildPersonnelActivityStats(input: {
+  deployments: PersonnelDeploymentRow[];
+  exams: PersonnelExamRow[];
+  medals: PersonnelMedalRow[];
+  premiums: PersonnelPremiumRow[];
+  testResults: Array<{ type: string; status: string; createdAt: string }>;
+}) {
+  const monthKeys = last12MonthBuckets();
+  const categoryKeys = ACTIVITY_CATEGORY_DEFS.map((c) => c.key);
+  const buckets = new Map<string, Record<ActivityCategoryKey, number>>();
+  for (const { key } of monthKeys) {
+    buckets.set(
+      key,
+      Object.fromEntries(categoryKeys.map((k) => [k, 0])) as Record<ActivityCategoryKey, number>,
+    );
+  }
+  const totals = Object.fromEntries(categoryKeys.map((k) => [k, 0])) as Record<ActivityCategoryKey, number>;
+
+  const add = (bucketKey: string | null, category: ActivityCategoryKey, amount = 1) => {
+    totals[category] += amount;
+    if (bucketKey && buckets.has(bucketKey)) {
+      buckets.get(bucketKey)![category] += amount;
+    }
+  };
+
+  for (const deployment of input.deployments) {
+    const bucketKey = monthKeyFromDate(deployment.dateFrom);
+    add(bucketKey, "deployments");
+    if (deployment.uavHits > 0) add(bucketKey, "hits", deployment.uavHits);
+  }
+
+  for (const test of input.testResults) {
+    if (test.status !== "passed") continue;
+    const bucketKey = monthKeyFromDate(test.createdAt);
+    if (test.type === "final") add(bucketKey, "finalTests");
+    else add(bucketKey, "trialTests");
+  }
+
+  for (const exam of input.exams) {
+    if (exam.status !== "passed" || !exam.passedAt) continue;
+    add(monthKeyFromDate(exam.passedAt), "exams");
+  }
+
+  for (const medal of input.medals) {
+    add(monthKeyFromDate(medal.awardedAt), "medals");
+  }
+
+  for (const premium of input.premiums) {
+    if (premium.amount > 0) add(monthKeyFromDate(premium.awardedAt), "premiums");
+  }
+
+  const activityByMonth: PersonnelActivityMonth[] = monthKeys.map(({ key, label }) => {
+    const bucket = buckets.get(key)!;
+    const segments = ACTIVITY_CATEGORY_DEFS.map((def) => ({
+      key: def.key,
+      label: def.label,
+      value: bucket[def.key],
+      color: def.color,
+    }));
+    return {
+      month: label,
+      segments,
+      total: segments.reduce((sum, seg) => sum + seg.value, 0),
+    };
+  });
+
+  const activitySummary: PersonnelActivitySegment[] = ACTIVITY_CATEGORY_DEFS.map((def) => ({
+    key: def.key,
+    label: def.label,
+    value: totals[def.key],
+    color: def.color,
+  })).filter((item) => item.value > 0);
+
+  if (!activitySummary.length) {
+    activitySummary.push({ key: "empty", label: "Нет данных", value: 1, color: "#94a3b8" });
+  }
+
+  return { activityByMonth, activitySummary };
 }
 
 function mapExamRow(row: Record<string, unknown>): PersonnelExamRow {
@@ -337,7 +463,7 @@ export async function loadPersonnelProfile(userId: string): Promise<PersonnelPro
   if (!basic) return null;
 
   const supabase = getServerSupabaseServiceClient();
-  const [depRes, medalRes, premiumRes, examRes, licenseRes, pendingRes] = await Promise.all([
+  const [depRes, medalRes, premiumRes, examRes, licenseRes, pendingRes, testRes] = await Promise.all([
     supabase.from("personnel_deployments").select("*").eq("user_id", userId).order("date_from", { ascending: false }),
     supabase.from("personnel_medals").select("*").eq("user_id", userId).order("awarded_at", { ascending: false }),
     supabase.from("personnel_premiums").select("*").eq("user_id", userId).order("awarded_at", { ascending: false }),
@@ -348,6 +474,7 @@ export async function loadPersonnelProfile(userId: string): Promise<PersonnelPro
       .select("id", { count: "exact", head: true })
       .eq("user_id", userId)
       .eq("status", "pending"),
+    supabase.from("test_results").select("type,test_type,status,created_at").eq("user_id", userId),
   ]);
 
   const deployments: PersonnelDeploymentRow[] = (depRes.data ?? []).map((row) => {
@@ -422,17 +549,23 @@ export async function loadPersonnelProfile(userId: string): Promise<PersonnelPro
     (licenseRes.data as { categories?: string[] } | null)?.categories,
   );
 
-  const monthNames = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"];
-  const activityByMonth = monthNames.slice(0, 7).map((month, idx) => ({
-    month,
-    days: deployments.filter((d) => new Date(d.dateFrom).getMonth() === idx).reduce((s, d) => s + d.days, 0),
-  }));
+  const testResults = (testRes.data ?? []).map((row) => {
+    const r = row as { type?: string; test_type?: string; status?: string; created_at?: string };
+    const type = r.type === "final" || r.test_type === "final" ? "final" : "trial";
+    return {
+      type,
+      status: r.status === "passed" ? "passed" : "failed",
+      createdAt: String(r.created_at ?? ""),
+    };
+  });
 
-  const hitsByUavType = [
-    { label: "Geran-4", value: Math.round(depStats.hits * 0.45) },
-    { label: "Leleka-2", value: Math.round(depStats.hits * 0.35) },
-    { label: "FPV-1", value: Math.max(0, depStats.hits - Math.round(depStats.hits * 0.8)) },
-  ].filter((x) => x.value > 0);
+  const { activityByMonth, activitySummary } = buildPersonnelActivityStats({
+    deployments,
+    exams,
+    medals,
+    premiums,
+    testResults,
+  });
 
   return {
     ...basic,
@@ -449,7 +582,7 @@ export async function loadPersonnelProfile(userId: string): Promise<PersonnelPro
     pendingRequests: pendingRes.count ?? 0,
     daysInSystem: daysInSystemSince(basic.createdAt),
     activityByMonth,
-    hitsByUavType: hitsByUavType.length ? hitsByUavType : [{ label: "Нет данных", value: 1 }],
+    activitySummary,
   };
 }
 
