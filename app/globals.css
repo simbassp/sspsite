@@ -2709,12 +2709,24 @@ html[data-theme="dark"] .final-review-answer--correct {
 }
 
 .personnel-reset-exams-btn,
+.personnel-export-excel-btn,
 .personnel-page .personnel-header-btn {
   padding: 6px 10px;
   font-size: 12px;
   border-radius: 8px;
   line-height: 1.2;
   white-space: nowrap;
+}
+
+.personnel-export-excel-btn {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  color: var(--accent);
+  background: var(--glass);
+  font-weight: 700;
+}
+
+.personnel-export-excel-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
 }
 
 .personnel-reset-exams-btn {

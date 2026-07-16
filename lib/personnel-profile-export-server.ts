@@ -243,3 +243,22 @@ export function formatExportDuration(seconds: number | null) {
   if (seconds === null || !Number.isFinite(seconds)) return "—";
   return formatTotalTestDuration(seconds);
 }
+
+export function buildPersonnelBulkExportFilename(scope: "all" | "filter") {
+  const date = new Date().toISOString().slice(0, 10);
+  return scope === "all" ? `personnel-4rota-${date}.xlsx` : `personnel-filter-${date}.xlsx`;
+}
+
+export function buildPersonnelBulkExportContentDisposition(scope: "all" | "filter") {
+  const filename = buildPersonnelBulkExportFilename(scope);
+  return `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
+}
+
+export async function loadPersonnelProfileExportBundles(userIds: string[]) {
+  const bundles: PersonnelProfileExportBundle[] = [];
+  for (const userId of userIds) {
+    const bundle = await loadPersonnelProfileExportBundle(userId);
+    if (bundle) bundles.push(bundle);
+  }
+  return bundles;
+}

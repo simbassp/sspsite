@@ -10,11 +10,17 @@ import {
   useResetPersonnelExamsModal,
 } from "@/components/personnel/ResetPersonnelExamsModal";
 import {
+  PersonnelExportExcelButton,
+  PersonnelExportExcelModal,
+  postPersonnelExportExcel,
+  usePersonnelExportExcelModal,
+} from "@/components/personnel/PersonnelExportExcelModal";
+import {
   IconUavHit,
   PersonnelExamRosterIcon,
 } from "@/components/personnel/PersonnelIcons";
 import { readClientSession } from "@/lib/client-auth";
-import { canResetTestResults } from "@/lib/permissions";
+import { canManageUsers, canResetTestResults } from "@/lib/permissions";
 import { dutyLocationLabel } from "@/lib/duty-location";
 import { resolvePersonnelProfilePath } from "@/lib/personnel-profile-path";
 import { PERSONNEL_EXAM_TYPES, rotaUnitLabel } from "@/lib/personnel-catalog";
@@ -54,9 +60,13 @@ export default function PersonnelListPage() {
   const [loadError, setLoadError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const canResetExams = useMemo(() => (session ? canResetTestResults(session) : false), [session]);
+  const canExportExcel = useMemo(() => (session ? canManageUsers(session) : false), [session]);
   const resetExamsModal = useResetPersonnelExamsModal("filter");
+  const exportExcelModal = usePersonnelExportExcelModal("filter");
   const [resetExamsSaving, setResetExamsSaving] = useState(false);
   const [resetExamsMsg, setResetExamsMsg] = useState("");
+  const [exportExcelLoading, setExportExcelLoading] = useState(false);
+  const [exportExcelMsg, setExportExcelMsg] = useState("");
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -106,6 +116,37 @@ export default function PersonnelListPage() {
 
   const profilePath = (id: string) => resolvePersonnelProfilePath(session, id);
 
+  const onExportExcel = async () => {
+    if (exportExcelLoading) return;
+    setExportExcelLoading(true);
+    setExportExcelMsg("");
+    try {
+      if (exportExcelModal.bulkScope === "all") {
+        await postPersonnelExportExcel({ scope: "all" });
+      } else {
+        await postPersonnelExportExcel({
+          scope: "filter",
+          platoon,
+          section,
+          search: search.trim(),
+        });
+      }
+      exportExcelModal.setOpen(false);
+      setExportExcelMsg("Excel-файл сформирован и скачан.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "export_failed";
+      setExportExcelMsg(
+        message === "no_users"
+          ? "Нет сотрудников для выгрузки."
+          : message === "export_failed"
+            ? "Не удалось сформировать Excel."
+            : `Не удалось сформировать Excel: ${message}`,
+      );
+    } finally {
+      setExportExcelLoading(false);
+    }
+  };
+
   const onResetExamsBulk = async () => {
     if (resetExamsSaving) return;
     setResetExamsSaving(true);
@@ -140,6 +181,15 @@ export default function PersonnelListPage() {
           <p className="page-subtitle">4 рота — личное дело и статистика</p>
         </div>
         <div className="personnel-page__header-actions">
+          {canExportExcel && tab === "all" && (
+            <PersonnelExportExcelButton
+              busy={exportExcelLoading}
+              onClick={() => {
+                setExportExcelMsg("");
+                exportExcelModal.setOpen(true);
+              }}
+            />
+          )}
           {canResetExams && tab === "all" && (
             <ResetPersonnelExamsButton
               busy={resetExamsSaving}
@@ -156,6 +206,7 @@ export default function PersonnelListPage() {
       </div>
 
       {resetExamsMsg && <p className="page-subtitle">{resetExamsMsg}</p>}
+      {exportExcelMsg && <p className="page-subtitle">{exportExcelMsg}</p>}
 
       {isPreview && <PersonnelPreviewBanner />}
 
@@ -348,6 +399,16 @@ export default function PersonnelListPage() {
         onBulkScopeChange={resetExamsModal.setBulkScope}
         onClose={() => resetExamsModal.setOpen(false)}
         onConfirm={() => void onResetExamsBulk()}
+      />
+
+      <PersonnelExportExcelModal
+        open={exportExcelModal.open}
+        loading={exportExcelLoading}
+        bulkScope={exportExcelModal.bulkScope}
+        filteredCount={users.length}
+        onBulkScopeChange={exportExcelModal.setBulkScope}
+        onClose={() => exportExcelModal.setOpen(false)}
+        onConfirm={() => void onExportExcel()}
       />
     </section>
   );
