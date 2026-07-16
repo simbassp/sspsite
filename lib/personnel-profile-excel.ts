@@ -52,6 +52,80 @@ function styleTableCell(cell: ExcelJS.Cell) {
   cell.alignment = { vertical: "top", wrapText: true };
 }
 
+function styleCompactTableCell(cell: ExcelJS.Cell, horizontal: "left" | "center" | "right" = "left") {
+  styleTableCell(cell);
+  cell.alignment = { vertical: "middle", horizontal, wrapText: false };
+}
+
+function applyCompactRow(row: ExcelJS.Row, height = 18) {
+  row.height = height;
+}
+
+type TestSummaryCounts = {
+  trialPassed: number;
+  trialFailed: number;
+  finalPassed: number;
+  finalFailed: number;
+};
+
+function getTestSummary(bundle: PersonnelProfileExportBundle): TestSummaryCounts {
+  const items = bundle.profile?.activitySummary ?? [];
+  const val = (key: string) => items.find((item) => item.key === key)?.value ?? 0;
+  const summary: TestSummaryCounts = {
+    trialPassed: val("trialPassed"),
+    trialFailed: val("trialFailed"),
+    finalPassed: val("finalPassed"),
+    finalFailed: val("finalFailed"),
+  };
+
+  if (summary.trialPassed + summary.trialFailed + summary.finalPassed + summary.finalFailed > 0) {
+    return summary;
+  }
+
+  for (const test of bundle.testResults) {
+    if (test.type === "final") {
+      if (test.status === "passed") summary.finalPassed += 1;
+      else summary.finalFailed += 1;
+    } else if (test.status === "passed") summary.trialPassed += 1;
+    else summary.trialFailed += 1;
+  }
+  return summary;
+}
+
+function testSummarySlices(summary: TestSummaryCounts): ExcelChartSlice[] {
+  return [
+    { label: "Пробные (сданы)", value: summary.trialPassed, color: "#3B82F6" },
+    { label: "Пробные (не сданы)", value: summary.trialFailed, color: "#F59E0B" },
+    { label: "Итоговые (сданы)", value: summary.finalPassed, color: "#10B981" },
+    { label: "Итоговые (не сданы)", value: summary.finalFailed, color: "#C42B2B" },
+  ];
+}
+
+function aggregateTestSummary(bundles: PersonnelProfileExportBundle[]): TestSummaryCounts {
+  return bundles.reduce(
+    (acc, bundle) => {
+      const s = getTestSummary(bundle);
+      acc.trialPassed += s.trialPassed;
+      acc.trialFailed += s.trialFailed;
+      acc.finalPassed += s.finalPassed;
+      acc.finalFailed += s.finalFailed;
+      return acc;
+    },
+    { trialPassed: 0, trialFailed: 0, finalPassed: 0, finalFailed: 0 },
+  );
+}
+
+function styleCountCell(cell: ExcelJS.Cell, tone: "pass" | "fail" | "neutral") {
+  styleCompactTableCell(cell, "center");
+  if (tone === "pass") {
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: PASS_FILL } };
+    cell.font = { bold: true, color: { argb: "FF065F46" } };
+  } else if (tone === "fail") {
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: FAIL_FILL } };
+    cell.font = { bold: true, color: { argb: "FF991B1B" } };
+  }
+}
+
 function employeeLabel(bundle: PersonnelProfileExportBundle) {
   const name = bundle.user.name || bundle.user.login || "—";
   const callsign = bundle.user.callsign?.trim();
@@ -419,27 +493,113 @@ function addPremiumsSheet(workbook: ExcelJS.Workbook, bundle: PersonnelProfileEx
   }
 }
 
-function addTestsSheet(workbook: ExcelJS.Workbook, bundle: PersonnelProfileExportBundle, bulk = false) {
-  const sheet = bulk
-    ? getOrCreateBulkSheet(
-        workbook,
-        "Тесты",
-        [{ width: 28 }, { width: 16 }, { width: 18 }, { width: 14 }, { width: 12 }, { width: 10 }, { width: 22 }, { width: 12 }],
-        ["Сотрудник", "Позывной", "Дата", "Тип", "Статус", "Балл", "Результат", "Длительность"],
-      )
-    : (() => {
-        const created = workbook.addWorksheet("Тесты");
-        created.columns = [{ width: 18 }, { width: 14 }, { width: 12 }, { width: 10 }, { width: 22 }, { width: 12 }];
-        styleHeaderRow(created.addRow(["Дата", "Тип", "Статус", "Балл", "Результат", "Длительность"]));
-        return created;
-      })();
-  if (!bundle.testResults.length) {
-    if (!bulk) {
-      const row = sheet.addRow(["Нет попыток", "", "", "", "", ""]);
-      sheet.mergeCells(row.number, 1, row.number, 6);
-    }
-    return;
+async function addTestsChartsBlock(
+  workbook: ExcelJS.Workbook,
+  sheet: ExcelJS.Worksheet,
+  summary: TestSummaryCounts,
+  startRow: number,
+) {
+  const slices = testSummarySlices(summary);
+  const [piePng, barPng] = await Promise.all([
+    svgToPngBuffer(buildPieChartSvg("Сводка по тестам", slices)),
+    svgToPngBuffer(buildBarChartSvg("Сводка по тестам (шкалы)", slices)),
+  ]);
+
+  const barHeight = Math.max(220, 64 + slices.filter((s) => s.value > 0).length * 34);
+  const pieId = workbook.addImage({ buffer: Buffer.from(piePng) as unknown as ExcelJS.Buffer, extension: "png" });
+  sheet.addImage(pieId, { tl: { col: 0, row: startRow }, ext: { width: 560, height: 320 } });
+
+  const barId = workbook.addImage({ buffer: Buffer.from(barPng) as unknown as ExcelJS.Buffer, extension: "png" });
+  sheet.addImage(barId, { tl: { col: 8, row: startRow }, ext: { width: 560, height: barHeight } });
+
+  return Math.max(17, Math.ceil(barHeight / 20) + 1);
+}
+
+function addTestsSummaryTable(
+  sheet: ExcelJS.Worksheet,
+  bundles: PersonnelProfileExportBundle[],
+  bulk: boolean,
+  startAfterCharts: number,
+) {
+  let rowNum = startAfterCharts + 1;
+  sheet.getRow(rowNum).values = [];
+  rowNum += 1;
+
+  const section = sheet.getRow(rowNum);
+  section.getCell(1).value = bulk ? "Сводка по сотрудникам" : "Сводка";
+  if (bulk) sheet.mergeCells(rowNum, 1, rowNum, 6);
+  else sheet.mergeCells(rowNum, 1, rowNum, 2);
+  styleSectionTitle(section.getCell(1));
+  applyCompactRow(section, 20);
+  rowNum += 1;
+
+  const header = sheet.getRow(rowNum);
+  if (bulk) {
+    header.values = [
+      "Сотрудник",
+      "Позывной",
+      "Пробные (сданы)",
+      "Пробные (не сданы)",
+      "Итоговые (сданы)",
+      "Итоговые (не сданы)",
+    ];
+  } else {
+    header.values = ["Показатель", "Количество"];
   }
+  styleHeaderRow(header);
+  rowNum += 1;
+
+  const tableStart = rowNum;
+  if (bulk) {
+    for (const bundle of bundles) {
+      const s = getTestSummary(bundle);
+      const row = sheet.getRow(rowNum);
+      row.values = [
+        bundle.user.name,
+        bundle.user.callsign,
+        s.trialPassed,
+        s.trialFailed,
+        s.finalPassed,
+        s.finalFailed,
+      ];
+      applyCompactRow(row);
+      styleCompactTableCell(row.getCell(1));
+      styleCompactTableCell(row.getCell(2));
+      styleCountCell(row.getCell(3), "pass");
+      styleCountCell(row.getCell(4), "fail");
+      styleCountCell(row.getCell(5), "pass");
+      styleCountCell(row.getCell(6), "fail");
+      rowNum += 1;
+    }
+    addActivityDataBars(sheet, "C", tableStart, rowNum - 1);
+    addActivityDataBars(sheet, "D", tableStart, rowNum - 1);
+    addActivityDataBars(sheet, "E", tableStart, rowNum - 1);
+    addActivityDataBars(sheet, "F", tableStart, rowNum - 1);
+  } else {
+    const bundle = bundles[0];
+    if (!bundle) return rowNum;
+    const s = getTestSummary(bundle);
+    const rows: Array<[string, number, "pass" | "fail"]> = [
+      ["Пробные (сданы)", s.trialPassed, "pass"],
+      ["Пробные (не сданы)", s.trialFailed, "fail"],
+      ["Итоговые (сданы)", s.finalPassed, "pass"],
+      ["Итоговые (не сданы)", s.finalFailed, "fail"],
+    ];
+    for (const [label, value, tone] of rows) {
+      const row = sheet.getRow(rowNum);
+      row.values = [label, value];
+      applyCompactRow(row);
+      styleCompactTableCell(row.getCell(1));
+      styleCountCell(row.getCell(2), tone);
+      rowNum += 1;
+    }
+    addActivityDataBars(sheet, "B", tableStart, rowNum - 1);
+  }
+
+  return rowNum + 1;
+}
+
+function appendTestsDetailRows(sheet: ExcelJS.Worksheet, bundle: PersonnelProfileExportBundle, bulk: boolean) {
   for (const t of bundle.testResults) {
     const row = sheet.addRow(
       bulk
@@ -462,7 +622,8 @@ function addTestsSheet(workbook: ExcelJS.Workbook, bundle: PersonnelProfileExpor
             formatExportDuration(t.durationSeconds),
           ],
     );
-    row.eachCell((cell) => styleTableCell(cell));
+    applyCompactRow(row);
+    row.eachCell((cell) => styleCompactTableCell(cell));
     const statusCell = row.getCell(bulk ? 5 : 3);
     statusCell.fill = {
       type: "pattern",
@@ -470,6 +631,100 @@ function addTestsSheet(workbook: ExcelJS.Workbook, bundle: PersonnelProfileExpor
       fgColor: { argb: t.status === "passed" ? PASS_FILL : FAIL_FILL },
     };
     statusCell.font = { bold: true };
+    statusCell.alignment = { vertical: "middle", horizontal: "center", wrapText: false };
+  }
+}
+
+async function addSingleTestsSheet(workbook: ExcelJS.Workbook, bundle: PersonnelProfileExportBundle) {
+  const sheet = workbook.addWorksheet("Тесты");
+  sheet.columns = [
+    { width: 18 },
+    { width: 12 },
+    { width: 12 },
+    { width: 10 },
+    { width: 24 },
+    { width: 12 },
+  ];
+
+  const title = sheet.addRow(["Тесты"]);
+  sheet.mergeCells(title.number, 1, title.number, 6);
+  styleSectionTitle(title.getCell(1));
+  title.height = 22;
+
+  const summary = getTestSummary(bundle);
+  const chartRows = await addTestsChartsBlock(workbook, sheet, summary, 2);
+  const detailStart = addTestsSummaryTable(sheet, [bundle], false, chartRows + 1);
+
+  const detailTitle = sheet.getRow(detailStart);
+  detailTitle.getCell(1).value = "Попытки";
+  sheet.mergeCells(detailStart, 1, detailStart, 6);
+  styleSectionTitle(detailTitle.getCell(1));
+  applyCompactRow(detailTitle, 20);
+
+  const detailHeader = sheet.addRow(["Дата", "Тип", "Статус", "Балл", "Результат", "Длительность"]);
+  styleHeaderRow(detailHeader);
+
+  if (!bundle.testResults.length) {
+    const row = sheet.addRow(["Нет попыток", "", "", "", "", ""]);
+    sheet.mergeCells(row.number, 1, row.number, 6);
+    applyCompactRow(row);
+    return;
+  }
+
+  appendTestsDetailRows(sheet, bundle, false);
+}
+
+async function addBulkTestsSheet(workbook: ExcelJS.Workbook, bundles: PersonnelProfileExportBundle[]) {
+  const sheet = workbook.addWorksheet("Тесты");
+  sheet.columns = [
+    { width: 18 },
+    { width: 12 },
+    { width: 16 },
+    { width: 12 },
+    { width: 12 },
+    { width: 8 },
+    { width: 24 },
+    { width: 12 },
+  ];
+
+  const title = sheet.addRow(["Тесты — 4 рота"]);
+  sheet.mergeCells(title.number, 1, title.number, 8);
+  styleSectionTitle(title.getCell(1));
+  title.height = 22;
+
+  const aggregate = aggregateTestSummary(bundles);
+  const chartRows = await addTestsChartsBlock(workbook, sheet, aggregate, 2);
+  const detailStart = addTestsSummaryTable(sheet, bundles, true, chartRows + 1);
+
+  const detailTitle = sheet.getRow(detailStart);
+  detailTitle.getCell(1).value = "Попытки";
+  sheet.mergeCells(detailStart, 1, detailStart, 8);
+  styleSectionTitle(detailTitle.getCell(1));
+  applyCompactRow(detailTitle, 20);
+
+  const detailHeader = sheet.addRow([
+    "Сотрудник",
+    "Позывной",
+    "Дата",
+    "Тип",
+    "Статус",
+    "Балл",
+    "Результат",
+    "Длительность",
+  ]);
+  styleHeaderRow(detailHeader);
+
+  let hasDetails = false;
+  for (const bundle of bundles) {
+    if (!bundle.testResults.length) continue;
+    hasDetails = true;
+    appendTestsDetailRows(sheet, bundle, true);
+  }
+
+  if (!hasDetails) {
+    const row = sheet.addRow(["Нет попыток", "", "", "", "", "", "", ""]);
+    sheet.mergeCells(row.number, 1, row.number, 8);
+    applyCompactRow(row);
   }
 }
 
@@ -521,20 +776,20 @@ function addSummarySheet(
     views: [{ state: "frozen", ySplit: 3 }],
   });
   sheet.columns = [
-    { width: 24 },
+    { width: 18 },
+    { width: 12 },
+    { width: 11 },
+    { width: 22 },
+    { width: 20 },
     { width: 16 },
-    { width: 14 },
-    { width: 18 },
-    { width: 18 },
-    { width: 14 },
-    { width: 14 },
+    { width: 13 },
+    { width: 9 },
     { width: 12 },
-    { width: 12 },
-    { width: 10 },
-    { width: 12 },
-    { width: 14 },
-    { width: 10 },
-    { width: 12 },
+    { width: 7 },
+    { width: 7 },
+    { width: 13 },
+    { width: 7 },
+    { width: 9 },
   ];
 
   const title = sheet.addRow([meta.title]);
@@ -582,7 +837,11 @@ function addSummarySheet(
       p?.medals?.length ?? 0,
       p?.licenseCategories?.length ? p.licenseCategories.join(", ") : "—",
     ]);
-    row.eachCell((cell) => styleTableCell(cell));
+    applyCompactRow(row);
+    row.eachCell((cell, col) => {
+      const centerCols = new Set([9, 10, 11, 13]);
+      styleCompactTableCell(cell, centerCols.has(col) ? "center" : "left");
+    });
   }
 }
 
@@ -692,9 +951,9 @@ async function buildWorkbook(bundles: PersonnelProfileExportBundle[], bulk: bool
       addDeploymentsSheet(workbook, bundle, true);
       addMedalsSheet(workbook, bundle, true);
       addPremiumsSheet(workbook, bundle, true);
-      addTestsSheet(workbook, bundle, true);
       addActivitySheet(workbook, bundle, true);
     }
+    await addBulkTestsSheet(workbook, bundles);
   } else {
     const bundle = bundles[0];
     if (!bundle) throw new Error("empty_export_bundle");
@@ -704,7 +963,7 @@ async function buildWorkbook(bundles: PersonnelProfileExportBundle[], bulk: bool
     addDeploymentsSheet(workbook, bundle);
     addMedalsSheet(workbook, bundle);
     addPremiumsSheet(workbook, bundle);
-    addTestsSheet(workbook, bundle);
+    await addSingleTestsSheet(workbook, bundle);
     addActivitySheet(workbook, bundle);
   }
 

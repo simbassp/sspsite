@@ -75,3 +75,30 @@ export async function resolveFinalUserContext(supabase: SupabaseClient, sessionU
     final_test_counting_from: countingFrom,
   };
 }
+
+/** Пакетно: id связанного аккаунта → id сотрудника из выгрузки. */
+export async function resolveBulkLinkedUserIds(supabase: SupabaseClient, rosterUserIds: string[]) {
+  const rosterSet = new Set(rosterUserIds);
+  const toCanonical = new Map<string, string>();
+  for (const id of rosterUserIds) toCanonical.set(id, id);
+
+  type AppUserRow = { id: string; auth_user_id?: string | null };
+  const rows: AppUserRow[] = [];
+
+  const byId = await supabase.from("app_users").select("id,auth_user_id").in("id", rosterUserIds);
+  if (!byId.error) rows.push(...((byId.data ?? []) as AppUserRow[]));
+
+  const byAuth = await supabase.from("app_users").select("id,auth_user_id").in("auth_user_id", rosterUserIds);
+  if (!byAuth.error) rows.push(...((byAuth.data ?? []) as AppUserRow[]));
+
+  for (const row of rows) {
+    const id = String(row.id);
+    const authId = row.auth_user_id ? String(row.auth_user_id) : null;
+    const canon = rosterSet.has(id) ? id : authId && rosterSet.has(authId) ? authId : null;
+    if (!canon) continue;
+    toCanonical.set(id, canon);
+    if (authId) toCanonical.set(authId, canon);
+  }
+
+  return toCanonical;
+}

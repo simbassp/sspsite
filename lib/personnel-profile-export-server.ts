@@ -1,7 +1,7 @@
 import { employmentDaysSince } from "@/lib/employment-date";
 import { dutyLocationLabel } from "@/lib/duty-location";
 import { loadPersonnelProfile, loadPersonnelProfilesBulk } from "@/lib/personnel-server";
-import { resolveFinalUserContext } from "@/lib/server-final-user-context";
+import { resolveBulkLinkedUserIds, resolveFinalUserContext } from "@/lib/server-final-user-context";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 import { formatTotalTestDuration } from "@/lib/format";
 import { formatTestResultForType } from "@/lib/test-pass-rules";
@@ -260,9 +260,11 @@ export async function loadPersonnelBulkExportBundles(userIds: string[]): Promise
 
   const supabase = getServerSupabaseServiceClient();
   const exportedAt = new Date().toLocaleString("ru-RU");
+  const linkedUserMap = await resolveBulkLinkedUserIds(supabase, uniqueIds);
+  const testQueryIds = [...new Set(linkedUserMap.keys())];
 
   const [profiles, usersRes, testPrimaryRes] = await Promise.all([
-    loadPersonnelProfilesBulk(uniqueIds),
+    loadPersonnelProfilesBulk(uniqueIds, { linkedUserMap }),
     supabase
       .from("app_users")
       .select(
@@ -272,7 +274,7 @@ export async function loadPersonnelBulkExportBundles(userIds: string[]): Promise
     supabase
       .from("test_results")
       .select("user_id,id,type,status,score,created_at,duration_seconds,questions_total,questions_correct,test_type")
-      .in("user_id", uniqueIds)
+      .in("user_id", testQueryIds)
       .order("created_at", { ascending: false })
       .limit(Math.min(uniqueIds.length * 80, 6000)),
   ]);
@@ -293,7 +295,7 @@ export async function loadPersonnelBulkExportBundles(userIds: string[]): Promise
     const legacy = await supabase
       .from("test_results")
       .select("user_id,id,test_type,status,score,created_at,questions_total,questions_correct")
-      .in("user_id", uniqueIds)
+      .in("user_id", testQueryIds)
       .order("created_at", { ascending: false })
       .limit(Math.min(uniqueIds.length * 80, 6000));
     testRows = (legacy.data ?? []) as Array<Record<string, unknown>>;
@@ -301,8 +303,10 @@ export async function loadPersonnelBulkExportBundles(userIds: string[]): Promise
 
   const testsByUser = new Map<string, Array<Record<string, unknown>>>();
   for (const row of testRows) {
-    const uid = String(row.user_id ?? "");
-    if (!uid) continue;
+    const rawUid = String(row.user_id ?? "");
+    if (!rawUid) continue;
+    const uid = linkedUserMap.get(rawUid) ?? rawUid;
+    if (!uniqueIds.includes(uid)) continue;
     const list = testsByUser.get(uid) ?? [];
     if (list.length >= 80) continue;
     list.push(row);

@@ -511,12 +511,19 @@ function assemblePersonnelProfile(
 }
 
 /** Пакетная загрузка профилей для массового Excel (один round-trip на таблицу). */
-export async function loadPersonnelProfilesBulk(userIds: string[]) {
+export async function loadPersonnelProfilesBulk(
+  userIds: string[],
+  options?: { linkedUserMap?: Map<string, string> },
+) {
   const uniqueIds = [...new Set(userIds.filter(Boolean))];
   const result = new Map<string, PersonnelProfilePayload>();
   if (uniqueIds.length === 0) return result;
 
   const supabase = getServerSupabaseServiceClient();
+  const testQueryIds = options?.linkedUserMap
+    ? [...new Set(options.linkedUserMap.keys())]
+    : uniqueIds;
+
   const [usersRes, depRes, medalRes, premiumRes, examRes, licenseRes, testPrimaryRes] = await Promise.all([
     supabase
       .from("app_users")
@@ -532,7 +539,7 @@ export async function loadPersonnelProfilesBulk(userIds: string[]) {
     supabase
       .from("test_results")
       .select("user_id,type,status,created_at,test_type")
-      .in("user_id", uniqueIds)
+      .in("user_id", testQueryIds)
       .order("created_at", { ascending: false })
       .limit(Math.min(uniqueIds.length * 120, 8000)),
   ]);
@@ -544,7 +551,7 @@ export async function loadPersonnelProfilesBulk(userIds: string[]) {
     const legacy = await supabase
       .from("test_results")
       .select("user_id,test_type,status,created_at")
-      .in("user_id", uniqueIds)
+      .in("user_id", testQueryIds)
       .order("created_at", { ascending: false })
       .limit(Math.min(uniqueIds.length * 120, 8000));
     testRows = (legacy.data ?? []) as Array<Record<string, unknown>>;
@@ -567,8 +574,10 @@ export async function loadPersonnelProfilesBulk(userIds: string[]) {
 
   const testsByUser = new Map<string, Array<{ type?: string; test_type?: string; status?: string; created_at?: string }>>();
   for (const row of testRows) {
-    const uid = String(row.user_id ?? "");
-    if (!uid) continue;
+    const rawUid = String(row.user_id ?? "");
+    if (!rawUid) continue;
+    const uid = options?.linkedUserMap?.get(rawUid) ?? rawUid;
+    if (!uniqueIds.includes(uid)) continue;
     const list = testsByUser.get(uid) ?? [];
     if (list.length >= 120) continue;
     list.push(row as { type?: string; test_type?: string; status?: string; created_at?: string });
