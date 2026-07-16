@@ -3303,6 +3303,16 @@ html[data-theme="dark"] .final-review-answer--correct {
   gap: 10px;
 }
 
+.personnel-filters__wide {
+  grid-column: 1 / -1;
+}
+
+@media (min-width: 820px) {
+  .personnel-filters__wide {
+    grid-column: span 2;
+  }
+}
+
 .personnel-top-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -3620,13 +3630,108 @@ html[data-theme="dark"] .final-review-answer--correct {
     justify-items: center;
   }
 
-  .personnel-table-wrap {
+  .personnel-page__header {
+    align-items: flex-start;
+  }
+
+  .personnel-page__header-actions {
+    width: 100%;
+  }
+
+  .personnel-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .personnel-table-wrap,
+  .personnel-table-scroll-hint {
     display: none;
   }
 
   .personnel-mobile-cards {
     display: grid;
     gap: 10px;
+    padding-top: 0;
+  }
+
+  .personnel-roster-card .personnel-table-wrap + .personnel-mobile-cards {
+    border-top: none;
+  }
+
+  .personnel-mobile-card {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 12px;
+    background: var(--panel);
+    display: grid;
+    gap: 10px;
+  }
+
+  .personnel-mobile-card__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .personnel-mobile-card__name {
+    font-weight: 700;
+    color: inherit;
+    text-decoration: none;
+    font-size: 16px;
+    line-height: 1.2;
+  }
+
+  .personnel-mobile-card__callsign {
+    margin: 4px 0 0;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .personnel-mobile-card__meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .personnel-mobile-card__exams {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .personnel-mobile-card__stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .personnel-mobile-card__stats > div {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 8px;
+    display: grid;
+    gap: 4px;
+    min-height: 52px;
+  }
+
+  .personnel-mobile-card__stats .label {
+    margin: 0;
+    font-size: 11px;
+  }
+
+  .personnel-mobile-card__stats strong {
+    font-size: 14px;
+    line-height: 1.2;
+  }
+
+  .personnel-mobile-empty {
+    margin: 0;
+    text-align: center;
+    color: var(--muted);
+    padding: 16px 8px;
   }
 
   .personnel-deploy-summary {

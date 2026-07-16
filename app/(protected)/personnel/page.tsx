@@ -17,7 +17,6 @@ import {
   usePersonnelExportExcelModal,
 } from "@/components/personnel/PersonnelExportExcelModal";
 import {
-  IconUavHit,
   PersonnelExamRosterIcon,
   PersonnelRosterLicenseCell,
   PersonnelRosterTestCell,
@@ -27,76 +26,74 @@ import { readClientSession } from "@/lib/client-auth";
 import { canManageUsers, canResetTestResults } from "@/lib/permissions";
 import { dutyLocationLabel } from "@/lib/duty-location";
 import { resolvePersonnelProfilePath } from "@/lib/personnel-profile-path";
-import { PERSONNEL_EXAM_TYPES, personnelExamLabel, rotaUnitLabel } from "@/lib/personnel-catalog";
+import { PERSONNEL_EXAM_TYPES, PERSONNEL_LICENSE_CATEGORIES, personnelExamLabel, rotaUnitLabel } from "@/lib/personnel-catalog";
+import type { PersonnelExamType, PersonnelLicenseCategory } from "@/lib/personnel-catalog";
 import type { Position } from "@/lib/types";
 
-type ColumnFilters = {
-  employee: string;
-  unit: string;
-  exams: string;
-  tests: string;
-  deployments: string;
-  hits: string;
-  premiums: string;
-  status: string;
-  licenses: string;
+type ExamFilterStatus = "all" | "passed" | "failed";
+type TriState = "all" | "yes" | "no";
+type TestFilter = "all" | "passed" | "failed";
+
+type RosterFilters = {
+  examType: "all" | PersonnelExamType;
+  examStatus: ExamFilterStatus;
+  license: "all" | PersonnelLicenseCategory;
+  trialTest: TestFilter;
+  finalTest: TestFilter;
+  hits: TriState;
+  premiums: TriState;
+  dutyStatus: "all" | "base" | "deployment";
 };
 
-const EMPTY_COLUMN_FILTERS: ColumnFilters = {
-  employee: "",
-  unit: "",
-  exams: "",
-  tests: "",
-  deployments: "",
-  hits: "",
-  premiums: "",
-  status: "",
-  licenses: "",
+const EMPTY_ROSTER_FILTERS: RosterFilters = {
+  examType: "all",
+  examStatus: "all",
+  license: "all",
+  trialTest: "all",
+  finalTest: "all",
+  hits: "all",
+  premiums: "all",
+  dutyStatus: "all",
 };
 
-function hasActiveColumnFilters(filters: ColumnFilters) {
-  return Object.values(filters).some((value) => value.trim().length > 0);
+function hasActiveRosterFilters(filters: RosterFilters) {
+  return (
+    filters.examType !== "all" ||
+    filters.examStatus !== "all" ||
+    filters.license !== "all" ||
+    filters.trialTest !== "all" ||
+    filters.finalTest !== "all" ||
+    filters.hits !== "all" ||
+    filters.premiums !== "all" ||
+    filters.dutyStatus !== "all"
+  );
 }
 
-function rosterExamsFilterText(
-  userId: string,
-  exams: UserRow["exams"],
-  examMap: Map<string, Map<string, string>>,
-) {
-  return PERSONNEL_EXAM_TYPES.map((type) => {
-    const status = examMap.get(userId)?.get(type) ?? exams.find((e) => e.examType === type)?.status;
-    const label = personnelExamLabel[type];
-    return `${label} ${status === "passed" ? "сдан" : "не сдан"}`;
-  }).join(" ");
-}
-
-function rosterTestsFilterText(stats?: PersonnelTestRosterStats) {
-  const resolved = stats ?? { trialPassed: 0, trialFailed: 0, finalPassed: 0, finalFailed: 0 };
-  return `пробные ${resolved.trialPassed}/${resolved.trialFailed} итоговые ${resolved.finalPassed}/${resolved.finalFailed}`;
-}
-
-function userMatchesColumnFilters(
+function userMatchesRosterFilters(
   user: UserRow,
-  filters: ColumnFilters,
+  filters: RosterFilters,
   examMap: Map<string, Map<string, string>>,
 ) {
-  const fields: Array<[string, string]> = [
-    [filters.employee, `${user.name} ${user.callsign}`],
-    [filters.unit, rotaUnitLabel(user.rotaPlatoon, user.rotaSection)],
-    [filters.exams, rosterExamsFilterText(user.id, user.exams, examMap)],
-    [filters.tests, rosterTestsFilterText(user.testStats)],
-    [filters.deployments, `${user.deploymentsCount} ${user.deploymentDays}`],
-    [filters.hits, String(user.uavHitsTotal)],
-    [filters.premiums, `${user.premiumsTotal}`],
-    [filters.status, dutyLocationLabel[user.dutyLocation]],
-    [filters.licenses, user.licenseCategories.join("/")],
-  ];
-
-  for (const [query, value] of fields) {
-    const q = query.trim().toLowerCase();
-    if (!q) continue;
-    if (!value.toLowerCase().includes(q)) return false;
+  if (filters.examType !== "all" && filters.examStatus !== "all") {
+    const passed = examMap.get(user.id)?.get(filters.examType) === "passed";
+    if (filters.examStatus === "passed" && !passed) return false;
+    if (filters.examStatus === "failed" && passed) return false;
   }
+
+  if (filters.license !== "all" && !user.licenseCategories.includes(filters.license)) return false;
+
+  const ts = user.testStats ?? { trialPassed: 0, trialFailed: 0, finalPassed: 0, finalFailed: 0 };
+  if (filters.trialTest === "passed" && ts.trialPassed === 0) return false;
+  if (filters.trialTest === "failed" && ts.trialPassed > 0) return false;
+  if (filters.finalTest === "passed" && ts.finalPassed === 0) return false;
+  if (filters.finalTest === "failed" && ts.finalPassed > 0) return false;
+
+  if (filters.hits === "yes" && user.uavHitsTotal === 0) return false;
+  if (filters.hits === "no" && user.uavHitsTotal > 0) return false;
+  if (filters.premiums === "yes" && user.premiumsTotal === 0) return false;
+  if (filters.premiums === "no" && user.premiumsTotal > 0) return false;
+  if (filters.dutyStatus !== "all" && user.dutyLocation !== filters.dutyStatus) return false;
+
   return true;
 }
 
@@ -162,7 +159,7 @@ export default function PersonnelListPage() {
   const [resetExamsMsg, setResetExamsMsg] = useState("");
   const [exportExcelLoading, setExportExcelLoading] = useState(false);
   const [exportExcelMsg, setExportExcelMsg] = useState("");
-  const [columnFilters, setColumnFilters] = useState<ColumnFilters>(EMPTY_COLUMN_FILTERS);
+  const [rosterFilters, setRosterFilters] = useState<RosterFilters>(EMPTY_ROSTER_FILTERS);
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -207,16 +204,16 @@ export default function PersonnelListPage() {
   }, [users]);
 
   const filteredUsers = useMemo(
-    () => users.filter((user) => userMatchesColumnFilters(user, columnFilters, examMap)),
-    [users, columnFilters, examMap],
+    () => users.filter((user) => userMatchesRosterFilters(user, rosterFilters, examMap)),
+    [users, rosterFilters, examMap],
   );
 
   const tableStats = useMemo(() => calcFilteredStats(filteredUsers), [filteredUsers]);
   const displayStats = users.length === 0 && isLoading ? stats : tableStats;
-  const columnFiltersActive = hasActiveColumnFilters(columnFilters);
+  const rosterFiltersActive = hasActiveRosterFilters(rosterFilters);
 
-  const setColumnFilter = (key: keyof ColumnFilters, value: string) => {
-    setColumnFilters((prev) => ({ ...prev, [key]: value }));
+  const setRosterFilter = <K extends keyof RosterFilters>(key: K, value: RosterFilters[K]) => {
+    setRosterFilters((prev) => ({ ...prev, [key]: value }));
   };
 
   useEffect(() => {
@@ -357,7 +354,7 @@ export default function PersonnelListPage() {
                   <option value="4">4</option>
                 </select>
               </div>
-              <div style={{ gridColumn: "1 / -1" }}>
+              <div className="personnel-filters__wide">
                 <p className="label">Поиск</p>
                 <input
                   className="input"
@@ -365,6 +362,116 @@ export default function PersonnelListPage() {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
+              </div>
+              <div>
+                <p className="label">Зачёт</p>
+                <select
+                  className="select"
+                  value={rosterFilters.examType}
+                  onChange={(e) => {
+                    const nextType = e.target.value as RosterFilters["examType"];
+                    setRosterFilters((prev) => ({
+                      ...prev,
+                      examType: nextType,
+                      examStatus: nextType === "all" ? "all" : prev.examStatus,
+                    }));
+                  }}
+                >
+                  <option value="all">Все</option>
+                  {PERSONNEL_EXAM_TYPES.map((type) => (
+                    <option key={type} value={type}>
+                      {personnelExamLabel[type]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <p className="label">Результат зачёта</p>
+                <select
+                  className="select"
+                  value={rosterFilters.examStatus}
+                  onChange={(e) => setRosterFilter("examStatus", e.target.value as ExamFilterStatus)}
+                  disabled={rosterFilters.examType === "all"}
+                >
+                  <option value="all">Все</option>
+                  <option value="passed">Сдан</option>
+                  <option value="failed">Не сдан</option>
+                </select>
+              </div>
+              <div>
+                <p className="label">Права</p>
+                <select
+                  className="select"
+                  value={rosterFilters.license}
+                  onChange={(e) => setRosterFilter("license", e.target.value as RosterFilters["license"])}
+                >
+                  <option value="all">Все</option>
+                  {PERSONNEL_LICENSE_CATEGORIES.map((category) => (
+                    <option key={category} value={category}>
+                      Категория {category}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <p className="label">Пробный тест</p>
+                <select
+                  className="select"
+                  value={rosterFilters.trialTest}
+                  onChange={(e) => setRosterFilter("trialTest", e.target.value as TestFilter)}
+                >
+                  <option value="all">Все</option>
+                  <option value="passed">Сдал</option>
+                  <option value="failed">Не сдал</option>
+                </select>
+              </div>
+              <div>
+                <p className="label">Итоговый тест</p>
+                <select
+                  className="select"
+                  value={rosterFilters.finalTest}
+                  onChange={(e) => setRosterFilter("finalTest", e.target.value as TestFilter)}
+                >
+                  <option value="all">Все</option>
+                  <option value="passed">Сдал</option>
+                  <option value="failed">Не сдал</option>
+                </select>
+              </div>
+              <div>
+                <p className="label">Сбития</p>
+                <select
+                  className="select"
+                  value={rosterFilters.hits}
+                  onChange={(e) => setRosterFilter("hits", e.target.value as TriState)}
+                >
+                  <option value="all">Все</option>
+                  <option value="yes">Есть</option>
+                  <option value="no">Нет</option>
+                </select>
+              </div>
+              <div>
+                <p className="label">Премии</p>
+                <select
+                  className="select"
+                  value={rosterFilters.premiums}
+                  onChange={(e) => setRosterFilter("premiums", e.target.value as TriState)}
+                >
+                  <option value="all">Все</option>
+                  <option value="yes">Есть</option>
+                  <option value="no">Нет</option>
+                </select>
+              </div>
+              <div>
+                <p className="label">Статус</p>
+                <select
+                  className="select"
+                  value={rosterFilters.dutyStatus}
+                  onChange={(e) => setRosterFilter("dutyStatus", e.target.value as RosterFilters["dutyStatus"])}
+                >
+                  <option value="all">Все</option>
+                  <option value="base">На базе</option>
+                  <option value="deployment">В командировке</option>
+                </select>
               </div>
             </div>
           </article>
@@ -392,12 +499,12 @@ export default function PersonnelListPage() {
             </div>
           </div>
 
-          {columnFiltersActive && !isLoading && (
+          {rosterFiltersActive && !isLoading && (
             <p className="page-subtitle personnel-table-filter-meta">
               Показано {filteredUsers.length} из {users.length}
               {" · "}
-              <button type="button" className="personnel-table-filter-reset" onClick={() => setColumnFilters(EMPTY_COLUMN_FILTERS)}>
-                Сбросить фильтры таблицы
+              <button type="button" className="personnel-table-filter-reset" onClick={() => setRosterFilters(EMPTY_ROSTER_FILTERS)}>
+                Сбросить фильтры
               </button>
             </p>
           )}
@@ -405,8 +512,8 @@ export default function PersonnelListPage() {
           {loadError && <p style={{ color: "var(--bad)" }}>{loadError}</p>}
           {isLoading && <p className="page-subtitle">Загрузка…</p>}
 
-          <article className="card">
-            <div className="card-body">
+          <article className="card personnel-roster-card">
+            <div className="card-body personnel-table-wrap">
               <p className="personnel-table-scroll-hint">Прокрутите таблицу вбок, чтобы увидеть все колонки</p>
               <PersonnelTableDualScroll>
               <table className="personnel-table">
@@ -430,85 +537,6 @@ export default function PersonnelListPage() {
                       Права
                     </th>
                   </tr>
-                  {isHydrated && (
-                  <tr className="personnel-table__filters">
-                    <th className="personnel-table__sticky">
-                      <input
-                        className="personnel-table__filter-input"
-                        placeholder="Имя…"
-                        value={columnFilters.employee}
-                        onChange={(e) => setColumnFilter("employee", e.target.value)}
-                      />
-                    </th>
-                    <th>
-                      <input
-                        className="personnel-table__filter-input"
-                        placeholder="Взвод…"
-                        value={columnFilters.unit}
-                        onChange={(e) => setColumnFilter("unit", e.target.value)}
-                      />
-                    </th>
-                    <th>
-                      <input
-                        className="personnel-table__filter-input"
-                        placeholder="Зачёт…"
-                        value={columnFilters.exams}
-                        onChange={(e) => setColumnFilter("exams", e.target.value)}
-                      />
-                    </th>
-                    <th>
-                      <input
-                        className="personnel-table__filter-input"
-                        placeholder="Тест…"
-                        value={columnFilters.tests}
-                        onChange={(e) => setColumnFilter("tests", e.target.value)}
-                      />
-                    </th>
-                    <th>
-                      <input
-                        className="personnel-table__filter-input"
-                        placeholder="Команд…"
-                        value={columnFilters.deployments}
-                        onChange={(e) => setColumnFilter("deployments", e.target.value)}
-                      />
-                    </th>
-                    <th>
-                      <input
-                        className="personnel-table__filter-input"
-                        placeholder="0"
-                        value={columnFilters.hits}
-                        onChange={(e) => setColumnFilter("hits", e.target.value)}
-                      />
-                    </th>
-                    <th>
-                      <input
-                        className="personnel-table__filter-input"
-                        placeholder="₽"
-                        value={columnFilters.premiums}
-                        onChange={(e) => setColumnFilter("premiums", e.target.value)}
-                      />
-                    </th>
-                    <th>
-                      <select
-                        className="personnel-table__filter-input"
-                        value={columnFilters.status}
-                        onChange={(e) => setColumnFilter("status", e.target.value)}
-                      >
-                        <option value="">Все</option>
-                        <option value="базе">На базе</option>
-                        <option value="командировке">В командировке</option>
-                      </select>
-                    </th>
-                    <th>
-                      <input
-                        className="personnel-table__filter-input"
-                        placeholder="B/C…"
-                        value={columnFilters.licenses}
-                        onChange={(e) => setColumnFilter("licenses", e.target.value)}
-                      />
-                    </th>
-                  </tr>
-                  )}
                 </thead>
                 <tbody>
                   {filteredUsers.map((u) => (
@@ -567,23 +595,54 @@ export default function PersonnelListPage() {
               </PersonnelTableDualScroll>
             </div>
             <div className="card-body personnel-mobile-cards">
+              {isLoading && users.length === 0 && <p className="personnel-mobile-empty">Загрузка…</p>}
+              {!isLoading && filteredUsers.length === 0 && (
+                <p className="personnel-mobile-empty">
+                  {users.length === 0 ? "Сотрудники не найдены" : "Нет сотрудников по выбранным фильтрам"}
+                </p>
+              )}
               {filteredUsers.map((u) => (
-                <article key={u.id} className="card">
-                  <div className="card-body">
-                    <Link href={profilePath(u.id)} style={{ fontWeight: 700 }}>
-                      {u.name} ({u.callsign})
-                    </Link>
-                    <p className="page-subtitle" style={{ margin: "6px 0" }}>
-                      {rotaUnitLabel(u.rotaPlatoon, u.rotaSection)}
-                    </p>
-                    <p style={{ margin: "8px 0 0" }}>
+                <article key={u.id} className="personnel-mobile-card">
+                  <div className="personnel-mobile-card__head">
+                    <div>
+                      <Link href={profilePath(u.id)} className="personnel-mobile-card__name">
+                        {u.name}
+                      </Link>
+                      <p className="personnel-mobile-card__callsign">{u.callsign}</p>
+                    </div>
+                    <span className={`pill ${u.dutyLocation === "base" ? "pill-green" : "pill-red"}`}>
+                      {dutyLocationLabel[u.dutyLocation]}
+                    </span>
+                  </div>
+                  <div className="personnel-mobile-card__meta">
+                    <span>{rotaUnitLabel(u.rotaPlatoon, u.rotaSection)}</span>
+                    <PersonnelRosterLicenseCell categories={u.licenseCategories} />
+                  </div>
+                  <div className="personnel-mobile-card__exams">
+                    {PERSONNEL_EXAM_TYPES.map((t) => {
+                      const st = examMap.get(u.id)?.get(t);
+                      return <PersonnelExamRosterIcon key={t} type={t} passed={st === "passed"} />;
+                    })}
+                  </div>
+                  <div className="personnel-mobile-card__stats">
+                    <div>
+                      <span className="label">Тесты</span>
                       <PersonnelRosterTestCell stats={u.testStats} />
-                      {" · "}
-                      <PersonnelRosterLicenseCell categories={u.licenseCategories} />
-                    </p>
-                    <p style={{ margin: "8px 0 0" }}>
-                      <IconUavHit /> {u.uavHitsTotal} · {u.premiumsTotal.toLocaleString("ru-RU")} ₽
-                    </p>
+                    </div>
+                    <div>
+                      <span className="label">Сбития</span>
+                      <strong>{u.uavHitsTotal}</strong>
+                    </div>
+                    <div>
+                      <span className="label">Премии</span>
+                      <strong>{u.premiumsTotal.toLocaleString("ru-RU")} ₽</strong>
+                    </div>
+                    <div>
+                      <span className="label">Команд.</span>
+                      <strong>
+                        {u.deploymentsCount} ({u.deploymentDays} дн.)
+                      </strong>
+                    </div>
                   </div>
                 </article>
               ))}
