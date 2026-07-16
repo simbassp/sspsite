@@ -43,6 +43,55 @@ import type { Position } from "@/lib/types";
 type Tab = "overview" | "exams" | "deployments" | "medals" | "premiums";
 type RequestType = "medal" | "deployment" | "exam" | "premium";
 
+const DEPLOYMENTS_PER_PAGE = 3;
+
+function PersonnelListPagination({
+  page,
+  totalPages,
+  onPageChange,
+}: {
+  page: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+}) {
+  if (totalPages <= 1) return null;
+  const safePage = Math.min(Math.max(1, page), totalPages);
+
+  return (
+    <div className="personnel-list-pagination">
+      <button className="btn" type="button" disabled={safePage <= 1} onClick={() => onPageChange(safePage - 1)}>
+        ‹
+      </button>
+      {Array.from({ length: totalPages }, (_, idx) => idx + 1).map((pageNum) => (
+        <button
+          key={pageNum}
+          className="btn"
+          type="button"
+          onClick={() => onPageChange(pageNum)}
+          style={
+            pageNum === safePage
+              ? {
+                  borderColor: "color-mix(in srgb, var(--accent) 55%, var(--line))",
+                  background: "color-mix(in srgb, var(--accent) 12%, var(--panel))",
+                }
+              : undefined
+          }
+        >
+          {pageNum}
+        </button>
+      ))}
+      <button
+        className="btn"
+        type="button"
+        disabled={safePage >= totalPages}
+        onClick={() => onPageChange(safePage + 1)}
+      >
+        ›
+      </button>
+    </div>
+  );
+}
+
 type DeploymentRow = {
   id: string;
   dateFrom: string;
@@ -127,6 +176,7 @@ export function PersonnelProfileStats({
   const [editModal, setEditModal] = useState<EditModal | null>(null);
   const [editSaving, setEditSaving] = useState(false);
   const [manageMsg, setManageMsg] = useState("");
+  const [deploymentsPage, setDeploymentsPage] = useState(1);
 
   const load = useCallback(async () => {
     try {
@@ -189,6 +239,27 @@ export function PersonnelProfileStats({
     () => filterPersonnelActivityByMonth(profile?.activityByMonth ?? [], "service"),
     [profile?.activityByMonth],
   );
+
+  const deploymentsTotalPages = useMemo(
+    () => Math.max(1, Math.ceil((profile?.deployments.length ?? 0) / DEPLOYMENTS_PER_PAGE)),
+    [profile?.deployments.length],
+  );
+  const safeDeploymentsPage = Math.min(deploymentsPage, deploymentsTotalPages);
+  const visibleDeployments = useMemo(() => {
+    const list = profile?.deployments ?? [];
+    const start = (safeDeploymentsPage - 1) * DEPLOYMENTS_PER_PAGE;
+    return list.slice(start, start + DEPLOYMENTS_PER_PAGE);
+  }, [profile?.deployments, safeDeploymentsPage]);
+
+  useEffect(() => {
+    if (deploymentsPage > deploymentsTotalPages) {
+      setDeploymentsPage(deploymentsTotalPages);
+    }
+  }, [deploymentsPage, deploymentsTotalPages]);
+
+  useEffect(() => {
+    setDeploymentsPage(1);
+  }, [reloadToken, profile?.deployments.length]);
 
   const saveSummaryPremiumTotal = async (totalPremium: number) => {
     if (!profile) return;
@@ -504,7 +575,7 @@ export function PersonnelProfileStats({
                   </tr>
                 </thead>
                 <tbody>
-                  {profile.deployments.map((d) => (
+                  {visibleDeployments.map((d) => (
                     <tr key={d.id}>
                       <td>{formatPeriod(d.dateFrom, d.dateTo)}</td>
                       <td>{d.days}</td>
@@ -517,7 +588,7 @@ export function PersonnelProfileStats({
               </table>
             </div>
             <div className="personnel-mobile-cards">
-              {profile.deployments.map((d) => (
+              {visibleDeployments.map((d) => (
                 <article key={d.id} className="card">
                   <div className="card-body">
                     <p style={{ margin: 0, fontWeight: 700 }}>{formatPeriod(d.dateFrom, d.dateTo)}</p>
@@ -534,11 +605,11 @@ export function PersonnelProfileStats({
                 Командировок пока нет
               </p>
             )}
-            {profile.deployments.length > 0 && tab === "overview" && (
-              <button type="button" className="personnel-link-btn" onClick={() => setTab("deployments")}>
-                Смотреть все командировки
-              </button>
-            )}
+            <PersonnelListPagination
+              page={safeDeploymentsPage}
+              totalPages={deploymentsTotalPages}
+              onPageChange={setDeploymentsPage}
+            />
           </div>
         </article>
       )}

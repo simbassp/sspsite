@@ -3213,6 +3213,15 @@ html[data-theme="dark"] .final-review-answer--correct {
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
+.personnel-list-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
 .personnel-stat-card__icon--purple {
   background: rgba(168, 85, 247, 0.14);
   color: #8b5cf6;
