@@ -174,26 +174,15 @@ async function embedChartImage(
   return Math.ceil(height / 20) + topRow + 1;
 }
 
-function addActivityDataBars(sheet: ExcelJS.Worksheet, valueCol: string, startRow: number, endRow: number) {
-  if (endRow < startRow) return;
-  sheet.addConditionalFormatting({
-    ref: `${valueCol}${startRow}:${valueCol}${endRow}`,
-    rules: [
-      {
-        type: "dataBar",
-        priority: 1,
-        cfvo: [{ type: "min" }, { type: "max" }],
-        showValue: true,
-      },
-    ],
-  });
-}
-
 async function addChartsSheet(workbook: ExcelJS.Workbook, bundle: PersonnelProfileExportBundle) {
   const sheet = workbook.addWorksheet("Графики");
   sheet.columns = [{ width: 72 }];
 
-  let nextRow = 0;
+  const title = sheet.addRow(["Графики"]);
+  styleSectionTitle(title.getCell(1));
+  title.height = 22;
+
+  let nextRow = sheet.rowCount;
   nextRow = await embedChartImage(
     workbook,
     sheet,
@@ -202,46 +191,45 @@ async function addChartsSheet(workbook: ExcelJS.Workbook, bundle: PersonnelProfi
     560,
     Math.max(220, 64 + summaryStatsSlices(bundle).filter((s) => s.value > 0).length * 34),
   );
-  nextRow += 1;
+  for (let i = sheet.rowCount; i < nextRow; i += 1) sheet.addRow([]);
 
   const activitySlices = activitySummarySlices(bundle);
   nextRow = await embedChartImage(
     workbook,
     sheet,
     buildPieChartSvg("Активность (круговая)", activitySlices),
-    nextRow,
+    sheet.rowCount,
   );
-  nextRow += 1;
+  for (let i = sheet.rowCount; i < nextRow; i += 1) sheet.addRow([]);
 
   nextRow = await embedChartImage(
     workbook,
     sheet,
     buildBarChartSvg("Активность (шкалы)", activitySlices),
-    nextRow,
+    sheet.rowCount,
     560,
     Math.max(220, 64 + activitySlices.filter((s) => s.value > 0).length * 34),
   );
-  nextRow += 1;
+  for (let i = sheet.rowCount; i < nextRow; i += 1) sheet.addRow([]);
 
   const monthly = monthlyActivityTotals(bundle);
   nextRow = await embedChartImage(
     workbook,
     sheet,
     buildMonthlyBarChartSvg("Активность по месяцам", monthly),
-    nextRow,
+    sheet.rowCount,
     560,
     280,
   );
+  for (let i = sheet.rowCount; i < nextRow; i += 1) sheet.addRow([]);
 
   sheet.addRow([]);
   const tableHeader = sheet.addRow(["Показатель", "Количество"]);
   styleHeaderRow(tableHeader);
-  const tableStart = tableHeader.number + 1;
   for (const item of activitySlices) {
     const row = sheet.addRow([item.label, item.value]);
     row.eachCell((cell) => styleTableCell(cell));
   }
-  addActivityDataBars(sheet, "B", tableStart, tableStart + activitySlices.length - 1);
 }
 
 function addOverviewSheet(workbook: ExcelJS.Workbook, bundle: PersonnelProfileExportBundle) {
@@ -319,13 +307,11 @@ function addOverviewSheet(workbook: ExcelJS.Workbook, bundle: PersonnelProfileEx
     const actHeader = sheet.addRow(["Показатель", "Количество"]);
     sheet.mergeCells(actHeader.number, 2, actHeader.number, 4);
     styleHeaderRow(actHeader);
-    const actStart = actHeader.number + 1;
     for (const item of p.activitySummary) {
       const row = sheet.addRow([item.label, item.value]);
       sheet.mergeCells(row.number, 2, row.number, 4);
       row.eachCell((cell) => styleTableCell(cell));
     }
-    addActivityDataBars(sheet, "B", actStart, actStart + p.activitySummary.length - 1);
   }
 }
 
@@ -500,68 +486,52 @@ async function addTestsChartsBlock(
   startRow: number,
 ) {
   const slices = testSummarySlices(summary);
-  const [piePng, barPng] = await Promise.all([
-    svgToPngBuffer(buildPieChartSvg("Сводка по тестам", slices)),
-    svgToPngBuffer(buildBarChartSvg("Сводка по тестам (шкалы)", slices)),
-  ]);
-
   const barHeight = Math.max(220, 64 + slices.filter((s) => s.value > 0).length * 34);
-  const pieId = workbook.addImage({ buffer: Buffer.from(piePng) as unknown as ExcelJS.Buffer, extension: "png" });
-  sheet.addImage(pieId, { tl: { col: 0, row: startRow }, ext: { width: 560, height: 320 } });
 
-  const barId = workbook.addImage({ buffer: Buffer.from(barPng) as unknown as ExcelJS.Buffer, extension: "png" });
-  sheet.addImage(barId, { tl: { col: 8, row: startRow }, ext: { width: 560, height: barHeight } });
-
-  return Math.max(17, Math.ceil(barHeight / 20) + 1);
+  let nextRow = startRow;
+  nextRow = await embedChartImage(workbook, sheet, buildPieChartSvg("Сводка по тестам", slices), nextRow);
+  nextRow += 1;
+  nextRow = await embedChartImage(
+    workbook,
+    sheet,
+    buildBarChartSvg("Сводка по тестам (шкалы)", slices),
+    nextRow,
+    560,
+    barHeight,
+  );
+  return nextRow;
 }
 
 function addTestsSummaryTable(
   sheet: ExcelJS.Worksheet,
   bundles: PersonnelProfileExportBundle[],
   bulk: boolean,
-  startAfterCharts: number,
 ) {
-  let rowNum = startAfterCharts + 1;
-  sheet.getRow(rowNum).values = [];
-  rowNum += 1;
-
-  const section = sheet.getRow(rowNum);
-  section.getCell(1).value = bulk ? "Сводка по сотрудникам" : "Сводка";
-  if (bulk) sheet.mergeCells(rowNum, 1, rowNum, 6);
-  else sheet.mergeCells(rowNum, 1, rowNum, 2);
+  sheet.addRow([]);
+  const section = sheet.addRow([bulk ? "Сводка по сотрудникам" : "Сводка"]);
+  if (bulk) sheet.mergeCells(section.number, 1, section.number, 6);
+  else sheet.mergeCells(section.number, 1, section.number, 2);
   styleSectionTitle(section.getCell(1));
   applyCompactRow(section, 20);
-  rowNum += 1;
 
-  const header = sheet.getRow(rowNum);
-  if (bulk) {
-    header.values = [
-      "Сотрудник",
-      "Позывной",
-      "Пробные (сданы)",
-      "Пробные (не сданы)",
-      "Итоговые (сданы)",
-      "Итоговые (не сданы)",
-    ];
-  } else {
-    header.values = ["Показатель", "Количество"];
-  }
+  const header = sheet.addRow(
+    bulk
+      ? ["Сотрудник", "Позывной", "Пробные (сданы)", "Пробные (не сданы)", "Итоговые (сданы)", "Итоговые (не сданы)"]
+      : ["Показатель", "Количество"],
+  );
   styleHeaderRow(header);
-  rowNum += 1;
 
-  const tableStart = rowNum;
   if (bulk) {
     for (const bundle of bundles) {
       const s = getTestSummary(bundle);
-      const row = sheet.getRow(rowNum);
-      row.values = [
+      const row = sheet.addRow([
         bundle.user.name,
         bundle.user.callsign,
         s.trialPassed,
         s.trialFailed,
         s.finalPassed,
         s.finalFailed,
-      ];
+      ]);
       applyCompactRow(row);
       styleCompactTableCell(row.getCell(1));
       styleCompactTableCell(row.getCell(2));
@@ -569,15 +539,10 @@ function addTestsSummaryTable(
       styleCountCell(row.getCell(4), "fail");
       styleCountCell(row.getCell(5), "pass");
       styleCountCell(row.getCell(6), "fail");
-      rowNum += 1;
     }
-    addActivityDataBars(sheet, "C", tableStart, rowNum - 1);
-    addActivityDataBars(sheet, "D", tableStart, rowNum - 1);
-    addActivityDataBars(sheet, "E", tableStart, rowNum - 1);
-    addActivityDataBars(sheet, "F", tableStart, rowNum - 1);
   } else {
     const bundle = bundles[0];
-    if (!bundle) return rowNum;
+    if (!bundle) return;
     const s = getTestSummary(bundle);
     const rows: Array<[string, number, "pass" | "fail"]> = [
       ["Пробные (сданы)", s.trialPassed, "pass"],
@@ -586,17 +551,12 @@ function addTestsSummaryTable(
       ["Итоговые (не сданы)", s.finalFailed, "fail"],
     ];
     for (const [label, value, tone] of rows) {
-      const row = sheet.getRow(rowNum);
-      row.values = [label, value];
+      const row = sheet.addRow([label, value]);
       applyCompactRow(row);
       styleCompactTableCell(row.getCell(1));
       styleCountCell(row.getCell(2), tone);
-      rowNum += 1;
     }
-    addActivityDataBars(sheet, "B", tableStart, rowNum - 1);
   }
-
-  return rowNum + 1;
 }
 
 function appendTestsDetailRows(sheet: ExcelJS.Worksheet, bundle: PersonnelProfileExportBundle, bulk: boolean) {
@@ -651,13 +611,24 @@ async function addSingleTestsSheet(workbook: ExcelJS.Workbook, bundle: Personnel
   styleSectionTitle(title.getCell(1));
   title.height = 22;
 
-  const summary = getTestSummary(bundle);
-  const chartRows = await addTestsChartsBlock(workbook, sheet, summary, 2);
-  const detailStart = addTestsSummaryTable(sheet, [bundle], false, chartRows + 1);
+  addTestsSummaryTable(sheet, [bundle], false);
 
-  const detailTitle = sheet.getRow(detailStart);
-  detailTitle.getCell(1).value = "Попытки";
-  sheet.mergeCells(detailStart, 1, detailStart, 6);
+  sheet.addRow([]);
+  const chartTitle = sheet.addRow(["Графики"]);
+  sheet.mergeCells(chartTitle.number, 1, chartTitle.number, 6);
+  styleSectionTitle(chartTitle.getCell(1));
+  applyCompactRow(chartTitle, 20);
+
+  const chartAnchor = sheet.rowCount;
+  const summary = getTestSummary(bundle);
+  const nextRow = await addTestsChartsBlock(workbook, sheet, summary, chartAnchor);
+  for (let i = sheet.rowCount; i < nextRow; i += 1) {
+    sheet.addRow([]);
+  }
+
+  sheet.addRow([]);
+  const detailTitle = sheet.addRow(["Попытки"]);
+  sheet.mergeCells(detailTitle.number, 1, detailTitle.number, 6);
   styleSectionTitle(detailTitle.getCell(1));
   applyCompactRow(detailTitle, 20);
 
@@ -692,13 +663,24 @@ async function addBulkTestsSheet(workbook: ExcelJS.Workbook, bundles: PersonnelP
   styleSectionTitle(title.getCell(1));
   title.height = 22;
 
-  const aggregate = aggregateTestSummary(bundles);
-  const chartRows = await addTestsChartsBlock(workbook, sheet, aggregate, 2);
-  const detailStart = addTestsSummaryTable(sheet, bundles, true, chartRows + 1);
+  addTestsSummaryTable(sheet, bundles, true);
 
-  const detailTitle = sheet.getRow(detailStart);
-  detailTitle.getCell(1).value = "Попытки";
-  sheet.mergeCells(detailStart, 1, detailStart, 8);
+  sheet.addRow([]);
+  const chartTitle = sheet.addRow(["Графики"]);
+  sheet.mergeCells(chartTitle.number, 1, chartTitle.number, 8);
+  styleSectionTitle(chartTitle.getCell(1));
+  applyCompactRow(chartTitle, 20);
+
+  const chartAnchor = sheet.rowCount;
+  const aggregate = aggregateTestSummary(bundles);
+  const nextRow = await addTestsChartsBlock(workbook, sheet, aggregate, chartAnchor);
+  for (let i = sheet.rowCount; i < nextRow; i += 1) {
+    sheet.addRow([]);
+  }
+
+  sheet.addRow([]);
+  const detailTitle = sheet.addRow(["Попытки"]);
+  sheet.mergeCells(detailTitle.number, 1, detailTitle.number, 8);
   styleSectionTitle(detailTitle.getCell(1));
   applyCompactRow(detailTitle, 20);
 
@@ -900,35 +882,54 @@ async function addBulkChartsSheet(workbook: ExcelJS.Workbook, bundles: Personnel
   const sheet = workbook.addWorksheet("Графики");
   sheet.columns = [{ width: 72 }];
 
+  const title = sheet.addRow(["Графики — сводка"]);
+  styleSectionTitle(title.getCell(1));
+  title.height = 22;
+
   const summary = aggregateSummaryStats(bundles);
   const activity = aggregateActivitySummary(bundles);
   const monthly = aggregateMonthlyActivity(bundles);
 
-  const [summaryPng, piePng, activityBarPng, monthlyPng] = await Promise.all([
-    svgToPngBuffer(buildBarChartSvg("Сводная статистика (все сотрудники)", summary)),
-    svgToPngBuffer(buildPieChartSvg("Активность (круговая)", activity)),
-    svgToPngBuffer(buildBarChartSvg("Активность (шкалы)", activity)),
-    svgToPngBuffer(buildMonthlyBarChartSvg("Активность по месяцам", monthly)),
-  ]);
-
   const summaryHeight = Math.max(220, 64 + summary.filter((s) => s.value > 0).length * 34);
   const activityHeight = Math.max(220, 64 + activity.filter((s) => s.value > 0).length * 34);
 
-  let nextRow = 0;
-  const imageId1 = workbook.addImage({ buffer: Buffer.from(summaryPng) as unknown as ExcelJS.Buffer, extension: "png" });
-  sheet.addImage(imageId1, { tl: { col: 0, row: nextRow }, ext: { width: 560, height: summaryHeight } });
-  nextRow += Math.ceil(summaryHeight / 20) + 1;
+  let nextRow = await embedChartImage(
+    workbook,
+    sheet,
+    buildBarChartSvg("Сводная статистика (все сотрудники)", summary),
+    sheet.rowCount,
+    560,
+    summaryHeight,
+  );
+  for (let i = sheet.rowCount; i < nextRow; i += 1) sheet.addRow([]);
 
-  const imageId2 = workbook.addImage({ buffer: Buffer.from(piePng) as unknown as ExcelJS.Buffer, extension: "png" });
-  sheet.addImage(imageId2, { tl: { col: 0, row: nextRow }, ext: { width: 560, height: 320 } });
-  nextRow += 17;
+  nextRow = await embedChartImage(
+    workbook,
+    sheet,
+    buildPieChartSvg("Активность (круговая)", activity),
+    sheet.rowCount,
+  );
+  for (let i = sheet.rowCount; i < nextRow; i += 1) sheet.addRow([]);
 
-  const imageId3 = workbook.addImage({ buffer: Buffer.from(activityBarPng) as unknown as ExcelJS.Buffer, extension: "png" });
-  sheet.addImage(imageId3, { tl: { col: 0, row: nextRow }, ext: { width: 560, height: activityHeight } });
-  nextRow += Math.ceil(activityHeight / 20) + 1;
+  nextRow = await embedChartImage(
+    workbook,
+    sheet,
+    buildBarChartSvg("Активность (шкалы)", activity),
+    sheet.rowCount,
+    560,
+    activityHeight,
+  );
+  for (let i = sheet.rowCount; i < nextRow; i += 1) sheet.addRow([]);
 
-  const imageId4 = workbook.addImage({ buffer: Buffer.from(monthlyPng) as unknown as ExcelJS.Buffer, extension: "png" });
-  sheet.addImage(imageId4, { tl: { col: 0, row: nextRow }, ext: { width: 560, height: 280 } });
+  nextRow = await embedChartImage(
+    workbook,
+    sheet,
+    buildMonthlyBarChartSvg("Активность по месяцам", monthly),
+    sheet.rowCount,
+    560,
+    280,
+  );
+  for (let i = sheet.rowCount; i < nextRow; i += 1) sheet.addRow([]);
 }
 
 async function buildWorkbook(bundles: PersonnelProfileExportBundle[], bulk: boolean) {
