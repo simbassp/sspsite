@@ -2,6 +2,7 @@ import { normalizeUnitAssignment } from "@/lib/unit-assignment";
 import type { DutyLocation, Position, UnitAssignment } from "@/lib/types";
 import {
   formatNotificationBody,
+  PERSONNEL_DEPLOYMENT_PREMIUM_TITLE,
   PERSONNEL_EXAM_TYPES,
   type PersonnelExamType,
   type PersonnelLicenseCategory,
@@ -43,6 +44,8 @@ export type PersonnelPremiumRow = {
   title: string;
   amount: number;
   awardedAt: string;
+  source?: "standalone" | "deployment";
+  deploymentId?: string;
 };
 
 export type PersonnelUserCard = {
@@ -386,17 +389,33 @@ export async function loadPersonnelProfile(userId: string): Promise<PersonnelPro
     };
   });
 
-  const premiums: PersonnelPremiumRow[] = (premiumRes.data ?? []).map((row) => {
+  const standalonePremiums: PersonnelPremiumRow[] = (premiumRes.data ?? []).map((row) => {
     const r = row as { id: string; title: string; amount: number; awarded_at: string };
     return {
       id: String(r.id),
       title: String(r.title ?? "Премия"),
       amount: Number(r.amount ?? 0),
       awardedAt: String(r.awarded_at),
+      source: "standalone" as const,
     };
   });
 
-  const standalonePremiumsTotal = premiums.reduce((sum, p) => sum + p.amount, 0);
+  const deploymentPremiums: PersonnelPremiumRow[] = deployments
+    .filter((d) => d.premiumAmount > 0)
+    .map((d) => ({
+      id: `deployment:${d.id}`,
+      title: PERSONNEL_DEPLOYMENT_PREMIUM_TITLE,
+      amount: d.premiumAmount,
+      awardedAt: d.dateTo,
+      source: "deployment" as const,
+      deploymentId: d.id,
+    }));
+
+  const premiums = [...standalonePremiums, ...deploymentPremiums].sort(
+    (a, b) => +new Date(b.awardedAt) - +new Date(a.awardedAt),
+  );
+
+  const standalonePremiumsTotal = standalonePremiums.reduce((sum, p) => sum + p.amount, 0);
 
   const exams = (examRes.data ?? []).map((row) => mapExamRow(row as Record<string, unknown>));
   const licenseCategories = normalizePersonnelLicenseCategories(

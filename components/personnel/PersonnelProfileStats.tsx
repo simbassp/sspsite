@@ -34,7 +34,7 @@ import {
 import type { Position } from "@/lib/types";
 
 type Tab = "overview" | "exams" | "deployments" | "medals" | "premiums";
-type RequestType = "medal" | "deployment" | "exam";
+type RequestType = "medal" | "deployment" | "exam" | "premium";
 
 type DeploymentRow = {
   id: string;
@@ -60,7 +60,14 @@ type ProfilePayload = {
   exams: Array<{ id?: string; examType: string; status: string; passedAt: string | null; expiresAt: string | null }>;
   deployments: DeploymentRow[];
   medals: Array<{ id: string; medalType?: string; title: string; awardedAt: string }>;
-  premiums: Array<{ id: string; title: string; amount: number; awardedAt: string }>;
+  premiums: Array<{
+    id: string;
+    title: string;
+    amount: number;
+    awardedAt: string;
+    source?: "standalone" | "deployment";
+    deploymentId?: string;
+  }>;
   licenseCategories: string[];
   activityByMonth: Array<{ month: string; days: number }>;
   hitsByUavType: Array<{ label: string; value: number }>;
@@ -294,6 +301,12 @@ export function PersonnelProfileStats({ userId }: { userId: string }) {
           uavHits: Number(form.get("uavHits") || 0),
           premiumAmount: Number(form.get("premiumAmount") || 0),
         };
+      } else if (requestType === "premium") {
+        payload = {
+          title: form.get("title"),
+          amount: Number(form.get("amount") || 0),
+          awardedAt: form.get("awardedAt"),
+        };
       } else {
         payload = {
           examType: form.get("examType"),
@@ -370,7 +383,7 @@ export function PersonnelProfileStats({ userId }: { userId: string }) {
             <IconPremium size={18} />
           </span>
           <div>
-            <p className="label">Премия за сбитие</p>
+            <p className="label">Премии</p>
             <strong>{profile.premiumsTotal.toLocaleString("ru-RU")} ₽</strong>
           </div>
         </div>
@@ -419,7 +432,7 @@ export function PersonnelProfileStats({ userId }: { userId: string }) {
                 <strong>{profile.uavHitsTotal}</strong>
               </div>
               <div>
-                <span className="label">Премия за сбитие</span>
+                <span className="label">Премии</span>
                 <div className="personnel-deploy-summary__value">
                   <strong>{profile.premiumsTotal.toLocaleString("ru-RU")} ₽</strong>
                   {canModerate && (
@@ -654,23 +667,51 @@ export function PersonnelProfileStats({ userId }: { userId: string }) {
       {tab === "premiums" && (
         <article className="card" style={{ marginTop: 12 }}>
           <div className="card-body">
-            <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-              {profile.premiums.map((p) => (
-                <li key={p.id} style={{ marginBottom: 8 }}>
-                  {p.title}: {p.amount.toLocaleString("ru-RU")} ₽ ({formatDate(p.awardedAt)})
-                  {canModerate && (
-                    <PersonnelModActions
-                      onEdit={() => setEditModal({ kind: "premium", record: p })}
-                      onDelete={() => void onDelete("premium", p.id, undefined, `премию «${p.title}»`)}
-                    />
-                  )}
-                </li>
-              ))}
-            </ul>
-            {profile.premiums.length === 0 && <p className="page-subtitle">Премий пока нет</p>}
-            <p className="page-subtitle" style={{ marginTop: 12 }}>
-              Отдельные премии отображаются здесь. Премия внутри командировки редактируется в таблице командировок.
-            </p>
+            {profile.premiums.length > 0 ? (
+              <div className="personnel-table-wrap">
+                <table className="personnel-table">
+                  <thead>
+                    <tr>
+                      <th>За что</th>
+                      <th>Дата</th>
+                      <th>Премия</th>
+                      {canModerate && <th />}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {profile.premiums.map((p) => (
+                      <tr key={p.id}>
+                        <td>{p.title}</td>
+                        <td>{formatDate(p.awardedAt)}</td>
+                        <td>{p.amount.toLocaleString("ru-RU")} ₽</td>
+                        {canModerate && (
+                          <td>
+                            {p.source === "deployment" && p.deploymentId ? (
+                              <PersonnelModActions
+                                onEdit={() => {
+                                  const deployment = profile.deployments.find((d) => d.id === p.deploymentId);
+                                  if (deployment) setEditModal({ kind: "deployment", record: deployment });
+                                }}
+                                onDelete={() =>
+                                  void onDelete("deployment", p.deploymentId, undefined, "премию в командировке")
+                                }
+                              />
+                            ) : (
+                              <PersonnelModActions
+                                onEdit={() => setEditModal({ kind: "premium", record: p })}
+                                onDelete={() => void onDelete("premium", p.id, undefined, `премию «${p.title}»`)}
+                              />
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="page-subtitle">Премий пока нет</p>
+            )}
           </div>
         </article>
       )}
@@ -699,6 +740,7 @@ export function PersonnelProfileStats({ userId }: { userId: string }) {
               >
                 <option value="deployment">Командировка</option>
                 <option value="medal">Медаль</option>
+                <option value="premium">Премия</option>
                 <option value="exam">Зачёт</option>
               </select>
               <form className="form" onSubmit={onRequestSubmit} style={{ marginTop: 12 }}>
@@ -727,6 +769,16 @@ export function PersonnelProfileStats({ userId }: { userId: string }) {
                     <input type="hidden" name="medalType" value={PERSONNEL_MEDAL_SVO_TYPE} />
                     <label className="label">Дата награждения</label>
                     <input className="input" type="date" name="awardedAt" required />
+                  </>
+                )}
+                {requestType === "premium" && (
+                  <>
+                    <label className="label">За что премия</label>
+                    <input className="input" name="title" placeholder="Например: за сбитие БПЛА" required />
+                    <label className="label">Дата</label>
+                    <input className="input" type="date" name="awardedAt" required />
+                    <label className="label">Премия, ₽</label>
+                    <input className="input" type="number" name="amount" min={0} defaultValue={0} required />
                   </>
                 )}
                 {requestType === "exam" && (
@@ -773,7 +825,7 @@ export function PersonnelProfileStats({ userId }: { userId: string }) {
           <article className="card personnel-modal" onClick={(e) => e.stopPropagation()}>
             <div className="card-body">
               <h3 style={{ marginTop: 0 }}>
-                {editModal.kind === "deploySummaryPremium" ? "Итоговая премия за сбитие" : "Изменить запись"}
+                {editModal.kind === "deploySummaryPremium" ? "Итоговые премии" : "Изменить запись"}
               </h3>
               <form className="form" onSubmit={onEditSubmit}>
                 {editModal.kind === "deploySummaryPremium" && (
@@ -781,7 +833,7 @@ export function PersonnelProfileStats({ userId }: { userId: string }) {
                     <p className="page-subtitle" style={{ marginTop: 0, marginBottom: 0 }}>
                       По командировкам: {deploymentPremiumsTotal.toLocaleString("ru-RU")} ₽
                     </p>
-                    <label className="label">Итого премия за сбитие, ₽</label>
+                    <label className="label">Итого премии, ₽</label>
                     <input
                       className="input"
                       type="number"
@@ -830,9 +882,9 @@ export function PersonnelProfileStats({ userId }: { userId: string }) {
                 )}
                 {editModal.kind === "premium" && (
                   <>
-                    <label className="label">Название</label>
+                    <label className="label">За что премия</label>
                     <input className="input" name="title" defaultValue={editModal.record.title} required />
-                    <label className="label">Сумма, ₽</label>
+                    <label className="label">Премия, ₽</label>
                     <input className="input" type="number" name="amount" min={0} defaultValue={editModal.record.amount} />
                     <label className="label">Дата</label>
                     <input

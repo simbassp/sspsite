@@ -58,6 +58,9 @@ export type PersonnelRequestType = (typeof PERSONNEL_REQUEST_TYPES)[number];
 /** Отдельная премия для корректировки итога в сводке командировок (редактируют админ/модератор). */
 export const PERSONNEL_SUMMARY_ADJUSTMENT_PREMIUM_TITLE = "Доп. премия за сбитие";
 
+/** Заголовок премии из командировки при отображении во вкладке «Премии». */
+export const PERSONNEL_DEPLOYMENT_PREMIUM_TITLE = "Премия за сбитие";
+
 export const personnelRequestTypeLabel: Record<PersonnelRequestType, string> = {
   medal: "Медаль",
   premium: "Премия",
@@ -152,8 +155,8 @@ export function formatPersonnelRequestDetails(
   }
   if (requestType === "premium") {
     const rows: Array<{ label: string; value: string }> = [
-      { label: "Название", value: payloadStr(payload.title) || "Премия за сбитие" },
-      { label: "Сумма", value: payloadMoney(payload.amount) },
+      { label: "За что", value: payloadStr(payload.title) || "—" },
+      { label: "Премия", value: payloadMoney(payload.amount) },
     ];
     const date = payloadDate(payload.awardedAt);
     if (date) rows.push({ label: "Дата", value: date });
