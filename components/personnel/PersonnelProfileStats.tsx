@@ -1,0 +1,540 @@
+"use client";
+
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { PersonnelPreviewBanner } from "@/components/personnel/PersonnelPreviewBanner";
+import {
+  ExamStatusIcon,
+  IconCalendarRange,
+  IconCar,
+  IconDays,
+  IconDeployment,
+  IconLicense,
+  IconMedal,
+  IconPremium,
+  IconRank,
+  IconUavHit,
+  PersonnelBarChart,
+  PersonnelPieChart,
+} from "@/components/personnel/PersonnelIcons";
+import { formatDate } from "@/lib/format";
+import {
+  PERSONNEL_EXAM_TYPES,
+  PERSONNEL_MEDAL_PRESETS,
+  personnelExamLabel,
+  personnelRequestTypeLabel,
+  rotaUnitLabel,
+} from "@/lib/personnel-catalog";
+import type { Position } from "@/lib/types";
+
+type Tab = "overview" | "exams" | "deployments" | "medals" | "premiums";
+
+type ProfilePayload = {
+  id: string;
+  name: string;
+  callsign: string;
+  position: Position;
+  rotaPlatoon: number | null;
+  rotaSection: number | null;
+  daysInSystem: number;
+  deploymentsCount: number;
+  deploymentDays: number;
+  uavHitsTotal: number;
+  premiumsTotal: number;
+  exams: Array<{ examType: string; status: string; passedAt: string | null; expiresAt: string | null }>;
+  deployments: Array<{
+    id: string;
+    dateFrom: string;
+    dateTo: string;
+    days: number;
+    uavHits: number;
+    premiumAmount: number;
+  }>;
+  medals: Array<{ id: string; title: string; awardedAt: string }>;
+  premiums: Array<{ id: string; title: string; amount: number; awardedAt: string }>;
+  licenseCategories: string[];
+  activityByMonth: Array<{ month: string; days: number }>;
+  hitsByUavType: Array<{ label: string; value: number }>;
+  pendingRequests: number;
+};
+
+function formatPeriod(from: string, to: string) {
+  return `${formatDate(from)} — ${formatDate(to)}`;
+}
+
+export function PersonnelProfileStats({ userId }: { userId: string }) {
+  const [profile, setProfile] = useState<ProfilePayload | null>(null);
+  const [isPreview, setIsPreview] = useState(false);
+  const [canEditOwn, setCanEditOwn] = useState(false);
+  const [tab, setTab] = useState<Tab>("overview");
+  const [hidden, setHidden] = useState(false);
+  const [requestOpen, setRequestOpen] = useState(false);
+  const [requestType, setRequestType] = useState<"medal" | "premium" | "deployment" | "exam">("deployment");
+  const [requestMsg, setRequestMsg] = useState("");
+  const [requestSaving, setRequestSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/personnel/profile/${encodeURIComponent(userId)}`, { cache: "no-store" });
+      if (res.status === 403) {
+        setHidden(true);
+        return;
+      }
+      const payload = (await res.json()) as {
+        ok?: boolean;
+        profile?: ProfilePayload;
+        isPreview?: boolean;
+        canEditOwn?: boolean;
+      };
+      if (!res.ok || !payload.ok || !payload.profile) {
+        setHidden(true);
+        return;
+      }
+      setProfile(payload.profile);
+      setIsPreview(payload.isPreview === true);
+      setCanEditOwn(payload.canEditOwn === true);
+      setHidden(false);
+    } catch {
+      setHidden(true);
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const examByType = useMemo(() => {
+    const m = new Map<string, ProfilePayload["exams"][number]>();
+    for (const e of profile?.exams ?? []) m.set(e.examType, e);
+    return m;
+  }, [profile?.exams]);
+
+  const failedExamsCount = useMemo(() => {
+    return PERSONNEL_EXAM_TYPES.filter((t) => examByType.get(t)?.status !== "passed").length;
+  }, [examByType]);
+
+  const onRequestSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!canEditOwn || requestSaving) return;
+    setRequestSaving(true);
+    setRequestMsg("");
+    try {
+      const form = new FormData(e.target as HTMLFormElement);
+      let payload: Record<string, unknown> = {};
+      if (requestType === "medal") {
+        const medalType = String(form.get("medalType") ?? "");
+        const preset = PERSONNEL_MEDAL_PRESETS.find((m) => m.type === medalType);
+        payload = { medalType, title: preset?.title ?? "Медаль", awardedAt: form.get("awardedAt") };
+      } else if (requestType === "premium") {
+        payload = {
+          title: "Премия за сбитие",
+          amount: Number(form.get("amount") || 0),
+          awardedAt: form.get("awardedAt"),
+        };
+      } else if (requestType === "deployment") {
+        payload = {
+          dateFrom: form.get("dateFrom"),
+          dateTo: form.get("dateTo"),
+          uavHits: Number(form.get("uavHits") || 0),
+          premiumAmount: Number(form.get("premiumAmount") || 0),
+        };
+      } else {
+        payload = {
+          examType: form.get("examType"),
+          status: form.get("status") || "passed",
+          passedAt: form.get("passedAt"),
+        };
+      }
+      const res = await fetch("/api/personnel/requests", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ requestType, payload }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) {
+        setRequestMsg(data.error || "Не удалось отправить заявку.");
+        return;
+      }
+      setRequestMsg("Заявка отправлена на модерацию.");
+      setRequestOpen(false);
+      void load();
+    } finally {
+      setRequestSaving(false);
+    }
+  };
+
+  if (hidden || !profile) return null;
+
+  return (
+    <section className="personnel-profile-stats" style={{ marginTop: 12 }}>
+      {isPreview && <PersonnelPreviewBanner />}
+
+      <div className="personnel-stat-grid personnel-stat-grid--hero">
+        <div className="personnel-stat-card personnel-stat-card--icon">
+          <span className="personnel-stat-card__icon personnel-stat-card__icon--blue">
+            <IconDays size={18} />
+          </span>
+          <div>
+            <p className="label">Всего в системе</p>
+            <strong>{profile.daysInSystem} дней</strong>
+          </div>
+        </div>
+        <div className="personnel-stat-card personnel-stat-card--icon">
+          <span className="personnel-stat-card__icon personnel-stat-card__icon--green">
+            <IconDeployment size={18} />
+          </span>
+          <div>
+            <p className="label">В командировках</p>
+            <strong>{profile.deploymentsCount} раз</strong>
+          </div>
+        </div>
+        <div className="personnel-stat-card personnel-stat-card--icon">
+          <span className="personnel-stat-card__icon personnel-stat-card__icon--red">
+            <IconUavHit size={18} />
+          </span>
+          <div>
+            <p className="label">Сбитий БПЛА</p>
+            <strong>{profile.uavHitsTotal}</strong>
+          </div>
+        </div>
+        <div className="personnel-stat-card personnel-stat-card--icon">
+          <span className="personnel-stat-card__icon personnel-stat-card__icon--gold">
+            <IconPremium size={18} />
+          </span>
+          <div>
+            <p className="label">Премия за сбитие</p>
+            <strong>{profile.premiumsTotal.toLocaleString("ru-RU")} ₽</strong>
+          </div>
+        </div>
+        <div className="personnel-stat-card personnel-stat-card--icon personnel-stat-card--rank">
+          <span className="personnel-stat-card__icon personnel-stat-card__icon--purple">
+            <IconRank size={20} />
+          </span>
+          <div>
+            <p className="label">Должность</p>
+            <strong style={{ fontSize: 16 }}>{profile.position}</strong>
+            <p className="page-subtitle" style={{ margin: "4px 0 0" }}>
+              {rotaUnitLabel(profile.rotaPlatoon, profile.rotaSection)}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="personnel-tabs" style={{ marginTop: 12 }}>
+        {(
+          [
+            ["overview", "Обзор"],
+            ["exams", "Зачёты"],
+            ["deployments", "Командировки"],
+            ["medals", "Медали"],
+            ["premiums", "Премии"],
+          ] as const
+        ).map(([id, label]) => (
+          <button key={id} type="button" className={tab === id ? "is-active" : ""} onClick={() => setTab(id)}>
+            {label}
+          </button>
+        ))}
+        {canEditOwn && (
+          <button type="button" className="btn btn-primary" style={{ marginLeft: "auto" }} onClick={() => setRequestOpen(true)}>
+            Подать заявку
+          </button>
+        )}
+      </div>
+
+      {(tab === "overview" || tab === "deployments") && (
+        <article className="card" style={{ marginTop: 12 }}>
+          <div className="card-body">
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <IconCalendarRange />
+              <h3 style={{ margin: 0 }}>Командировки</h3>
+            </div>
+
+            <div className="personnel-deploy-summary">
+              <div>
+                <span className="label">Всего командировок</span>
+                <strong>{profile.deploymentsCount}</strong>
+              </div>
+              <div>
+                <span className="label">Общее количество дней</span>
+                <strong>{profile.deploymentDays}</strong>
+              </div>
+              <div>
+                <span className="label">Сбитий БПЛА</span>
+                <strong>{profile.uavHitsTotal}</strong>
+              </div>
+              <div>
+                <span className="label">Премия за сбитие</span>
+                <strong>{profile.premiumsTotal.toLocaleString("ru-RU")} ₽</strong>
+              </div>
+            </div>
+
+            <div className="personnel-table-wrap" style={{ marginTop: 12 }}>
+              <table className="personnel-table">
+                <thead>
+                  <tr>
+                    <th>Период</th>
+                    <th>Дней</th>
+                    <th>Сбитий</th>
+                    <th>Премия</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {profile.deployments.map((d) => (
+                    <tr key={d.id}>
+                      <td>{formatPeriod(d.dateFrom, d.dateTo)}</td>
+                      <td>{d.days}</td>
+                      <td>{d.uavHits}</td>
+                      <td>{d.premiumAmount.toLocaleString("ru-RU")} ₽</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="personnel-mobile-cards">
+              {profile.deployments.map((d) => (
+                <article key={d.id} className="card">
+                  <div className="card-body">
+                    <p style={{ margin: 0, fontWeight: 700 }}>{formatPeriod(d.dateFrom, d.dateTo)}</p>
+                    <p className="page-subtitle" style={{ margin: "6px 0" }}>
+                      {d.days} дн. · {d.uavHits} сбитий · {d.premiumAmount.toLocaleString("ru-RU")} ₽
+                    </p>
+                  </div>
+                </article>
+              ))}
+            </div>
+            {profile.deployments.length === 0 && (
+              <p className="page-subtitle" style={{ marginTop: 8 }}>
+                Командировок пока нет
+              </p>
+            )}
+            {profile.deployments.length > 0 && tab === "overview" && (
+              <button type="button" className="personnel-link-btn" onClick={() => setTab("deployments")}>
+                Смотреть все командировки
+              </button>
+            )}
+          </div>
+        </article>
+      )}
+
+      {(tab === "overview" || tab === "exams") && (
+        <article className="card" style={{ marginTop: 12 }}>
+          <div className="card-body">
+            <h3 style={{ marginTop: 0 }}>Зачёты</h3>
+            {failedExamsCount > 0 && (
+              <p className="personnel-exam-alert">
+                <ExamStatusIcon passed={false} /> Не сдано: {failedExamsCount}
+              </p>
+            )}
+            <div className="personnel-exam-grid">
+              {PERSONNEL_EXAM_TYPES.map((t) => {
+                const row = examByType.get(t);
+                const passed = row?.status === "passed";
+                return (
+                  <div key={t} className={`personnel-exam-card ${passed ? "is-passed" : "is-failed"}`}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <strong>{personnelExamLabel[t]}</strong>
+                      <ExamStatusIcon passed={passed} />
+                    </div>
+                    <p style={{ margin: "8px 0 0", fontWeight: 600 }}>{passed ? "Сдан" : "Не сдан"}</p>
+                    {row?.passedAt && (
+                      <p className="page-subtitle" style={{ margin: "4px 0 0" }}>
+                        {formatDate(row.passedAt)}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </article>
+      )}
+
+      {tab === "overview" && (
+        <div className="grid-two" style={{ marginTop: 12 }}>
+          <article className="card">
+            <div className="card-body">
+              <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                <IconMedal size={20} /> Медали
+              </h3>
+              <div className="personnel-medals-row">
+                {profile.medals.slice(0, 3).map((m) => (
+                  <div key={m.id} className="personnel-medal-item" title={m.title}>
+                    <IconMedal size={28} />
+                  </div>
+                ))}
+                {profile.medals.length === 0 && <p className="page-subtitle">Нет медалей</p>}
+              </div>
+              {profile.medals.length > 0 && (
+                <button type="button" className="personnel-link-btn" onClick={() => setTab("medals")}>
+                  Все медали
+                </button>
+              )}
+            </div>
+          </article>
+          <article className="card">
+            <div className="card-body">
+              <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                <IconCar size={20} /> Категории прав
+              </h3>
+              <div className="personnel-license-row">
+                {profile.licenseCategories.length ? (
+                  profile.licenseCategories.map((c) => <IconLicense key={c} label={c} />)
+                ) : (
+                  <p className="page-subtitle">Не указаны</p>
+                )}
+              </div>
+            </div>
+          </article>
+        </div>
+      )}
+
+      {tab === "overview" && (
+        <div className="grid-two" style={{ marginTop: 12 }}>
+          <article className="card">
+            <div className="card-body">
+              <h3 style={{ marginTop: 0 }}>Активность по месяцам</h3>
+              <PersonnelBarChart data={profile.activityByMonth} />
+            </div>
+          </article>
+          <article className="card">
+            <div className="card-body">
+              <h3 style={{ marginTop: 0 }}>Сбития по типам БПЛА</h3>
+              <PersonnelPieChart data={profile.hitsByUavType} />
+            </div>
+          </article>
+        </div>
+      )}
+
+      {tab === "medals" && (
+        <article className="card" style={{ marginTop: 12 }}>
+          <div className="card-body">
+            <div className="personnel-medals-row">
+              {profile.medals.map((m) => (
+                <div key={m.id} className="personnel-medal-item" title={`${m.title} · ${formatDate(m.awardedAt)}`}>
+                  <IconMedal size={28} />
+                </div>
+              ))}
+            </div>
+            <ul style={{ marginTop: 12 }}>
+              {profile.medals.map((m) => (
+                <li key={m.id}>
+                  {m.title} — {formatDate(m.awardedAt)}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </article>
+      )}
+
+      {tab === "premiums" && (
+        <article className="card" style={{ marginTop: 12 }}>
+          <div className="card-body">
+            <ul>
+              {profile.premiums.map((p) => (
+                <li key={p.id}>
+                  {p.title}: {p.amount.toLocaleString("ru-RU")} ₽ ({formatDate(p.awardedAt)})
+                </li>
+              ))}
+            </ul>
+            {profile.premiums.length === 0 && <p className="page-subtitle">Премий пока нет</p>}
+          </div>
+        </article>
+      )}
+
+      {profile.pendingRequests > 0 && (
+        <p className="page-subtitle" style={{ marginTop: 8 }}>
+          На модерации: {profile.pendingRequests} заявок
+        </p>
+      )}
+
+      {requestOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="personnel-modal-backdrop"
+          onClick={() => setRequestOpen(false)}
+        >
+          <article className="card personnel-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="card-body">
+              <h3 style={{ marginTop: 0 }}>Заявка: {personnelRequestTypeLabel[requestType]}</h3>
+              <label className="label">Тип</label>
+              <select
+                className="select"
+                value={requestType}
+                onChange={(e) => setRequestType(e.target.value as typeof requestType)}
+              >
+                <option value="deployment">Командировка</option>
+                <option value="medal">Медаль</option>
+                <option value="premium">Премия</option>
+                <option value="exam">Зачёт</option>
+              </select>
+              <form className="form" onSubmit={onRequestSubmit} style={{ marginTop: 12 }}>
+                {requestType === "deployment" && (
+                  <>
+                    <label className="label">С</label>
+                    <input className="input" type="date" name="dateFrom" required />
+                    <label className="label">По</label>
+                    <input className="input" type="date" name="dateTo" required />
+                    <label className="label">Сбития</label>
+                    <input className="input" type="number" name="uavHits" min={0} defaultValue={0} />
+                    <label className="label">Премия, ₽</label>
+                    <input className="input" type="number" name="premiumAmount" min={0} defaultValue={0} />
+                  </>
+                )}
+                {requestType === "medal" && (
+                  <>
+                    <label className="label">Медаль</label>
+                    <select className="select" name="medalType" required>
+                      {PERSONNEL_MEDAL_PRESETS.map((m) => (
+                        <option key={m.type} value={m.type}>
+                          {m.title}
+                        </option>
+                      ))}
+                    </select>
+                    <label className="label">Дата</label>
+                    <input className="input" type="date" name="awardedAt" required />
+                  </>
+                )}
+                {requestType === "premium" && (
+                  <>
+                    <label className="label">Сумма, ₽</label>
+                    <input className="input" type="number" name="amount" min={0} required />
+                    <label className="label">Дата</label>
+                    <input className="input" type="date" name="awardedAt" required />
+                  </>
+                )}
+                {requestType === "exam" && (
+                  <>
+                    <label className="label">Зачёт</label>
+                    <select className="select" name="examType" required>
+                      {PERSONNEL_EXAM_TYPES.map((t) => (
+                        <option key={t} value={t}>
+                          {personnelExamLabel[t]}
+                        </option>
+                      ))}
+                    </select>
+                    <label className="label">Результат</label>
+                    <select className="select" name="status">
+                      <option value="passed">Сдал</option>
+                      <option value="failed">Не сдал</option>
+                    </select>
+                    <label className="label">Дата</label>
+                    <input className="input" type="date" name="passedAt" />
+                  </>
+                )}
+                {requestMsg && <p className="page-subtitle">{requestMsg}</p>}
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button type="submit" className="btn btn-primary" disabled={requestSaving}>
+                    {requestSaving ? "Отправка…" : "Отправить на модерацию"}
+                  </button>
+                  <button type="button" className="btn" onClick={() => setRequestOpen(false)}>
+                    Отмена
+                  </button>
+                </div>
+              </form>
+            </div>
+          </article>
+        </div>
+      )}
+    </section>
+  );
+}

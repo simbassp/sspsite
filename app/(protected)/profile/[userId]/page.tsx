@@ -8,6 +8,7 @@ import { formatDateTime, formatTotalTestDuration } from "@/lib/format";
 import { formatTestResultForType } from "@/lib/test-pass-rules";
 import { dutyLocationLabel } from "@/lib/duty-location";
 import { unitAssignmentLabelOrEmpty, normalizeUnitAssignment } from "@/lib/unit-assignment";
+import { PersonnelProfileStats } from "@/components/personnel/PersonnelProfileStats";
 import { getPositionBadgeClass } from "@/lib/position-ui";
 import { canManageUsers, canViewUserList } from "@/lib/permissions";
 import { DutyLocation, TestResult, UnitAssignment } from "@/lib/types";
@@ -551,6 +552,8 @@ export default function ProfileUserInspectPage() {
               </div>
             </div>
           </article>
+
+          {userId ? <PersonnelProfileStats userId={userId} /> : null}
 
           <article className="card" style={{ marginTop: 12 }}>
             <div className="card-body">

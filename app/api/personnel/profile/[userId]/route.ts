@@ -1,17 +1,18 @@
-import { canViewPersonnelUser, getPersonnelContext } from "@/lib/personnel-api-guard";
+import { resolvePersonnelProfileViewAccess } from "@/lib/personnel-profile-access";
 import { loadPersonnelProfile } from "@/lib/personnel-server";
+import { getServerSession } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
 
 export async function GET(_req: Request, context: { params: Promise<{ userId: string }> }) {
-  const ctx = await getPersonnelContext();
-  if (!ctx.ok) {
-    return Response.json({ ok: false, error: ctx.error }, { status: ctx.status });
+  const session = await getServerSession();
+  if (!session) {
+    return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
   const { userId } = await context.params;
-  const allowed = await canViewPersonnelUser(ctx.session, userId);
-  if (!allowed) {
+  const view = await resolvePersonnelProfileViewAccess(session, userId);
+  if (!view.show) {
     return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
   }
 
@@ -22,9 +23,9 @@ export async function GET(_req: Request, context: { params: Promise<{ userId: st
 
   return Response.json({
     ok: true,
-    isPreview: ctx.access.isPreview,
-    canEditOwn: ctx.access.canEditOwn && ctx.session.id === userId,
-    canModerate: ctx.access.canModerate,
+    isPreview: view.isPreview,
+    canEditOwn: view.canEditOwn,
+    canModerate: view.canModerate,
     profile,
   });
 }

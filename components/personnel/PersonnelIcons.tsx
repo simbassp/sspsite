@@ -11,6 +11,45 @@ const svgBase = {
   strokeLinejoin: "round" as const,
 };
 
+export function IconDays({ size = 20 }: { size?: number }) {
+  return (
+    <svg {...svgBase} width={size} height={size} aria-hidden>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </svg>
+  );
+}
+
+export function IconRank({ size = 22 }: { size?: number }) {
+  return (
+    <svg {...svgBase} width={size} height={size} aria-hidden>
+      <path d="M12 2 4 7v6c0 4.5 3.5 7.5 8 9 4.5-1.5 8-4.5 8-9V7l-8-5Z" />
+      <path d="m9 12 2 2 4-4" />
+    </svg>
+  );
+}
+
+export function IconCalendarRange({ size = 18 }: { size?: number }) {
+  return (
+    <svg {...svgBase} width={size} height={size} aria-hidden>
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <line x1="16" y1="2" x2="16" y2="6" />
+      <line x1="8" y1="2" x2="8" y2="6" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+    </svg>
+  );
+}
+
+export function IconCar({ size = 22 }: { size?: number }) {
+  return (
+    <svg {...svgBase} width={size} height={size} aria-hidden>
+      <path d="M5 17h14v-5l-2-5H7l-2 5v5Z" />
+      <circle cx="7.5" cy="17.5" r="1.5" />
+      <circle cx="16.5" cy="17.5" r="1.5" />
+    </svg>
+  );
+}
+
 export function IconMedal({ size = 24 }: { size?: number }) {
   return (
     <svg {...svgBase} width={size} height={size} aria-hidden>

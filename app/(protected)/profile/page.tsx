@@ -22,6 +22,7 @@ import {
   updateCurrentUserPassword,
   updateCurrentUserPasswordWithOldPassword,
 } from "@/lib/users-repository";
+import { PersonnelProfileStats } from "@/components/personnel/PersonnelProfileStats";
 import { getPositionBadgeClass } from "@/lib/position-ui";
 import { dutyLocationLabel } from "@/lib/duty-location";
 import {
@@ -819,6 +820,8 @@ export default function ProfilePage() {
           </div>
         </div>
       </article>
+
+      {session?.id ? <PersonnelProfileStats userId={session.id} /> : null}
 
       <article className="card" style={{ marginTop: 12 }}>
         <div className="card-body">
