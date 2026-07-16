@@ -676,36 +676,6 @@ export async function deletePersonnelRecord(input: {
   return { ok: true as const };
 }
 
-export async function createPersonnelRecord(input: {
-  userId: string;
-  entity: PersonnelManageEntity;
-  data: Record<string, unknown>;
-}) {
-  const target = await assertTargetCompany4(input.userId);
-  if (!target.ok) return target;
-
-  if (input.entity !== "premium") {
-    return { ok: false as const, error: "create_not_supported" };
-  }
-
-  const supabase = getServerSupabaseServiceClient();
-  const d = input.data;
-  const amount = Number(d.amount ?? 0);
-  if (!Number.isFinite(amount) || amount < 0) {
-    return { ok: false as const, error: "invalid_amount" };
-  }
-
-  const awardedAt = String(d.awardedAt ?? new Date().toISOString().slice(0, 10));
-  const res = await supabase.from("personnel_premiums").insert({
-    user_id: input.userId,
-    title: String(d.title ?? "Премия за сбитие"),
-    amount,
-    awarded_at: awardedAt,
-  });
-  if (res.error) return { ok: false as const, error: res.error.message };
-  return { ok: true as const };
-}
-
 export async function updatePersonnelRecord(input: {
   userId: string;
   entity: PersonnelManageEntity;
