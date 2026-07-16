@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { PersonnelModActions, postPersonnelManage } from "@/components/personnel/PersonnelModerationTools";
 import { PersonnelPreviewBanner } from "@/components/personnel/PersonnelPreviewBanner";
 import {
   ExamStatusIcon,
@@ -19,6 +20,7 @@ import {
 import { formatDate } from "@/lib/format";
 import {
   PERSONNEL_EXAM_TYPES,
+  PERSONNEL_LICENSE_CATEGORIES,
   PERSONNEL_MEDAL_PRESETS,
   personnelExamLabel,
   personnelRequestTypeLabel,
@@ -27,6 +29,16 @@ import {
 import type { Position } from "@/lib/types";
 
 type Tab = "overview" | "exams" | "deployments" | "medals" | "premiums";
+type RequestType = "medal" | "deployment" | "exam";
+
+type DeploymentRow = {
+  id: string;
+  dateFrom: string;
+  dateTo: string;
+  days: number;
+  uavHits: number;
+  premiumAmount: number;
+};
 
 type ProfilePayload = {
   id: string;
@@ -40,15 +52,8 @@ type ProfilePayload = {
   deploymentDays: number;
   uavHitsTotal: number;
   premiumsTotal: number;
-  exams: Array<{ examType: string; status: string; passedAt: string | null; expiresAt: string | null }>;
-  deployments: Array<{
-    id: string;
-    dateFrom: string;
-    dateTo: string;
-    days: number;
-    uavHits: number;
-    premiumAmount: number;
-  }>;
+  exams: Array<{ id?: string; examType: string; status: string; passedAt: string | null; expiresAt: string | null }>;
+  deployments: DeploymentRow[];
   medals: Array<{ id: string; title: string; awardedAt: string }>;
   premiums: Array<{ id: string; title: string; amount: number; awardedAt: string }>;
   licenseCategories: string[];
@@ -57,20 +62,37 @@ type ProfilePayload = {
   pendingRequests: number;
 };
 
+type EditModal =
+  | { kind: "deployment"; record: DeploymentRow }
+  | { kind: "premium"; record: ProfilePayload["premiums"][number] }
+  | { kind: "medal"; record: ProfilePayload["medals"][number] }
+  | { kind: "exam"; examType: string; status: string; passedAt: string | null };
+
 function formatPeriod(from: string, to: string) {
   return `${formatDate(from)} — ${formatDate(to)}`;
+}
+
+function toDateInput(value: string | null | undefined) {
+  if (!value) return "";
+  return value.slice(0, 10);
 }
 
 export function PersonnelProfileStats({ userId }: { userId: string }) {
   const [profile, setProfile] = useState<ProfilePayload | null>(null);
   const [isPreview, setIsPreview] = useState(false);
   const [canEditOwn, setCanEditOwn] = useState(false);
+  const [canModerate, setCanModerate] = useState(false);
   const [tab, setTab] = useState<Tab>("overview");
   const [hidden, setHidden] = useState(false);
   const [requestOpen, setRequestOpen] = useState(false);
-  const [requestType, setRequestType] = useState<"medal" | "premium" | "deployment" | "exam">("deployment");
+  const [requestType, setRequestType] = useState<RequestType>("deployment");
   const [requestMsg, setRequestMsg] = useState("");
   const [requestSaving, setRequestSaving] = useState(false);
+  const [licenseDraft, setLicenseDraft] = useState<string[]>([]);
+  const [licenseSaving, setLicenseSaving] = useState(false);
+  const [editModal, setEditModal] = useState<EditModal | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
+  const [manageMsg, setManageMsg] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -84,14 +106,17 @@ export function PersonnelProfileStats({ userId }: { userId: string }) {
         profile?: ProfilePayload;
         isPreview?: boolean;
         canEditOwn?: boolean;
+        canModerate?: boolean;
       };
       if (!res.ok || !payload.ok || !payload.profile) {
         setHidden(true);
         return;
       }
       setProfile(payload.profile);
+      setLicenseDraft(payload.profile.licenseCategories);
       setIsPreview(payload.isPreview === true);
       setCanEditOwn(payload.canEditOwn === true);
+      setCanModerate(payload.canModerate === true);
       setHidden(false);
     } catch {
       setHidden(true);
@@ -112,6 +137,106 @@ export function PersonnelProfileStats({ userId }: { userId: string }) {
     return PERSONNEL_EXAM_TYPES.filter((t) => examByType.get(t)?.status !== "passed").length;
   }, [examByType]);
 
+  const onDelete = async (
+    entity: "deployment" | "premium" | "medal" | "exam",
+    id?: string,
+    examType?: string,
+    label?: string,
+  ) => {
+    if (!canModerate) return;
+    if (!window.confirm(`Удалить ${label ?? "запись"}?`)) return;
+    setManageMsg("");
+    try {
+      await postPersonnelManage({ action: "delete", entity, userId, id, examType });
+      void load();
+    } catch (err) {
+      setManageMsg(err instanceof Error ? err.message : "Ошибка удаления.");
+    }
+  };
+
+  const onSaveLicenses = async () => {
+    if (!canModerate || licenseSaving) return;
+    setLicenseSaving(true);
+    setManageMsg("");
+    try {
+      await postPersonnelManage({
+        action: "update",
+        entity: "licenses",
+        userId,
+        data: { categories: licenseDraft },
+      });
+      void load();
+    } catch (err) {
+      setManageMsg(err instanceof Error ? err.message : "Ошибка сохранения.");
+    } finally {
+      setLicenseSaving(false);
+    }
+  };
+
+  const onEditSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!editModal || editSaving) return;
+    setEditSaving(true);
+    setManageMsg("");
+    try {
+      const form = new FormData(e.target as HTMLFormElement);
+      if (editModal.kind === "deployment") {
+        await postPersonnelManage({
+          action: "update",
+          entity: "deployment",
+          userId,
+          id: editModal.record.id,
+          data: {
+            dateFrom: form.get("dateFrom"),
+            dateTo: form.get("dateTo"),
+            uavHits: Number(form.get("uavHits") || 0),
+            premiumAmount: Number(form.get("premiumAmount") || 0),
+          },
+        });
+      } else if (editModal.kind === "premium") {
+        await postPersonnelManage({
+          action: "update",
+          entity: "premium",
+          userId,
+          id: editModal.record.id,
+          data: {
+            title: form.get("title"),
+            amount: Number(form.get("amount") || 0),
+            awardedAt: form.get("awardedAt"),
+          },
+        });
+      } else if (editModal.kind === "medal") {
+        await postPersonnelManage({
+          action: "update",
+          entity: "medal",
+          userId,
+          id: editModal.record.id,
+          data: {
+            title: form.get("title"),
+            awardedAt: form.get("awardedAt"),
+          },
+        });
+      } else {
+        await postPersonnelManage({
+          action: "update",
+          entity: "exam",
+          userId,
+          examType: editModal.examType,
+          data: {
+            status: form.get("status"),
+            passedAt: form.get("passedAt") || null,
+          },
+        });
+      }
+      setEditModal(null);
+      void load();
+    } catch (err) {
+      setManageMsg(err instanceof Error ? err.message : "Ошибка сохранения.");
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   const onRequestSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!canEditOwn || requestSaving) return;
@@ -124,12 +249,6 @@ export function PersonnelProfileStats({ userId }: { userId: string }) {
         const medalType = String(form.get("medalType") ?? "");
         const preset = PERSONNEL_MEDAL_PRESETS.find((m) => m.type === medalType);
         payload = { medalType, title: preset?.title ?? "Медаль", awardedAt: form.get("awardedAt") };
-      } else if (requestType === "premium") {
-        payload = {
-          title: "Премия за сбитие",
-          amount: Number(form.get("amount") || 0),
-          awardedAt: form.get("awardedAt"),
-        };
       } else if (requestType === "deployment") {
         payload = {
           dateFrom: form.get("dateFrom"),
@@ -162,11 +281,23 @@ export function PersonnelProfileStats({ userId }: { userId: string }) {
     }
   };
 
+  const renderDeploymentActions = (d: DeploymentRow) =>
+    canModerate ? (
+      <PersonnelModActions
+        onEdit={() => setEditModal({ kind: "deployment", record: d })}
+        onDelete={() => void onDelete("deployment", d.id, undefined, "командировку")}
+      />
+    ) : null;
+
   if (hidden || !profile) return null;
 
   return (
     <section className="personnel-profile-stats" style={{ marginTop: 12 }}>
       {isPreview && <PersonnelPreviewBanner />}
+      {canModerate && !canEditOwn && (
+        <p className="personnel-mod-banner">Режим модератора: можно изменять или удалять записи в личном деле.</p>
+      )}
+      {manageMsg && <p className="page-subtitle">{manageMsg}</p>}
 
       <div className="personnel-stat-grid personnel-stat-grid--hero">
         <div className="personnel-stat-card personnel-stat-card--icon">
@@ -275,6 +406,7 @@ export function PersonnelProfileStats({ userId }: { userId: string }) {
                     <th>Дней</th>
                     <th>Сбитий</th>
                     <th>Премия</th>
+                    {canModerate && <th />}
                   </tr>
                 </thead>
                 <tbody>
@@ -284,6 +416,7 @@ export function PersonnelProfileStats({ userId }: { userId: string }) {
                       <td>{d.days}</td>
                       <td>{d.uavHits}</td>
                       <td>{d.premiumAmount.toLocaleString("ru-RU")} ₽</td>
+                      {canModerate && <td>{renderDeploymentActions(d)}</td>}
                     </tr>
                   ))}
                 </tbody>
@@ -297,6 +430,7 @@ export function PersonnelProfileStats({ userId }: { userId: string }) {
                     <p className="page-subtitle" style={{ margin: "6px 0" }}>
                       {d.days} дн. · {d.uavHits} сбитий · {d.premiumAmount.toLocaleString("ru-RU")} ₽
                     </p>
+                    {renderDeploymentActions(d)}
                   </div>
                 </article>
               ))}
@@ -340,6 +474,21 @@ export function PersonnelProfileStats({ userId }: { userId: string }) {
                         {formatDate(row.passedAt)}
                       </p>
                     )}
+                    {canModerate && (
+                      <div style={{ marginTop: 8 }}>
+                        <PersonnelModActions
+                          onEdit={() =>
+                            setEditModal({
+                              kind: "exam",
+                              examType: t,
+                              status: row?.status ?? "failed",
+                              passedAt: row?.passedAt ?? null,
+                            })
+                          }
+                          onDelete={() => void onDelete("exam", row?.id, t, `зачёт «${personnelExamLabel[t]}»`)}
+                        />
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -376,12 +525,41 @@ export function PersonnelProfileStats({ userId }: { userId: string }) {
                 <IconCar size={20} /> Категории прав
               </h3>
               <div className="personnel-license-row">
-                {profile.licenseCategories.length ? (
+                {!canModerate && profile.licenseCategories.length ? (
                   profile.licenseCategories.map((c) => <IconLicense key={c} label={c} />)
-                ) : (
+                ) : !canModerate ? (
                   <p className="page-subtitle">Не указаны</p>
-                )}
+                ) : null}
               </div>
+              {canModerate && (
+                <>
+                  <div className="personnel-license-edit">
+                    {PERSONNEL_LICENSE_CATEGORIES.map((c) => (
+                      <label key={c}>
+                        <input
+                          type="checkbox"
+                          checked={licenseDraft.includes(c)}
+                          onChange={(e) => {
+                            setLicenseDraft((prev) =>
+                              e.target.checked ? [...prev, c] : prev.filter((x) => x !== c),
+                            );
+                          }}
+                        />
+                        {c}
+                      </label>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    style={{ marginTop: 10 }}
+                    disabled={licenseSaving}
+                    onClick={() => void onSaveLicenses()}
+                  >
+                    {licenseSaving ? "Сохранение…" : "Сохранить категории"}
+                  </button>
+                </>
+              )}
             </div>
           </article>
         </div>
@@ -414,10 +592,16 @@ export function PersonnelProfileStats({ userId }: { userId: string }) {
                 </div>
               ))}
             </div>
-            <ul style={{ marginTop: 12 }}>
+            <ul style={{ marginTop: 12, listStyle: "none", padding: 0, margin: "12px 0 0" }}>
               {profile.medals.map((m) => (
-                <li key={m.id}>
+                <li key={m.id} style={{ marginBottom: 8 }}>
                   {m.title} — {formatDate(m.awardedAt)}
+                  {canModerate && (
+                    <PersonnelModActions
+                      onEdit={() => setEditModal({ kind: "medal", record: m })}
+                      onDelete={() => void onDelete("medal", m.id, undefined, `медаль «${m.title}»`)}
+                    />
+                  )}
                 </li>
               ))}
             </ul>
@@ -428,14 +612,23 @@ export function PersonnelProfileStats({ userId }: { userId: string }) {
       {tab === "premiums" && (
         <article className="card" style={{ marginTop: 12 }}>
           <div className="card-body">
-            <ul>
+            <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
               {profile.premiums.map((p) => (
-                <li key={p.id}>
+                <li key={p.id} style={{ marginBottom: 8 }}>
                   {p.title}: {p.amount.toLocaleString("ru-RU")} ₽ ({formatDate(p.awardedAt)})
+                  {canModerate && (
+                    <PersonnelModActions
+                      onEdit={() => setEditModal({ kind: "premium", record: p })}
+                      onDelete={() => void onDelete("premium", p.id, undefined, `премию «${p.title}»`)}
+                    />
+                  )}
                 </li>
               ))}
             </ul>
             {profile.premiums.length === 0 && <p className="page-subtitle">Премий пока нет</p>}
+            <p className="page-subtitle" style={{ marginTop: 12 }}>
+              Отдельные премии отображаются здесь. Премия внутри командировки редактируется в таблице командировок.
+            </p>
           </div>
         </article>
       )}
@@ -460,11 +653,10 @@ export function PersonnelProfileStats({ userId }: { userId: string }) {
               <select
                 className="select"
                 value={requestType}
-                onChange={(e) => setRequestType(e.target.value as typeof requestType)}
+                onChange={(e) => setRequestType(e.target.value as RequestType)}
               >
                 <option value="deployment">Командировка</option>
                 <option value="medal">Медаль</option>
-                <option value="premium">Премия</option>
                 <option value="exam">Зачёт</option>
               </select>
               <form className="form" onSubmit={onRequestSubmit} style={{ marginTop: 12 }}>
@@ -494,14 +686,6 @@ export function PersonnelProfileStats({ userId }: { userId: string }) {
                     <input className="input" type="date" name="awardedAt" required />
                   </>
                 )}
-                {requestType === "premium" && (
-                  <>
-                    <label className="label">Сумма, ₽</label>
-                    <input className="input" type="number" name="amount" min={0} required />
-                    <label className="label">Дата</label>
-                    <input className="input" type="date" name="awardedAt" required />
-                  </>
-                )}
                 {requestType === "exam" && (
                   <>
                     <label className="label">Зачёт</label>
@@ -527,6 +711,114 @@ export function PersonnelProfileStats({ userId }: { userId: string }) {
                     {requestSaving ? "Отправка…" : "Отправить на модерацию"}
                   </button>
                   <button type="button" className="btn" onClick={() => setRequestOpen(false)}>
+                    Отмена
+                  </button>
+                </div>
+              </form>
+            </div>
+          </article>
+        </div>
+      )}
+
+      {editModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="personnel-modal-backdrop"
+          onClick={() => setEditModal(null)}
+        >
+          <article className="card personnel-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="card-body">
+              <h3 style={{ marginTop: 0 }}>Изменить запись</h3>
+              <form className="form" onSubmit={onEditSubmit}>
+                {editModal.kind === "deployment" && (
+                  <>
+                    <label className="label">С</label>
+                    <input
+                      className="input"
+                      type="date"
+                      name="dateFrom"
+                      defaultValue={toDateInput(editModal.record.dateFrom)}
+                      required
+                    />
+                    <label className="label">По</label>
+                    <input
+                      className="input"
+                      type="date"
+                      name="dateTo"
+                      defaultValue={toDateInput(editModal.record.dateTo)}
+                      required
+                    />
+                    <label className="label">Сбития</label>
+                    <input
+                      className="input"
+                      type="number"
+                      name="uavHits"
+                      min={0}
+                      defaultValue={editModal.record.uavHits}
+                    />
+                    <label className="label">Премия, ₽</label>
+                    <input
+                      className="input"
+                      type="number"
+                      name="premiumAmount"
+                      min={0}
+                      defaultValue={editModal.record.premiumAmount}
+                    />
+                  </>
+                )}
+                {editModal.kind === "premium" && (
+                  <>
+                    <label className="label">Название</label>
+                    <input className="input" name="title" defaultValue={editModal.record.title} required />
+                    <label className="label">Сумма, ₽</label>
+                    <input className="input" type="number" name="amount" min={0} defaultValue={editModal.record.amount} />
+                    <label className="label">Дата</label>
+                    <input
+                      className="input"
+                      type="date"
+                      name="awardedAt"
+                      defaultValue={toDateInput(editModal.record.awardedAt)}
+                      required
+                    />
+                  </>
+                )}
+                {editModal.kind === "medal" && (
+                  <>
+                    <label className="label">Название</label>
+                    <input className="input" name="title" defaultValue={editModal.record.title} required />
+                    <label className="label">Дата</label>
+                    <input
+                      className="input"
+                      type="date"
+                      name="awardedAt"
+                      defaultValue={toDateInput(editModal.record.awardedAt)}
+                      required
+                    />
+                  </>
+                )}
+                {editModal.kind === "exam" && (
+                  <>
+                    <p className="label">Зачёт: {personnelExamLabel[editModal.examType as keyof typeof personnelExamLabel]}</p>
+                    <label className="label">Результат</label>
+                    <select className="select" name="status" defaultValue={editModal.status}>
+                      <option value="passed">Сдан</option>
+                      <option value="failed">Не сдан</option>
+                    </select>
+                    <label className="label">Дата</label>
+                    <input
+                      className="input"
+                      type="date"
+                      name="passedAt"
+                      defaultValue={toDateInput(editModal.passedAt)}
+                    />
+                  </>
+                )}
+                <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                  <button type="submit" className="btn btn-primary" disabled={editSaving}>
+                    {editSaving ? "Сохранение…" : "Сохранить"}
+                  </button>
+                  <button type="button" className="btn" onClick={() => setEditModal(null)}>
                     Отмена
                   </button>
                 </div>

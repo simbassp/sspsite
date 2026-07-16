@@ -68,7 +68,7 @@ export default function PersonnelProfilePage() {
   const [canEditOwn, setCanEditOwn] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [requestOpen, setRequestOpen] = useState(false);
-  const [requestType, setRequestType] = useState<"medal" | "premium" | "deployment" | "exam">("medal");
+  const [requestType, setRequestType] = useState<"medal" | "deployment" | "exam">("deployment");
   const [requestMsg, setRequestMsg] = useState("");
   const [requestSaving, setRequestSaving] = useState(false);
 
@@ -119,12 +119,6 @@ export default function PersonnelProfilePage() {
         payload = {
           medalType,
           title: preset?.title ?? "Медаль",
-          awardedAt: form.get("awardedAt"),
-        };
-      } else if (requestType === "premium") {
-        payload = {
-          title: form.get("title") || "Премия за сбитие",
-          amount: Number(form.get("amount") || 0),
           awardedAt: form.get("awardedAt"),
         };
       } else if (requestType === "deployment") {
@@ -441,9 +435,8 @@ export default function PersonnelProfilePage() {
                 value={requestType}
                 onChange={(e) => setRequestType(e.target.value as typeof requestType)}
               >
-                <option value="medal">Медаль</option>
-                <option value="premium">Премия</option>
                 <option value="deployment">Командировка</option>
+                <option value="medal">Медаль</option>
                 <option value="exam">Зачёт</option>
               </select>
               <form className="form" onSubmit={onRequestSubmit} style={{ marginTop: 12 }}>
@@ -458,14 +451,6 @@ export default function PersonnelProfilePage() {
                       ))}
                     </select>
                     <input type="hidden" name="title" value="" />
-                    <label className="label">Дата</label>
-                    <input className="input" type="date" name="awardedAt" required />
-                  </>
-                )}
-                {requestType === "premium" && (
-                  <>
-                    <label className="label">Сумма, ₽</label>
-                    <input className="input" type="number" name="amount" min={0} required />
                     <label className="label">Дата</label>
                     <input className="input" type="date" name="awardedAt" required />
                   </>

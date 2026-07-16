@@ -2,6 +2,7 @@ import { normalizeUnitAssignment } from "@/lib/unit-assignment";
 import type { DutyLocation, Position, UnitAssignment } from "@/lib/types";
 import {
   formatNotificationBody,
+  PERSONNEL_EXAM_TYPES,
   type PersonnelExamType,
   type PersonnelLicenseCategory,
 } from "@/lib/personnel-catalog";
@@ -627,4 +628,147 @@ export async function reviewPersonnelRequest(input: {
   );
 
   return { ok: true as const };
+}
+
+export type PersonnelManageEntity = "deployment" | "premium" | "medal" | "exam" | "licenses";
+
+async function assertTargetCompany4(userId: string) {
+  const basic = await loadPersonnelUserBasics(userId);
+  if (!basic || basic.unitAssignment !== "company_4") {
+    return { ok: false as const, error: "not_found" };
+  }
+  return { ok: true as const };
+}
+
+export async function deletePersonnelRecord(input: {
+  userId: string;
+  entity: PersonnelManageEntity;
+  id?: string;
+  examType?: string;
+}) {
+  const target = await assertTargetCompany4(input.userId);
+  if (!target.ok) return target;
+
+  const supabase = getServerSupabaseServiceClient();
+  if (input.entity === "licenses") {
+    await supabase.from("personnel_licenses").delete().eq("user_id", input.userId);
+    return { ok: true as const };
+  }
+
+  if (input.entity === "exam") {
+    if (!input.examType && !input.id) return { ok: false as const, error: "missing_id" };
+    let q = supabase.from("personnel_exams").delete().eq("user_id", input.userId);
+    q = input.id ? q.eq("id", input.id) : q.eq("exam_type", input.examType!);
+    const res = await q;
+    if (res.error) return { ok: false as const, error: res.error.message };
+    return { ok: true as const };
+  }
+
+  if (!input.id) return { ok: false as const, error: "missing_id" };
+  const table =
+    input.entity === "deployment"
+      ? "personnel_deployments"
+      : input.entity === "premium"
+        ? "personnel_premiums"
+        : "personnel_medals";
+  const res = await supabase.from(table).delete().eq("id", input.id).eq("user_id", input.userId);
+  if (res.error) return { ok: false as const, error: res.error.message };
+  return { ok: true as const };
+}
+
+export async function updatePersonnelRecord(input: {
+  userId: string;
+  entity: PersonnelManageEntity;
+  id?: string;
+  examType?: string;
+  data: Record<string, unknown>;
+}) {
+  const target = await assertTargetCompany4(input.userId);
+  if (!target.ok) return target;
+
+  const supabase = getServerSupabaseServiceClient();
+  const d = input.data;
+
+  if (input.entity === "licenses") {
+    const categories = Array.isArray(d.categories)
+      ? d.categories.filter((c): c is PersonnelLicenseCategory => c === "B" || c === "C" || c === "CE")
+      : [];
+    const res = await supabase.from("personnel_licenses").upsert(
+      {
+        user_id: input.userId,
+        categories,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" },
+    );
+    if (res.error) return { ok: false as const, error: res.error.message };
+    return { ok: true as const };
+  }
+
+  if (input.entity === "exam") {
+    const examType = String(input.examType ?? d.examType ?? "");
+    if (!PERSONNEL_EXAM_TYPES.includes(examType as PersonnelExamType)) {
+      return { ok: false as const, error: "invalid_exam_type" };
+    }
+    const res = await supabase.from("personnel_exams").upsert(
+      {
+        user_id: input.userId,
+        exam_type: examType,
+        status: d.status === "failed" ? "failed" : "passed",
+        passed_at: d.passedAt ? String(d.passedAt) : null,
+        expires_at: d.expiresAt ? String(d.expiresAt) : null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id,exam_type" },
+    );
+    if (res.error) return { ok: false as const, error: res.error.message };
+    return { ok: true as const };
+  }
+
+  if (!input.id) return { ok: false as const, error: "missing_id" };
+
+  if (input.entity === "deployment") {
+    const res = await supabase
+      .from("personnel_deployments")
+      .update({
+        date_from: String(d.dateFrom),
+        date_to: String(d.dateTo),
+        uav_hits: Number(d.uavHits ?? 0),
+        premium_amount: Number(d.premiumAmount ?? 0),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", input.id)
+      .eq("user_id", input.userId);
+    if (res.error) return { ok: false as const, error: res.error.message };
+    return { ok: true as const };
+  }
+
+  if (input.entity === "premium") {
+    const res = await supabase
+      .from("personnel_premiums")
+      .update({
+        title: String(d.title ?? "Премия за сбитие"),
+        amount: Number(d.amount ?? 0),
+        awarded_at: String(d.awardedAt),
+      })
+      .eq("id", input.id)
+      .eq("user_id", input.userId);
+    if (res.error) return { ok: false as const, error: res.error.message };
+    return { ok: true as const };
+  }
+
+  if (input.entity === "medal") {
+    const res = await supabase
+      .from("personnel_medals")
+      .update({
+        title: String(d.title ?? "Медаль"),
+        awarded_at: String(d.awardedAt),
+      })
+      .eq("id", input.id)
+      .eq("user_id", input.userId);
+    if (res.error) return { ok: false as const, error: res.error.message };
+    return { ok: true as const };
+  }
+
+  return { ok: false as const, error: "invalid_entity" };
 }

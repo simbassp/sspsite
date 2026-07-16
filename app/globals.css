@@ -2962,6 +2962,47 @@ html[data-theme="dark"] .final-review-answer--correct {
   font-weight: 600;
 }
 
+.personnel-mod-actions {
+  display: inline-flex;
+  gap: 6px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.personnel-mod-actions .btn-sm {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.personnel-mod-banner {
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+  font-size: 14px;
+}
+
+.personnel-license-edit {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.personnel-license-edit label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.personnel-table td .personnel-mod-actions {
+  display: flex;
+  margin-left: 0;
+  margin-top: 4px;
+}
+
 @media (max-width: 819px) {
   .personnel-hero {
     grid-template-columns: 1fr;
