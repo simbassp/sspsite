@@ -1,13 +1,13 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
 type ProfileNameEditModalProps = {
   open: boolean;
   onClose: () => void;
-  name: string;
-  callsign: string;
-  onNameChange: (value: string) => void;
-  onCallsignChange: (value: string) => void;
-  onSave: () => void;
+  initialName: string;
+  initialCallsign: string;
+  onSave: (values: { name: string; callsign: string }) => void | Promise<void>;
   saving?: boolean;
   fieldError?: { name?: string; callsign?: string };
   message?: string;
@@ -16,15 +16,22 @@ type ProfileNameEditModalProps = {
 export function ProfileNameEditModal({
   open,
   onClose,
-  name,
-  callsign,
-  onNameChange,
-  onCallsignChange,
+  initialName,
+  initialCallsign,
   onSave,
   saving = false,
   fieldError,
   message,
 }: ProfileNameEditModalProps) {
+  const [name, setName] = useState(initialName);
+  const [callsign, setCallsign] = useState(initialCallsign);
+
+  useEffect(() => {
+    if (!open) return;
+    setName(initialName);
+    setCallsign(initialCallsign);
+  }, [open, initialName, initialCallsign]);
+
   if (!open) return null;
 
   return (
@@ -45,7 +52,7 @@ export function ProfileNameEditModal({
               id="profile-edit-name"
               className="input"
               value={name}
-              onChange={(e) => onNameChange(e.target.value)}
+              onChange={(e) => setName(e.target.value)}
               placeholder="Ваше имя"
               disabled={saving}
             />
@@ -61,7 +68,7 @@ export function ProfileNameEditModal({
               id="profile-edit-callsign"
               className="input"
               value={callsign}
-              onChange={(e) => onCallsignChange(e.target.value)}
+              onChange={(e) => setCallsign(e.target.value)}
               placeholder="Ваш позывной"
               disabled={saving}
             />
@@ -72,7 +79,12 @@ export function ProfileNameEditModal({
             )}
             {!!message && <p className="page-subtitle" style={{ margin: 0 }}>{message}</p>}
             <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-              <button type="button" className="btn btn-primary" onClick={onSave} disabled={saving}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => void onSave({ name, callsign })}
+                disabled={saving}
+              >
                 {saving ? "Сохранение…" : "Сохранить"}
               </button>
               <button type="button" className="btn" onClick={onClose} disabled={saving}>

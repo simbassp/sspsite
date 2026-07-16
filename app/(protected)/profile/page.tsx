@@ -60,8 +60,6 @@ export default function ProfilePage() {
   const [isInviteLoading, setIsInviteLoading] = useState(false);
   const [isSavingInvite, setIsSavingInvite] = useState(false);
   const [inviteDeleteCode, setInviteDeleteCode] = useState<string | null>(null);
-  const [profileNameInput, setProfileNameInput] = useState(() => session?.name ?? "");
-  const [profileCallsignInput, setProfileCallsignInput] = useState(() => session?.callsign ?? "");
   const [isOnline, setIsOnline] = useState(true);
   const [dutyLocation, setDutyLocation] = useState<DutyLocation>("base");
   const [unitAssignment, setUnitAssignment] = useState<UnitAssignment | null>(null);
@@ -80,12 +78,6 @@ export default function ProfilePage() {
     setSession(readClientSession());
     setSessionResolved(true);
   }, []);
-
-  useEffect(() => {
-    if (!session) return;
-    setProfileNameInput(session.name ?? "");
-    setProfileCallsignInput(session.callsign ?? "");
-  }, [session]);
 
   useEffect(() => {
     if (!session) return;
@@ -520,11 +512,12 @@ export default function ProfilePage() {
     });
   };
 
-  const onSaveProfile = async () => {
+  const onSaveProfile = async ({ name, callsign }: { name: string; callsign: string }) => {
+    if (!session) return;
     setSettingsMessage("");
     setFieldError({});
-    const trimmedName = profileNameInput.trim();
-    const trimmedCallsign = profileCallsignInput.trim();
+    const trimmedName = name.trim();
+    const trimmedCallsign = callsign.trim();
     const nextError: { name?: string; callsign?: string } = {};
     if (trimmedName.length < 2) nextError.name = "Минимум 2 символа";
     if (trimmedCallsign.length < 2) nextError.callsign = "Минимум 2 символа";
@@ -541,6 +534,11 @@ export default function ProfilePage() {
       return;
     }
     persistSession({
+      ...session,
+      name: result.name,
+      callsign: result.callsign,
+    });
+    setSession({
       ...session,
       name: result.name,
       callsign: result.callsign,
@@ -733,7 +731,7 @@ export default function ProfilePage() {
             <div className="profile-hero-main">
               <p className="profile-hero-kicker">Пользовательский профиль</p>
               <div className="profile-hero-name-row">
-                <p className="profile-hero-name">{profileNameInput || session.name}</p>
+                <p className="profile-hero-name">{session.name || "—"}</p>
                 <button
                   type="button"
                   className="btn profile-hero-edit-btn"
@@ -749,7 +747,7 @@ export default function ProfilePage() {
               </div>
               <p className="profile-hero-callsign">
                 Позывной:{" "}
-                <strong>{(profileCallsignInput || session.callsign || "").trim() || "—"}</strong>
+                <strong>{(session.callsign || "").trim() || "—"}</strong>
               </p>
               <div className="profile-hero-status-inline">
                 <span className="profile-hero-status-value">
@@ -827,12 +825,13 @@ export default function ProfilePage() {
 
       <ProfileNameEditModal
         open={profileEditModalOpen}
-        onClose={() => setProfileEditModalOpen(false)}
-        name={profileNameInput}
-        callsign={profileCallsignInput}
-        onNameChange={setProfileNameInput}
-        onCallsignChange={setProfileCallsignInput}
-        onSave={() => void onSaveProfile()}
+        onClose={() => {
+          setProfileEditModalOpen(false);
+          setFieldError({});
+        }}
+        initialName={session.name ?? ""}
+        initialCallsign={session.callsign ?? ""}
+        onSave={(values) => void onSaveProfile(values)}
         fieldError={fieldError}
       />
 

@@ -70,8 +70,6 @@ export default function ProfileUserInspectPage() {
   const [finalAttemptsPage, setFinalAttemptsPage] = useState(1);
   const [dutySaving, setDutySaving] = useState(false);
   const [dutyMessage, setDutyMessage] = useState("");
-  const [editName, setEditName] = useState("");
-  const [editCallsign, setEditCallsign] = useState("");
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileMessage, setProfileMessage] = useState("");
   const [profileEditModalOpen, setProfileEditModalOpen] = useState(false);
@@ -108,8 +106,6 @@ export default function ProfileUserInspectPage() {
         const duty_location: DutyLocation = u.duty_location === "deployment" ? "deployment" : "base";
         const unit_assignment = normalizeUnitAssignment(u.unit_assignment);
         setInspectUser({ ...u, duty_location, unit_assignment });
-        setEditName(String(u.name || ""));
-        setEditCallsign(String(u.callsign || ""));
         setRows(mapRows({ results: payload.results }).sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)));
       } catch {
         if (!cancelled) setError("network");
@@ -135,8 +131,6 @@ export default function ProfileUserInspectPage() {
             u.duty_location === "deployment" ? "deployment" : "base";
           const unit_assignment = normalizeUnitAssignment(u.unit_assignment);
           setInspectUser({ ...u, duty_location, unit_assignment });
-          setEditName(String(u.name || ""));
-          setEditCallsign(String(u.callsign || ""));
         } catch {
           /* ignore */
         }
@@ -366,18 +360,18 @@ export default function ProfileUserInspectPage() {
     }
   };
 
-  const onSaveProfileFields = async () => {
+  const onSaveProfileFields = async ({ name, callsign }: { name: string; callsign: string }) => {
     if (!canEditProfileFields || !inspectUser || profileSaving) return;
-    const name = editName.trim();
-    const callsign = editCallsign.trim();
+    const trimmedName = name.trim();
+    const trimmedCallsign = callsign.trim();
     const nextError: { name?: string; callsign?: string } = {};
-    if (name.length < 2) nextError.name = "Минимум 2 символа";
-    if (callsign.length < 2) nextError.callsign = "Минимум 2 символа";
+    if (trimmedName.length < 2) nextError.name = "Минимум 2 символа";
+    if (trimmedCallsign.length < 2) nextError.callsign = "Минимум 2 символа";
     if (nextError.name || nextError.callsign) {
       setFieldError(nextError);
       return;
     }
-    if (name === inspectUser.name && callsign === inspectUser.callsign) {
+    if (trimmedName === inspectUser.name && trimmedCallsign === inspectUser.callsign) {
       setProfileEditModalOpen(false);
       return;
     }
@@ -388,14 +382,14 @@ export default function ProfileUserInspectPage() {
       const response = await fetch(`/api/profile/user/${encodeURIComponent(userId)}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name, callsign }),
+        body: JSON.stringify({ name: trimmedName, callsign: trimmedCallsign }),
       });
       const payload = (await response.json()) as { ok?: boolean; error?: string };
       if (!response.ok || !payload.ok) {
         setProfileMessage(payload.error || "Не удалось сохранить профиль.");
         return;
       }
-      setInspectUser((prev) => (prev ? { ...prev, name, callsign } : prev));
+      setInspectUser((prev) => (prev ? { ...prev, name: trimmedName, callsign: trimmedCallsign } : prev));
       setProfileEditModalOpen(false);
     } catch {
       setProfileMessage("Ошибка сети. Повторите попытку.");
@@ -455,8 +449,6 @@ export default function ProfileUserInspectPage() {
                         title="Редактировать имя и позывной"
                         aria-label="Редактировать имя и позывной"
                         onClick={() => {
-                          setEditName(inspectUser.name || "");
-                          setEditCallsign(inspectUser.callsign || "");
                           setFieldError({});
                           setProfileMessage("");
                           setProfileEditModalOpen(true);
@@ -543,12 +535,14 @@ export default function ProfileUserInspectPage() {
 
           <ProfileNameEditModal
             open={profileEditModalOpen}
-            onClose={() => setProfileEditModalOpen(false)}
-            name={editName}
-            callsign={editCallsign}
-            onNameChange={setEditName}
-            onCallsignChange={setEditCallsign}
-            onSave={() => void onSaveProfileFields()}
+            onClose={() => {
+              setProfileEditModalOpen(false);
+              setFieldError({});
+              setProfileMessage("");
+            }}
+            initialName={inspectUser.name ?? ""}
+            initialCallsign={inspectUser.callsign ?? ""}
+            onSave={(values) => void onSaveProfileFields(values)}
             saving={profileSaving}
             fieldError={fieldError}
             message={profileMessage}
