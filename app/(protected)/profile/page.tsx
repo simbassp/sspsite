@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { Pencil } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { ProfileHeroLoginBlock } from "@/components/profile/ProfileHeroLoginBlock";
+import { ProfileNameEditModal } from "@/components/profile/ProfileNameEditModal";
 import { readClientSession } from "@/lib/client-auth";
 import { formatDate, formatDateTime, formatTotalTestDuration } from "@/lib/format";
 import { formatTestResultForType } from "@/lib/test-pass-rules";
@@ -41,6 +44,7 @@ export default function ProfilePage() {
   const [inviteInput, setInviteInput] = useState("");
   const [maxUsesInput, setMaxUsesInput] = useState("");
   const [adminMessage, setAdminMessage] = useState("");
+  const [profileEditModalOpen, setProfileEditModalOpen] = useState(false);
   const [emailInput, setEmailInput] = useState("");
   const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [oldEmailInput, setOldEmailInput] = useState("");
@@ -542,6 +546,7 @@ export default function ProfilePage() {
       callsign: result.callsign,
     });
     setSettingsMessage("Профиль сохранён");
+    setProfileEditModalOpen(false);
   };
 
   const onResetStats = async () => {
@@ -625,48 +630,6 @@ export default function ProfilePage() {
     <svg viewBox="0 0 24 24" aria-hidden="true" style={{ ...iconStroke(color), width: size, height: size }}>
       <circle cx="12" cy="8" r="4" />
       <path d="M4 20c1.8-3.6 4.2-5 8-5s6.2 1.4 8 5" />
-    </svg>
-  );
-
-  const LockIcon = ({ color, size = 20 }: { color: string; size?: number }) => (
-    <svg
-      viewBox="0 0 24 24"
-      width={size}
-      height={size}
-      aria-hidden="true"
-      style={{
-        display: "block",
-        color,
-        stroke: "currentColor",
-        fill: "none",
-        strokeWidth: 2,
-        strokeLinecap: "round",
-        strokeLinejoin: "round",
-      }}
-    >
-      <rect x="5" y="11" width="14" height="10" rx="2" />
-      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-    </svg>
-  );
-
-  const MailIcon = ({ color = "currentColor", size = 18 }: { color?: string; size?: number }) => (
-    <svg
-      viewBox="0 0 24 24"
-      width={size}
-      height={size}
-      aria-hidden="true"
-      style={{
-        display: "block",
-        color,
-        stroke: "currentColor",
-        fill: "none",
-        strokeWidth: 2,
-        strokeLinecap: "round",
-        strokeLinejoin: "round",
-      }}
-    >
-      <rect x="3" y="5" width="18" height="14" rx="2" />
-      <path d="m3 7 9 6 9-6" />
     </svg>
   );
 
@@ -769,7 +732,21 @@ export default function ProfilePage() {
             </div>
             <div className="profile-hero-main">
               <p className="profile-hero-kicker">Пользовательский профиль</p>
-              <p className="profile-hero-name">{profileNameInput || session.name}</p>
+              <div className="profile-hero-name-row">
+                <p className="profile-hero-name">{profileNameInput || session.name}</p>
+                <button
+                  type="button"
+                  className="btn profile-hero-edit-btn"
+                  title="Редактировать имя и позывной"
+                  aria-label="Редактировать имя и позывной"
+                  onClick={() => {
+                    setFieldError({});
+                    setProfileEditModalOpen(true);
+                  }}
+                >
+                  <Pencil width={16} height={16} strokeWidth={2} aria-hidden />
+                </button>
+              </div>
               <p className="profile-hero-callsign">
                 Позывной:{" "}
                 <strong>{(profileCallsignInput || session.callsign || "").trim() || "—"}</strong>
@@ -781,48 +758,56 @@ export default function ProfilePage() {
                 {session.position}
               </div>
             </div>
-            <div className="profile-hero-duty">
-              <p className="label profile-hero-duty-label">Подразделение</p>
-              <select
-                className="select profile-unit-select"
-                value={unitAssignment ?? ""}
-                onChange={(e) => void onUnitChange(e.target.value)}
-                disabled={unitSaving}
-                aria-label="Подразделение"
-              >
-                <option value="">Не указано</option>
-                {UNIT_ASSIGNMENT_OPTIONS.map((unit) => (
-                  <option key={unit} value={unit}>
-                    {unitAssignmentLabel[unit]}
-                  </option>
-                ))}
-              </select>
-              {!!unitSaveError && (
-                <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0, color: "var(--bad)", maxWidth: 280 }}>
-                  {unitSaveError}
-                </p>
-              )}
-            </div>
-            <div className="profile-hero-duty">
-              <p className="label profile-hero-duty-label">Место положения</p>
-              <div className="profile-duty-toggle" role="group" aria-label="Место положения">
-                <button
-                  type="button"
-                  className={`profile-duty-option${dutyLocation === "base" ? " profile-duty-option--active" : " profile-duty-option--inactive"}`}
-                  onClick={() => void onDutyChange("base")}
-                  disabled={dutySaving}
+            <div className="profile-hero-controls">
+              <div className="profile-hero-duty">
+                <p className="label profile-hero-duty-label">Подразделение</p>
+                <select
+                  className="select profile-unit-select"
+                  value={unitAssignment ?? ""}
+                  onChange={(e) => void onUnitChange(e.target.value)}
+                  disabled={unitSaving}
+                  aria-label="Подразделение"
                 >
-                  На базе
-                </button>
-                <button
-                  type="button"
-                  className={`profile-duty-option${dutyLocation === "deployment" ? " profile-duty-option--active" : " profile-duty-option--inactive"}`}
-                  onClick={() => void onDutyChange("deployment")}
-                  disabled={dutySaving}
-                >
-                  В командировке
-                </button>
+                  <option value="">Не указано</option>
+                  {UNIT_ASSIGNMENT_OPTIONS.map((unit) => (
+                    <option key={unit} value={unit}>
+                      {unitAssignmentLabel[unit]}
+                    </option>
+                  ))}
+                </select>
+                {!!unitSaveError && (
+                  <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0, color: "var(--bad)", maxWidth: 280 }}>
+                    {unitSaveError}
+                  </p>
+                )}
               </div>
+              <div className="profile-hero-duty">
+                <p className="label profile-hero-duty-label">Место положения</p>
+                <div className="profile-duty-toggle" role="group" aria-label="Место положения">
+                  <button
+                    type="button"
+                    className={`profile-duty-option${dutyLocation === "base" ? " profile-duty-option--active" : " profile-duty-option--inactive"}`}
+                    onClick={() => void onDutyChange("base")}
+                    disabled={dutySaving}
+                  >
+                    На базе
+                  </button>
+                  <button
+                    type="button"
+                    className={`profile-duty-option${dutyLocation === "deployment" ? " profile-duty-option--active" : " profile-duty-option--inactive"}`}
+                    onClick={() => void onDutyChange("deployment")}
+                    disabled={dutySaving}
+                  >
+                    В командировке
+                  </button>
+                </div>
+              </div>
+              <ProfileHeroLoginBlock
+                email={emailInput}
+                onChangeEmail={() => setEmailModalOpen(true)}
+                onChangePassword={() => setPasswordModalOpen(true)}
+                message={settingsMessage}
+              />
             </div>
             <div className="profile-hero-divider" aria-hidden="true" />
             <div className="profile-hero-status">
@@ -846,83 +831,16 @@ export default function ProfilePage() {
 
       {session?.id ? <PersonnelProfileStats userId={session.id} /> : null}
 
-      <article className="card" style={{ marginTop: 12 }}>
-        <div className="card-body">
-          <h3>Настройки аккаунта</h3>
-          <p className="page-subtitle" style={{ marginTop: 8 }}>
-            Здесь можно обновить данные профиля и параметры входа.
-          </p>
-
-          <div className="form" style={{ marginTop: 10 }}>
-            <section className="profile-settings-section">
-              <h4 className="profile-settings-section-title">
-                <UserIcon color="currentColor" size={20} />
-                Личные данные
-              </h4>
-              <div className="grid grid-two">
-                <div>
-                  <label className="label">Имя</label>
-                  <input
-                    className="input"
-                    value={profileNameInput}
-                    onChange={(e) => setProfileNameInput(e.target.value)}
-                    placeholder="Ваше имя"
-                  />
-                  {!!fieldError.name && (
-                    <p className="page-subtitle" style={{ marginTop: 4, marginBottom: 0, color: "var(--bad)" }}>
-                      {fieldError.name}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <label className="label">Позывной</label>
-                  <input
-                    className="input"
-                    value={profileCallsignInput}
-                    onChange={(e) => setProfileCallsignInput(e.target.value)}
-                    placeholder="Ваш позывной"
-                  />
-                  {!!fieldError.callsign && (
-                    <p className="page-subtitle" style={{ marginTop: 4, marginBottom: 0, color: "var(--bad)" }}>
-                      {fieldError.callsign}
-                    </p>
-                  )}
-                </div>
-              </div>
-              <button className="btn btn-primary profile-save-btn" type="button" onClick={() => void onSaveProfile()}>
-                Сохранить профиль
-              </button>
-            </section>
-
-            <section className="profile-settings-section">
-              <h4 className="profile-settings-section-title">
-                <LockIcon color="currentColor" size={20} />
-                Данные входа
-              </h4>
-              <label className="label">Email для входа</label>
-              <input
-                className="input"
-                type="email"
-                value={emailInput || "не определен"}
-                readOnly
-                placeholder="name@example.com"
-              />
-              <div className="profile-login-row">
-                <button className="btn profile-btn-with-icon" type="button" onClick={() => setEmailModalOpen(true)}>
-                  <MailIcon size={18} />
-                  Сменить почту
-                </button>
-                <button className="btn profile-btn-with-icon" type="button" onClick={() => setPasswordModalOpen(true)}>
-                  <LockIcon color="currentColor" size={18} />
-                  Сменить пароль
-                </button>
-              </div>
-            </section>
-
-            {settingsMessage && <p className="page-subtitle">{settingsMessage}</p>}
-          </div>
-        </div>
-      </article>
+      <ProfileNameEditModal
+        open={profileEditModalOpen}
+        onClose={() => setProfileEditModalOpen(false)}
+        name={profileNameInput}
+        callsign={profileCallsignInput}
+        onNameChange={setProfileNameInput}
+        onCallsignChange={setProfileCallsignInput}
+        onSave={() => void onSaveProfile()}
+        fieldError={fieldError}
+      />
 
       <article className="card profile-danger-card" style={{ marginTop: 12 }}>
         <div className="card-body profile-danger-inner">

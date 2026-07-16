@@ -602,6 +602,69 @@ html[data-theme="dark"] .select option {
   word-break: break-word;
 }
 
+.profile-page .profile-hero-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.profile-page .profile-hero-name-row .profile-hero-name {
+  margin: 0;
+}
+
+.profile-page .profile-hero-edit-btn {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.profile-page .profile-hero-controls {
+  flex: 0 1 260px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-self: stretch;
+  justify-content: center;
+}
+
+.profile-page .profile-hero-controls .profile-hero-duty {
+  flex: 0 0 auto;
+  align-self: stretch;
+}
+
+.profile-page .profile-hero-login {
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.profile-page .profile-hero-login-label {
+  margin: 0 0 4px;
+  font-size: 12px;
+}
+
+.profile-page .profile-hero-login-email {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  word-break: break-all;
+}
+
+.profile-page .profile-hero-login .profile-login-row {
+  margin-top: 0;
+}
+
+.profile-page .profile-hero-login-btn {
+  font-size: 12px;
+  padding: 6px 10px;
+}
+
 .profile-page .profile-hero-callsign {
   margin: 6px 0 0;
   font-size: 14px;
@@ -780,11 +843,18 @@ html[data-theme="dark"] .unit-assignment-badge {
     display: none;
   }
 
-  .profile-page .profile-hero-duty {
+  .profile-page .profile-hero-controls {
     flex: 1 1 100%;
     width: 100%;
     padding-top: 12px;
     border-top: 1px solid var(--line);
+  }
+
+  .profile-page .profile-hero-duty {
+    flex: 1 1 100%;
+    width: 100%;
+    padding-top: 0;
+    border-top: none;
   }
 
   .profile-page .profile-duty-toggle {

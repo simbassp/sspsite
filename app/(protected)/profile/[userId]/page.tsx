@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { Pencil } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { ProfileNameEditModal } from "@/components/profile/ProfileNameEditModal";
 import { readClientSession } from "@/lib/client-auth";
 import { formatDateTime, formatTotalTestDuration } from "@/lib/format";
 import { formatTestResultForType } from "@/lib/test-pass-rules";
@@ -72,6 +74,8 @@ export default function ProfileUserInspectPage() {
   const [editCallsign, setEditCallsign] = useState("");
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileMessage, setProfileMessage] = useState("");
+  const [profileEditModalOpen, setProfileEditModalOpen] = useState(false);
+  const [fieldError, setFieldError] = useState<{ name?: string; callsign?: string }>({});
 
   useEffect(() => {
     if (!session || !userId || !canOpen) return;
@@ -366,16 +370,20 @@ export default function ProfileUserInspectPage() {
     if (!canEditProfileFields || !inspectUser || profileSaving) return;
     const name = editName.trim();
     const callsign = editCallsign.trim();
-    if (!name || !callsign) {
-      setProfileMessage("Имя и позывной обязательны.");
+    const nextError: { name?: string; callsign?: string } = {};
+    if (name.length < 2) nextError.name = "Минимум 2 символа";
+    if (callsign.length < 2) nextError.callsign = "Минимум 2 символа";
+    if (nextError.name || nextError.callsign) {
+      setFieldError(nextError);
       return;
     }
     if (name === inspectUser.name && callsign === inspectUser.callsign) {
-      setProfileMessage("Изменений нет.");
+      setProfileEditModalOpen(false);
       return;
     }
     setProfileSaving(true);
     setProfileMessage("");
+    setFieldError({});
     try {
       const response = await fetch(`/api/profile/user/${encodeURIComponent(userId)}`, {
         method: "PATCH",
@@ -388,7 +396,7 @@ export default function ProfileUserInspectPage() {
         return;
       }
       setInspectUser((prev) => (prev ? { ...prev, name, callsign } : prev));
-      setProfileMessage("Имя и позывной обновлены.");
+      setProfileEditModalOpen(false);
     } catch {
       setProfileMessage("Ошибка сети. Повторите попытку.");
     } finally {
@@ -438,49 +446,29 @@ export default function ProfileUserInspectPage() {
                 </div>
                 <div className="profile-hero-main">
                   <p className="profile-hero-kicker">Пользовательский профиль</p>
-                  {canEditProfileFields ? (
-                    <div className="form" style={{ marginTop: 8, maxWidth: 380 }}>
-                      <label className="label" htmlFor="inspect-name">
-                        Имя
-                      </label>
-                      <input
-                        id="inspect-name"
-                        className="input"
-                        value={editName}
-                        onChange={(e) => setEditName(e.target.value)}
-                        placeholder="Введите имя"
-                        disabled={profileSaving}
-                      />
-                      <label className="label" htmlFor="inspect-callsign">
-                        Позывной
-                      </label>
-                      <input
-                        id="inspect-callsign"
-                        className="input"
-                        value={editCallsign}
-                        onChange={(e) => setEditCallsign(e.target.value)}
-                        placeholder="Введите позывной"
-                        disabled={profileSaving}
-                      />
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        <button className="btn btn-primary" type="button" onClick={() => void onSaveProfileFields()} disabled={profileSaving}>
-                          {profileSaving ? "Сохранение..." : "Сохранить"}
-                        </button>
-                      </div>
-                      {profileMessage ? (
-                        <p className="page-subtitle" style={{ margin: 0, color: profileMessage.includes("обновлены") ? "var(--ok)" : "var(--bad)" }}>
-                          {profileMessage}
-                        </p>
-                      ) : null}
-                    </div>
-                  ) : (
-                    <>
-                      <p className="profile-hero-name">{inspectUser.name || "—"}</p>
-                      <p className="profile-hero-callsign">
-                        Позывной: <strong>{inspectUser.callsign.trim() || "—"}</strong>
-                      </p>
-                    </>
-                  )}
+                  <div className="profile-hero-name-row">
+                    <p className="profile-hero-name">{inspectUser.name || "—"}</p>
+                    {canEditProfileFields && (
+                      <button
+                        type="button"
+                        className="btn profile-hero-edit-btn"
+                        title="Редактировать имя и позывной"
+                        aria-label="Редактировать имя и позывной"
+                        onClick={() => {
+                          setEditName(inspectUser.name || "");
+                          setEditCallsign(inspectUser.callsign || "");
+                          setFieldError({});
+                          setProfileMessage("");
+                          setProfileEditModalOpen(true);
+                        }}
+                      >
+                        <Pencil width={16} height={16} strokeWidth={2} aria-hidden />
+                      </button>
+                    )}
+                  </div>
+                  <p className="profile-hero-callsign">
+                    Позывной: <strong>{inspectUser.callsign.trim() || "—"}</strong>
+                  </p>
                   <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
                     @{inspectUser.login}
                     {inspectUser.status === "inactive" ? (
@@ -496,45 +484,47 @@ export default function ProfileUserInspectPage() {
                     {inspectUser.position}
                   </div>
                 </div>
-                <div className="profile-hero-duty">
-                  <p className="label profile-hero-duty-label">Подразделение</p>
-                  <span className="unit-assignment-badge">
-                    {unitAssignmentLabelOrEmpty(inspectUser.unit_assignment)}
-                  </span>
-                </div>
-                <div className="profile-hero-duty">
-                  <p className="label profile-hero-duty-label">Место положения</p>
-                  {canEditDutyForOthers ? (
-                    <>
-                      <div className="profile-duty-toggle" role="group" aria-label="Место положения сотрудника">
-                        <button
-                          type="button"
-                          className={`profile-duty-option${inspectUser.duty_location === "base" ? " profile-duty-option--active" : " profile-duty-option--inactive"}`}
-                          onClick={() => void onDutyChangeForUser("base")}
-                          disabled={dutySaving}
-                        >
-                          На базе
-                        </button>
-                        <button
-                          type="button"
-                          className={`profile-duty-option${inspectUser.duty_location === "deployment" ? " profile-duty-option--active" : " profile-duty-option--inactive"}`}
-                          onClick={() => void onDutyChangeForUser("deployment")}
-                          disabled={dutySaving}
-                        >
-                          В командировке
-                        </button>
-                      </div>
-                      {!!dutyMessage && (
-                        <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0, color: "var(--bad)" }}>
-                          {dutyMessage}
-                        </p>
-                      )}
-                    </>
-                  ) : (
-                    <span className={`duty-location-badge duty-location-badge--${inspectUser.duty_location}`}>
-                      {dutyLocationLabel[inspectUser.duty_location]}
+                <div className="profile-hero-controls">
+                  <div className="profile-hero-duty">
+                    <p className="label profile-hero-duty-label">Подразделение</p>
+                    <span className="unit-assignment-badge">
+                      {unitAssignmentLabelOrEmpty(inspectUser.unit_assignment)}
                     </span>
-                  )}
+                  </div>
+                  <div className="profile-hero-duty">
+                    <p className="label profile-hero-duty-label">Место положения</p>
+                    {canEditDutyForOthers ? (
+                      <>
+                        <div className="profile-duty-toggle" role="group" aria-label="Место положения сотрудника">
+                          <button
+                            type="button"
+                            className={`profile-duty-option${inspectUser.duty_location === "base" ? " profile-duty-option--active" : " profile-duty-option--inactive"}`}
+                            onClick={() => void onDutyChangeForUser("base")}
+                            disabled={dutySaving}
+                          >
+                            На базе
+                          </button>
+                          <button
+                            type="button"
+                            className={`profile-duty-option${inspectUser.duty_location === "deployment" ? " profile-duty-option--active" : " profile-duty-option--inactive"}`}
+                            onClick={() => void onDutyChangeForUser("deployment")}
+                            disabled={dutySaving}
+                          >
+                            В командировке
+                          </button>
+                        </div>
+                        {!!dutyMessage && (
+                          <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0, color: "var(--bad)" }}>
+                            {dutyMessage}
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <span className={`duty-location-badge duty-location-badge--${inspectUser.duty_location}`}>
+                        {dutyLocationLabel[inspectUser.duty_location]}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="profile-hero-divider" aria-hidden="true" />
                 <div className="profile-hero-status">
@@ -552,6 +542,19 @@ export default function ProfileUserInspectPage() {
               </div>
             </div>
           </article>
+
+          <ProfileNameEditModal
+            open={profileEditModalOpen}
+            onClose={() => setProfileEditModalOpen(false)}
+            name={editName}
+            callsign={editCallsign}
+            onNameChange={setEditName}
+            onCallsignChange={setEditCallsign}
+            onSave={() => void onSaveProfileFields()}
+            saving={profileSaving}
+            fieldError={fieldError}
+            message={profileMessage}
+          />
 
           {userId ? <PersonnelProfileStats userId={userId} /> : null}
 
