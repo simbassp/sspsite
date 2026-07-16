@@ -44,7 +44,7 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
     const userPrimary = await supabase
       .from("app_users")
       .select(
-        "id,name,callsign,position,role,status,login,is_online,last_seen_at,duty_location,unit_assignment",
+        "id,name,callsign,position,role,status,login,is_online,last_seen_at,duty_location,unit_assignment,rota_platoon,rota_section",
       )
       .eq("id", userId)
       .maybeSingle();
@@ -114,6 +114,8 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
         : "base";
 
     const unitAssignment = unitFromDb ? normalizeUnitAssignment(userRow.unit_assignment) : null;
+    const rotaPlatoon = userRow.rota_platoon != null ? Number(userRow.rota_platoon) : null;
+    const rotaSection = userRow.rota_section != null ? Number(userRow.rota_section) : null;
 
     return Response.json({
       ok: true,
@@ -128,6 +130,8 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
         is_online: isOnline,
         duty_location: dutyLocation,
         unit_assignment: unitAssignment,
+        rota_platoon: rotaPlatoon,
+        rota_section: rotaSection,
       },
       results: resultsRows.map((r) => ({
         id: r.id,

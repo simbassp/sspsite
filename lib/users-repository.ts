@@ -874,6 +874,42 @@ export async function updateCurrentUserUnitAssignment(unit: UnitAssignment | nul
   }
 }
 
+export async function updateCurrentUserRotaUnit(input: {
+  rotaPlatoon: number | null;
+  rotaSection: number | null;
+}) {
+  if (!isSupabaseConfigured) {
+    return { ok: false as const, error: "Доступно только при подключённой базе данных." };
+  }
+
+  try {
+    const response = await fetch("/api/profile/rota-unit", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    const payload = (await response.json()) as {
+      ok?: boolean;
+      error?: string;
+      rotaPlatoon?: number | null;
+      rotaSection?: number | null;
+    };
+    if (!response.ok || !payload.ok) {
+      return {
+        ok: false as const,
+        error: payload.error || "Не удалось сохранить взвод и отделение.",
+      };
+    }
+    return {
+      ok: true as const,
+      rotaPlatoon: payload.rotaPlatoon ?? input.rotaPlatoon,
+      rotaSection: payload.rotaSection ?? input.rotaSection,
+    };
+  } catch {
+    return { ok: false as const, error: "Не удалось сохранить взвод и отделение." };
+  }
+}
+
 export async function registerUser(payload: {
   email: string;
   login: string;

@@ -5,6 +5,7 @@ import { Pencil } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ProfileNameEditModal } from "@/components/profile/ProfileNameEditModal";
+import { ProfileRotaUnitFields } from "@/components/profile/ProfileRotaUnitFields";
 import { readClientSession } from "@/lib/client-auth";
 import { formatDateTime, formatTotalTestDuration } from "@/lib/format";
 import { formatTestResultForType } from "@/lib/test-pass-rules";
@@ -20,6 +21,7 @@ import {
 import { getPositionBadgeClass } from "@/lib/position-ui";
 import { canManageUsers, canResetTestResults, canViewUserList, canModeratePersonnel } from "@/lib/permissions";
 import { removeTestResultsForUser } from "@/lib/storage";
+import { rotaUnitCompactLabel, type RotaPlatoon, type RotaSection } from "@/lib/rota-unit";
 import { DutyLocation, TestResult, TestResultsResetScope, UnitAssignment } from "@/lib/types";
 
 const RESET_SCOPE_LABELS: Record<TestResultsResetScope, string> = {
@@ -39,6 +41,8 @@ type InspectUser = {
   is_online: boolean;
   duty_location: DutyLocation;
   unit_assignment: UnitAssignment | null;
+  rota_platoon?: number | null;
+  rota_section?: number | null;
 };
 
 function mapRows(payload: { results?: Array<Record<string, unknown>> }): TestResult[] {
@@ -74,6 +78,7 @@ export default function ProfileUserInspectPage() {
     : false;
   const canEditDutyForOthers = session ? canManageUsers(session) : false;
   const canEditProfileFields = session ? canManageUsers(session) : false;
+  const canEditRotaForOthers = session ? canManageUsers(session) || canModeratePersonnel(session) : false;
   const canResetStats = session ? canResetTestResults(session) : false;
 
   const [loading, setLoading] = useState(true);
@@ -95,6 +100,10 @@ export default function ProfileUserInspectPage() {
   const [isResettingStats, setIsResettingStats] = useState(false);
   const [resetStatsMessage, setResetStatsMessage] = useState("");
   const resetStatsModal = useResetTestStatsModal("all");
+  const [rotaPlatoon, setRotaPlatoon] = useState<RotaPlatoon | null>(null);
+  const [rotaSection, setRotaSection] = useState<RotaSection | null>(null);
+  const [rotaSaving, setRotaSaving] = useState(false);
+  const [rotaSaveError, setRotaSaveError] = useState("");
 
   useEffect(() => {
     if (!session || !userId || !canOpen) return;
@@ -127,6 +136,12 @@ export default function ProfileUserInspectPage() {
         const duty_location: DutyLocation = u.duty_location === "deployment" ? "deployment" : "base";
         const unit_assignment = normalizeUnitAssignment(u.unit_assignment);
         setInspectUser({ ...u, duty_location, unit_assignment });
+        setRotaPlatoon(u.rota_platoon === 1 || u.rota_platoon === 2 ? u.rota_platoon : null);
+        setRotaSection(
+          u.rota_section === 1 || u.rota_section === 2 || u.rota_section === 3 || u.rota_section === 4
+            ? u.rota_section
+            : null,
+        );
         setRows(mapRows({ results: payload.results }).sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)));
       } catch {
         if (!cancelled) setError("network");
@@ -152,6 +167,14 @@ export default function ProfileUserInspectPage() {
             u.duty_location === "deployment" ? "deployment" : "base";
           const unit_assignment = normalizeUnitAssignment(u.unit_assignment);
           setInspectUser({ ...u, duty_location, unit_assignment });
+          if (!rotaSaving) {
+            setRotaPlatoon(u.rota_platoon === 1 || u.rota_platoon === 2 ? u.rota_platoon : null);
+            setRotaSection(
+              u.rota_section === 1 || u.rota_section === 2 || u.rota_section === 3 || u.rota_section === 4
+                ? u.rota_section
+                : null,
+            );
+          }
         } catch {
           /* ignore */
         }
@@ -227,6 +250,66 @@ export default function ProfileUserInspectPage() {
       setFinalAttemptsPage(finalAttemptsTotalPages);
     }
   }, [finalAttemptsPage, finalAttemptsTotalPages, showAllFinalAttempts]);
+
+  const saveRotaForUser = async (nextPlatoon: RotaPlatoon | null, nextSection: RotaSection | null) => {
+    if (!userId || !canEditRotaForOthers || inspectUser?.unit_assignment !== "company_4" || rotaSaving) {
+      return false;
+    }
+    setRotaSaving(true);
+    setRotaSaveError("");
+    try {
+      const response = await fetch(`/api/profile/user/${encodeURIComponent(userId)}/rota-unit`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ rotaPlatoon: nextPlatoon, rotaSection: nextSection }),
+      });
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        error?: string;
+        rotaPlatoon?: number | null;
+        rotaSection?: number | null;
+      };
+      if (!response.ok || !payload.ok) {
+        setRotaSaveError(payload.error || "Не удалось сохранить взвод и отделение.");
+        return false;
+      }
+      setRotaPlatoon(
+        payload.rotaPlatoon === 1 || payload.rotaPlatoon === 2 ? payload.rotaPlatoon : null,
+      );
+      setRotaSection(
+        payload.rotaSection === 1 ||
+          payload.rotaSection === 2 ||
+          payload.rotaSection === 3 ||
+          payload.rotaSection === 4
+          ? payload.rotaSection
+          : null,
+      );
+      return true;
+    } catch {
+      setRotaSaveError("Ошибка сети. Попробуйте ещё раз.");
+      return false;
+    } finally {
+      setRotaSaving(false);
+    }
+  };
+
+  const onRotaPlatoonChangeForUser = (next: RotaPlatoon | null) => {
+    const prev = rotaPlatoon;
+    setRotaPlatoon(next);
+    void (async () => {
+      const ok = await saveRotaForUser(next, rotaSection);
+      if (!ok) setRotaPlatoon(prev);
+    })();
+  };
+
+  const onRotaSectionChangeForUser = (next: RotaSection | null) => {
+    const prev = rotaSection;
+    setRotaSection(next);
+    void (async () => {
+      const ok = await saveRotaForUser(rotaPlatoon, next);
+      if (!ok) setRotaSection(prev);
+    })();
+  };
 
   const reloadInspectUserResults = async () => {
     const response = await fetch(`/api/profile/user/${encodeURIComponent(userId)}`, { cache: "no-store" });
@@ -556,6 +639,13 @@ export default function ProfileUserInspectPage() {
                     >
                       {dutyLocationLabel[inspectUser.duty_location]}
                     </span>
+                    <span className="unit-assignment-badge">
+                      {unitAssignmentLabelOrEmpty(inspectUser.unit_assignment)}
+                    </span>
+                    {inspectUser.unit_assignment === "company_4" &&
+                    rotaUnitCompactLabel(rotaPlatoon, rotaSection) ? (
+                      <span className="profile-rota-badge">{rotaUnitCompactLabel(rotaPlatoon, rotaSection)}</span>
+                    ) : null}
                   </div>
                   <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
                     @{inspectUser.login}
@@ -579,6 +669,23 @@ export default function ProfileUserInspectPage() {
                       {unitAssignmentLabelOrEmpty(inspectUser.unit_assignment)}
                     </span>
                   </div>
+                  {inspectUser.unit_assignment === "company_4" && canEditRotaForOthers ? (
+                    <ProfileRotaUnitFields
+                      platoon={rotaPlatoon}
+                      section={rotaSection}
+                      saving={rotaSaving}
+                      error={rotaSaveError}
+                      onPlatoonChange={onRotaPlatoonChangeForUser}
+                      onSectionChange={onRotaSectionChangeForUser}
+                    />
+                  ) : inspectUser.unit_assignment === "company_4" ? (
+                    <div className="profile-hero-duty">
+                      <p className="label profile-hero-duty-label">Взвод / отделение</p>
+                      <span className="profile-rota-badge profile-rota-badge--static">
+                        {rotaUnitCompactLabel(rotaPlatoon, rotaSection) || "Не указано"}
+                      </span>
+                    </div>
+                  ) : null}
                   <div className="profile-hero-duty">
                     <p className="label profile-hero-duty-label">Место положения</p>
                     {canEditDutyForOthers ? (

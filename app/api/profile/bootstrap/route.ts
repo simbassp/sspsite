@@ -36,13 +36,15 @@ export async function GET() {
     }
     const profilePrimaryQ = await supabase
       .from("app_users")
-      .select("auth_user_id,duty_location,unit_assignment")
+      .select("auth_user_id,duty_location,unit_assignment,rota_platoon,rota_section")
       .eq("id", session.id)
       .maybeSingle();
     let profileRow: Record<string, unknown> | null = (profilePrimaryQ.data || null) as Record<string, unknown> | null;
     let profileError: string | null = profilePrimaryQ.error?.message || null;
     let dutyLocation: "base" | "deployment" = "base";
     let unitAssignment: UnitAssignment | null = null;
+    let rotaPlatoon: number | null = null;
+    let rotaSection: number | null = null;
     if (profilePrimaryQ.error && isMissingColumnError(profilePrimaryQ.error.message)) {
       const profileLegacyQ = await supabase.from("app_users").select("auth_user_id").eq("id", session.id).maybeSingle();
       profileRow = (profileLegacyQ.data || null) as Record<string, unknown> | null;
@@ -52,6 +54,8 @@ export async function GET() {
         dutyLocation = profileRow.duty_location.trim().toLowerCase() === "deployment" ? "deployment" : "base";
       }
       unitAssignment = normalizeUnitAssignment(profileRow.unit_assignment);
+      rotaPlatoon = profileRow.rota_platoon != null ? Number(profileRow.rota_platoon) : null;
+      rotaSection = profileRow.rota_section != null ? Number(profileRow.rota_section) : null;
     }
 
     if (resultsError || profileError) {
@@ -85,6 +89,8 @@ export async function GET() {
       email,
       dutyLocation,
       unitAssignment,
+      rotaPlatoon,
+      rotaSection,
       results: resultsRows.map((r) => ({
         id: r.id,
         user_id: r.user_id,

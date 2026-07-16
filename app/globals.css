@@ -850,6 +850,49 @@ html[data-theme="dark"] .unit-assignment-badge {
   padding: 5px 8px;
 }
 
+.profile-page .profile-hero-rota {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 10px;
+  align-items: start;
+}
+
+.profile-page .profile-hero-rota__field {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.profile-page .profile-hero-rota__error {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 11px;
+}
+
+.profile-rota-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  width: fit-content;
+  max-width: 100%;
+  background: rgba(124, 58, 237, 0.12);
+  color: #6d28d9;
+  border: 1px solid rgba(124, 58, 237, 0.32);
+}
+
+html[data-theme="dark"] .profile-rota-badge {
+  color: #c4b5fd;
+}
+
+.profile-rota-badge--static {
+  margin-top: 2px;
+}
+
 @media (max-width: 700px) {
   .profile-page .profile-hero-controls {
     flex: 1 1 100%;
@@ -868,6 +911,10 @@ html[data-theme="dark"] .unit-assignment-badge {
   .profile-page .profile-duty-option {
     flex: 1 1 calc(50% - 2px);
     min-width: 0;
+  }
+
+  .profile-page .profile-hero-rota {
+    grid-template-columns: 1fr;
   }
 }
 

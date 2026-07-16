@@ -32,9 +32,14 @@ export async function PATCH(request: Request) {
 
   try {
     const supabase = getServerSupabaseServiceClient();
+    const updatePayload: Record<string, unknown> = { unit_assignment: unit };
+    if (unit !== "company_4") {
+      updatePayload.rota_platoon = null;
+      updatePayload.rota_section = null;
+    }
     const upd = await supabase
       .from("app_users")
-      .update({ unit_assignment: unit })
+      .update(updatePayload)
       .eq("id", session.id)
       .select("id")
       .maybeSingle();

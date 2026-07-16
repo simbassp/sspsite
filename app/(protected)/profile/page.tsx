@@ -5,6 +5,7 @@ import { Pencil } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ProfileHeroLoginBlock } from "@/components/profile/ProfileHeroLoginBlock";
 import { ProfileNameEditModal } from "@/components/profile/ProfileNameEditModal";
+import { ProfileRotaUnitFields } from "@/components/profile/ProfileRotaUnitFields";
 import { readClientSession } from "@/lib/client-auth";
 import { formatDate, formatDateTime, formatTotalTestDuration } from "@/lib/format";
 import { formatTestResultForType } from "@/lib/test-pass-rules";
@@ -24,6 +25,7 @@ import {
   updateCurrentUserEmail,
   updateCurrentUserPassword,
   updateCurrentUserPasswordWithOldPassword,
+  updateCurrentUserRotaUnit,
 } from "@/lib/users-repository";
 import { PersonnelProfileStats, type PersonnelActivityData } from "@/components/personnel/PersonnelProfileStats";
 import { PersonnelTestActivityBlock } from "@/components/personnel/PersonnelTestActivityBlock";
@@ -41,6 +43,7 @@ import {
   unitAssignmentLabelOrEmpty,
 } from "@/lib/unit-assignment";
 import { removeTestResultsForUser } from "@/lib/storage";
+import { rotaUnitCompactLabel, type RotaPlatoon, type RotaSection } from "@/lib/rota-unit";
 import { DutyLocation, TestResult, TestResultsResetScope, UnitAssignment } from "@/lib/types";
 
 function mapBootstrapResults(raw: Array<Record<string, unknown>>): TestResult[] {
@@ -104,6 +107,10 @@ export default function ProfilePage() {
   const [unitAssignment, setUnitAssignment] = useState<UnitAssignment | null>(null);
   const [unitSaving, setUnitSaving] = useState(false);
   const [unitSaveError, setUnitSaveError] = useState("");
+  const [rotaPlatoon, setRotaPlatoon] = useState<RotaPlatoon | null>(null);
+  const [rotaSection, setRotaSection] = useState<RotaSection | null>(null);
+  const [rotaSaving, setRotaSaving] = useState(false);
+  const [rotaSaveError, setRotaSaveError] = useState("");
   const [dutySaving, setDutySaving] = useState(false);
   const [fieldError, setFieldError] = useState<{ name?: string; callsign?: string }>({});
   const [profileSaving, setProfileSaving] = useState(false);
@@ -138,6 +145,8 @@ export default function ProfilePage() {
           email?: string;
           dutyLocation?: DutyLocation;
           unitAssignment?: UnitAssignment | null;
+          rotaPlatoon?: number | null;
+          rotaSection?: number | null;
           results?: Array<Record<string, unknown>>;
           inviteCodes?: Array<Record<string, unknown>>;
         };
@@ -171,6 +180,21 @@ export default function ProfilePage() {
           setUnitAssignment(null);
         } else if (UNIT_ASSIGNMENT_OPTIONS.includes(payload.unitAssignment)) {
           setUnitAssignment(payload.unitAssignment);
+        }
+        if (payload.rotaPlatoon === 1 || payload.rotaPlatoon === 2) {
+          setRotaPlatoon(payload.rotaPlatoon);
+        } else {
+          setRotaPlatoon(null);
+        }
+        if (
+          payload.rotaSection === 1 ||
+          payload.rotaSection === 2 ||
+          payload.rotaSection === 3 ||
+          payload.rotaSection === 4
+        ) {
+          setRotaSection(payload.rotaSection);
+        } else {
+          setRotaSection(null);
         }
         if (typeof payload.email === "string" && payload.email) {
           setEmailInput(payload.email);
@@ -551,10 +575,55 @@ export default function ProfilePage() {
       setUnitSaveError(res.error);
       return;
     }
+    if (next !== "company_4") {
+      setRotaPlatoon(null);
+      setRotaSection(null);
+      setRotaSaveError("");
+    }
     persistSession({
       ...session,
       unitAssignment: res.unitAssignment ?? next,
     });
+  };
+
+  const saveRotaUnit = async (nextPlatoon: RotaPlatoon | null, nextSection: RotaSection | null) => {
+    if (unitAssignment !== "company_4" || rotaSaving) return false;
+    setRotaSaving(true);
+    setRotaSaveError("");
+    const res = await updateCurrentUserRotaUnit({
+      rotaPlatoon: nextPlatoon,
+      rotaSection: nextSection,
+    });
+    setRotaSaving(false);
+    if (!res.ok) {
+      setRotaSaveError(res.error);
+      return false;
+    }
+    setRotaPlatoon((res.rotaPlatoon === 1 || res.rotaPlatoon === 2 ? res.rotaPlatoon : null) as RotaPlatoon | null);
+    setRotaSection(
+      (res.rotaSection === 1 || res.rotaSection === 2 || res.rotaSection === 3 || res.rotaSection === 4
+        ? res.rotaSection
+        : null) as RotaSection | null,
+    );
+    return true;
+  };
+
+  const onRotaPlatoonChange = (next: RotaPlatoon | null) => {
+    const prev = rotaPlatoon;
+    setRotaPlatoon(next);
+    void (async () => {
+      const ok = await saveRotaUnit(next, rotaSection);
+      if (!ok) setRotaPlatoon(prev);
+    })();
+  };
+
+  const onRotaSectionChange = (next: RotaSection | null) => {
+    const prev = rotaSection;
+    setRotaSection(next);
+    void (async () => {
+      const ok = await saveRotaUnit(rotaPlatoon, next);
+      if (!ok) setRotaSection(prev);
+    })();
   };
 
   const onSaveProfile = async ({ name, callsign }: { name: string; callsign: string }) => {
@@ -793,6 +862,9 @@ export default function ProfilePage() {
                   {dutyLocationLabel[dutyLocation]}
                 </span>
                 <span className="unit-assignment-badge">{unitAssignmentLabelOrEmpty(unitAssignment)}</span>
+                {unitAssignment === "company_4" && rotaUnitCompactLabel(rotaPlatoon, rotaSection) ? (
+                  <span className="profile-rota-badge">{rotaUnitCompactLabel(rotaPlatoon, rotaSection)}</span>
+                ) : null}
               </div>
               <div
                 className={`admin-users-position-badge ${getPositionBadgeClass(session.position)}`}
@@ -824,6 +896,16 @@ export default function ProfilePage() {
                   </p>
                 )}
               </div>
+              {unitAssignment === "company_4" && (
+                <ProfileRotaUnitFields
+                  platoon={rotaPlatoon}
+                  section={rotaSection}
+                  saving={rotaSaving}
+                  error={rotaSaveError}
+                  onPlatoonChange={onRotaPlatoonChange}
+                  onSectionChange={onRotaSectionChange}
+                />
+              )}
               <div className="profile-hero-duty">
                 <p className="label profile-hero-duty-label">Место положения</p>
                 <div className="profile-duty-toggle" role="group" aria-label="Место положения">
