@@ -329,11 +329,9 @@ export function PersonnelRosterTestCell({ stats }: { stats?: PersonnelTestRoster
 export function PersonnelRosterLicenseCell({ categories }: { categories: string[] }) {
   if (!categories.length) return <span className="personnel-roster-tests__empty">—</span>;
   return (
-    <div className="personnel-roster-licenses">
-      {categories.map((label) => (
-        <IconLicense key={label} label={label} compact />
-      ))}
-    </div>
+    <span className="personnel-roster-licenses-text" title={`Категории: ${categories.join(", ")}`}>
+      {categories.join("/")}
+    </span>
   );
 }
 

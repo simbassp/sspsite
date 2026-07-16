@@ -104,7 +104,10 @@ export type PersonnelProfilePayload = PersonnelUserCard & {
 
 function isMissingColumnError(message: string | undefined) {
   const m = (message || "").toLowerCase();
-  return m.includes("column") && m.includes("does not exist");
+  return (
+    (m.includes("column") && m.includes("does not exist")) ||
+    (m.includes("column") && m.includes("could not find") && m.includes("schema cache"))
+  );
 }
 
 function isMissingTableError(message: string | undefined) {
@@ -408,7 +411,7 @@ async function loadTestStatsForUsers(userIds: string[]) {
   const fetchChunk = async (ids: string[]) => {
     const primary = await supabase
       .from("test_results")
-      .select("user_id,type,status,test_type")
+      .select("user_id,type,status")
       .in("user_id", ids)
       .order("created_at", { ascending: false })
       .limit(Math.min(ids.length * 120, 8000));
@@ -648,7 +651,7 @@ export async function loadPersonnelProfilesBulk(
     supabase.from("personnel_licenses").select("user_id,categories").in("user_id", uniqueIds),
     supabase
       .from("test_results")
-      .select("user_id,type,status,created_at,test_type")
+      .select("user_id,type,status,created_at")
       .in("user_id", testQueryIds)
       .order("created_at", { ascending: false })
       .limit(Math.min(uniqueIds.length * 120, 8000)),

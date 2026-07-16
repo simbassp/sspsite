@@ -3034,20 +3034,12 @@ html[data-theme="dark"] .final-review-answer--correct {
   color: var(--muted);
 }
 
-.personnel-roster-licenses {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px;
-  max-width: 64px;
-}
-
-.personnel-license-badge--compact {
-  min-width: 20px;
-  height: 20px;
-  border-radius: 5px;
-  font-size: 10px;
+.personnel-roster-licenses-text {
+  font-size: 12px;
   font-weight: 700;
-  line-height: 1;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .personnel-table th,
