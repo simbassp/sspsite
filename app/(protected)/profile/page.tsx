@@ -508,7 +508,12 @@ export default function ProfilePage() {
     if (!res.ok) {
       setUnitAssignment(prev);
       setUnitSaveError(res.error);
+      return;
     }
+    persistSession({
+      ...session,
+      unitAssignment: res.unitAssignment ?? next,
+    });
   };
 
   const onSaveProfile = async () => {
@@ -869,6 +874,42 @@ export default function ProfilePage() {
               <button className="btn btn-primary profile-save-btn" type="button" onClick={() => void onSaveProfile()}>
                 Сохранить профиль
               </button>
+            </section>
+
+            <section className="profile-settings-section">
+              <h4 className="profile-settings-section-title">Подразделение</h4>
+              <label className="label" htmlFor="profile-unit-assignment">
+                Ваше подразделение
+              </label>
+              <select
+                id="profile-unit-assignment"
+                className="select"
+                value={unitAssignment ?? ""}
+                onChange={(e) => void onUnitChange(e.target.value)}
+                disabled={unitSaving}
+              >
+                <option value="">Выберите подразделение</option>
+                {UNIT_ASSIGNMENT_OPTIONS.map((unit) => (
+                  <option key={unit} value={unit}>
+                    {unitAssignmentLabel[unit]}
+                  </option>
+                ))}
+              </select>
+              {!unitAssignment && (
+                <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
+                  Если вы зарегистрировались раньше — выберите подразделение здесь.
+                </p>
+              )}
+              {unitSaving && (
+                <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
+                  Сохраняем…
+                </p>
+              )}
+              {!!unitSaveError && (
+                <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0, color: "var(--bad)" }}>
+                  {unitSaveError}
+                </p>
+              )}
             </section>
 
             <section className="profile-settings-section">
