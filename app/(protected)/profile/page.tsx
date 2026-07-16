@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Pencil } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { ProfileExportExcelButton } from "@/components/profile/ProfileExportExcelButton";
 import { ProfileHeroLoginBlock } from "@/components/profile/ProfileHeroLoginBlock";
 import { ProfileNameEditModal } from "@/components/profile/ProfileNameEditModal";
 import { ProfileEmploymentDateField } from "@/components/profile/ProfileEmploymentDateField";
@@ -35,7 +36,7 @@ import {
   ResetTestStatsModal,
   useResetTestStatsModal,
 } from "@/components/profile/ResetTestStatsModal";
-import { canResetTestResults } from "@/lib/permissions";
+import { canManageUsers, canResetTestResults } from "@/lib/permissions";
 import { getPositionBadgeClass } from "@/lib/position-ui";
 import { dutyLocationLabel } from "@/lib/duty-location";
 import {
@@ -129,6 +130,7 @@ export default function ProfilePage() {
   const resetStatsModal = useResetTestStatsModal("all");
   const canManageInvites = session?.role === "admin";
   const canResetStats = useMemo(() => (session ? canResetTestResults(session) : false), [session]);
+  const canExportExcel = useMemo(() => (session ? canManageUsers(session) : false), [session]);
 
   useEffect(() => {
     setSession(readClientSession());
@@ -893,6 +895,7 @@ export default function ProfilePage() {
                 Позывной:{" "}
                 <strong>{(session.callsign || "").trim() || "—"}</strong>
               </p>
+              {canExportExcel && session?.id ? <ProfileExportExcelButton userId={session.id} /> : null}
               <div className="profile-hero-status-inline">
                 <span className="profile-hero-status-value">
                   <StatusDotIcon online={isOnline} />

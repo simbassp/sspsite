@@ -684,6 +684,23 @@ html[data-theme="dark"] .select option {
   color: var(--text);
 }
 
+.profile-export-excel {
+  margin-top: 8px;
+}
+
+.profile-export-excel__btn {
+  padding: 5px 10px;
+  font-size: 12px;
+  border-radius: 8px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.profile-export-excel__error {
+  margin: 6px 0 0;
+  font-size: 11px;
+}
+
 .profile-page .profile-hero-status-inline {
   display: flex;
   flex-wrap: wrap;

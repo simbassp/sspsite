@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Pencil } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { ProfileExportExcelButton } from "@/components/profile/ProfileExportExcelButton";
 import { ProfileNameEditModal } from "@/components/profile/ProfileNameEditModal";
 import { ProfileEmploymentDateField } from "@/components/profile/ProfileEmploymentDateField";
 import { ProfileRotaUnitFields } from "@/components/profile/ProfileRotaUnitFields";
@@ -82,6 +83,7 @@ export default function ProfileUserInspectPage() {
   const canEditProfileFields = session ? canManageUsers(session) : false;
   const canEditRotaForOthers = session ? canManageUsers(session) || canModeratePersonnel(session) : false;
   const canEditEmploymentForOthers = canEditRotaForOthers;
+  const canExportExcel = session ? canManageUsers(session) : false;
   const canResetStats = session ? canResetTestResults(session) : false;
 
   const [loading, setLoading] = useState(true);
@@ -673,6 +675,7 @@ export default function ProfileUserInspectPage() {
                   <p className="profile-hero-callsign">
                     Позывной: <strong>{inspectUser.callsign.trim() || "—"}</strong>
                   </p>
+                  {canExportExcel ? <ProfileExportExcelButton userId={inspectUser.id} /> : null}
                   <div className="profile-hero-status-inline">
                     <span className="profile-hero-status-value">
                       <StatusDotIcon online={inspectUser.is_online} />

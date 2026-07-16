@@ -1,0 +1,206 @@
+import { employmentDaysSince } from "@/lib/employment-date";
+import { dutyLocationLabel } from "@/lib/duty-location";
+import { loadPersonnelProfile } from "@/lib/personnel-server";
+import { resolveFinalUserContext } from "@/lib/server-final-user-context";
+import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
+import { formatTotalTestDuration } from "@/lib/format";
+import { formatTestResultForType } from "@/lib/test-pass-rules";
+import { normalizeUnitAssignment, unitAssignmentLabelOrEmpty } from "@/lib/unit-assignment";
+import {
+  PERSONNEL_EXAM_TYPES,
+  personnelExamLabel,
+  rotaUnitLabel,
+} from "@/lib/personnel-catalog";
+import type { PersonnelProfilePayload } from "@/lib/personnel-server";
+
+export type PersonnelProfileExportTestRow = {
+  createdAt: string;
+  type: "trial" | "final";
+  status: "passed" | "failed";
+  score: number;
+  questionsTotal: number | null;
+  questionsCorrect: number | null;
+  durationSeconds: number | null;
+  resultText: string;
+};
+
+export type PersonnelProfileExportBundle = {
+  exportedAt: string;
+  user: {
+    id: string;
+    name: string;
+    callsign: string;
+    login: string;
+    position: string;
+    role: string;
+    status: string;
+    dutyLocation: string;
+    unitAssignment: string;
+    rotaUnit: string;
+    employmentDate: string;
+    employmentDays: string;
+  };
+  profile: PersonnelProfilePayload | null;
+  exams: Array<{
+    examType: string;
+    label: string;
+    status: string;
+    passedAt: string;
+    expiresAt: string;
+  }>;
+  testResults: PersonnelProfileExportTestRow[];
+};
+
+function isMissingColumnError(message: string | undefined) {
+  const m = (message || "").toLowerCase();
+  return m.includes("column") && m.includes("does not exist");
+}
+
+function formatRuDate(value: string | null | undefined) {
+  if (!value?.trim()) return "—";
+  const d = new Date(value.includes("T") ? value : `${value}T12:00:00`);
+  if (!Number.isFinite(d.getTime())) return value;
+  return d.toLocaleDateString("ru-RU");
+}
+
+function formatRuDateTime(value: string | null | undefined) {
+  if (!value?.trim()) return "—";
+  const d = new Date(value);
+  if (!Number.isFinite(d.getTime())) return value;
+  return d.toLocaleString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+export async function loadPersonnelProfileExportBundle(userId: string): Promise<PersonnelProfileExportBundle | null> {
+  const supabase = getServerSupabaseServiceClient();
+  const userRes = await supabase
+    .from("app_users")
+    .select(
+      "id,name,callsign,position,role,status,login,duty_location,unit_assignment,rota_platoon,rota_section,employment_date,created_at",
+    )
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (userRes.error || !userRes.data) return null;
+  const u = userRes.data as Record<string, unknown>;
+
+  const profile = await loadPersonnelProfile(userId);
+  const { linkedUserIds } = await resolveFinalUserContext(supabase, userId);
+
+  const testPrimary = await supabase
+    .from("test_results")
+    .select(
+      "id,type,status,score,created_at,duration_seconds,questions_total,questions_correct,test_type",
+    )
+    .in("user_id", linkedUserIds)
+    .order("created_at", { ascending: false })
+    .limit(500);
+
+  let testRows = (testPrimary.data ?? []) as Array<Record<string, unknown>>;
+  if (testPrimary.error && isMissingColumnError(testPrimary.error.message)) {
+    const legacy = await supabase
+      .from("test_results")
+      .select("id,test_type,status,score,created_at,questions_total,questions_correct")
+      .in("user_id", linkedUserIds)
+      .order("created_at", { ascending: false })
+      .limit(500);
+    testRows = (legacy.data ?? []) as Array<Record<string, unknown>>;
+  }
+
+  const examMap = new Map((profile?.exams ?? []).map((e) => [e.examType, e]));
+  const exams = PERSONNEL_EXAM_TYPES.map((type) => {
+    const row = examMap.get(type);
+    const passed = row?.status === "passed";
+    return {
+      examType: type,
+      label: personnelExamLabel[type],
+      status: passed ? "Сдан" : "Не сдан",
+      passedAt: formatRuDate(row?.passedAt),
+      expiresAt: formatRuDate(row?.expiresAt),
+    };
+  });
+
+  const employmentDateRaw = u.employment_date ? String(u.employment_date).slice(0, 10) : null;
+  const days = employmentDaysSince(employmentDateRaw);
+
+  const testResults: PersonnelProfileExportTestRow[] = testRows.map((row) => {
+    const type = row.type === "final" || row.test_type === "final" ? "final" : "trial";
+    const status = row.status === "passed" ? "passed" : "failed";
+    const questionsTotal =
+      row.questions_total === null || row.questions_total === undefined ? null : Number(row.questions_total);
+    const questionsCorrect =
+      row.questions_correct === null || row.questions_correct === undefined ? null : Number(row.questions_correct);
+    const durationSeconds =
+      row.duration_seconds === null || row.duration_seconds === undefined ? null : Number(row.duration_seconds);
+
+    return {
+      createdAt: formatRuDateTime(String(row.created_at ?? "")),
+      type,
+      status,
+      score: Number(row.score ?? 0),
+      questionsTotal,
+      questionsCorrect,
+      durationSeconds,
+      resultText: formatTestResultForType({
+        type,
+        questionsCorrect,
+        questionsTotal,
+        scorePercent: Number(row.score ?? 0),
+      }),
+    };
+  });
+
+  const duty =
+    typeof u.duty_location === "string" && u.duty_location.trim().toLowerCase() === "deployment"
+      ? "deployment"
+      : "base";
+
+  return {
+    exportedAt: new Date().toLocaleString("ru-RU"),
+    user: {
+      id: String(u.id),
+      name: String(u.name ?? ""),
+      callsign: String(u.callsign ?? ""),
+      login: String(u.login ?? ""),
+      position: String(u.position ?? ""),
+      role: u.role === "admin" ? "Администратор" : "Сотрудник",
+      status: u.status === "inactive" ? "Неактивен" : "Активен",
+      dutyLocation: dutyLocationLabel[duty],
+      unitAssignment: unitAssignmentLabelOrEmpty(normalizeUnitAssignment(u.unit_assignment)),
+      rotaUnit:
+        rotaUnitLabel(
+          u.rota_platoon != null ? Number(u.rota_platoon) : null,
+          u.rota_section != null ? Number(u.rota_section) : null,
+        ) || "—",
+      employmentDate: employmentDateRaw ? formatRuDate(employmentDateRaw) : "—",
+      employmentDays: days != null ? `${days} дн.` : "—",
+    },
+    profile,
+    exams,
+    testResults,
+  };
+}
+
+export function buildPersonnelExportFilename(bundle: PersonnelProfileExportBundle) {
+  const base = (bundle.user.callsign || bundle.user.name || "profile")
+    .trim()
+    .replace(/[^\w\u0400-\u04FF-]+/gi, "-")
+    .replace(/-+/g, "-")
+    .slice(0, 40);
+  const date = new Date().toISOString().slice(0, 10);
+  return `${base || "profile"}-${date}.xlsx`;
+}
+
+export function formatExportMoney(amount: number) {
+  return `${amount.toLocaleString("ru-RU")} ₽`;
+}
+
+export function formatExportDuration(seconds: number | null) {
+  if (seconds === null || !Number.isFinite(seconds)) return "—";
+  return formatTotalTestDuration(seconds);
+}
