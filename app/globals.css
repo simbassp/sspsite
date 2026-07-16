@@ -893,6 +893,22 @@ html[data-theme="dark"] .profile-rota-badge {
   margin-top: 2px;
 }
 
+.profile-page .profile-employment-date-input {
+  min-width: 0;
+  max-width: 100%;
+  font-size: 12px;
+  padding: 5px 8px;
+}
+
+.profile-page .profile-hero-employment {
+  grid-column: 1 / -1;
+}
+
+.profile-page .profile-hero-employment__error {
+  margin: 0;
+  font-size: 11px;
+}
+
 @media (max-width: 700px) {
   .profile-page .profile-hero-controls {
     flex: 1 1 100%;
@@ -3150,6 +3166,13 @@ html[data-theme="dark"] .final-review-answer--correct {
 
 .personnel-stat-card--icon strong {
   font-size: 18px;
+}
+
+.personnel-stat-card__sub {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
 }
 
 .personnel-stat-card__icon {

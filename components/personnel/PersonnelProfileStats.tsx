@@ -60,6 +60,7 @@ type ProfilePayload = {
   rotaPlatoon: number | null;
   rotaSection: number | null;
   daysInSystem: number;
+  employmentDate: string;
   deploymentsCount: number;
   deploymentDays: number;
   uavHitsTotal: number;
@@ -390,8 +391,9 @@ export function PersonnelProfileStats({
             <IconDays size={18} />
           </span>
           <div>
-            <p className="label">Всего в системе</p>
+            <p className="label">Трудоустройство</p>
             <strong>{profile.daysInSystem} дней</strong>
+            <p className="personnel-stat-card__sub">{formatDate(profile.employmentDate)}</p>
           </div>
         </div>
         <div className="personnel-stat-card personnel-stat-card--icon">

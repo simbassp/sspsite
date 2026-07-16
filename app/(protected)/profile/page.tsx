@@ -5,6 +5,7 @@ import { Pencil } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ProfileHeroLoginBlock } from "@/components/profile/ProfileHeroLoginBlock";
 import { ProfileNameEditModal } from "@/components/profile/ProfileNameEditModal";
+import { ProfileEmploymentDateField } from "@/components/profile/ProfileEmploymentDateField";
 import { ProfileRotaUnitFields } from "@/components/profile/ProfileRotaUnitFields";
 import { readClientSession } from "@/lib/client-auth";
 import { formatDate, formatDateTime, formatTotalTestDuration } from "@/lib/format";
@@ -43,6 +44,7 @@ import {
   unitAssignmentLabelOrEmpty,
 } from "@/lib/unit-assignment";
 import { removeTestResultsForUser } from "@/lib/storage";
+import { resolveEmploymentDate } from "@/lib/employment-date";
 import { rotaUnitCompactLabel, type RotaPlatoon, type RotaSection } from "@/lib/rota-unit";
 import { DutyLocation, TestResult, TestResultsResetScope, UnitAssignment } from "@/lib/types";
 
@@ -111,6 +113,10 @@ export default function ProfilePage() {
   const [rotaSection, setRotaSection] = useState<RotaSection | null>(null);
   const [rotaSaving, setRotaSaving] = useState(false);
   const [rotaSaveError, setRotaSaveError] = useState("");
+  const [employmentDateStored, setEmploymentDateStored] = useState<string | null>(null);
+  const [accountCreatedAt, setAccountCreatedAt] = useState("");
+  const [employmentSaving, setEmploymentSaving] = useState(false);
+  const [employmentSaveError, setEmploymentSaveError] = useState("");
   const [dutySaving, setDutySaving] = useState(false);
   const [fieldError, setFieldError] = useState<{ name?: string; callsign?: string }>({});
   const [profileSaving, setProfileSaving] = useState(false);
@@ -147,6 +153,8 @@ export default function ProfilePage() {
           unitAssignment?: UnitAssignment | null;
           rotaPlatoon?: number | null;
           rotaSection?: number | null;
+          employmentDate?: string | null;
+          accountCreatedAt?: string | null;
           results?: Array<Record<string, unknown>>;
           inviteCodes?: Array<Record<string, unknown>>;
         };
@@ -196,6 +204,10 @@ export default function ProfilePage() {
         } else {
           setRotaSection(null);
         }
+        setEmploymentDateStored(
+          typeof payload.employmentDate === "string" && payload.employmentDate ? payload.employmentDate : null,
+        );
+        setAccountCreatedAt(typeof payload.accountCreatedAt === "string" ? payload.accountCreatedAt : "");
         if (typeof payload.email === "string" && payload.email) {
           setEmailInput(payload.email);
         } else {
@@ -626,6 +638,40 @@ export default function ProfilePage() {
     })();
   };
 
+  const employmentDateDisplay = resolveEmploymentDate(employmentDateStored, accountCreatedAt);
+
+  const onEmploymentDateChange = (next: string) => {
+    if (!next || employmentSaving) return;
+    const prevStored = employmentDateStored;
+    setEmploymentDateStored(next);
+    setEmploymentSaving(true);
+    setEmploymentSaveError("");
+    void (async () => {
+      try {
+        const response = await fetch("/api/profile/employment-date", {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ employmentDate: next }),
+        });
+        const payload = (await response.json()) as { ok?: boolean; error?: string; employmentDate?: string | null };
+        if (!response.ok || !payload.ok) {
+          setEmploymentDateStored(prevStored);
+          setEmploymentSaveError(payload.error || "Не удалось сохранить дату трудоустройства.");
+          return;
+        }
+        setEmploymentDateStored(
+          typeof payload.employmentDate === "string" && payload.employmentDate ? payload.employmentDate : null,
+        );
+        setPersonnelReloadToken((t) => t + 1);
+      } catch {
+        setEmploymentDateStored(prevStored);
+        setEmploymentSaveError("Ошибка сети. Попробуйте ещё раз.");
+      } finally {
+        setEmploymentSaving(false);
+      }
+    })();
+  };
+
   const onSaveProfile = async ({ name, callsign }: { name: string; callsign: string }) => {
     if (!session || profileSaving) return;
     setProfileModalMessage("");
@@ -906,6 +952,12 @@ export default function ProfilePage() {
                   onSectionChange={onRotaSectionChange}
                 />
               )}
+              <ProfileEmploymentDateField
+                value={employmentDateDisplay}
+                saving={employmentSaving}
+                error={employmentSaveError}
+                onChange={onEmploymentDateChange}
+              />
               <div className="profile-hero-duty">
                 <p className="label profile-hero-duty-label">Место положения</p>
                 <div className="profile-duty-toggle" role="group" aria-label="Место положения">

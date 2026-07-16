@@ -10,6 +10,7 @@ import {
 } from "@/lib/personnel-catalog";
 import { resolveFinalUserContext } from "@/lib/server-final-user-context";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
+import { employmentDaysSince, resolveEmploymentDate } from "@/lib/employment-date";
 
 export type PersonnelModuleSettings = {
   moduleEnabled: boolean;
@@ -59,6 +60,7 @@ export type PersonnelUserCard = {
   rotaPlatoon: number | null;
   rotaSection: number | null;
   createdAt: string;
+  employmentDate: string | null;
   exams: PersonnelExamRow[];
   deploymentsCount: number;
   deploymentDays: number;
@@ -87,6 +89,7 @@ export type PersonnelProfilePayload = PersonnelUserCard & {
   premiums: PersonnelPremiumRow[];
   pendingRequests: number;
   daysInSystem: number;
+  employmentDate: string;
   activityByMonth: PersonnelActivityMonth[];
   activitySummary: PersonnelActivitySegment[];
 };
@@ -146,12 +149,6 @@ function daysBetween(from: string, to: string) {
   const b = new Date(to);
   const ms = b.getTime() - a.getTime();
   return Math.max(1, Math.round(ms / 86400000) + 1);
-}
-
-function daysInSystemSince(createdAt: string) {
-  const start = new Date(createdAt);
-  const now = new Date();
-  return Math.max(1, Math.round((now.getTime() - start.getTime()) / 86400000));
 }
 
 const ACTIVITY_MONTH_LABELS = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"];
@@ -283,7 +280,7 @@ export async function loadPersonnelUserBasics(userId: string) {
   const userRes = await supabase
     .from("app_users")
     .select(
-      "id,name,callsign,position,duty_location,unit_assignment,rota_platoon,rota_section,created_at",
+      "id,name,callsign,position,duty_location,unit_assignment,rota_platoon,rota_section,created_at,employment_date",
     )
     .eq("id", userId)
     .maybeSingle();
@@ -299,6 +296,7 @@ export async function loadPersonnelUserBasics(userId: string) {
     rotaPlatoon: u.rota_platoon != null ? Number(u.rota_platoon) : null,
     rotaSection: u.rota_section != null ? Number(u.rota_section) : null,
     createdAt: String(u.created_at ?? new Date().toISOString()),
+    employmentDate: u.employment_date ? String(u.employment_date).slice(0, 10) : null,
   };
 }
 
@@ -447,6 +445,7 @@ export async function loadPersonnelRoster(filters?: {
       rotaPlatoon: u.rota_platoon != null ? Number(u.rota_platoon) : null,
       rotaSection: u.rota_section != null ? Number(u.rota_section) : null,
       createdAt: String(u.created_at ?? new Date().toISOString()),
+      employmentDate: u.employment_date ? String(u.employment_date).slice(0, 10) : null,
       exams: examsMap.get(id) ?? [],
       deploymentsCount: dep.count,
       deploymentDays: dep.days,
@@ -593,7 +592,8 @@ export async function loadPersonnelProfile(userId: string): Promise<PersonnelPro
     medals,
     premiums,
     pendingRequests: pendingRes.count ?? 0,
-    daysInSystem: daysInSystemSince(basic.createdAt),
+    daysInSystem: employmentDaysSince(basic.employmentDate, basic.createdAt),
+    employmentDate: resolveEmploymentDate(basic.employmentDate, basic.createdAt),
     activityByMonth,
     activitySummary,
   };

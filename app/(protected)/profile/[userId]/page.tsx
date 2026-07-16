@@ -5,9 +5,10 @@ import { Pencil } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ProfileNameEditModal } from "@/components/profile/ProfileNameEditModal";
+import { ProfileEmploymentDateField } from "@/components/profile/ProfileEmploymentDateField";
 import { ProfileRotaUnitFields } from "@/components/profile/ProfileRotaUnitFields";
 import { readClientSession } from "@/lib/client-auth";
-import { formatDateTime, formatTotalTestDuration } from "@/lib/format";
+import { formatDate, formatDateTime, formatTotalTestDuration } from "@/lib/format";
 import { formatTestResultForType } from "@/lib/test-pass-rules";
 import { dutyLocationLabel } from "@/lib/duty-location";
 import { unitAssignmentLabelOrEmpty, normalizeUnitAssignment } from "@/lib/unit-assignment";
@@ -21,6 +22,7 @@ import {
 import { getPositionBadgeClass } from "@/lib/position-ui";
 import { canManageUsers, canResetTestResults, canViewUserList, canModeratePersonnel } from "@/lib/permissions";
 import { removeTestResultsForUser } from "@/lib/storage";
+import { resolveEmploymentDate } from "@/lib/employment-date";
 import { rotaUnitCompactLabel, type RotaPlatoon, type RotaSection } from "@/lib/rota-unit";
 import { DutyLocation, TestResult, TestResultsResetScope, UnitAssignment } from "@/lib/types";
 
@@ -43,6 +45,8 @@ type InspectUser = {
   unit_assignment: UnitAssignment | null;
   rota_platoon?: number | null;
   rota_section?: number | null;
+  employment_date?: string | null;
+  account_created_at?: string | null;
 };
 
 function mapRows(payload: { results?: Array<Record<string, unknown>> }): TestResult[] {
@@ -79,6 +83,7 @@ export default function ProfileUserInspectPage() {
   const canEditDutyForOthers = session ? canManageUsers(session) : false;
   const canEditProfileFields = session ? canManageUsers(session) : false;
   const canEditRotaForOthers = session ? canManageUsers(session) || canModeratePersonnel(session) : false;
+  const canEditEmploymentForOthers = canEditRotaForOthers;
   const canResetStats = session ? canResetTestResults(session) : false;
 
   const [loading, setLoading] = useState(true);
@@ -104,6 +109,10 @@ export default function ProfileUserInspectPage() {
   const [rotaSection, setRotaSection] = useState<RotaSection | null>(null);
   const [rotaSaving, setRotaSaving] = useState(false);
   const [rotaSaveError, setRotaSaveError] = useState("");
+  const [employmentDateStored, setEmploymentDateStored] = useState<string | null>(null);
+  const [accountCreatedAt, setAccountCreatedAt] = useState("");
+  const [employmentSaving, setEmploymentSaving] = useState(false);
+  const [employmentSaveError, setEmploymentSaveError] = useState("");
 
   useEffect(() => {
     if (!session || !userId || !canOpen) return;
@@ -142,6 +151,8 @@ export default function ProfileUserInspectPage() {
             ? u.rota_section
             : null,
         );
+        setEmploymentDateStored(typeof u.employment_date === "string" && u.employment_date ? u.employment_date : null);
+        setAccountCreatedAt(typeof u.account_created_at === "string" ? u.account_created_at : "");
         setRows(mapRows({ results: payload.results }).sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)));
       } catch {
         if (!cancelled) setError("network");
@@ -174,6 +185,12 @@ export default function ProfileUserInspectPage() {
                 ? u.rota_section
                 : null,
             );
+          }
+          if (!employmentSaving) {
+            setEmploymentDateStored(
+              typeof u.employment_date === "string" && u.employment_date ? u.employment_date : null,
+            );
+            setAccountCreatedAt(typeof u.account_created_at === "string" ? u.account_created_at : "");
           }
         } catch {
           /* ignore */
@@ -308,6 +325,40 @@ export default function ProfileUserInspectPage() {
     void (async () => {
       const ok = await saveRotaForUser(rotaPlatoon, next);
       if (!ok) setRotaSection(prev);
+    })();
+  };
+
+  const employmentDateDisplay = resolveEmploymentDate(employmentDateStored, accountCreatedAt);
+
+  const onEmploymentDateChangeForUser = (next: string) => {
+    if (!userId || !canEditEmploymentForOthers || !next || employmentSaving) return;
+    const prevStored = employmentDateStored;
+    setEmploymentDateStored(next);
+    setEmploymentSaving(true);
+    setEmploymentSaveError("");
+    void (async () => {
+      try {
+        const response = await fetch(`/api/profile/user/${encodeURIComponent(userId)}/employment-date`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ employmentDate: next }),
+        });
+        const payload = (await response.json()) as { ok?: boolean; error?: string; employmentDate?: string | null };
+        if (!response.ok || !payload.ok) {
+          setEmploymentDateStored(prevStored);
+          setEmploymentSaveError(payload.error || "Не удалось сохранить дату трудоустройства.");
+          return;
+        }
+        setEmploymentDateStored(
+          typeof payload.employmentDate === "string" && payload.employmentDate ? payload.employmentDate : null,
+        );
+        setPersonnelReloadToken((t) => t + 1);
+      } catch {
+        setEmploymentDateStored(prevStored);
+        setEmploymentSaveError("Ошибка сети. Попробуйте ещё раз.");
+      } finally {
+        setEmploymentSaving(false);
+      }
     })();
   };
 
@@ -686,6 +737,21 @@ export default function ProfileUserInspectPage() {
                       </span>
                     </div>
                   ) : null}
+                  {canEditEmploymentForOthers ? (
+                    <ProfileEmploymentDateField
+                      value={employmentDateDisplay}
+                      saving={employmentSaving}
+                      error={employmentSaveError}
+                      onChange={onEmploymentDateChangeForUser}
+                    />
+                  ) : (
+                    <div className="profile-hero-duty">
+                      <p className="label profile-hero-duty-label">Трудоустройство</p>
+                      <span className="profile-rota-badge profile-rota-badge--static">
+                        {employmentDateDisplay ? formatDate(employmentDateDisplay) : "Не указано"}
+                      </span>
+                    </div>
+                  )}
                   <div className="profile-hero-duty">
                     <p className="label profile-hero-duty-label">Место положения</p>
                     {canEditDutyForOthers ? (
