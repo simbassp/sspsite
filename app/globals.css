@@ -1928,6 +1928,56 @@ html[data-theme="dark"] .trial-feedback-btn--dim {
   background: color-mix(in srgb, #d64a4a 22%, var(--panel));
 }
 
+.final-review-card {
+  border-left: 4px solid var(--brand);
+}
+
+.final-review-list {
+  display: grid;
+  gap: 10px;
+}
+
+.final-review-item {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: color-mix(in srgb, var(--glass) 70%, transparent);
+}
+
+.final-review-question {
+  margin: 0 0 8px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.final-review-num {
+  color: var(--muted);
+}
+
+.final-review-answer {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 6px 0 0;
+  line-height: 1.4;
+}
+
+.final-review-answer--wrong {
+  color: #b93434;
+}
+
+.final-review-answer--correct {
+  color: #1f8a44;
+}
+
+html[data-theme="dark"] .final-review-answer--wrong {
+  color: #f08a8a;
+}
+
+html[data-theme="dark"] .final-review-answer--correct {
+  color: #7dcea0;
+}
+
 .home-icon-svg {
   width: 22px;
   height: 22px;

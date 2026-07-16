@@ -56,6 +56,54 @@ function resolveBankTimeFromQuestions(questions: TestQuestion[]) {
 
 type TrialFeedback = { chosen: number | null; correct: number };
 
+type FinalReviewItem = {
+  questionText: string;
+  chosenLabel: string;
+  correctLabel: string;
+};
+
+type FinalReview = {
+  scorePercent: number;
+  correctCount: number;
+  totalCount: number;
+  passed: boolean;
+  wrongItems: FinalReviewItem[];
+};
+
+function buildFinalReview(questions: TestQuestion[], finalAnswers: Record<string, number>): FinalReview {
+  const totalCount = questions.length;
+  let correctCount = 0;
+  const wrongItems: FinalReviewItem[] = [];
+
+  for (const q of questions) {
+    const chosen = finalAnswers[q.id];
+    const isCorrect = chosen === q.correctIndex;
+    if (isCorrect) {
+      correctCount += 1;
+      continue;
+    }
+    const chosenLabel =
+      typeof chosen === "number" && chosen >= 0 && q.options[chosen] != null
+        ? q.options[chosen]
+        : "Не ответил";
+    const correctLabel = q.options[q.correctIndex] ?? "—";
+    wrongItems.push({
+      questionText: q.text,
+      chosenLabel,
+      correctLabel,
+    });
+  }
+
+  const scorePercent = Math.round((correctCount / Math.max(totalCount, 1)) * 100);
+  return {
+    scorePercent,
+    correctCount,
+    totalCount,
+    passed: isFinalPassed(correctCount, totalCount),
+    wrongItems,
+  };
+}
+
 type FinalTestSummary = {
   maxAttempts: number;
   usedAttempts: number;
@@ -79,6 +127,7 @@ export default function TestsPage() {
   const [timeLeft, setTimeLeft] = useState(0);
   const [isAnswering, setIsAnswering] = useState(false);
   const [trialFeedback, setTrialFeedback] = useState<TrialFeedback | null>(null);
+  const [finalReview, setFinalReview] = useState<FinalReview | null>(null);
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [bootstrapError, setBootstrapError] = useState("");
   const [isConfigLoaded, setIsConfigLoaded] = useState(false);
@@ -115,6 +164,7 @@ export default function TestsPage() {
   const completeTrialAfterRevealRef = useRef<() => void>(() => {});
   const testStartedAtRef = useRef<string | null>(null);
   const testCardRef = useRef<HTMLDivElement | null>(null);
+  const finalReviewRef = useRef<HTMLDivElement | null>(null);
   /** Одноразовое уведомление в блоке сообщений при исчерпании попыток итога. */
   const finalAttemptsExhaustedBannerRef = useRef(false);
 
@@ -495,6 +545,11 @@ export default function TestsPage() {
     if (historyExpanded && historyPage > nextPages) setHistoryPage(nextPages);
   }, [historyExpanded, historyPage, results.length]);
 
+  useEffect(() => {
+    if (!finalReview) return;
+    finalReviewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [finalReview]);
+
   if (!isHydrated) {
     return <p className="page-subtitle">Загрузка тестов...</p>;
   }
@@ -509,12 +564,18 @@ export default function TestsPage() {
     const correct = questions.reduce((acc, q) => acc + (finalAnswers[q.id] === q.correctIndex ? 1 : 0), 0);
     const qTotal = questions.length;
     const score = Math.round((correct / Math.max(qTotal, 1)) * 100);
+    const passed = type === "final" ? isFinalPassed(correct, qTotal) : false;
+    const reviewSnapshot = type === "final" ? buildFinalReview(questions, finalAnswers) : null;
     const messageText =
       type === "trial"
         ? `Пробный тест завершен: ${formatTestResultDisplay({ questionsCorrect: correct, questionsTotal: qTotal, scorePercent: score })}.`
         : `Итоговый тест завершен: ${formatTestResultDisplay({ questionsCorrect: correct, questionsTotal: qTotal, scorePercent: score })}. Статус: ${
-            isFinalPassed(correct, qTotal) ? "СДАЛ" : "НЕ СДАЛ"
+            passed ? "СДАЛ" : "НЕ СДАЛ"
           }.`;
+
+    if (reviewSnapshot) {
+      setFinalReview(reviewSnapshot);
+    }
 
     // Снимаем активный тест сразу, чтобы не было повторной обработки последнего вопроса.
     setActiveTest(null);
@@ -552,7 +613,6 @@ export default function TestsPage() {
       if (type === "trial") {
         await createTrialResult(session.id, score, meta);
       } else {
-        const passed = isFinalPassed(correct, qTotal);
         await finishFinalAttempt(session.id, score, passed, meta);
       }
       setMessage(messageText);
@@ -654,6 +714,7 @@ export default function TestsPage() {
     const first = randomQuestions[0];
     expireHandledForQuestionIdRef.current = null;
     setTrialFeedback(null);
+    setFinalReview(null);
     setActiveTest("trial");
     setIsTestStarted(false);
     setSelectedQuestions(randomQuestions);
@@ -699,6 +760,7 @@ export default function TestsPage() {
     await beginFinalAttempt(session.id);
     expireHandledForQuestionIdRef.current = null;
     setTrialFeedback(null);
+    setFinalReview(null);
     setActiveTest("final");
     setIsTestStarted(false);
     setSelectedQuestions(randomQuestions);
@@ -974,6 +1036,61 @@ export default function TestsPage() {
         <article className="card" style={{ marginTop: 12 }}>
           <div className="card-body">
             <p>{message}</p>
+          </div>
+        </article>
+      )}
+
+      {finalReview && (
+        <article className="card final-review-card" style={{ marginTop: 12 }} ref={finalReviewRef}>
+          <div className="card-body">
+            <h3 style={{ marginTop: 0 }}>Разбор итогового теста</h3>
+            <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
+              Результат:{" "}
+              {formatTestResultDisplay({
+                questionsCorrect: finalReview.correctCount,
+                questionsTotal: finalReview.totalCount,
+                scorePercent: finalReview.scorePercent,
+              })}
+              {" · "}
+              <span className={`pill ${finalReview.passed ? "pill-green" : "pill-red"}`}>
+                {finalReview.passed ? "Сдал" : "Не сдал"}
+              </span>
+            </p>
+            {finalReview.wrongItems.length === 0 ? (
+              <p className="page-subtitle" style={{ marginTop: 12, marginBottom: 0 }}>
+                Все ответы верны.
+              </p>
+            ) : (
+              <>
+                <p className="page-subtitle" style={{ marginTop: 12, marginBottom: 8 }}>
+                  Неверные ответы ({finalReview.wrongItems.length}):
+                </p>
+                <div className="final-review-list">
+                  {finalReview.wrongItems.map((item, index) => (
+                    <article className="final-review-item" key={`${index}-${item.questionText.slice(0, 40)}`}>
+                      <p className="final-review-question">
+                        <span className="final-review-num">{index + 1}.</span> {item.questionText}
+                      </p>
+                      <p className="final-review-answer final-review-answer--wrong">
+                        <span className="test-option-letter test-option-letter--wrong" aria-hidden="true">
+                          ✕
+                        </span>
+                        Ваш ответ: {item.chosenLabel}
+                      </p>
+                      <p className="final-review-answer final-review-answer--correct">
+                        <span className="test-option-letter test-option-letter--correct" aria-hidden="true">
+                          ✓
+                        </span>
+                        Правильный ответ: {item.correctLabel}
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              </>
+            )}
+            <button className="btn btn-primary" type="button" style={{ marginTop: 14 }} onClick={() => setFinalReview(null)}>
+              Закрыть разбор
+            </button>
           </div>
         </article>
       )}
