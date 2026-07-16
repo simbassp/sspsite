@@ -237,9 +237,7 @@ export default function PersonnelListPage() {
       } else {
         await postPersonnelExportExcel({
           scope: "filter",
-          platoon,
-          section,
-          search: search.trim(),
+          userIds: filteredUsers.map((user) => user.id),
         });
       }
       exportExcelModal.setOpen(false);
@@ -691,7 +689,7 @@ export default function PersonnelListPage() {
         open={exportExcelModal.open}
         loading={exportExcelLoading}
         bulkScope={exportExcelModal.bulkScope}
-        filteredCount={users.length}
+        filteredCount={filteredUsers.length}
         onBulkScopeChange={exportExcelModal.setBulkScope}
         onClose={() => exportExcelModal.setOpen(false)}
         onConfirm={() => void onExportExcel()}

@@ -19,6 +19,7 @@ export async function postPersonnelExportExcel(body: {
   platoon?: "all" | "1" | "2";
   section?: "all" | "1" | "2" | "3" | "4";
   search?: string;
+  userIds?: string[];
 }) {
   const res = await fetch("/api/admin/personnel/export-excel", {
     method: "POST",
@@ -106,7 +107,7 @@ export function PersonnelExportExcelModal({
               <span>
                 <strong style={{ display: "block" }}>По текущему фильтру</strong>
                 <span className="page-subtitle" style={{ margin: 0, fontSize: 12 }}>
-                  {filteredCount} сотрудник{filteredCount === 1 ? "" : filteredCount >= 2 && filteredCount <= 4 ? "а" : "ов"}
+                  {filteredCount} сотрудник{filteredCount === 1 ? "" : filteredCount >= 2 && filteredCount <= 4 ? "а" : "ов"} — как в таблице сейчас
                 </span>
               </span>
             </label>

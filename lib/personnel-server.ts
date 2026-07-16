@@ -1355,6 +1355,34 @@ export async function loadActiveCompany4UserIds(filters?: {
   return { ok: true as const, userIds: roster.users.map((u) => u.id) };
 }
 
+/** Проверяет, что запрошенные id — активные сотрудники 4 роты, сохраняя порядок. */
+export async function resolvePersonnelExportUserIds(requestedIds: string[]) {
+  const ordered = [...new Set(requestedIds.map((id) => String(id).trim()).filter(Boolean))];
+  if (ordered.length === 0) {
+    return { ok: false as const, error: "no_users", userIds: [] as string[] };
+  }
+
+  const supabase = getServerSupabaseServiceClient();
+  const res = await supabase
+    .from("app_users")
+    .select("id")
+    .in("id", ordered)
+    .eq("unit_assignment", "company_4")
+    .eq("status", "active");
+
+  if (res.error) {
+    return { ok: false as const, error: res.error.message, userIds: [] as string[] };
+  }
+
+  const allowed = new Set((res.data ?? []).map((row) => String(row.id)));
+  const userIds = ordered.filter((id) => allowed.has(id));
+  if (userIds.length === 0) {
+    return { ok: false as const, error: "no_users", userIds: [] as string[] };
+  }
+
+  return { ok: true as const, userIds };
+}
+
 export async function resetPersonnelExams(input: {
   scope: "single" | "all" | "filter";
   userId?: string;

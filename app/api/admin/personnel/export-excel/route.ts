@@ -1,5 +1,5 @@
 import { canManageUsers } from "@/lib/permissions";
-import { loadActiveCompany4UserIds } from "@/lib/personnel-server";
+import { loadActiveCompany4UserIds, resolvePersonnelExportUserIds } from "@/lib/personnel-server";
 import {
   buildPersonnelBulkExportContentDisposition,
   loadPersonnelProfileExportBundles,
@@ -28,6 +28,7 @@ export async function POST(request: Request) {
     platoon?: unknown;
     section?: unknown;
     search?: unknown;
+    userIds?: unknown;
   };
 
   const scope = raw.scope === "all" || raw.scope === "filter" ? raw.scope : null;
@@ -50,29 +51,47 @@ export async function POST(request: Request) {
         ? (Number(sectionRaw) as 1 | 2 | 3 | 4)
         : null;
 
-  if (scope === "filter" && (platoon === null || section === null)) {
-    return Response.json({ ok: false, error: "invalid_filter" }, { status: 400 });
-  }
-
   try {
-    const idsResult =
-      scope === "all"
-        ? await loadActiveCompany4UserIds()
-        : await loadActiveCompany4UserIds({
-            platoon: platoon ?? "all",
-            section: section ?? "all",
-            search: typeof raw.search === "string" ? raw.search : "",
-          });
+    let userIds: string[] = [];
 
-    if (!idsResult.ok) {
-      return Response.json({ ok: false, error: idsResult.error }, { status: 400 });
+    if (scope === "all") {
+      const idsResult = await loadActiveCompany4UserIds();
+      if (!idsResult.ok) {
+        return Response.json({ ok: false, error: idsResult.error }, { status: 400 });
+      }
+      userIds = idsResult.userIds;
+    } else {
+      const requestedIds = Array.isArray(raw.userIds)
+        ? raw.userIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0)
+        : [];
+
+      if (requestedIds.length > 0) {
+        const resolved = await resolvePersonnelExportUserIds(requestedIds);
+        if (!resolved.ok) {
+          return Response.json({ ok: false, error: resolved.error }, { status: 400 });
+        }
+        userIds = resolved.userIds;
+      } else {
+        if (platoon === null || section === null) {
+          return Response.json({ ok: false, error: "invalid_filter" }, { status: 400 });
+        }
+        const idsResult = await loadActiveCompany4UserIds({
+          platoon: platoon ?? "all",
+          section: section ?? "all",
+          search: typeof raw.search === "string" ? raw.search : "",
+        });
+        if (!idsResult.ok) {
+          return Response.json({ ok: false, error: idsResult.error }, { status: 400 });
+        }
+        userIds = idsResult.userIds;
+      }
     }
 
-    if (idsResult.userIds.length === 0) {
+    if (userIds.length === 0) {
       return Response.json({ ok: false, error: "no_users" }, { status: 400 });
     }
 
-    const bundles = await loadPersonnelProfileExportBundles(idsResult.userIds);
+    const bundles = await loadPersonnelProfileExportBundles(userIds);
     if (!bundles.length) {
       return Response.json({ ok: false, error: "no_data" }, { status: 404 });
     }
