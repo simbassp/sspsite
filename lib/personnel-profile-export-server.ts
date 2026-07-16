@@ -209,13 +209,30 @@ export async function loadPersonnelProfileExportBundle(userId: string): Promise<
 }
 
 export function buildPersonnelExportFilename(bundle: PersonnelProfileExportBundle) {
-  const base = (bundle.user.callsign || bundle.user.name || "profile")
+  const base = (bundle.user.callsign || bundle.user.name || bundle.user.login || "profile")
     .trim()
     .replace(/[^\w\u0400-\u04FF-]+/gi, "-")
     .replace(/-+/g, "-")
     .slice(0, 40);
   const date = new Date().toISOString().slice(0, 10);
   return `${base || "profile"}-${date}.xlsx`;
+}
+
+/** ASCII-only имя для заголовка filename= (без кириллицы). */
+export function buildPersonnelExportAsciiFilename(bundle: PersonnelProfileExportBundle) {
+  const base = (bundle.user.login || "profile")
+    .trim()
+    .replace(/[^\w.-]+/g, "-")
+    .replace(/-+/g, "-")
+    .slice(0, 40);
+  const date = new Date().toISOString().slice(0, 10);
+  return `${base || "profile"}-${date}.xlsx`;
+}
+
+export function buildPersonnelExportContentDisposition(bundle: PersonnelProfileExportBundle) {
+  const filename = buildPersonnelExportFilename(bundle);
+  const asciiFilename = buildPersonnelExportAsciiFilename(bundle);
+  return `attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
 }
 
 export function formatExportMoney(amount: number) {

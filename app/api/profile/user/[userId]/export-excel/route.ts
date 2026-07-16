@@ -1,6 +1,6 @@
 import { canManageUsers } from "@/lib/permissions";
 import {
-  buildPersonnelExportFilename,
+  buildPersonnelExportContentDisposition,
   loadPersonnelProfileExportBundle,
 } from "@/lib/personnel-profile-export-server";
 import { buildPersonnelProfileExcelBuffer } from "@/lib/personnel-profile-excel";
@@ -30,13 +30,12 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
     }
 
     const buffer = await buildPersonnelProfileExcelBuffer(bundle);
-    const filename = buildPersonnelExportFilename(bundle);
 
     return new Response(new Uint8Array(buffer), {
       status: 200,
       headers: {
         "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "content-disposition": `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+        "content-disposition": buildPersonnelExportContentDisposition(bundle),
         "cache-control": "no-store",
       },
     });
