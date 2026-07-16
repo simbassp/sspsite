@@ -1,7 +1,7 @@
 import { employmentDaysSince } from "@/lib/employment-date";
 import { dutyLocationLabel } from "@/lib/duty-location";
-import { loadPersonnelProfile, loadPersonnelProfilesBulk } from "@/lib/personnel-server";
-import { resolveBulkLinkedUserIds, resolveFinalUserContext } from "@/lib/server-final-user-context";
+import { loadPersonnelProfile } from "@/lib/personnel-server";
+import { resolveFinalUserContext } from "@/lib/server-final-user-context";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 import { formatTotalTestDuration } from "@/lib/format";
 import { formatTestResultForType } from "@/lib/test-pass-rules";
@@ -76,81 +76,8 @@ function formatRuDateTime(value: string | null | undefined) {
   });
 }
 
-export async function loadPersonnelProfileExportBundle(userId: string): Promise<PersonnelProfileExportBundle | null> {
-  const supabase = getServerSupabaseServiceClient();
-  let userRes = await supabase
-    .from("app_users")
-    .select(
-      "id,name,callsign,position,role,status,login,duty_location,unit_assignment,rota_platoon,rota_section,employment_date,created_at",
-    )
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (userRes.error && isMissingColumnError(userRes.error.message)) {
-    userRes = await supabase
-      .from("app_users")
-      .select(
-        "id,name,callsign,position,role,status,login,duty_location,unit_assignment,rota_platoon,rota_section,created_at",
-      )
-      .eq("id", userId)
-      .maybeSingle();
-  }
-
-  if (userRes.error || !userRes.data) return null;
-  const u = userRes.data as Record<string, unknown>;
-
-  let profile: PersonnelProfilePayload | null = null;
-  try {
-    profile = await loadPersonnelProfile(userId);
-  } catch {
-    profile = null;
-  }
-
-  const { linkedUserIds } = await resolveFinalUserContext(supabase, userId);
-  const userIdsForTests = linkedUserIds.length > 0 ? linkedUserIds : [userId];
-
-  let testRows: Array<Record<string, unknown>> = [];
-  const testPrimary = await supabase
-    .from("test_results")
-    .select("id,type,status,score,created_at,duration_seconds,questions_total,questions_correct,test_type")
-    .in("user_id", userIdsForTests)
-    .order("created_at", { ascending: false })
-    .limit(500);
-
-  if (!testPrimary.error) {
-    testRows = (testPrimary.data ?? []) as Array<Record<string, unknown>>;
-  } else if (isMissingColumnError(testPrimary.error.message)) {
-    const legacy = await supabase
-      .from("test_results")
-      .select("id,test_type,status,score,created_at,questions_total,questions_correct")
-      .in("user_id", userIdsForTests)
-      .order("created_at", { ascending: false })
-      .limit(500);
-    if (!legacy.error) {
-      testRows = (legacy.data ?? []) as Array<Record<string, unknown>>;
-    }
-  }
-
-  const examMap = new Map((profile?.exams ?? []).map((e) => [e.examType, e]));
-  const exams = PERSONNEL_EXAM_TYPES.map((type) => {
-    const row = examMap.get(type);
-    const passed = row?.status === "passed";
-    return {
-      examType: type,
-      label: personnelExamLabel[type],
-      status: passed ? "Сдан" : "Не сдан",
-      passedAt: formatRuDate(row?.passedAt),
-      expiresAt: formatRuDate(row?.expiresAt),
-    };
-  });
-
-  const employmentDateRaw =
-    u.employment_date != null && String(u.employment_date).trim()
-      ? String(u.employment_date).slice(0, 10)
-      : null;
-  const days = employmentDaysSince(employmentDateRaw);
-
-  const testResults: PersonnelProfileExportTestRow[] = testRows.map((row) => {
+function mapExportTestRows(testRows: Array<Record<string, unknown>>): PersonnelProfileExportTestRow[] {
+  return testRows.map((row) => {
     const type = row.type === "final" || row.test_type === "final" ? "final" : "trial";
     const status = row.status === "passed" ? "passed" : "failed";
     const questionsTotal =
@@ -176,14 +103,86 @@ export async function loadPersonnelProfileExportBundle(userId: string): Promise<
       }),
     };
   });
+}
 
+async function fetchExportTestRowsForUser(userId: string) {
+  const supabase = getServerSupabaseServiceClient();
+  const { linkedUserIds } = await resolveFinalUserContext(supabase, userId);
+  const userIdsForTests = linkedUserIds.length > 0 ? linkedUserIds : [userId];
+
+  let testRows: Array<Record<string, unknown>> = [];
+  const testPrimary = await supabase
+    .from("test_results")
+    .select("id,type,status,score,created_at,duration_seconds,questions_total,questions_correct,test_type")
+    .in("user_id", userIdsForTests)
+    .order("created_at", { ascending: false })
+    .limit(500);
+
+  if (!testPrimary.error) {
+    testRows = (testPrimary.data ?? []) as Array<Record<string, unknown>>;
+  } else if (isMissingColumnError(testPrimary.error.message)) {
+    const legacy = await supabase
+      .from("test_results")
+      .select("id,test_type,status,score,created_at,questions_total,questions_correct")
+      .in("user_id", userIdsForTests)
+      .order("created_at", { ascending: false })
+      .limit(500);
+    if (!legacy.error) {
+      testRows = (legacy.data ?? []) as Array<Record<string, unknown>>;
+    }
+  }
+
+  return mapExportTestRows(testRows);
+}
+
+async function loadUserExportProfileData(userId: string) {
+  const [profile, testResults] = await Promise.all([
+    loadPersonnelProfile(userId).catch(() => null),
+    fetchExportTestRowsForUser(userId).catch(() => [] as PersonnelProfileExportTestRow[]),
+  ]);
+  return { profile, testResults };
+}
+
+async function runInPool<T, R>(items: T[], concurrency: number, worker: (item: T) => Promise<R>) {
+  const results: R[] = [];
+  for (let i = 0; i < items.length; i += concurrency) {
+    const chunk = items.slice(i, i + concurrency);
+    results.push(...(await Promise.all(chunk.map(worker))));
+  }
+  return results;
+}
+
+function buildExportBundleFromUser(
+  u: Record<string, unknown>,
+  profile: PersonnelProfilePayload | null,
+  testResults: PersonnelProfileExportTestRow[],
+  exportedAt: string,
+): PersonnelProfileExportBundle {
+  const examMap = new Map((profile?.exams ?? []).map((e) => [e.examType, e]));
+  const exams = PERSONNEL_EXAM_TYPES.map((type) => {
+    const row = examMap.get(type);
+    const passed = row?.status === "passed";
+    return {
+      examType: type,
+      label: personnelExamLabel[type],
+      status: passed ? "Сдан" : "Не сдан",
+      passedAt: formatRuDate(row?.passedAt),
+      expiresAt: formatRuDate(row?.expiresAt),
+    };
+  });
+
+  const employmentDateRaw =
+    u.employment_date != null && String(u.employment_date).trim()
+      ? String(u.employment_date).slice(0, 10)
+      : null;
+  const days = employmentDaysSince(employmentDateRaw);
   const duty =
     typeof u.duty_location === "string" && u.duty_location.trim().toLowerCase() === "deployment"
       ? "deployment"
       : "base";
 
   return {
-    exportedAt: new Date().toLocaleString("ru-RU"),
+    exportedAt,
     user: {
       id: String(u.id),
       name: String(u.name ?? ""),
@@ -206,6 +205,36 @@ export async function loadPersonnelProfileExportBundle(userId: string): Promise<
     exams,
     testResults,
   };
+}
+
+export async function loadPersonnelProfileExportBundle(userId: string): Promise<PersonnelProfileExportBundle | null> {
+  const supabase = getServerSupabaseServiceClient();
+  let userRes = await supabase
+    .from("app_users")
+    .select(
+      "id,name,callsign,position,role,status,login,duty_location,unit_assignment,rota_platoon,rota_section,employment_date,created_at",
+    )
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (userRes.error && isMissingColumnError(userRes.error.message)) {
+    userRes = await supabase
+      .from("app_users")
+      .select(
+        "id,name,callsign,position,role,status,login,duty_location,unit_assignment,rota_platoon,rota_section,created_at",
+      )
+      .eq("id", userId)
+      .maybeSingle();
+  }
+
+  if (userRes.error || !userRes.data) return null;
+  const { profile, testResults } = await loadUserExportProfileData(userId);
+  return buildExportBundleFromUser(
+    userRes.data as Record<string, unknown>,
+    profile,
+    testResults,
+    new Date().toLocaleString("ru-RU"),
+  );
 }
 
 export function buildPersonnelExportFilename(bundle: PersonnelProfileExportBundle) {
@@ -260,27 +289,16 @@ export async function loadPersonnelBulkExportBundles(userIds: string[]): Promise
 
   const supabase = getServerSupabaseServiceClient();
   const exportedAt = new Date().toLocaleString("ru-RU");
-  const linkedUserMap = await resolveBulkLinkedUserIds(supabase, uniqueIds);
-  const testQueryIds = [...new Set(linkedUserMap.keys())];
 
-  const [profiles, usersRes, testPrimaryRes] = await Promise.all([
-    loadPersonnelProfilesBulk(uniqueIds, { linkedUserMap }),
-    supabase
-      .from("app_users")
-      .select(
-        "id,name,callsign,position,role,status,login,duty_location,unit_assignment,rota_platoon,rota_section,employment_date,created_at",
-      )
-      .in("id", uniqueIds),
-    supabase
-      .from("test_results")
-      .select("user_id,id,type,status,score,created_at,duration_seconds,questions_total,questions_correct,test_type")
-      .in("user_id", testQueryIds)
-      .order("created_at", { ascending: false })
-      .limit(Math.min(uniqueIds.length * 80, 6000)),
-  ]);
+  const usersPrimary = await supabase
+    .from("app_users")
+    .select(
+      "id,name,callsign,position,role,status,login,duty_location,unit_assignment,rota_platoon,rota_section,employment_date,created_at",
+    )
+    .in("id", uniqueIds);
 
-  let users = (usersRes.data ?? []) as Array<Record<string, unknown>>;
-  if (usersRes.error && isMissingColumnError(usersRes.error.message)) {
+  let users = (usersPrimary.data ?? []) as Array<Record<string, unknown>>;
+  if (usersPrimary.error && isMissingColumnError(usersPrimary.error.message)) {
     const fallback = await supabase
       .from("app_users")
       .select(
@@ -289,113 +307,18 @@ export async function loadPersonnelBulkExportBundles(userIds: string[]): Promise
       .in("id", uniqueIds);
     users = (fallback.data ?? []) as Array<Record<string, unknown>>;
   }
-
-  let testRows = (testPrimaryRes.data ?? []) as Array<Record<string, unknown>>;
-  if (testPrimaryRes.error && isMissingColumnError(testPrimaryRes.error.message)) {
-    const legacy = await supabase
-      .from("test_results")
-      .select("user_id,id,test_type,status,score,created_at,questions_total,questions_correct")
-      .in("user_id", testQueryIds)
-      .order("created_at", { ascending: false })
-      .limit(Math.min(uniqueIds.length * 80, 6000));
-    testRows = (legacy.data ?? []) as Array<Record<string, unknown>>;
-  }
-
-  const testsByUser = new Map<string, Array<Record<string, unknown>>>();
-  for (const row of testRows) {
-    const rawUid = String(row.user_id ?? "");
-    if (!rawUid) continue;
-    const uid = linkedUserMap.get(rawUid) ?? rawUid;
-    if (!uniqueIds.includes(uid)) continue;
-    const list = testsByUser.get(uid) ?? [];
-    if (list.length >= 80) continue;
-    list.push(row);
-    testsByUser.set(uid, list);
-  }
-
   const userMap = new Map(users.map((u) => [String(u.id), u]));
+
+  const profileData = await runInPool(uniqueIds, 6, async (userId) => ({
+    userId,
+    ...(await loadUserExportProfileData(userId)),
+  }));
+
   const bundles: PersonnelProfileExportBundle[] = [];
-
-  for (const userId of uniqueIds) {
-    const u = userMap.get(userId);
-    const profile = profiles.get(userId) ?? null;
+  for (const item of profileData) {
+    const u = userMap.get(item.userId);
     if (!u) continue;
-
-    const examMap = new Map((profile?.exams ?? []).map((e) => [e.examType, e]));
-    const exams = PERSONNEL_EXAM_TYPES.map((type) => {
-      const row = examMap.get(type);
-      const passed = row?.status === "passed";
-      return {
-        examType: type,
-        label: personnelExamLabel[type],
-        status: passed ? "Сдан" : "Не сдан",
-        passedAt: formatRuDate(row?.passedAt),
-        expiresAt: formatRuDate(row?.expiresAt),
-      };
-    });
-
-    const employmentDateRaw =
-      u.employment_date != null && String(u.employment_date).trim()
-        ? String(u.employment_date).slice(0, 10)
-        : null;
-    const days = employmentDaysSince(employmentDateRaw);
-
-    const duty =
-      typeof u.duty_location === "string" && u.duty_location.trim().toLowerCase() === "deployment"
-        ? "deployment"
-        : "base";
-
-    const testResults: PersonnelProfileExportTestRow[] = (testsByUser.get(userId) ?? []).map((row) => {
-      const type = row.type === "final" || row.test_type === "final" ? "final" : "trial";
-      const status = row.status === "passed" ? "passed" : "failed";
-      const questionsTotal =
-        row.questions_total === null || row.questions_total === undefined ? null : Number(row.questions_total);
-      const questionsCorrect =
-        row.questions_correct === null || row.questions_correct === undefined ? null : Number(row.questions_correct);
-      const durationSeconds =
-        row.duration_seconds === null || row.duration_seconds === undefined ? null : Number(row.duration_seconds);
-
-      return {
-        createdAt: formatRuDateTime(String(row.created_at ?? "")),
-        type,
-        status,
-        score: Number(row.score ?? 0),
-        questionsTotal,
-        questionsCorrect,
-        durationSeconds,
-        resultText: formatTestResultForType({
-          type,
-          questionsCorrect,
-          questionsTotal,
-          scorePercent: Number(row.score ?? 0),
-        }),
-      };
-    });
-
-    bundles.push({
-      exportedAt,
-      user: {
-        id: userId,
-        name: String(u.name ?? ""),
-        callsign: String(u.callsign ?? ""),
-        login: String(u.login ?? ""),
-        position: String(u.position ?? ""),
-        role: u.role === "admin" ? "Администратор" : "Сотрудник",
-        status: u.status === "inactive" ? "Неактивен" : "Активен",
-        dutyLocation: dutyLocationLabel[duty],
-        unitAssignment: unitAssignmentLabelOrEmpty(normalizeUnitAssignment(u.unit_assignment)),
-        rotaUnit:
-          rotaUnitLabel(
-            u.rota_platoon != null ? Number(u.rota_platoon) : null,
-            u.rota_section != null ? Number(u.rota_section) : null,
-          ) || "—",
-        employmentDate: employmentDateRaw ? formatRuDate(employmentDateRaw) : "—",
-        employmentDays: days != null ? `${days} дн.` : "—",
-      },
-      profile,
-      exams,
-      testResults,
-    });
+    bundles.push(buildExportBundleFromUser(u, item.profile, item.testResults, exportedAt));
   }
 
   return bundles;

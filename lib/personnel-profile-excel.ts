@@ -15,10 +15,10 @@ const SECTION_FILL = "FFF3F4F6";
 const PASS_FILL = "FFD1FAE5";
 const FAIL_FILL = "FFFEE2E2";
 
-function styleHeaderRow(row: ExcelJS.Row) {
+function styleHeaderRow(row: ExcelJS.Row, height = 24) {
   row.eachCell((cell) => {
     cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: HEADER_FILL } };
-    cell.font = { bold: true, color: { argb: HEADER_FONT }, size: 11 };
+    cell.font = { bold: true, color: { argb: HEADER_FONT }, size: 10 };
     cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
     cell.border = {
       top: { style: "thin", color: { argb: "FFE5E7EB" } },
@@ -27,7 +27,7 @@ function styleHeaderRow(row: ExcelJS.Row) {
       right: { style: "thin", color: { argb: "FFE5E7EB" } },
     };
   });
-  row.height = 22;
+  row.height = height;
 }
 
 function styleSectionTitle(cell: ExcelJS.Cell) {
@@ -69,27 +69,31 @@ type TestSummaryCounts = {
 };
 
 function getTestSummary(bundle: PersonnelProfileExportBundle): TestSummaryCounts {
+  const fromResults: TestSummaryCounts = {
+    trialPassed: 0,
+    trialFailed: 0,
+    finalPassed: 0,
+    finalFailed: 0,
+  };
+  for (const test of bundle.testResults) {
+    if (test.type === "final") {
+      if (test.status === "passed") fromResults.finalPassed += 1;
+      else fromResults.finalFailed += 1;
+    } else if (test.status === "passed") fromResults.trialPassed += 1;
+    else fromResults.trialFailed += 1;
+  }
+  if (fromResults.trialPassed + fromResults.trialFailed + fromResults.finalPassed + fromResults.finalFailed > 0) {
+    return fromResults;
+  }
+
   const items = bundle.profile?.activitySummary ?? [];
   const val = (key: string) => items.find((item) => item.key === key)?.value ?? 0;
-  const summary: TestSummaryCounts = {
+  return {
     trialPassed: val("trialPassed"),
     trialFailed: val("trialFailed"),
     finalPassed: val("finalPassed"),
     finalFailed: val("finalFailed"),
   };
-
-  if (summary.trialPassed + summary.trialFailed + summary.finalPassed + summary.finalFailed > 0) {
-    return summary;
-  }
-
-  for (const test of bundle.testResults) {
-    if (test.type === "final") {
-      if (test.status === "passed") summary.finalPassed += 1;
-      else summary.finalFailed += 1;
-    } else if (test.status === "passed") summary.trialPassed += 1;
-    else summary.trialFailed += 1;
-  }
-  return summary;
 }
 
 function testSummarySlices(summary: TestSummaryCounts): ExcelChartSlice[] {
@@ -764,14 +768,14 @@ function addSummarySheet(
     { width: 22 },
     { width: 20 },
     { width: 16 },
-    { width: 13 },
+    { width: 16 },
+    { width: 10 },
+    { width: 14 },
+    { width: 8 },
     { width: 9 },
-    { width: 12 },
-    { width: 7 },
-    { width: 7 },
     { width: 13 },
-    { width: 7 },
-    { width: 9 },
+    { width: 8 },
+    { width: 10 },
   ];
 
   const title = sheet.addRow([meta.title]);
@@ -799,7 +803,7 @@ function addSummarySheet(
     "Медали",
     "Права",
   ]);
-  styleHeaderRow(header);
+  styleHeaderRow(header, 36);
 
   for (const bundle of bundles) {
     const p = bundle.profile;
