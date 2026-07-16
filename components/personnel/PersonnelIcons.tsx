@@ -50,6 +50,52 @@ export function IconCar({ size = 22 }: { size?: number }) {
   );
 }
 
+export function IconMedalSvoContribution({ size = 48 }: { size?: number }) {
+  const h = Math.round(size * (64 / 48));
+  return (
+    <svg
+      viewBox="0 0 48 64"
+      width={size}
+      height={h}
+      aria-hidden
+      className="personnel-medal-svo-icon"
+    >
+      {/* pentagonal ribbon */}
+      <path d="M8 2h32l6 10-6 6H8L2 12 8 2Z" fill="#b91c1c" />
+      <path d="M11 4h26l4 8-4 4H11L7 12l4-8Z" fill="#9ca3af" />
+      <path d="M22 4h4v12h-4z" fill="#111" />
+      <path d="M26 4h4v12h-4z" fill="#f59e0b" />
+      <path d="M18 4h4v12h-4z" fill="#f59e0b" />
+      <path d="M30 4h4v12h-4z" fill="#111" />
+      {/* suspension ring */}
+      <circle cx="24" cy="20" r="2.2" fill="#d4a017" stroke="#a16207" strokeWidth="0.6" />
+      {/* medal disc */}
+      <circle cx="24" cy="38" r="16" fill="#f5c542" stroke="#c58a00" strokeWidth="1.2" />
+      <circle cx="24" cy="38" r="13.5" fill="#fbbf24" stroke="#d97706" strokeWidth="0.8" />
+      {/* sun rays */}
+      {[0, 45, 90, 135, 180, 225, 270, 315].map((deg) => (
+        <line
+          key={deg}
+          x1="24"
+          y1="38"
+          x2={24 + 12 * Math.cos((deg * Math.PI) / 180)}
+          y2={38 + 12 * Math.sin((deg * Math.PI) / 180)}
+          stroke="#eab308"
+          strokeWidth="0.7"
+          opacity="0.55"
+        />
+      ))}
+      {/* simplified George on horseback */}
+      <path
+        d="M16 40c2-2 4-2 6-1 2 1 3 0 5-2 2-2 4-1 5 1 1 2 0 4-2 5-3 2-6 1-8-1-2-2-4-1-6 0-1 0-1-2 0-2Z"
+        fill="#b45309"
+      />
+      <path d="M28 34c1-2 3-3 5-2 1 1 0 3-2 3-1 0-2-1-3-1Z" fill="#92400e" />
+      <path d="M18 43h12" stroke="#92400e" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function IconMedal({ size = 24 }: { size?: number }) {
   return (
     <svg {...svgBase} width={size} height={size} aria-hidden>

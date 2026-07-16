@@ -3,12 +3,12 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { PersonnelMedalBadge } from "@/components/personnel/PersonnelMedalBadge";
 import { PersonnelPreviewBanner } from "@/components/personnel/PersonnelPreviewBanner";
 import {
   ExamStatusIcon,
   IconDeployment,
   IconLicense,
-  IconMedal,
   IconPremium,
   IconUavHit,
   PersonnelBarChart,
@@ -19,6 +19,8 @@ import { formatDate } from "@/lib/format";
 import {
   PERSONNEL_EXAM_TYPES,
   PERSONNEL_MEDAL_PRESETS,
+  PERSONNEL_MEDAL_SVO_TYPE,
+  getMedalDisplayTitle,
   personnelExamLabel,
   personnelRequestTypeLabel,
   rotaUnitLabel,
@@ -52,7 +54,7 @@ type Profile = {
     uavHits: number;
     premiumAmount: number;
   }>;
-  medals: Array<{ id: string; title: string; awardedAt: string }>;
+  medals: Array<{ id: string; medalType?: string; title: string; awardedAt: string }>;
   premiums: Array<{ id: string; title: string; amount: number; awardedAt: string }>;
   activityByMonth: Array<{ month: string; days: number }>;
   hitsByUavType: Array<{ label: string; value: number }>;
@@ -287,9 +289,7 @@ export default function PersonnelProfilePage() {
                 <h3 style={{ marginTop: 0 }}>Медали</h3>
                 <div className="personnel-medals-row">
                   {profile.medals.slice(0, 3).map((m) => (
-                    <div key={m.id} className="personnel-medal-item" title={m.title}>
-                      <IconMedal size={28} />
-                    </div>
+                    <PersonnelMedalBadge key={m.id} medalType={m.medalType} title={m.title} awardedAt={m.awardedAt} size={40} />
                   ))}
                   {profile.medals.length === 0 && <p className="page-subtitle">Нет медалей</p>}
                 </div>
@@ -378,17 +378,22 @@ export default function PersonnelProfilePage() {
       {tab === "medals" && (
         <article className="card">
           <div className="card-body">
-            <div className="personnel-medals-row">
+            <div className="personnel-medals-row personnel-medals-row--badges">
               {profile.medals.map((m) => (
-                <div key={m.id} className="personnel-medal-item" title={`${m.title} · ${formatDate(m.awardedAt)}`}>
-                  <IconMedal size={28} />
-                </div>
+                <PersonnelMedalBadge
+                  key={m.id}
+                  medalType={m.medalType}
+                  title={m.title}
+                  awardedAt={formatDate(m.awardedAt)}
+                  size={44}
+                  showFullTitle
+                />
               ))}
             </div>
             <ul style={{ marginTop: 12 }}>
               {profile.medals.map((m) => (
                 <li key={m.id}>
-                  {m.title} — {formatDate(m.awardedAt)}
+                  {getMedalDisplayTitle(m.medalType, m.title)} — {formatDate(m.awardedAt)}
                 </li>
               ))}
             </ul>
@@ -442,16 +447,16 @@ export default function PersonnelProfilePage() {
               <form className="form" onSubmit={onRequestSubmit} style={{ marginTop: 12 }}>
                 {requestType === "medal" && (
                   <>
-                    <label className="label">Медаль</label>
-                    <select className="select" name="medalType" required>
-                      {PERSONNEL_MEDAL_PRESETS.map((m) => (
-                        <option key={m.type} value={m.type}>
-                          {m.title}
-                        </option>
-                      ))}
-                    </select>
-                    <input type="hidden" name="title" value="" />
-                    <label className="label">Дата</label>
+                    <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
+                      <PersonnelMedalBadge
+                        medalType={PERSONNEL_MEDAL_SVO_TYPE}
+                        title={PERSONNEL_MEDAL_PRESETS[0].title}
+                        size={52}
+                        showFullTitle
+                      />
+                    </div>
+                    <input type="hidden" name="medalType" value={PERSONNEL_MEDAL_SVO_TYPE} />
+                    <label className="label">Дата награждения</label>
                     <input className="input" type="date" name="awardedAt" required />
                   </>
                 )}

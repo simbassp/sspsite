@@ -12,11 +12,36 @@ export const personnelExamLabel: Record<PersonnelExamType, string> = {
 export const PERSONNEL_LICENSE_CATEGORIES = ["B", "C", "CE"] as const;
 export type PersonnelLicenseCategory = (typeof PERSONNEL_LICENSE_CATEGORIES)[number];
 
+export const PERSONNEL_MEDAL_SVO_TYPE = "svo_victory_contribution" as const;
+
 export const PERSONNEL_MEDAL_PRESETS = [
-  { type: "medal_1", title: "Медаль 1" },
-  { type: "medal_2", title: "Медаль 2" },
-  { type: "medal_3", title: "Медаль 3" },
+  {
+    type: PERSONNEL_MEDAL_SVO_TYPE,
+    title: "За вклад в победу спецоперации",
+    shortTitle: "За вклад в победу СВО",
+  },
 ] as const;
+
+export type PersonnelMedalPresetType = (typeof PERSONNEL_MEDAL_PRESETS)[number]["type"];
+
+export function isSvoContributionMedal(medalType?: string | null, title?: string | null) {
+  if (medalType === PERSONNEL_MEDAL_SVO_TYPE) return true;
+  const t = (title ?? "").toLowerCase();
+  return t.includes("спецопера") || t.includes("вклад в победу");
+}
+
+export function getMedalDisplayTitle(medalType?: string | null, title?: string | null) {
+  const preset = PERSONNEL_MEDAL_PRESETS.find((m) => m.type === medalType);
+  if (preset) return preset.title;
+  return title?.trim() || "Медаль";
+}
+
+export function getMedalShortTitle(medalType?: string | null, title?: string | null) {
+  const preset = PERSONNEL_MEDAL_PRESETS.find((m) => m.type === medalType);
+  if (preset) return preset.shortTitle;
+  const full = getMedalDisplayTitle(medalType, title);
+  return full.length > 32 ? `${full.slice(0, 32)}…` : full;
+}
 
 export const PERSONNEL_REQUEST_TYPES = ["medal", "premium", "deployment", "exam"] as const;
 export type PersonnelRequestType = (typeof PERSONNEL_REQUEST_TYPES)[number];
