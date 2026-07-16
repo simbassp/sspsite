@@ -105,9 +105,11 @@ export type PersonnelActivityData = {
 export function PersonnelProfileStats({
   userId,
   onActivityData,
+  reloadToken = 0,
 }: {
   userId: string;
   onActivityData?: (data: PersonnelActivityData) => void;
+  reloadToken?: number;
 }) {
   const [profile, setProfile] = useState<ProfilePayload | null>(null);
   const [isPreview, setIsPreview] = useState(false);
@@ -160,7 +162,7 @@ export function PersonnelProfileStats({
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, reloadToken]);
 
   const examByType = useMemo(() => {
     const m = new Map<string, ProfilePayload["exams"][number]>();

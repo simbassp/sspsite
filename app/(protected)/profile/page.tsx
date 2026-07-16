@@ -27,6 +27,12 @@ import {
 } from "@/lib/users-repository";
 import { PersonnelProfileStats, type PersonnelActivityData } from "@/components/personnel/PersonnelProfileStats";
 import { PersonnelTestActivityBlock } from "@/components/personnel/PersonnelTestActivityBlock";
+import {
+  ResetTestStatsButton,
+  ResetTestStatsModal,
+  useResetTestStatsModal,
+} from "@/components/profile/ResetTestStatsModal";
+import { canResetTestResults } from "@/lib/permissions";
 import { getPositionBadgeClass } from "@/lib/position-ui";
 import { dutyLocationLabel } from "@/lib/duty-location";
 import {
@@ -34,8 +40,40 @@ import {
   unitAssignmentLabel,
   unitAssignmentLabelOrEmpty,
 } from "@/lib/unit-assignment";
-import { removeTrialResultsForUser } from "@/lib/storage";
-import { DutyLocation, TestResult, UnitAssignment } from "@/lib/types";
+import { removeTestResultsForUser } from "@/lib/storage";
+import { DutyLocation, TestResult, TestResultsResetScope, UnitAssignment } from "@/lib/types";
+
+function mapBootstrapResults(raw: Array<Record<string, unknown>>): TestResult[] {
+  return raw
+    .map((r) => ({
+      id: String(r.id),
+      userId: String(r.user_id),
+      type: r.type === "final" ? "final" : "trial",
+      status: r.status === "passed" ? "passed" : "failed",
+      score: Number(r.score || 0),
+      createdAt: String(r.created_at),
+      startedAt: r.started_at ? String(r.started_at) : null,
+      finishedAt: r.finished_at ? String(r.finished_at) : null,
+      durationSeconds:
+        r.duration_seconds === null || r.duration_seconds === undefined ? null : Number(r.duration_seconds),
+      isCompleted: r.is_completed === null || r.is_completed === undefined ? null : Boolean(r.is_completed),
+      questionsTotal:
+        r.questions_total === null || r.questions_total === undefined ? null : Number(r.questions_total),
+      questionsCorrect:
+        r.questions_correct === null || r.questions_correct === undefined ? null : Number(r.questions_correct),
+      finalAttemptIndex:
+        r.final_attempt_index === null || r.final_attempt_index === undefined
+          ? null
+          : Number(r.final_attempt_index),
+    }))
+    .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)) as TestResult[];
+}
+
+const RESET_SCOPE_LABELS: Record<TestResultsResetScope, string> = {
+  trial: "пробные тесты",
+  final: "итоговые тесты",
+  all: "все попытки",
+};
 
 export default function ProfilePage() {
   const [session, setSession] = useState<ReturnType<typeof readClientSession>>(null);
@@ -76,7 +114,10 @@ export default function ProfilePage() {
   const [showAllFinalAttempts, setShowAllFinalAttempts] = useState(false);
   const [finalAttemptsPage, setFinalAttemptsPage] = useState(1);
   const [personnelActivity, setPersonnelActivity] = useState<PersonnelActivityData | null>(null);
+  const [personnelReloadToken, setPersonnelReloadToken] = useState(0);
+  const resetStatsModal = useResetTestStatsModal("all");
   const canManageInvites = session?.role === "admin";
+  const canResetStats = useMemo(() => (session ? canResetTestResults(session) : false), [session]);
 
   useEffect(() => {
     setSession(readClientSession());
@@ -564,52 +605,51 @@ export default function ProfilePage() {
     }
   };
 
-  const onResetStats = async () => {
-    if (isResettingStats) return;
-    if (
-      !window.confirm(
-        "Сбросить статистику профиля? Итоговые попытки (лимит и окно итогового теста) НЕ будут сброшены.",
-      )
-    ) {
-      return;
+  const refreshPersonnelActivity = async (targetUserId: string) => {
+    setPersonnelReloadToken((token) => token + 1);
+    try {
+      const res = await fetch(`/api/personnel/profile/${encodeURIComponent(targetUserId)}`, { cache: "no-store" });
+      const payload = (await res.json()) as {
+        ok?: boolean;
+        profile?: PersonnelActivityData;
+      };
+      if (res.ok && payload.ok && payload.profile) {
+        setPersonnelActivity({
+          activityByMonth: payload.profile.activityByMonth,
+          activitySummary: payload.profile.activitySummary,
+        });
+      }
+    } catch {
+      // ignore — overview reloads via reloadToken
     }
+  };
+
+  const onConfirmResetStats = async () => {
+    if (isResettingStats || !session?.id) return;
     setIsResettingStats(true);
     setSettingsMessage("");
     try {
-      const response = await fetch("/api/profile/reset-stats", {
+      const response = await fetch("/api/admin/results/reset-stats", {
         method: "POST",
         headers: { "content-type": "application/json" },
+        body: JSON.stringify({ targetUserId: session.id, scope: resetStatsModal.scope }),
       });
       const payload = (await response.json()) as { ok?: boolean; error?: string };
       if (!response.ok || !payload.ok) {
         setSettingsMessage(payload.error || "Не удалось сбросить статистику.");
         return;
       }
-      removeTrialResultsForUser(session.id);
-      setSettingsMessage("Статистика профиля сброшена (без сброса итоговых попыток).");
+      removeTestResultsForUser(session.id, resetStatsModal.scope);
+      resetStatsModal.setOpen(false);
+      setSettingsMessage(`Статистика сброшена: ${RESET_SCOPE_LABELS[resetStatsModal.scope]}.`);
       const refreshed = await fetch("/api/profile/bootstrap", { cache: "no-store" });
       const refreshedPayload = (await refreshed.json()) as { ok?: boolean; results?: Array<Record<string, unknown>> };
       if (refreshed.ok && refreshedPayload.ok && Array.isArray(refreshedPayload.results)) {
-        const mappedRows = refreshedPayload.results.map((r) => ({
-          id: String(r.id),
-          userId: String(r.user_id),
-          type: r.type === "final" ? "final" : "trial",
-          status: r.status === "passed" ? "passed" : "failed",
-          score: Number(r.score || 0),
-          createdAt: String(r.created_at),
-          startedAt: r.started_at ? String(r.started_at) : null,
-          finishedAt: r.finished_at ? String(r.finished_at) : null,
-          durationSeconds:
-            r.duration_seconds === null || r.duration_seconds === undefined ? null : Number(r.duration_seconds),
-          isCompleted: r.is_completed === null || r.is_completed === undefined ? null : Boolean(r.is_completed),
-          questionsTotal: r.questions_total === null || r.questions_total === undefined ? null : Number(r.questions_total),
-          questionsCorrect:
-            r.questions_correct === null || r.questions_correct === undefined ? null : Number(r.questions_correct),
-          finalAttemptIndex:
-            r.final_attempt_index === null || r.final_attempt_index === undefined ? null : Number(r.final_attempt_index),
-        })) as TestResult[];
-        setRows(mappedRows.sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)));
+        setRows(mapBootstrapResults(refreshedPayload.results));
       }
+      await refreshPersonnelActivity(session.id);
+    } catch {
+      setSettingsMessage("Ошибка сети. Попробуйте ещё раз.");
     } finally {
       setIsResettingStats(false);
     }
@@ -645,29 +685,6 @@ export default function ProfilePage() {
     <svg viewBox="0 0 24 24" aria-hidden="true" style={{ ...iconStroke(color), width: size, height: size }}>
       <circle cx="12" cy="8" r="4" />
       <path d="M4 20c1.8-3.6 4.2-5 8-5s6.2 1.4 8 5" />
-    </svg>
-  );
-
-  const TrashIcon = ({ color = "currentColor", size = 18 }: { color?: string; size?: number }) => (
-    <svg
-      viewBox="0 0 24 24"
-      width={size}
-      height={size}
-      aria-hidden="true"
-      style={{
-        display: "block",
-        color,
-        stroke: "currentColor",
-        fill: "none",
-        strokeWidth: 2,
-        strokeLinecap: "round",
-        strokeLinejoin: "round",
-      }}
-    >
-      <polyline points="3 6 5 6 21 6" />
-      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-      <line x1="10" y1="11" x2="10" y2="17" />
-      <line x1="14" y1="11" x2="14" y2="17" />
     </svg>
   );
 
@@ -840,7 +857,11 @@ export default function ProfilePage() {
       </article>
 
       {session?.id ? (
-        <PersonnelProfileStats userId={session.id} onActivityData={setPersonnelActivity} />
+        <PersonnelProfileStats
+          userId={session.id}
+          onActivityData={setPersonnelActivity}
+          reloadToken={personnelReloadToken}
+        />
       ) : null}
 
       <ProfileNameEditModal
@@ -859,27 +880,32 @@ export default function ProfilePage() {
         message={profileModalMessage}
       />
 
-      <article className="card profile-danger-card" style={{ marginTop: 12 }}>
-        <div className="card-body profile-danger-inner">
-          <div className="profile-danger-copy">
-            <WarningTriangleIcon color="var(--accent)" size={28} />
-            <div>
-              <h4>Опасные действия</h4>
-              <p>Эти действия необратимы. Пожалуйста, будьте осторожны.</p>
+      {canResetStats && (
+        <article className="card profile-danger-card" style={{ marginTop: 12 }}>
+          <div className="card-body profile-danger-inner">
+            <div className="profile-danger-copy">
+              <WarningTriangleIcon color="var(--accent)" size={28} />
+              <div>
+                <h4>Опасные действия</h4>
+                <p>Эти действия необратимы. Пожалуйста, будьте осторожны.</p>
+              </div>
             </div>
+            <ResetTestStatsButton busy={isResettingStats} onClick={() => resetStatsModal.setOpen(true)} />
           </div>
-          <button
-            className="btn profile-danger-btn profile-btn-with-icon"
-            type="button"
-            onClick={() => void onResetStats()}
-            disabled={isResettingStats}
-            aria-busy={isResettingStats}
-          >
-            <TrashIcon size={18} />
-            {isResettingStats ? "Сбрасываю..." : "Сбросить статистику"}
-          </button>
-        </div>
-      </article>
+        </article>
+      )}
+
+      <ResetTestStatsModal
+        open={resetStatsModal.open}
+        saving={isResettingStats}
+        scope={resetStatsModal.scope}
+        onScopeChange={resetStatsModal.setScope}
+        onClose={() => {
+          if (isResettingStats) return;
+          resetStatsModal.setOpen(false);
+        }}
+        onConfirm={() => void onConfirmResetStats()}
+      />
 
       {emailModalOpen && (
         <div

@@ -12,9 +12,21 @@ import { dutyLocationLabel } from "@/lib/duty-location";
 import { unitAssignmentLabelOrEmpty, normalizeUnitAssignment } from "@/lib/unit-assignment";
 import { PersonnelProfileStats, type PersonnelActivityData } from "@/components/personnel/PersonnelProfileStats";
 import { PersonnelTestActivityBlock } from "@/components/personnel/PersonnelTestActivityBlock";
+import {
+  ResetTestStatsButton,
+  ResetTestStatsModal,
+  useResetTestStatsModal,
+} from "@/components/profile/ResetTestStatsModal";
 import { getPositionBadgeClass } from "@/lib/position-ui";
-import { canManageUsers, canViewUserList } from "@/lib/permissions";
-import { DutyLocation, TestResult, UnitAssignment } from "@/lib/types";
+import { canManageUsers, canResetTestResults, canViewUserList } from "@/lib/permissions";
+import { removeTestResultsForUser } from "@/lib/storage";
+import { DutyLocation, TestResult, TestResultsResetScope, UnitAssignment } from "@/lib/types";
+
+const RESET_SCOPE_LABELS: Record<TestResultsResetScope, string> = {
+  trial: "пробные тесты",
+  final: "итоговые тесты",
+  all: "все попытки",
+};
 
 type InspectUser = {
   id: string;
@@ -60,6 +72,7 @@ export default function ProfileUserInspectPage() {
   const canOpen = session ? canManageUsers(session) || canViewUserList(session) : false;
   const canEditDutyForOthers = session ? canManageUsers(session) : false;
   const canEditProfileFields = session ? canManageUsers(session) : false;
+  const canResetStats = session ? canResetTestResults(session) : false;
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -76,6 +89,10 @@ export default function ProfileUserInspectPage() {
   const [profileEditModalOpen, setProfileEditModalOpen] = useState(false);
   const [fieldError, setFieldError] = useState<{ name?: string; callsign?: string }>({});
   const [personnelActivity, setPersonnelActivity] = useState<PersonnelActivityData | null>(null);
+  const [personnelReloadToken, setPersonnelReloadToken] = useState(0);
+  const [isResettingStats, setIsResettingStats] = useState(false);
+  const [resetStatsMessage, setResetStatsMessage] = useState("");
+  const resetStatsModal = useResetTestStatsModal("all");
 
   useEffect(() => {
     if (!session || !userId || !canOpen) return;
@@ -208,6 +225,63 @@ export default function ProfileUserInspectPage() {
       setFinalAttemptsPage(finalAttemptsTotalPages);
     }
   }, [finalAttemptsPage, finalAttemptsTotalPages, showAllFinalAttempts]);
+
+  const reloadInspectUserResults = async () => {
+    const response = await fetch(`/api/profile/user/${encodeURIComponent(userId)}`, { cache: "no-store" });
+    const payload = (await response.json()) as {
+      ok?: boolean;
+      results?: Array<Record<string, unknown>>;
+    };
+    if (response.ok && payload.ok && Array.isArray(payload.results)) {
+      setRows(mapRows({ results: payload.results }).sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)));
+    }
+  };
+
+  const refreshPersonnelActivity = async () => {
+    setPersonnelReloadToken((token) => token + 1);
+    try {
+      const res = await fetch(`/api/personnel/profile/${encodeURIComponent(userId)}`, { cache: "no-store" });
+      const payload = (await res.json()) as {
+        ok?: boolean;
+        profile?: PersonnelActivityData;
+      };
+      if (res.ok && payload.ok && payload.profile) {
+        setPersonnelActivity({
+          activityByMonth: payload.profile.activityByMonth,
+          activitySummary: payload.profile.activitySummary,
+        });
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const onConfirmResetStats = async () => {
+    if (isResettingStats || !userId) return;
+    setIsResettingStats(true);
+    setResetStatsMessage("");
+    try {
+      const response = await fetch("/api/admin/results/reset-stats", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ targetUserId: userId, scope: resetStatsModal.scope }),
+      });
+      const payload = (await response.json()) as { ok?: boolean; error?: string };
+      if (!response.ok || !payload.ok) {
+        setResetStatsMessage(payload.error || "Не удалось сбросить статистику.");
+        return;
+      }
+      removeTestResultsForUser(userId, resetStatsModal.scope);
+      resetStatsModal.setOpen(false);
+      setResetStatsMessage(`Статистика сброшена: ${RESET_SCOPE_LABELS[resetStatsModal.scope]}.`);
+      await reloadInspectUserResults();
+      await refreshPersonnelActivity();
+    } catch {
+      setResetStatsMessage("Ошибка сети. Попробуйте ещё раз.");
+    } finally {
+      setIsResettingStats(false);
+    }
+  };
 
   const renderAttemptEntry = (item: TestResult) => {
     const statusText = item.status === "passed" ? "Сдан" : "Не сдан";
@@ -550,7 +624,47 @@ export default function ProfileUserInspectPage() {
             message={profileMessage}
           />
 
-          {userId ? <PersonnelProfileStats userId={userId} onActivityData={setPersonnelActivity} /> : null}
+          {userId ? (
+            <PersonnelProfileStats
+              userId={userId}
+              onActivityData={setPersonnelActivity}
+              reloadToken={personnelReloadToken}
+            />
+          ) : null}
+
+          {canResetStats && (
+            <article className="card profile-danger-card" style={{ marginTop: 12 }}>
+              <div className="card-body profile-danger-inner">
+                <div className="profile-danger-copy">
+                  <div>
+                    <h4 style={{ margin: 0 }}>Сброс статистики</h4>
+                    <p className="page-subtitle" style={{ margin: "6px 0 0" }}>
+                      Удаление попыток тестов пользователя {inspectUser?.callsign || inspectUser?.name}. Действие
+                      необратимо.
+                    </p>
+                    {resetStatsMessage ? (
+                      <p className="page-subtitle" style={{ margin: "8px 0 0", color: "var(--muted)" }}>
+                        {resetStatsMessage}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+                <ResetTestStatsButton busy={isResettingStats} onClick={() => resetStatsModal.setOpen(true)} />
+              </div>
+            </article>
+          )}
+
+          <ResetTestStatsModal
+            open={resetStatsModal.open}
+            saving={isResettingStats}
+            scope={resetStatsModal.scope}
+            onScopeChange={resetStatsModal.setScope}
+            onClose={() => {
+              if (isResettingStats) return;
+              resetStatsModal.setOpen(false);
+            }}
+            onConfirm={() => void onConfirmResetStats()}
+          />
 
           <article className="card" style={{ marginTop: 12 }}>
             <div className="card-body">

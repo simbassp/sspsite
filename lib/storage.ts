@@ -332,12 +332,21 @@ export function listTestResults() {
   return readData().testResults;
 }
 
-/** Удаляет пробные попытки пользователя из офлайн-кэша (после сброса статистики на сервере). */
-export function removeTrialResultsForUser(userId: string) {
+/** Удаляет попытки пользователя из офлайн-кэша (после сброса статистики на сервере). */
+export function removeTestResultsForUser(userId: string, scope: "trial" | "final" | "all") {
   if (typeof window === "undefined") return;
   const data = readData();
-  data.testResults = data.testResults.filter((r) => !(r.userId === userId && r.type === "trial"));
+  data.testResults = data.testResults.filter((r) => {
+    if (r.userId !== userId) return true;
+    if (scope === "all") return false;
+    return r.type !== scope;
+  });
   writeData(data);
+}
+
+/** @deprecated используйте removeTestResultsForUser */
+export function removeTrialResultsForUser(userId: string) {
+  removeTestResultsForUser(userId, "trial");
 }
 
 export function listTestQuestions(type?: "trial" | "final") {

@@ -23,6 +23,7 @@ export type UnitAssignment =
   | "office";
 export type TestType = "trial" | "final";
 export type TestStatus = "passed" | "failed";
+export type TestResultsResetScope = "trial" | "final" | "all";
 
 export interface UserPermissions {
   news: boolean;
