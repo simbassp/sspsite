@@ -44,7 +44,7 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
     const userPrimary = await supabase
       .from("app_users")
       .select(
-        "id,name,callsign,position,role,status,login,is_online,last_seen_at,duty_location,unit_assignment,rota_platoon,rota_section,employment_date,created_at",
+        "id,name,callsign,position,role,status,login,is_online,last_seen_at,duty_location,unit_assignment,rota_platoon,rota_section,employment_date",
       )
       .eq("id", userId)
       .maybeSingle();
@@ -117,7 +117,6 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
     const rotaPlatoon = userRow.rota_platoon != null ? Number(userRow.rota_platoon) : null;
     const rotaSection = userRow.rota_section != null ? Number(userRow.rota_section) : null;
     const employmentDate = userRow.employment_date ? String(userRow.employment_date).slice(0, 10) : null;
-    const accountCreatedAt = userRow.created_at ? String(userRow.created_at).slice(0, 10) : null;
 
     return Response.json({
       ok: true,
@@ -135,7 +134,6 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
         rota_platoon: rotaPlatoon,
         rota_section: rotaSection,
         employment_date: employmentDate,
-        account_created_at: accountCreatedAt,
       },
       results: resultsRows.map((r) => ({
         id: r.id,

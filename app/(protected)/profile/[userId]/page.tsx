@@ -22,7 +22,6 @@ import {
 import { getPositionBadgeClass } from "@/lib/position-ui";
 import { canManageUsers, canResetTestResults, canViewUserList, canModeratePersonnel } from "@/lib/permissions";
 import { removeTestResultsForUser } from "@/lib/storage";
-import { resolveEmploymentDate } from "@/lib/employment-date";
 import { rotaUnitCompactLabel, type RotaPlatoon, type RotaSection } from "@/lib/rota-unit";
 import { DutyLocation, TestResult, TestResultsResetScope, UnitAssignment } from "@/lib/types";
 
@@ -46,7 +45,6 @@ type InspectUser = {
   rota_platoon?: number | null;
   rota_section?: number | null;
   employment_date?: string | null;
-  account_created_at?: string | null;
 };
 
 function mapRows(payload: { results?: Array<Record<string, unknown>> }): TestResult[] {
@@ -110,7 +108,6 @@ export default function ProfileUserInspectPage() {
   const [rotaSaving, setRotaSaving] = useState(false);
   const [rotaSaveError, setRotaSaveError] = useState("");
   const [employmentDateStored, setEmploymentDateStored] = useState<string | null>(null);
-  const [accountCreatedAt, setAccountCreatedAt] = useState("");
   const [employmentSaving, setEmploymentSaving] = useState(false);
   const [employmentSaveError, setEmploymentSaveError] = useState("");
 
@@ -152,7 +149,6 @@ export default function ProfileUserInspectPage() {
             : null,
         );
         setEmploymentDateStored(typeof u.employment_date === "string" && u.employment_date ? u.employment_date : null);
-        setAccountCreatedAt(typeof u.account_created_at === "string" ? u.account_created_at : "");
         setRows(mapRows({ results: payload.results }).sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)));
       } catch {
         if (!cancelled) setError("network");
@@ -190,7 +186,6 @@ export default function ProfileUserInspectPage() {
             setEmploymentDateStored(
               typeof u.employment_date === "string" && u.employment_date ? u.employment_date : null,
             );
-            setAccountCreatedAt(typeof u.account_created_at === "string" ? u.account_created_at : "");
           }
         } catch {
           /* ignore */
@@ -327,8 +322,6 @@ export default function ProfileUserInspectPage() {
       if (!ok) setRotaSection(prev);
     })();
   };
-
-  const employmentDateDisplay = resolveEmploymentDate(employmentDateStored, accountCreatedAt);
 
   const onEmploymentDateChangeForUser = (next: string) => {
     if (!userId || !canEditEmploymentForOthers || !next || employmentSaving) return;
@@ -739,7 +732,7 @@ export default function ProfileUserInspectPage() {
                   ) : null}
                   {canEditEmploymentForOthers ? (
                     <ProfileEmploymentDateField
-                      value={employmentDateDisplay}
+                      value={employmentDateStored ?? ""}
                       saving={employmentSaving}
                       error={employmentSaveError}
                       onChange={onEmploymentDateChangeForUser}
@@ -748,7 +741,7 @@ export default function ProfileUserInspectPage() {
                     <div className="profile-hero-duty">
                       <p className="label profile-hero-duty-label">Трудоустройство</p>
                       <span className="profile-rota-badge profile-rota-badge--static">
-                        {employmentDateDisplay ? formatDate(employmentDateDisplay) : "Не указано"}
+                        {employmentDateStored ? formatDate(employmentDateStored) : "Не указано"}
                       </span>
                     </div>
                   )}

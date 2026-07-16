@@ -10,7 +10,7 @@ import {
 } from "@/lib/personnel-catalog";
 import { resolveFinalUserContext } from "@/lib/server-final-user-context";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
-import { employmentDaysSince, resolveEmploymentDate } from "@/lib/employment-date";
+import { employmentDaysSince } from "@/lib/employment-date";
 
 export type PersonnelModuleSettings = {
   moduleEnabled: boolean;
@@ -88,8 +88,8 @@ export type PersonnelProfilePayload = PersonnelUserCard & {
   medals: PersonnelMedalRow[];
   premiums: PersonnelPremiumRow[];
   pendingRequests: number;
-  daysInSystem: number;
-  employmentDate: string;
+  daysInSystem: number | null;
+  employmentDate: string | null;
   activityByMonth: PersonnelActivityMonth[];
   activitySummary: PersonnelActivitySegment[];
 };
@@ -592,8 +592,8 @@ export async function loadPersonnelProfile(userId: string): Promise<PersonnelPro
     medals,
     premiums,
     pendingRequests: pendingRes.count ?? 0,
-    daysInSystem: employmentDaysSince(basic.employmentDate, basic.createdAt),
-    employmentDate: resolveEmploymentDate(basic.employmentDate, basic.createdAt),
+    daysInSystem: employmentDaysSince(basic.employmentDate),
+    employmentDate: basic.employmentDate,
     activityByMonth,
     activitySummary,
   };

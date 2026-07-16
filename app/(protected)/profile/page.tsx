@@ -44,7 +44,6 @@ import {
   unitAssignmentLabelOrEmpty,
 } from "@/lib/unit-assignment";
 import { removeTestResultsForUser } from "@/lib/storage";
-import { resolveEmploymentDate } from "@/lib/employment-date";
 import { rotaUnitCompactLabel, type RotaPlatoon, type RotaSection } from "@/lib/rota-unit";
 import { DutyLocation, TestResult, TestResultsResetScope, UnitAssignment } from "@/lib/types";
 
@@ -114,7 +113,6 @@ export default function ProfilePage() {
   const [rotaSaving, setRotaSaving] = useState(false);
   const [rotaSaveError, setRotaSaveError] = useState("");
   const [employmentDateStored, setEmploymentDateStored] = useState<string | null>(null);
-  const [accountCreatedAt, setAccountCreatedAt] = useState("");
   const [employmentSaving, setEmploymentSaving] = useState(false);
   const [employmentSaveError, setEmploymentSaveError] = useState("");
   const [dutySaving, setDutySaving] = useState(false);
@@ -154,7 +152,6 @@ export default function ProfilePage() {
           rotaPlatoon?: number | null;
           rotaSection?: number | null;
           employmentDate?: string | null;
-          accountCreatedAt?: string | null;
           results?: Array<Record<string, unknown>>;
           inviteCodes?: Array<Record<string, unknown>>;
         };
@@ -207,7 +204,6 @@ export default function ProfilePage() {
         setEmploymentDateStored(
           typeof payload.employmentDate === "string" && payload.employmentDate ? payload.employmentDate : null,
         );
-        setAccountCreatedAt(typeof payload.accountCreatedAt === "string" ? payload.accountCreatedAt : "");
         if (typeof payload.email === "string" && payload.email) {
           setEmailInput(payload.email);
         } else {
@@ -638,8 +634,6 @@ export default function ProfilePage() {
     })();
   };
 
-  const employmentDateDisplay = resolveEmploymentDate(employmentDateStored, accountCreatedAt);
-
   const onEmploymentDateChange = (next: string) => {
     if (!next || employmentSaving) return;
     const prevStored = employmentDateStored;
@@ -953,7 +947,7 @@ export default function ProfilePage() {
                 />
               )}
               <ProfileEmploymentDateField
-                value={employmentDateDisplay}
+                value={employmentDateStored ?? ""}
                 saving={employmentSaving}
                 error={employmentSaveError}
                 onChange={onEmploymentDateChange}

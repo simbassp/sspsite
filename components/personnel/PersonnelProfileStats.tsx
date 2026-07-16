@@ -59,8 +59,8 @@ type ProfilePayload = {
   position: Position;
   rotaPlatoon: number | null;
   rotaSection: number | null;
-  daysInSystem: number;
-  employmentDate: string;
+  daysInSystem: number | null;
+  employmentDate: string | null;
   deploymentsCount: number;
   deploymentDays: number;
   uavHitsTotal: number;
@@ -392,8 +392,14 @@ export function PersonnelProfileStats({
           </span>
           <div>
             <p className="label">Трудоустройство</p>
-            <strong>{profile.daysInSystem} дней</strong>
-            <p className="personnel-stat-card__sub">{formatDate(profile.employmentDate)}</p>
+            {profile.employmentDate ? (
+              <>
+                <strong>{profile.daysInSystem} дней</strong>
+                <p className="personnel-stat-card__sub">{formatDate(profile.employmentDate)}</p>
+              </>
+            ) : (
+              <strong>Не указано</strong>
+            )}
           </div>
         </div>
         <div className="personnel-stat-card personnel-stat-card--icon">

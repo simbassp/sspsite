@@ -12,17 +12,9 @@ export function normalizeEmploymentDateInput(value: unknown): string | null {
   return s;
 }
 
-export function employmentDaysSince(employmentDate: string | null | undefined, fallbackCreatedAt: string) {
-  const raw = employmentDate?.trim() || fallbackCreatedAt;
-  const start = new Date(employmentDate ? `${employmentDate}T12:00:00` : raw);
+export function employmentDaysSince(employmentDate: string | null | undefined): number | null {
+  if (!employmentDate?.trim()) return null;
+  const start = new Date(`${employmentDate.trim()}T12:00:00`);
   const now = new Date();
   return Math.max(1, Math.round((now.getTime() - start.getTime()) / 86400000));
-}
-
-export function resolveEmploymentDate(
-  employmentDate: string | null | undefined,
-  fallbackCreatedAt: string,
-): string {
-  if (employmentDate?.trim()) return employmentDate.trim().slice(0, 10);
-  return fallbackCreatedAt.slice(0, 10);
 }

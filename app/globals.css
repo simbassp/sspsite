@@ -3204,6 +3204,15 @@ html[data-theme="dark"] .final-review-answer--correct {
   color: #b88319;
 }
 
+.personnel-icon-ruble {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  line-height: 1;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
 .personnel-stat-card__icon--purple {
   background: rgba(168, 85, 247, 0.14);
   color: #8b5cf6;

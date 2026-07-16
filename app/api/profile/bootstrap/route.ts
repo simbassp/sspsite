@@ -36,7 +36,7 @@ export async function GET() {
     }
     const profilePrimaryQ = await supabase
       .from("app_users")
-      .select("auth_user_id,duty_location,unit_assignment,rota_platoon,rota_section,employment_date,created_at")
+      .select("auth_user_id,duty_location,unit_assignment,rota_platoon,rota_section,employment_date")
       .eq("id", session.id)
       .maybeSingle();
     let profileRow: Record<string, unknown> | null = (profilePrimaryQ.data || null) as Record<string, unknown> | null;
@@ -46,7 +46,6 @@ export async function GET() {
     let rotaPlatoon: number | null = null;
     let rotaSection: number | null = null;
     let employmentDate: string | null = null;
-    let accountCreatedAt: string | null = null;
     if (profilePrimaryQ.error && isMissingColumnError(profilePrimaryQ.error.message)) {
       const profileLegacyQ = await supabase.from("app_users").select("auth_user_id").eq("id", session.id).maybeSingle();
       profileRow = (profileLegacyQ.data || null) as Record<string, unknown> | null;
@@ -59,7 +58,6 @@ export async function GET() {
       rotaPlatoon = profileRow.rota_platoon != null ? Number(profileRow.rota_platoon) : null;
       rotaSection = profileRow.rota_section != null ? Number(profileRow.rota_section) : null;
       employmentDate = profileRow.employment_date ? String(profileRow.employment_date).slice(0, 10) : null;
-      accountCreatedAt = profileRow.created_at ? String(profileRow.created_at).slice(0, 10) : null;
     }
 
     if (resultsError || profileError) {
@@ -96,7 +94,6 @@ export async function GET() {
       rotaPlatoon,
       rotaSection,
       employmentDate,
-      accountCreatedAt,
       results: resultsRows.map((r) => ({
         id: r.id,
         user_id: r.user_id,
