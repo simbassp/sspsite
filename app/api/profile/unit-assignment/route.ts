@@ -1,6 +1,6 @@
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
-import { normalizeUnitAssignment, type UnitAssignment } from "@/lib/unit-assignment";
+import { normalizeUnitAssignment, formatUnitAssignmentSaveError, type UnitAssignment } from "@/lib/unit-assignment";
 
 export const runtime = "nodejs";
 
@@ -46,7 +46,7 @@ export async function PATCH(request: Request) {
           { status: 503 },
         );
       }
-      return Response.json({ ok: false, error: upd.error.message }, { status: 500 });
+      return Response.json({ ok: false, error: formatUnitAssignmentSaveError(upd.error.message) }, { status: 500 });
     }
 
     if (!upd.data) {

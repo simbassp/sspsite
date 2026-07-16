@@ -61,6 +61,7 @@ export default function ProfilePage() {
   const [dutyLocation, setDutyLocation] = useState<DutyLocation>("base");
   const [unitAssignment, setUnitAssignment] = useState<UnitAssignment | null>(null);
   const [unitSaving, setUnitSaving] = useState(false);
+  const [unitSaveError, setUnitSaveError] = useState("");
   const [dutySaving, setDutySaving] = useState(false);
   const [fieldError, setFieldError] = useState<{ name?: string; callsign?: string }>({});
   const [isResettingStats, setIsResettingStats] = useState(false);
@@ -499,12 +500,13 @@ export default function ProfilePage() {
     const prev = unitAssignment;
     setUnitAssignment(next);
     setUnitSaving(true);
+    setUnitSaveError("");
     setSettingsMessage("");
     const res = await updateCurrentUserUnitAssignment(next);
     setUnitSaving(false);
     if (!res.ok) {
       setUnitAssignment(prev);
-      setSettingsMessage(res.error);
+      setUnitSaveError(res.error);
     }
   };
 
@@ -789,6 +791,11 @@ export default function ProfilePage() {
                   </option>
                 ))}
               </select>
+              {!!unitSaveError && (
+                <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0, color: "var(--bad)", maxWidth: 280 }}>
+                  {unitSaveError}
+                </p>
+              )}
             </div>
             <div className="profile-hero-duty">
               <p className="label profile-hero-duty-label">Место положения</p>

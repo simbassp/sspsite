@@ -14,7 +14,7 @@ import {
   updateUser,
 } from "@/lib/storage";
 import { normalizeDutyLocation } from "@/lib/duty-location";
-import { normalizeUnitAssignment, UNIT_ASSIGNMENT_OPTIONS } from "@/lib/unit-assignment";
+import { normalizeUnitAssignment, UNIT_ASSIGNMENT_OPTIONS, formatUnitAssignmentSaveError } from "@/lib/unit-assignment";
 import { DutyLocation, Position, SessionUser, UserPermissions, UserRecord, UnitAssignment } from "@/lib/types";
 
 type UserRow = {
@@ -858,7 +858,7 @@ export async function updateCurrentUserUnitAssignment(unit: UnitAssignment | nul
     if (!response.ok || !payload.ok) {
       return {
         ok: false as const,
-        error: payload.error || "Не удалось сохранить подразделение.",
+        error: formatUnitAssignmentSaveError(payload.error || "Не удалось сохранить подразделение."),
       };
     }
     const current = readClientSession();

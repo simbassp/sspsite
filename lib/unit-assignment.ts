@@ -52,3 +52,22 @@ export function matchesUnitFilter(filter: UnitAssignmentFilter, unit: UnitAssign
   if (filter === "unset") return !unit;
   return unit === filter;
 }
+
+export function formatUnitAssignmentSaveError(raw: string | undefined) {
+  const message = (raw ?? "").trim();
+  const lower = message.toLowerCase();
+  if (
+    lower.includes("app_users_unit_assignment_check") ||
+    (lower.includes("check constraint") && lower.includes("unit_assignment")) ||
+    lower.includes("violates check constraint")
+  ) {
+    return "Не удалось сохранить: в базе ещё не добавлены «Штаб» и «Канцелярия». В Supabase выполните SQL-миграцию (файл 20260716130000_user_unit_assignment_staff_office.sql).";
+  }
+  if (message === "invalid_unit_assignment") {
+    return "Некорректное подразделение.";
+  }
+  if (message === "not_found") {
+    return "Профиль не найден. Выйдите и войдите снова.";
+  }
+  return message || "Не удалось сохранить подразделение.";
+}
