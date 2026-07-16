@@ -142,9 +142,12 @@ export function IconUavHit({ size = 20 }: { size?: number }) {
   );
 }
 
-export function IconLicense({ label }: { label: string }) {
+export function IconLicense({ label, compact = false }: { label: string; compact?: boolean }) {
   return (
-    <span className="personnel-license-badge" title={`Категория ${label}`}>
+    <span
+      className={`personnel-license-badge${compact ? " personnel-license-badge--compact" : ""}`}
+      title={`Категория ${label}`}
+    >
       {label}
     </span>
   );
@@ -284,6 +287,52 @@ export function PersonnelExamRosterIcon({ type, passed }: { type: PersonnelExamT
         <ExamTypeIcon type={type} size={14} />
       </span>
     </span>
+  );
+}
+
+export type PersonnelTestRosterStats = {
+  trialPassed: number;
+  trialFailed: number;
+  finalPassed: number;
+  finalFailed: number;
+};
+
+function personnelRosterTestLine(
+  label: string,
+  passed: number,
+  failed: number,
+  title: string,
+) {
+  return (
+    <span className="personnel-roster-tests__line" title={title}>
+      <span className="personnel-roster-tests__tag">{label}</span>
+      <span className="personnel-roster-tests__ok">{passed}</span>
+      <span className="personnel-roster-tests__sep">/</span>
+      <span className="personnel-roster-tests__bad">{failed}</span>
+    </span>
+  );
+}
+
+export function PersonnelRosterTestCell({ stats }: { stats: PersonnelTestRosterStats }) {
+  const total = stats.trialPassed + stats.trialFailed + stats.finalPassed + stats.finalFailed;
+  if (total === 0) return <span className="personnel-roster-tests__empty">—</span>;
+
+  return (
+    <div className="personnel-roster-tests" title="Сданы / не сданы">
+      {personnelRosterTestLine("П", stats.trialPassed, stats.trialFailed, "Пробные: сданы / не сданы")}
+      {personnelRosterTestLine("И", stats.finalPassed, stats.finalFailed, "Итоговые: сданы / не сданы")}
+    </div>
+  );
+}
+
+export function PersonnelRosterLicenseCell({ categories }: { categories: string[] }) {
+  if (!categories.length) return <span className="personnel-roster-tests__empty">—</span>;
+  return (
+    <div className="personnel-roster-licenses">
+      {categories.map((label) => (
+        <IconLicense key={label} label={label} compact />
+      ))}
+    </div>
   );
 }
 

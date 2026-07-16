@@ -18,6 +18,9 @@ import {
 import {
   IconUavHit,
   PersonnelExamRosterIcon,
+  PersonnelRosterLicenseCell,
+  PersonnelRosterTestCell,
+  type PersonnelTestRosterStats,
 } from "@/components/personnel/PersonnelIcons";
 import { readClientSession } from "@/lib/client-auth";
 import { canManageUsers, canResetTestResults } from "@/lib/permissions";
@@ -39,6 +42,8 @@ type UserRow = {
   deploymentDays: number;
   uavHitsTotal: number;
   premiumsTotal: number;
+  licenseCategories: string[];
+  testStats: PersonnelTestRosterStats;
 };
 
 type Tab = "all" | "top";
@@ -283,29 +288,40 @@ export default function PersonnelListPage() {
 
           <article className="card">
             <div className="card-body personnel-table-wrap">
+              <p className="personnel-table-scroll-hint">Прокрутите таблицу вбок, чтобы увидеть все колонки</p>
               <table className="personnel-table">
                 <thead>
                   <tr>
-                    <th>Сотрудник</th>
-                    <th>Взвод / отделение</th>
-                    <th>Зачёты</th>
-                    <th>Командировки</th>
-                    <th>Сбития</th>
-                    <th>Премии</th>
-                    <th>Статус</th>
+                    <th className="personnel-table__sticky">Сотрудник</th>
+                    <th className="personnel-table__compact" title="Взвод / отделение">
+                      Взвод/отд.
+                    </th>
+                    <th className="personnel-table__compact">Зачёты</th>
+                    <th className="personnel-table__compact" title="Пробные и итоговые: сданы / не сданы">
+                      Тесты
+                    </th>
+                    <th className="personnel-table__compact" title="Категории прав">
+                      Права
+                    </th>
+                    <th className="personnel-table__compact" title="Командировки">
+                      Команд.
+                    </th>
+                    <th className="personnel-table__compact">Сбития</th>
+                    <th className="personnel-table__compact">Премии</th>
+                    <th className="personnel-table__compact">Статус</th>
                   </tr>
                 </thead>
                 <tbody>
                   {users.map((u) => (
                     <tr key={u.id}>
-                      <td>
+                      <td className="personnel-table__sticky">
                         <Link href={profilePath(u.id)} style={{ fontWeight: 700, color: "inherit" }}>
                           {u.name}
                         </Link>
                         <div style={{ color: "var(--muted)", fontSize: 13 }}>{u.callsign}</div>
                       </td>
-                      <td>{rotaUnitLabel(u.rotaPlatoon, u.rotaSection)}</td>
-                      <td>
+                      <td className="personnel-table__compact">{rotaUnitLabel(u.rotaPlatoon, u.rotaSection)}</td>
+                      <td className="personnel-table__compact">
                         <div className="personnel-roster-exams">
                           {PERSONNEL_EXAM_TYPES.map((t) => {
                             const st = examMap.get(u.id)?.get(t);
@@ -315,12 +331,18 @@ export default function PersonnelListPage() {
                           })}
                         </div>
                       </td>
-                      <td>
+                      <td className="personnel-table__compact">
+                        <PersonnelRosterTestCell stats={u.testStats} />
+                      </td>
+                      <td className="personnel-table__compact">
+                        <PersonnelRosterLicenseCell categories={u.licenseCategories} />
+                      </td>
+                      <td className="personnel-table__compact">
                         {u.deploymentsCount} ({u.deploymentDays} дн.)
                       </td>
-                      <td>{u.uavHitsTotal}</td>
-                      <td>{u.premiumsTotal.toLocaleString("ru-RU")} ₽</td>
-                      <td>
+                      <td className="personnel-table__compact">{u.uavHitsTotal}</td>
+                      <td className="personnel-table__compact">{u.premiumsTotal.toLocaleString("ru-RU")} ₽</td>
+                      <td className="personnel-table__compact">
                         <span className={`pill ${u.dutyLocation === "base" ? "pill-green" : "pill-red"}`}>
                           {dutyLocationLabel[u.dutyLocation]}
                         </span>
@@ -340,7 +362,12 @@ export default function PersonnelListPage() {
                     <p className="page-subtitle" style={{ margin: "6px 0" }}>
                       {rotaUnitLabel(u.rotaPlatoon, u.rotaSection)}
                     </p>
-                    <p style={{ margin: 0 }}>
+                    <p style={{ margin: "8px 0 0" }}>
+                      <PersonnelRosterTestCell stats={u.testStats} />
+                      {" · "}
+                      <PersonnelRosterLicenseCell categories={u.licenseCategories} />
+                    </p>
+                    <p style={{ margin: "8px 0 0" }}>
                       <IconUavHit /> {u.uavHitsTotal} · {u.premiumsTotal.toLocaleString("ru-RU")} ₽
                     </p>
                   </div>

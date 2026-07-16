@@ -8,7 +8,7 @@ import {
   type PersonnelLicenseCategory,
   normalizePersonnelLicenseCategories,
 } from "@/lib/personnel-catalog";
-import { resolveFinalUserContext } from "@/lib/server-final-user-context";
+import { resolveBulkLinkedUserIds, resolveFinalUserContext } from "@/lib/server-final-user-context";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 import { employmentDaysSince } from "@/lib/employment-date";
 
@@ -68,6 +68,14 @@ export type PersonnelUserCard = {
   premiumsTotal: number;
   medalsCount: number;
   licenseCategories: PersonnelLicenseCategory[];
+  testStats: PersonnelTestRosterStats;
+};
+
+export type PersonnelTestRosterStats = {
+  trialPassed: number;
+  trialFailed: number;
+  finalPassed: number;
+  finalFailed: number;
 };
 
 export type PersonnelActivitySegment = {
@@ -367,6 +375,73 @@ async function loadLicenses(userIds: string[]) {
   return map;
 }
 
+function emptyTestRosterStats(): PersonnelTestRosterStats {
+  return { trialPassed: 0, trialFailed: 0, finalPassed: 0, finalFailed: 0 };
+}
+
+function summarizeTestResultRows(
+  rows: Array<{ type?: string; test_type?: string; status?: string }>,
+): PersonnelTestRosterStats {
+  const stats = emptyTestRosterStats();
+  for (const test of rows) {
+    const type = test.type ?? test.test_type ?? "trial";
+    if (type === "final") {
+      if (test.status === "passed") stats.finalPassed += 1;
+      else stats.finalFailed += 1;
+    } else if (test.status === "passed") stats.trialPassed += 1;
+    else stats.trialFailed += 1;
+  }
+  return stats;
+}
+
+async function loadTestStatsForUsers(userIds: string[]) {
+  const map = new Map<string, PersonnelTestRosterStats>();
+  for (const id of userIds) map.set(id, emptyTestRosterStats());
+  if (userIds.length === 0) return map;
+
+  const supabase = getServerSupabaseServiceClient();
+  const linkedMap = await resolveBulkLinkedUserIds(supabase, userIds);
+  const queryIds = [...new Set(linkedMap.keys())];
+
+  let testRows = [] as Array<Record<string, unknown>>;
+  const primary = await supabase
+    .from("test_results")
+    .select("user_id,type,status,test_type")
+    .in("user_id", queryIds)
+    .order("created_at", { ascending: false })
+    .limit(Math.min(queryIds.length * 120, 8000));
+
+  if (!primary.error) {
+    testRows = (primary.data ?? []) as Array<Record<string, unknown>>;
+  } else if (isMissingColumnError(primary.error.message)) {
+    const legacy = await supabase
+      .from("test_results")
+      .select("user_id,test_type,status")
+      .in("user_id", queryIds)
+      .order("created_at", { ascending: false })
+      .limit(Math.min(queryIds.length * 120, 8000));
+    if (!legacy.error) testRows = (legacy.data ?? []) as Array<Record<string, unknown>>;
+  }
+
+  const rowsByUser = new Map<string, Array<{ type?: string; test_type?: string; status?: string }>>();
+  for (const row of testRows) {
+    const rawUid = String(row.user_id ?? "");
+    if (!rawUid) continue;
+    const canon = linkedMap.get(rawUid) ?? rawUid;
+    if (!map.has(canon)) continue;
+    const list = rowsByUser.get(canon) ?? [];
+    if (list.length >= 120) continue;
+    list.push(row as { type?: string; test_type?: string; status?: string });
+    rowsByUser.set(canon, list);
+  }
+
+  for (const [id, rows] of rowsByUser) {
+    map.set(id, summarizeTestResultRows(rows));
+  }
+
+  return map;
+}
+
 async function loadPremiumTotals(userIds: string[]) {
   const map = new Map<string, number>();
   if (userIds.length === 0) return map;
@@ -499,6 +574,7 @@ function assemblePersonnelProfile(
     premiumsTotal: depStats.premiums + standalonePremiumsTotal,
     medalsCount: medals.length,
     licenseCategories: input.licenseCategories,
+    testStats: summarizeTestResultRows(input.testRows),
     deployments,
     medals,
     premiums,
@@ -657,12 +733,13 @@ export async function loadPersonnelRoster(filters?: {
   }
 
   const userIds = rows.map((r) => String(r.id));
-  const [examsMap, depMap, medalsMap, licensesMap, premiumMap] = await Promise.all([
+  const [examsMap, depMap, medalsMap, licensesMap, premiumMap, testStatsMap] = await Promise.all([
     loadExamsForUsers(userIds),
     loadDeploymentStats(userIds),
     loadMedalsCount(userIds),
     loadLicenses(userIds),
     loadPremiumTotals(userIds),
+    loadTestStatsForUsers(userIds),
   ]);
 
   const users: PersonnelUserCard[] = rows.map((u) => {
@@ -687,6 +764,7 @@ export async function loadPersonnelRoster(filters?: {
       premiumsTotal: dep.premiums + standalonePremiums,
       medalsCount: medalsMap.get(id) ?? 0,
       licenseCategories: licensesMap.get(id) ?? [],
+      testStats: testStatsMap.get(id) ?? emptyTestRosterStats(),
     };
   });
 
@@ -822,6 +900,7 @@ export async function loadPersonnelProfile(userId: string): Promise<PersonnelPro
     premiumsTotal: depStats.premiums + standalonePremiumsTotal,
     medalsCount: medals.length,
     licenseCategories,
+    testStats: summarizeTestResultRows(testRows),
     deployments,
     medals,
     premiums,

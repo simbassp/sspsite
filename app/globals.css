@@ -2933,12 +2933,94 @@ html[data-theme="dark"] .final-review-answer--correct {
 
 .personnel-table-wrap {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.personnel-table-scroll-hint {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .personnel-table {
   width: 100%;
+  min-width: 1040px;
   border-collapse: collapse;
   font-size: 14px;
+}
+
+.personnel-table th.personnel-table__sticky,
+.personnel-table td.personnel-table__sticky {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--panel);
+  box-shadow: 1px 0 0 var(--line);
+}
+
+.personnel-table th.personnel-table__sticky {
+  z-index: 2;
+}
+
+.personnel-table th.personnel-table__compact,
+.personnel-table td.personnel-table__compact {
+  padding: 8px 6px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.personnel-roster-tests {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.personnel-roster-tests__line {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.personnel-roster-tests__tag {
+  color: var(--muted);
+  font-weight: 700;
+  width: 12px;
+  flex-shrink: 0;
+}
+
+.personnel-roster-tests__ok {
+  color: #10b981;
+  font-weight: 600;
+}
+
+.personnel-roster-tests__sep {
+  color: var(--muted);
+}
+
+.personnel-roster-tests__bad {
+  color: var(--bad);
+  font-weight: 600;
+}
+
+.personnel-roster-tests__empty {
+  color: var(--muted);
+}
+
+.personnel-roster-licenses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: 88px;
+}
+
+.personnel-license-badge--compact {
+  min-width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  font-size: 12px;
 }
 
 .personnel-table th,

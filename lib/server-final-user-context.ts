@@ -91,13 +91,23 @@ export async function resolveBulkLinkedUserIds(supabase: SupabaseClient, rosterU
   const byAuth = await supabase.from("app_users").select("id,auth_user_id").in("auth_user_id", rosterUserIds);
   if (!byAuth.error) rows.push(...((byAuth.data ?? []) as AppUserRow[]));
 
-  for (const row of rows) {
+  const linkRow = (row: AppUserRow) => {
     const id = String(row.id);
     const authId = row.auth_user_id ? String(row.auth_user_id) : null;
     const canon = rosterSet.has(id) ? id : authId && rosterSet.has(authId) ? authId : null;
-    if (!canon) continue;
+    if (!canon) return;
     toCanonical.set(id, canon);
     if (authId) toCanonical.set(authId, canon);
+  };
+
+  for (const row of rows) linkRow(row);
+
+  const authIds = [...new Set(rows.map((row) => (row.auth_user_id ? String(row.auth_user_id) : null)).filter(Boolean))] as string[];
+  if (authIds.length) {
+    const linkedByAuth = await supabase.from("app_users").select("id,auth_user_id").in("auth_user_id", authIds).limit(500);
+    if (!linkedByAuth.error) {
+      for (const row of (linkedByAuth.data ?? []) as AppUserRow[]) linkRow(row);
+    }
   }
 
   return toCanonical;
