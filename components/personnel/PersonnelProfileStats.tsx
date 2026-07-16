@@ -5,6 +5,8 @@ import { PersonnelModActions, postPersonnelManage } from "@/components/personnel
 import { PersonnelPreviewBanner } from "@/components/personnel/PersonnelPreviewBanner";
 import {
   ExamStatusIcon,
+  ExamTypeIcon,
+  examTypeIconTone,
   IconCalendarRange,
   IconCar,
   IconDays,
@@ -464,30 +466,30 @@ export function PersonnelProfileStats({ userId }: { userId: string }) {
                 const passed = row?.status === "passed";
                 return (
                   <div key={t} className={`personnel-exam-card ${passed ? "is-passed" : "is-failed"}`}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                      <strong>{personnelExamLabel[t]}</strong>
+                    <div className="personnel-exam-card__head">
+                      <span className={`personnel-exam-card__type-icon personnel-exam-card__type-icon--${examTypeIconTone(t)}`}>
+                        <ExamTypeIcon type={t} size={20} />
+                      </span>
                       <ExamStatusIcon passed={passed} />
                     </div>
-                    <p style={{ margin: "8px 0 0", fontWeight: 600 }}>{passed ? "Сдан" : "Не сдан"}</p>
+                    <strong className="personnel-exam-card__title">{personnelExamLabel[t]}</strong>
+                    <p className="personnel-exam-card__status">{passed ? "Сдан" : "Не сдан"}</p>
                     {row?.passedAt && (
-                      <p className="page-subtitle" style={{ margin: "4px 0 0" }}>
-                        {formatDate(row.passedAt)}
-                      </p>
+                      <p className="page-subtitle personnel-exam-card__date">{formatDate(row.passedAt)}</p>
                     )}
                     {canModerate && (
-                      <div style={{ marginTop: 8 }}>
-                        <PersonnelModActions
-                          onEdit={() =>
-                            setEditModal({
-                              kind: "exam",
-                              examType: t,
-                              status: row?.status ?? "failed",
-                              passedAt: row?.passedAt ?? null,
-                            })
-                          }
-                          onDelete={() => void onDelete("exam", row?.id, t, `зачёт «${personnelExamLabel[t]}»`)}
-                        />
-                      </div>
+                      <PersonnelModActions
+                        compact
+                        onEdit={() =>
+                          setEditModal({
+                            kind: "exam",
+                            examType: t,
+                            status: row?.status ?? "failed",
+                            passedAt: row?.passedAt ?? null,
+                          })
+                        }
+                        onDelete={() => void onDelete("exam", row?.id, t, `зачёт «${personnelExamLabel[t]}»`)}
+                      />
                     )}
                   </div>
                 );

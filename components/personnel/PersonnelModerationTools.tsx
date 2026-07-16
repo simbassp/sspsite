@@ -1,5 +1,7 @@
 "use client";
 
+import { Pencil, Trash2 } from "lucide-react";
+
 type ManageAction = "delete" | "update";
 
 export type ManageEntity = "deployment" | "premium" | "medal" | "exam" | "licenses";
@@ -26,19 +28,35 @@ export async function postPersonnelManage(body: {
 export function PersonnelModActions({
   onEdit,
   onDelete,
+  compact = false,
 }: {
   onEdit?: () => void;
   onDelete: () => void;
+  compact?: boolean;
 }) {
   return (
-    <div className="personnel-mod-actions">
+    <div className={`personnel-mod-actions catalog-card-actions${compact ? " personnel-mod-actions--compact" : ""}`}>
       {onEdit && (
-        <button type="button" className="btn btn-sm" onClick={onEdit}>
-          Изменить
+        <button
+          type="button"
+          className="btn"
+          style={{ width: 38, height: 34, padding: 0 }}
+          title="Редактировать"
+          aria-label="Редактировать"
+          onClick={onEdit}
+        >
+          <Pencil width={18} height={18} strokeWidth={2} aria-hidden />
         </button>
       )}
-      <button type="button" className="btn btn-sm btn-danger" onClick={onDelete}>
-        Удалить
+      <button
+        type="button"
+        className="btn btn-danger"
+        style={{ width: 38, height: 34, padding: 0 }}
+        title="Удалить"
+        aria-label="Удалить"
+        onClick={onDelete}
+      >
+        <Trash2 width={18} height={18} strokeWidth={2} aria-hidden />
       </button>
     </div>
   );

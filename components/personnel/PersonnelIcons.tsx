@@ -113,6 +113,95 @@ export function ExamStatusIcon({ passed }: { passed: boolean }) {
   );
 }
 
+export function IconExamTtx({ size = 22 }: { size?: number }) {
+  return (
+    <svg {...svgBase} width={size} height={size} aria-hidden>
+      <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
+      <rect x="9" y="3" width="6" height="4" rx="1" />
+      <line x1="9" y1="12" x2="15" y2="12" />
+      <line x1="9" y1="16" x2="13" y2="16" />
+    </svg>
+  );
+}
+
+export function IconExamMedicine({ size = 22 }: { size?: number }) {
+  return (
+    <svg {...svgBase} width={size} height={size} aria-hidden>
+      <path d="M12 6v12" />
+      <path d="M6 12h12" />
+      <rect x="4" y="4" width="16" height="16" rx="4" />
+    </svg>
+  );
+}
+
+export function IconExamVerification({ size = 22 }: { size?: number }) {
+  return (
+    <svg {...svgBase} width={size} height={size} aria-hidden>
+      <path d="M12 3 4 7v6c0 4 3.5 6.5 8 8 4.5-1.5 8-4 8-8V7l-8-4Z" />
+      <path d="m9 12 2 2 4-4" />
+    </svg>
+  );
+}
+
+export function IconExamPhysical({ size = 22 }: { size?: number }) {
+  return (
+    <svg {...svgBase} width={size} height={size} aria-hidden>
+      <path d="M6.5 9.5 4 12l2.5 2.5" />
+      <path d="M17.5 9.5 20 12l-2.5 2.5" />
+      <path d="M4 12h16" />
+      <rect x="8" y="10" width="8" height="4" rx="1" />
+    </svg>
+  );
+}
+
+export function IconExamShooting({ size = 22 }: { size?: number }) {
+  return (
+    <svg {...svgBase} width={size} height={size} aria-hidden>
+      <circle cx="12" cy="12" r="8" />
+      <circle cx="12" cy="12" r="4" />
+      <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" />
+      <line x1="12" y1="2" x2="12" y2="6" />
+      <line x1="12" y1="18" x2="12" y2="22" />
+      <line x1="2" y1="12" x2="6" y2="12" />
+      <line x1="18" y1="12" x2="22" y2="12" />
+    </svg>
+  );
+}
+
+export function ExamTypeIcon({ type, size = 22 }: { type: PersonnelExamType; size?: number }) {
+  switch (type) {
+    case "ttx":
+      return <IconExamTtx size={size} />;
+    case "medicine":
+      return <IconExamMedicine size={size} />;
+    case "verification":
+      return <IconExamVerification size={size} />;
+    case "physical":
+      return <IconExamPhysical size={size} />;
+    case "shooting":
+      return <IconExamShooting size={size} />;
+    default:
+      return <IconExamTtx size={size} />;
+  }
+}
+
+export function examTypeIconTone(type: PersonnelExamType): "blue" | "red" | "green" | "purple" | "orange" {
+  switch (type) {
+    case "ttx":
+      return "blue";
+    case "medicine":
+      return "red";
+    case "verification":
+      return "purple";
+    case "physical":
+      return "green";
+    case "shooting":
+      return "orange";
+    default:
+      return "blue";
+  }
+}
+
 export function examTypeShortLabel(type: PersonnelExamType) {
   switch (type) {
     case "ttx":

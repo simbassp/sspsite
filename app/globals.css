@@ -2612,15 +2612,81 @@ html[data-theme="dark"] .final-review-answer--correct {
 
 .personnel-exam-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
 }
 
 .personnel-exam-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 12px;
+  border-radius: 14px;
+  padding: 14px;
   background: var(--panel);
+  min-height: 148px;
+}
+
+.personnel-exam-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.personnel-exam-card__type-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.personnel-exam-card__type-icon--blue {
+  background: rgba(59, 130, 246, 0.12);
+  color: #3b82f6;
+}
+
+.personnel-exam-card__type-icon--red {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+}
+
+.personnel-exam-card__type-icon--green {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+}
+
+.personnel-exam-card__type-icon--purple {
+  background: rgba(168, 85, 247, 0.12);
+  color: #8b5cf6;
+}
+
+.personnel-exam-card__type-icon--orange {
+  background: rgba(245, 158, 11, 0.14);
+  color: #d97706;
+}
+
+.personnel-exam-card__title {
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.personnel-exam-card__status {
+  margin: 0;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.personnel-exam-card__date {
+  margin: 0;
+  font-size: 13px;
+}
+
+.personnel-exam-card .personnel-mod-actions {
+  margin-top: auto;
+  padding-top: 4px;
 }
 
 .personnel-exam-card.is-passed {
@@ -2628,7 +2694,8 @@ html[data-theme="dark"] .final-review-answer--correct {
 }
 
 .personnel-exam-card.is-failed {
-  border-color: color-mix(in srgb, #ef4444 40%, var(--line));
+  border-color: color-mix(in srgb, #ef4444 35%, var(--line));
+  background: color-mix(in srgb, #ef4444 4%, var(--panel));
 }
 
 .personnel-exam-icon--ok {
@@ -2969,9 +3036,23 @@ html[data-theme="dark"] .final-review-answer--correct {
   vertical-align: middle;
 }
 
-.personnel-mod-actions .btn-sm {
-  padding: 4px 10px;
-  font-size: 12px;
+.personnel-mod-actions.catalog-card-actions {
+  margin-left: 0;
+  margin-top: 10px;
+}
+
+.personnel-mod-actions.catalog-card-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.personnel-mod-actions.catalog-card-actions .btn svg {
+  flex-shrink: 0;
+}
+
+.personnel-mod-actions--compact {
+  margin-top: auto;
 }
 
 .personnel-mod-banner {
