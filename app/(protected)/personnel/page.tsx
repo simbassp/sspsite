@@ -138,7 +138,8 @@ type UserRow = {
 type Tab = "all" | "top";
 
 export default function PersonnelListPage() {
-  const session = useMemo(() => readClientSession(), []);
+  const [isHydrated, setIsHydrated] = useState(false);
+  const session = useMemo(() => (isHydrated ? readClientSession() : null), [isHydrated]);
   const [tab, setTab] = useState<Tab>("all");
   const [platoon, setPlatoon] = useState<"all" | "1" | "2">("all");
   const [section, setSection] = useState<"all" | "1" | "2" | "3" | "4">("all");
@@ -195,10 +196,6 @@ export default function PersonnelListPage() {
     }
   }, [platoon, section, search]);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
-
   const examMap = useMemo(() => {
     const m = new Map<string, Map<string, string>>();
     for (const u of users) {
@@ -215,11 +212,21 @@ export default function PersonnelListPage() {
   );
 
   const tableStats = useMemo(() => calcFilteredStats(filteredUsers), [filteredUsers]);
+  const displayStats = users.length === 0 && isLoading ? stats : tableStats;
   const columnFiltersActive = hasActiveColumnFilters(columnFilters);
 
   const setColumnFilter = (key: keyof ColumnFilters, value: string) => {
     setColumnFilters((prev) => ({ ...prev, [key]: value }));
   };
+
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    void load();
+  }, [isHydrated, load]);
 
   const profilePath = (id: string) => resolvePersonnelProfilePath(session, id);
 
@@ -365,27 +372,27 @@ export default function PersonnelListPage() {
           <div className="personnel-stat-grid">
             <div className="personnel-stat-card">
               <p className="label">Всего</p>
-              <strong>{tableStats.totalEmployees}</strong>
+              <strong>{displayStats.totalEmployees}</strong>
             </div>
             <div className="personnel-stat-card">
               <p className="label">В командировке</p>
-              <strong>{tableStats.deployedNow}</strong>
+              <strong>{displayStats.deployedNow}</strong>
             </div>
             <div className="personnel-stat-card">
               <p className="label">Ср. дней</p>
-              <strong>{tableStats.avgDays}</strong>
+              <strong>{displayStats.avgDays}</strong>
             </div>
             <div className="personnel-stat-card">
               <p className="label">Сбитий</p>
-              <strong>{tableStats.totalHits}</strong>
+              <strong>{displayStats.totalHits}</strong>
             </div>
             <div className="personnel-stat-card">
               <p className="label">Премии</p>
-              <strong>{tableStats.totalPremiums.toLocaleString("ru-RU")} ₽</strong>
+              <strong>{displayStats.totalPremiums.toLocaleString("ru-RU")} ₽</strong>
             </div>
           </div>
 
-          {columnFiltersActive && (
+          {columnFiltersActive && !isLoading && (
             <p className="page-subtitle personnel-table-filter-meta">
               Показано {filteredUsers.length} из {users.length}
               {" · "}
@@ -423,6 +430,7 @@ export default function PersonnelListPage() {
                       Права
                     </th>
                   </tr>
+                  {isHydrated && (
                   <tr className="personnel-table__filters">
                     <th className="personnel-table__sticky">
                       <input
@@ -500,6 +508,7 @@ export default function PersonnelListPage() {
                       />
                     </th>
                   </tr>
+                  )}
                 </thead>
                 <tbody>
                   {filteredUsers.map((u) => (
@@ -539,10 +548,17 @@ export default function PersonnelListPage() {
                       </td>
                     </tr>
                   ))}
-                  {filteredUsers.length === 0 && (
+                  {isLoading && users.length === 0 && (
                     <tr>
                       <td colSpan={9} className="personnel-table__empty">
-                        Нет сотрудников по выбранным фильтрам
+                        Загрузка…
+                      </td>
+                    </tr>
+                  )}
+                  {!isLoading && filteredUsers.length === 0 && (
+                    <tr>
+                      <td colSpan={9} className="personnel-table__empty">
+                        {users.length === 0 ? "Сотрудники не найдены" : "Нет сотрудников по выбранным фильтрам"}
                       </td>
                     </tr>
                   )}
