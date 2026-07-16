@@ -381,6 +381,231 @@ async function loadPremiumTotals(userIds: string[]) {
   return map;
 }
 
+function groupRowsByUserId<T extends { user_id: string }>(rows: T[]) {
+  const map = new Map<string, T[]>();
+  for (const row of rows) {
+    const uid = String(row.user_id);
+    const list = map.get(uid) ?? [];
+    list.push(row);
+    map.set(uid, list);
+  }
+  return map;
+}
+
+function assemblePersonnelProfile(
+  basic: {
+    id: string;
+    name: string;
+    callsign: string;
+    position: Position;
+    dutyLocation: DutyLocation;
+    unitAssignment: UnitAssignment | null;
+    rotaPlatoon: number | null;
+    rotaSection: number | null;
+    createdAt: string;
+    employmentDate: string | null;
+  },
+  input: {
+    deploymentRows: Array<{
+      id: string;
+      date_from: string;
+      date_to: string;
+      uav_hits?: number;
+      premium_amount?: number;
+    }>;
+    medalRows: Array<{ id: string; medal_type: string; title: string; awarded_at: string }>;
+    premiumRows: Array<{ id: string; title?: string; amount?: number; awarded_at: string }>;
+    examRows: Array<Record<string, unknown>>;
+    licenseCategories: PersonnelLicenseCategory[];
+    testRows: Array<{ type?: string; test_type?: string; status?: string; created_at?: string }>;
+    pendingRequests?: number;
+  },
+): PersonnelProfilePayload {
+  const deployments: PersonnelDeploymentRow[] = input.deploymentRows.map((row) => ({
+    id: String(row.id),
+    dateFrom: String(row.date_from),
+    dateTo: String(row.date_to),
+    uavHits: Number(row.uav_hits ?? 0),
+    premiumAmount: Number(row.premium_amount ?? 0),
+    days: daysBetween(String(row.date_from), String(row.date_to)),
+  }));
+
+  const depStats = deployments.reduce(
+    (acc, d) => {
+      acc.count += 1;
+      acc.days += d.days;
+      acc.hits += d.uavHits;
+      acc.premiums += d.premiumAmount;
+      return acc;
+    },
+    { count: 0, days: 0, hits: 0, premiums: 0 },
+  );
+
+  const medals: PersonnelMedalRow[] = input.medalRows.map((row) => ({
+    id: String(row.id),
+    medalType: String(row.medal_type),
+    title: String(row.title),
+    awardedAt: String(row.awarded_at),
+  }));
+
+  const standalonePremiums: PersonnelPremiumRow[] = input.premiumRows.map((row) => ({
+    id: String(row.id),
+    title: String(row.title ?? "Премия"),
+    amount: Number(row.amount ?? 0),
+    awardedAt: String(row.awarded_at),
+    source: "standalone" as const,
+  }));
+
+  const deploymentPremiums: PersonnelPremiumRow[] = deployments
+    .filter((d) => d.premiumAmount > 0)
+    .map((d) => ({
+      id: `deployment:${d.id}`,
+      title: PERSONNEL_DEPLOYMENT_PREMIUM_TITLE,
+      amount: d.premiumAmount,
+      awardedAt: d.dateTo,
+      source: "deployment" as const,
+      deploymentId: d.id,
+    }));
+
+  const premiums = [...standalonePremiums, ...deploymentPremiums].sort(
+    (a, b) => +new Date(b.awardedAt) - +new Date(a.awardedAt),
+  );
+
+  const standalonePremiumsTotal = standalonePremiums.reduce((sum, p) => sum + p.amount, 0);
+  const exams = input.examRows.map((row) => mapExamRow(row));
+  const testResults = input.testRows.map((row) => {
+    const type = row.type === "final" || row.test_type === "final" ? "final" : "trial";
+    return {
+      type,
+      status: row.status === "passed" ? "passed" : "failed",
+      createdAt: String(row.created_at ?? ""),
+    };
+  });
+
+  const { activityByMonth, activitySummary } = buildPersonnelActivityStats({
+    deployments,
+    exams,
+    medals,
+    premiums,
+    testResults,
+  });
+
+  return {
+    ...basic,
+    exams,
+    deploymentsCount: depStats.count,
+    deploymentDays: depStats.days,
+    uavHitsTotal: depStats.hits,
+    premiumsTotal: depStats.premiums + standalonePremiumsTotal,
+    medalsCount: medals.length,
+    licenseCategories: input.licenseCategories,
+    deployments,
+    medals,
+    premiums,
+    pendingRequests: input.pendingRequests ?? 0,
+    daysInSystem: employmentDaysSince(basic.employmentDate),
+    employmentDate: basic.employmentDate,
+    activityByMonth,
+    activitySummary,
+  };
+}
+
+/** Пакетная загрузка профилей для массового Excel (один round-trip на таблицу). */
+export async function loadPersonnelProfilesBulk(userIds: string[]) {
+  const uniqueIds = [...new Set(userIds.filter(Boolean))];
+  const result = new Map<string, PersonnelProfilePayload>();
+  if (uniqueIds.length === 0) return result;
+
+  const supabase = getServerSupabaseServiceClient();
+  const [usersRes, depRes, medalRes, premiumRes, examRes, licenseRes, testPrimaryRes] = await Promise.all([
+    supabase
+      .from("app_users")
+      .select(
+        "id,name,callsign,position,duty_location,unit_assignment,rota_platoon,rota_section,created_at,employment_date",
+      )
+      .in("id", uniqueIds),
+    supabase.from("personnel_deployments").select("*").in("user_id", uniqueIds).order("date_from", { ascending: false }),
+    supabase.from("personnel_medals").select("*").in("user_id", uniqueIds).order("awarded_at", { ascending: false }),
+    supabase.from("personnel_premiums").select("*").in("user_id", uniqueIds).order("awarded_at", { ascending: false }),
+    supabase.from("personnel_exams").select("*").in("user_id", uniqueIds),
+    supabase.from("personnel_licenses").select("user_id,categories").in("user_id", uniqueIds),
+    supabase
+      .from("test_results")
+      .select("user_id,type,status,created_at,test_type")
+      .in("user_id", uniqueIds)
+      .order("created_at", { ascending: false })
+      .limit(Math.min(uniqueIds.length * 120, 8000)),
+  ]);
+
+  if (usersRes.error || !usersRes.data?.length) return result;
+
+  let testRows = (testPrimaryRes.data ?? []) as Array<Record<string, unknown>>;
+  if (testPrimaryRes.error && isMissingColumnError(testPrimaryRes.error.message)) {
+    const legacy = await supabase
+      .from("test_results")
+      .select("user_id,test_type,status,created_at")
+      .in("user_id", uniqueIds)
+      .order("created_at", { ascending: false })
+      .limit(Math.min(uniqueIds.length * 120, 8000));
+    testRows = (legacy.data ?? []) as Array<Record<string, unknown>>;
+  }
+
+  const depByUser = groupRowsByUserId(
+    (depRes.data ?? []) as Array<{ user_id: string; id: string; date_from: string; date_to: string; uav_hits?: number; premium_amount?: number }>,
+  );
+  const medalByUser = groupRowsByUserId(
+    (medalRes.data ?? []) as Array<{ user_id: string; id: string; medal_type: string; title: string; awarded_at: string }>,
+  );
+  const premiumByUser = groupRowsByUserId(
+    (premiumRes.data ?? []) as Array<{ user_id: string; id: string; title?: string; amount?: number; awarded_at: string }>,
+  );
+  const examByUser = groupRowsByUserId((examRes.data ?? []) as Array<{ user_id: string } & Record<string, unknown>>);
+  const licenseMap = new Map<string, PersonnelLicenseCategory[]>();
+  for (const row of (licenseRes.data ?? []) as Array<{ user_id: string; categories?: string[] }>) {
+    licenseMap.set(String(row.user_id), normalizePersonnelLicenseCategories(row.categories));
+  }
+
+  const testsByUser = new Map<string, Array<{ type?: string; test_type?: string; status?: string; created_at?: string }>>();
+  for (const row of testRows) {
+    const uid = String(row.user_id ?? "");
+    if (!uid) continue;
+    const list = testsByUser.get(uid) ?? [];
+    if (list.length >= 120) continue;
+    list.push(row as { type?: string; test_type?: string; status?: string; created_at?: string });
+    testsByUser.set(uid, list);
+  }
+
+  for (const u of usersRes.data as Array<Record<string, unknown>>) {
+    const id = String(u.id);
+    const basic = {
+      id,
+      name: String(u.name ?? ""),
+      callsign: String(u.callsign ?? ""),
+      position: String(u.position ?? "Специалист") as Position,
+      dutyLocation: (u.duty_location === "deployment" ? "deployment" : "base") as DutyLocation,
+      unitAssignment: normalizeUnitAssignment(u.unit_assignment),
+      rotaPlatoon: u.rota_platoon != null ? Number(u.rota_platoon) : null,
+      rotaSection: u.rota_section != null ? Number(u.rota_section) : null,
+      createdAt: String(u.created_at ?? new Date().toISOString()),
+      employmentDate: u.employment_date ? String(u.employment_date).slice(0, 10) : null,
+    };
+
+    result.set(
+      id,
+      assemblePersonnelProfile(basic, {
+        deploymentRows: depByUser.get(id) ?? [],
+        medalRows: medalByUser.get(id) ?? [],
+        premiumRows: premiumByUser.get(id) ?? [],
+        examRows: examByUser.get(id) ?? [],
+        licenseCategories: licenseMap.get(id) ?? [],
+        testRows: testsByUser.get(id) ?? [],
+      }),
+    );
+  }
+
+  return result;
+}
+
 export async function loadPersonnelRoster(filters?: {
   platoon?: number | "all";
   section?: number | "all";

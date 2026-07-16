@@ -8,6 +8,7 @@ import { buildPersonnelBulkExcelBuffer } from "@/lib/personnel-profile-excel";
 import { getServerSession } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
+export const maxDuration = 120;
 
 export async function POST(request: Request) {
   const session = await getServerSession();

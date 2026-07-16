@@ -48,6 +48,9 @@ export async function postPersonnelExportExcel(body: {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
+  if (res.status === 504) {
+    throw new Error("gateway_timeout");
+  }
   if (!res.ok) {
     const payload = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(payload.error || "export_failed");

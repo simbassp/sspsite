@@ -138,6 +138,8 @@ export default function PersonnelListPage() {
       setExportExcelMsg(
         message === "no_users"
           ? "Нет сотрудников для выгрузки."
+          : message === "gateway_timeout"
+            ? "Сервер не успел сформировать файл. Попробуйте сузить фильтр или повторите позже."
           : message === "export_failed"
             ? "Не удалось сформировать Excel."
             : `Не удалось сформировать Excel: ${message}`,

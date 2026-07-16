@@ -645,28 +645,31 @@ async function addBulkChartsSheet(workbook: ExcelJS.Workbook, bundles: Personnel
   const activity = aggregateActivitySummary(bundles);
   const monthly = aggregateMonthlyActivity(bundles);
 
+  const [summaryPng, piePng, activityBarPng, monthlyPng] = await Promise.all([
+    svgToPngBuffer(buildBarChartSvg("Сводная статистика (все сотрудники)", summary)),
+    svgToPngBuffer(buildPieChartSvg("Активность (круговая)", activity)),
+    svgToPngBuffer(buildBarChartSvg("Активность (шкалы)", activity)),
+    svgToPngBuffer(buildMonthlyBarChartSvg("Активность по месяцам", monthly)),
+  ]);
+
+  const summaryHeight = Math.max(220, 64 + summary.filter((s) => s.value > 0).length * 34);
+  const activityHeight = Math.max(220, 64 + activity.filter((s) => s.value > 0).length * 34);
+
   let nextRow = 0;
-  nextRow = await embedChartImage(
-    workbook,
-    sheet,
-    buildBarChartSvg("Сводная статистика (все сотрудники)", summary),
-    nextRow,
-    560,
-    Math.max(220, 64 + summary.filter((s) => s.value > 0).length * 34),
-  );
-  nextRow += 1;
-  nextRow = await embedChartImage(workbook, sheet, buildPieChartSvg("Активность (круговая)", activity), nextRow);
-  nextRow += 1;
-  nextRow = await embedChartImage(
-    workbook,
-    sheet,
-    buildBarChartSvg("Активность (шкалы)", activity),
-    nextRow,
-    560,
-    Math.max(220, 64 + activity.filter((s) => s.value > 0).length * 34),
-  );
-  nextRow += 1;
-  await embedChartImage(workbook, sheet, buildMonthlyBarChartSvg("Активность по месяцам", monthly), nextRow, 560, 280);
+  const imageId1 = workbook.addImage({ buffer: Buffer.from(summaryPng) as unknown as ExcelJS.Buffer, extension: "png" });
+  sheet.addImage(imageId1, { tl: { col: 0, row: nextRow }, ext: { width: 560, height: summaryHeight } });
+  nextRow += Math.ceil(summaryHeight / 20) + 1;
+
+  const imageId2 = workbook.addImage({ buffer: Buffer.from(piePng) as unknown as ExcelJS.Buffer, extension: "png" });
+  sheet.addImage(imageId2, { tl: { col: 0, row: nextRow }, ext: { width: 560, height: 320 } });
+  nextRow += 17;
+
+  const imageId3 = workbook.addImage({ buffer: Buffer.from(activityBarPng) as unknown as ExcelJS.Buffer, extension: "png" });
+  sheet.addImage(imageId3, { tl: { col: 0, row: nextRow }, ext: { width: 560, height: activityHeight } });
+  nextRow += Math.ceil(activityHeight / 20) + 1;
+
+  const imageId4 = workbook.addImage({ buffer: Buffer.from(monthlyPng) as unknown as ExcelJS.Buffer, extension: "png" });
+  sheet.addImage(imageId4, { tl: { col: 0, row: nextRow }, ext: { width: 560, height: 280 } });
 }
 
 async function buildWorkbook(bundles: PersonnelProfileExportBundle[], bulk: boolean) {
