@@ -18,6 +18,7 @@ function normalizeDbPermissions(row: Record<string, unknown>, fallbackContent: b
       userList: true,
       users: true,
       online: true,
+      personnelModeration: true,
     };
   }
   return {
@@ -30,6 +31,7 @@ function normalizeDbPermissions(row: Record<string, unknown>, fallbackContent: b
     userList: row.can_view_user_list === true,
     users: row.can_manage_users === true,
     online: row.can_view_online === true,
+    personnelModeration: row.can_moderate_personnel === true,
   };
 }
 
@@ -43,7 +45,8 @@ function samePermissions(a: SessionUser["permissions"], b: SessionUser["permissi
     a.counteraction === b.counteraction &&
     a.userList === b.userList &&
     a.users === b.users &&
-    a.online === b.online
+    a.online === b.online &&
+    a.personnelModeration === b.personnelModeration
   );
 }
 
@@ -54,7 +57,7 @@ export async function isSessionStillValid(session: SessionUser): Promise<boolean
     const primary = await supabase
       .from("app_users")
       .select(
-        "id,role,status,can_manage_content,can_manage_news,can_manage_tests,can_manage_results,can_manage_uav,can_manage_counteraction,can_manage_users,can_view_user_list,can_view_online,can_reset_test_results",
+        "id,role,status,can_manage_content,can_manage_news,can_manage_tests,can_manage_results,can_manage_uav,can_manage_counteraction,can_manage_users,can_view_user_list,can_view_online,can_reset_test_results,can_moderate_personnel",
       )
       .eq("id", session.id)
       .maybeSingle();

@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { AuthPasswordInput } from "@/components/AuthPasswordInput";
 import { getPositions } from "@/lib/storage";
+import { UNIT_ASSIGNMENT_OPTIONS, unitAssignmentLabel } from "@/lib/unit-assignment";
+import type { UnitAssignment } from "@/lib/types";
 import { registerUser } from "@/lib/users-repository";
 
 /** Один signUp + при сбое сети — перепроверка входом; на мобильном цепочка дольше, чем 15–20 с. */
@@ -37,6 +39,7 @@ export default function RegisterPage() {
     password: "",
     repeatPassword: "",
     position: positions[0],
+    unitAssignment: "" as "" | UnitAssignment,
   });
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -135,6 +138,10 @@ export default function RegisterPage() {
       setError("В строках пароля есть ошибка: пароли не совпадают.");
       return;
     }
+    if (!form.unitAssignment) {
+      setError("Выберите подразделение.");
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -147,6 +154,7 @@ export default function RegisterPage() {
           password: form.password,
           position: form.position,
           inviteCode: form.inviteCode,
+          unitAssignment: form.unitAssignment,
         }),
         REGISTER_REQUEST_TIMEOUT_MS,
         "request_timeout",
@@ -293,6 +301,23 @@ export default function RegisterPage() {
               autoComplete="new-password"
             />
             {passwordMismatch && <p style={{ color: "#ff8d8d", fontSize: 13 }}>Пароль в этих двух строках должен совпадать.</p>}
+
+            <label className="label">Подразделение</label>
+            <select
+              className="select"
+              value={form.unitAssignment}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, unitAssignment: e.target.value as typeof p.unitAssignment }))
+              }
+              required
+            >
+              <option value="">Выберите подразделение</option>
+              {UNIT_ASSIGNMENT_OPTIONS.map((unit) => (
+                <option key={unit} value={unit}>
+                  {unitAssignmentLabel[unit]}
+                </option>
+              ))}
+            </select>
 
             <label className="label">Должность</label>
             <select

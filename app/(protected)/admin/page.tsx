@@ -6,6 +6,7 @@ import {
   canManageTests,
   canManageUav,
   canManageUsers,
+  canModeratePersonnel,
   canViewUserList,
 } from "@/lib/permissions";
 import { getServerSession } from "@/lib/server-auth";
@@ -65,6 +66,13 @@ const adminOnlyLinks: AdminLinkDef[] = [
     text: "Список и профили; полное управление — при праве «Редактирование и удаление пользователей».",
     color: "red",
     access: (session) => canManageUsers(session) || canViewUserList(session),
+  },
+  {
+    href: "/admin/personnel",
+    title: "Личное дело (4 рота)",
+    text: "Включение модуля, модерация заявок на медали, премии и зачёты.",
+    color: "green",
+    access: (session) => session?.role === "admin" || canModeratePersonnel(session),
   },
 ];
 

@@ -40,6 +40,7 @@ function defaultPermissions(user: Partial<UserRecord>): UserPermissions {
     userList: false,
     users: isAdmin,
     online: isAdmin,
+    personnelModeration: isAdmin,
   };
 }
 
@@ -151,6 +152,7 @@ export function registerEmployee(payload: {
       userList: false,
       users: false,
       online: false,
+      personnelModeration: false,
     },
     status: "active",
     dutyLocation: "base",

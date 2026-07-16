@@ -13,8 +13,10 @@ import {
   canManageTests,
   canManageUav,
   canManageUsers,
+  canModeratePersonnel,
   canViewUserList,
 } from "@/lib/permissions";
+import { PersonnelNotificationsBell } from "@/components/personnel/PersonnelNotificationsBell";
 import {
   PRESENCE_HEARTBEAT_MS,
   PRESENCE_HIDDEN_OFFLINE_DELAY_MS,
@@ -71,7 +73,8 @@ type NavIconId =
   | "clipboard"
   | "user"
   | "users"
-  | "chart";
+  | "chart"
+  | "personnel";
 
 const mainLinks: { href: string; label: string; icon: NavIconId }[] = [
   { href: "/dashboard", label: "Главная", icon: "home" },
@@ -84,12 +87,31 @@ const mainLinks: { href: string; label: string; icon: NavIconId }[] = [
 
 export function AppShell({ session, children }: AppShellProps) {
   const pathname = usePathname();
-  const bottomLinks = mainLinks;
   const canSeeUserDirectory = canManageUsers(session) || canViewUserList(session);
   const hasAdminAccess = canAccessAdminPanel(session);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
+  const [showPersonnelNav, setShowPersonnelNav] = useState(false);
   const isLoggingOutRef = useRef(false);
+
+  useEffect(() => {
+    void fetch("/api/personnel/nav", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((p: { showPersonnel?: boolean }) => setShowPersonnelNav(p.showPersonnel === true))
+      .catch(() => undefined);
+  }, []);
+
+  const navLinks = showPersonnelNav
+    ? (() => {
+        const idx = mainLinks.findIndex((l) => l.href === "/profile");
+        return [
+          ...mainLinks.slice(0, idx),
+          { href: "/personnel", label: "Сотрудники", icon: "personnel" as const },
+          ...mainLinks.slice(idx),
+        ];
+      })()
+    : mainLinks;
+  const bottomLinks = navLinks;
 
   useEffect(() => {
     const sync = () => setIsOnline(typeof navigator !== "undefined" ? navigator.onLine : true);
@@ -213,6 +235,9 @@ export function AppShell({ session, children }: AppShellProps) {
       ? [{ href: "/admin/counteraction", label: "Противодействие", icon: "shield" as const }]
       : []),
     ...(canManageUav(session) ? [{ href: "/admin/uav", label: "БПЛА", icon: "uav" as const }] : []),
+    ...(session.role === "admin" || canModeratePersonnel(session)
+      ? [{ href: "/admin/personnel", label: "Личное дело", icon: "personnel" as const }]
+      : []),
   ];
 
   const withTimeout = (promise: Promise<unknown>, timeoutMs: number) =>
@@ -296,13 +321,22 @@ export function AppShell({ session, children }: AppShellProps) {
           </svg>
         );
       case "user":
-      default:
         return (
           <svg viewBox="0 0 24 24" aria-hidden="true" style={iconStyle}>
             <circle cx="12" cy="8" r="4" />
             <path d="M4 20c1.8-3.8 4.5-5.5 8-5.5S18.2 16.2 20 20" />
           </svg>
         );
+      case "personnel":
+        return (
+          <svg viewBox="0 0 24 24" aria-hidden="true" style={iconStyle}>
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+            <circle cx="9" cy="7" r="4" />
+            <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+          </svg>
+        );
+      default:
     }
   };
 
@@ -333,14 +367,17 @@ export function AppShell({ session, children }: AppShellProps) {
         </div>
 
         <div style={{ marginTop: 14, display: "grid", gap: 8 }}>
-          <ThemeToggle />
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <ThemeToggle />
+            {showPersonnelNav && <PersonnelNotificationsBell />}
+          </div>
           <button className="btn btn-danger" type="button" onClick={logout} disabled={isLoggingOut}>
             {isLoggingOut ? "Выходим..." : "Выход"}
           </button>
         </div>
 
         <div style={{ marginTop: 20 }}>
-          {mainLinks.map((link) => {
+          {navLinks.map((link) => {
             const active = pathname === link.href || pathname.startsWith(`${link.href}/`);
             return (
               <Link

@@ -31,7 +31,7 @@ export async function GET() {
     const primaryQ = await supabase
       .from("app_users")
       .select(
-        "id,auth_user_id,login,name,callsign,position,can_manage_content,can_manage_news,can_manage_tests,can_manage_results,can_manage_uav,can_manage_counteraction,can_manage_users,can_view_user_list,can_reset_test_results,can_view_online,is_online,last_seen_at,role,status,duty_location,unit_assignment",
+        "id,auth_user_id,login,name,callsign,position,can_manage_content,can_manage_news,can_manage_tests,can_manage_results,can_manage_uav,can_manage_counteraction,can_manage_users,can_view_user_list,can_reset_test_results,can_view_online,can_moderate_personnel,is_online,last_seen_at,role,status,duty_location,unit_assignment",
       )
       .order("created_at", { ascending: false })
       .limit(1000);
@@ -66,6 +66,7 @@ export async function GET() {
       can_view_user_list: r.can_view_user_list ?? false,
       can_reset_test_results: r.can_reset_test_results ?? undefined,
       can_view_online: r.can_view_online ?? false,
+      can_moderate_personnel: r.can_moderate_personnel ?? false,
       is_online: onlineFromFlagOnly ? r.is_online === true : effectiveOnlineStrict(r.is_online, r.last_seen_at),
       duty_location:
         dutyFromDb && typeof r.duty_location === "string" && r.duty_location.trim().toLowerCase() === "deployment"

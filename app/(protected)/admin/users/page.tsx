@@ -20,6 +20,7 @@ const permissionOptions = [
   { key: "userList", label: "Список пользователей" },
   { key: "users", label: "Редактирование и удаление пользователей" },
   { key: "online", label: "Показывать кто онлайн" },
+  { key: "personnelModeration", label: "Модерация личного дела (4 рота)" },
 ] as const;
 
 const fullAdminPermissions = {
@@ -32,6 +33,7 @@ const fullAdminPermissions = {
   userList: true,
   users: true,
   online: true,
+  personnelModeration: true,
 } as const satisfies UserRecord["permissions"];
 
 export default function AdminUsersPage() {

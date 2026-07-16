@@ -12,6 +12,7 @@ const emptyPermissions: UserPermissions = {
   userList: false,
   users: false,
   online: false,
+  personnelModeration: false,
 };
 
 function allPermissions(): UserPermissions {
@@ -25,6 +26,7 @@ function allPermissions(): UserPermissions {
     userList: true,
     users: true,
     online: true,
+    personnelModeration: true,
   };
 }
 
@@ -91,6 +93,10 @@ export function canViewOnline(session: SessionLike) {
   return resolvePermissions(session).online;
 }
 
+export function canModeratePersonnel(session: SessionLike) {
+  return resolvePermissions(session).personnelModeration;
+}
+
 export function canAccessAdminPanel(session: SessionLike) {
   const p = resolvePermissions(session);
   return (
@@ -98,6 +104,7 @@ export function canAccessAdminPanel(session: SessionLike) {
     canManageUsers(session) ||
     p.userList ||
     canManageResults(session) ||
-    canResetTestResults(session)
+    canResetTestResults(session) ||
+    p.personnelModeration
   );
 }

@@ -1,0 +1,599 @@
+import { normalizeUnitAssignment } from "@/lib/unit-assignment";
+import type { DutyLocation, Position, UnitAssignment } from "@/lib/types";
+import type { PersonnelExamType, PersonnelLicenseCategory } from "@/lib/personnel-catalog";
+import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
+
+export type PersonnelModuleSettings = {
+  moduleEnabled: boolean;
+  moderationEnabled: boolean;
+};
+
+export type PersonnelExamRow = {
+  id: string;
+  examType: PersonnelExamType;
+  status: "passed" | "failed";
+  passedAt: string | null;
+  expiresAt: string | null;
+};
+
+export type PersonnelDeploymentRow = {
+  id: string;
+  dateFrom: string;
+  dateTo: string;
+  uavHits: number;
+  premiumAmount: number;
+  days: number;
+};
+
+export type PersonnelMedalRow = {
+  id: string;
+  medalType: string;
+  title: string;
+  awardedAt: string;
+};
+
+export type PersonnelPremiumRow = {
+  id: string;
+  title: string;
+  amount: number;
+  awardedAt: string;
+};
+
+export type PersonnelUserCard = {
+  id: string;
+  name: string;
+  callsign: string;
+  position: Position;
+  dutyLocation: DutyLocation;
+  unitAssignment: UnitAssignment | null;
+  rotaPlatoon: number | null;
+  rotaSection: number | null;
+  createdAt: string;
+  exams: PersonnelExamRow[];
+  deploymentsCount: number;
+  deploymentDays: number;
+  uavHitsTotal: number;
+  premiumsTotal: number;
+  medalsCount: number;
+  licenseCategories: PersonnelLicenseCategory[];
+};
+
+export type PersonnelProfilePayload = PersonnelUserCard & {
+  deployments: PersonnelDeploymentRow[];
+  medals: PersonnelMedalRow[];
+  premiums: PersonnelPremiumRow[];
+  pendingRequests: number;
+  daysInSystem: number;
+  activityByMonth: Array<{ month: string; days: number }>;
+  hitsByUavType: Array<{ label: string; value: number }>;
+};
+
+function isMissingColumnError(message: string | undefined) {
+  const m = (message || "").toLowerCase();
+  return m.includes("column") && m.includes("does not exist");
+}
+
+function isMissingTableError(message: string | undefined) {
+  const m = (message || "").toLowerCase();
+  return m.includes("relation") && m.includes("does not exist");
+}
+
+export async function loadPersonnelModuleSettings(): Promise<PersonnelModuleSettings> {
+  const defaults: PersonnelModuleSettings = { moduleEnabled: false, moderationEnabled: true };
+  try {
+    const supabase = getServerSupabaseServiceClient();
+    const res = await supabase.from("site_settings").select("key,value").in("key", [
+      "personnel_module_enabled",
+      "personnel_moderation_enabled",
+    ]);
+    if (res.error) {
+      if (isMissingTableError(res.error.message)) return defaults;
+      return defaults;
+    }
+    const map = new Map((res.data ?? []).map((r) => [String(r.key), r.value]));
+    return {
+      moduleEnabled: map.get("personnel_module_enabled") === true,
+      moderationEnabled: map.get("personnel_moderation_enabled") !== false,
+    };
+  } catch {
+    return defaults;
+  }
+}
+
+export async function savePersonnelModuleSettings(input: Partial<PersonnelModuleSettings>) {
+  const supabase = getServerSupabaseServiceClient();
+  if (input.moduleEnabled !== undefined) {
+    await supabase.from("site_settings").upsert({
+      key: "personnel_module_enabled",
+      value: input.moduleEnabled,
+      updated_at: new Date().toISOString(),
+    });
+  }
+  if (input.moderationEnabled !== undefined) {
+    await supabase.from("site_settings").upsert({
+      key: "personnel_moderation_enabled",
+      value: input.moderationEnabled,
+      updated_at: new Date().toISOString(),
+    });
+  }
+}
+
+function daysBetween(from: string, to: string) {
+  const a = new Date(from);
+  const b = new Date(to);
+  const ms = b.getTime() - a.getTime();
+  return Math.max(1, Math.round(ms / 86400000) + 1);
+}
+
+function daysInSystemSince(createdAt: string) {
+  const start = new Date(createdAt);
+  const now = new Date();
+  return Math.max(1, Math.round((now.getTime() - start.getTime()) / 86400000));
+}
+
+function mapExamRow(row: Record<string, unknown>): PersonnelExamRow {
+  return {
+    id: String(row.id),
+    examType: String(row.exam_type) as PersonnelExamType,
+    status: row.status === "failed" ? "failed" : "passed",
+    passedAt: row.passed_at ? String(row.passed_at) : null,
+    expiresAt: row.expires_at ? String(row.expires_at) : null,
+  };
+}
+
+export async function loadPersonnelUserBasics(userId: string) {
+  const supabase = getServerSupabaseServiceClient();
+  const userRes = await supabase
+    .from("app_users")
+    .select(
+      "id,name,callsign,position,duty_location,unit_assignment,rota_platoon,rota_section,created_at",
+    )
+    .eq("id", userId)
+    .maybeSingle();
+  if (userRes.error || !userRes.data) return null;
+  const u = userRes.data as Record<string, unknown>;
+  return {
+    id: String(u.id),
+    name: String(u.name ?? ""),
+    callsign: String(u.callsign ?? ""),
+    position: String(u.position ?? "Специалист") as Position,
+    dutyLocation: (u.duty_location === "deployment" ? "deployment" : "base") as DutyLocation,
+    unitAssignment: normalizeUnitAssignment(u.unit_assignment),
+    rotaPlatoon: u.rota_platoon != null ? Number(u.rota_platoon) : null,
+    rotaSection: u.rota_section != null ? Number(u.rota_section) : null,
+    createdAt: String(u.created_at ?? new Date().toISOString()),
+  };
+}
+
+async function loadExamsForUsers(userIds: string[]) {
+  if (userIds.length === 0) return new Map<string, PersonnelExamRow[]>();
+  const supabase = getServerSupabaseServiceClient();
+  const res = await supabase.from("personnel_exams").select("*").in("user_id", userIds);
+  if (res.error) return new Map<string, PersonnelExamRow[]>();
+  const map = new Map<string, PersonnelExamRow[]>();
+  for (const row of res.data ?? []) {
+    const uid = String((row as { user_id: string }).user_id);
+    const list = map.get(uid) ?? [];
+    list.push(mapExamRow(row as Record<string, unknown>));
+    map.set(uid, list);
+  }
+  return map;
+}
+
+async function loadDeploymentStats(userIds: string[]) {
+  const empty = { count: 0, days: 0, hits: 0, premiums: 0 };
+  if (userIds.length === 0) return new Map<string, typeof empty>();
+  const supabase = getServerSupabaseServiceClient();
+  const res = await supabase.from("personnel_deployments").select("*").in("user_id", userIds);
+  const map = new Map<string, typeof empty>();
+  if (res.error) return map;
+  for (const row of res.data ?? []) {
+    const r = row as {
+      user_id: string;
+      date_from: string;
+      date_to: string;
+      uav_hits?: number;
+      premium_amount?: number;
+    };
+    const uid = String(r.user_id);
+    const cur = map.get(uid) ?? { ...empty };
+    cur.count += 1;
+    cur.days += daysBetween(r.date_from, r.date_to);
+    cur.hits += Number(r.uav_hits ?? 0);
+    cur.premiums += Number(r.premium_amount ?? 0);
+    map.set(uid, cur);
+  }
+  return map;
+}
+
+async function loadMedalsCount(userIds: string[]) {
+  const map = new Map<string, number>();
+  if (userIds.length === 0) return map;
+  const supabase = getServerSupabaseServiceClient();
+  const res = await supabase.from("personnel_medals").select("user_id").in("user_id", userIds);
+  if (res.error) return map;
+  for (const row of res.data ?? []) {
+    const uid = String((row as { user_id: string }).user_id);
+    map.set(uid, (map.get(uid) ?? 0) + 1);
+  }
+  return map;
+}
+
+async function loadLicenses(userIds: string[]) {
+  const map = new Map<string, PersonnelLicenseCategory[]>();
+  if (userIds.length === 0) return map;
+  const supabase = getServerSupabaseServiceClient();
+  const res = await supabase.from("personnel_licenses").select("user_id,categories").in("user_id", userIds);
+  if (res.error) return map;
+  for (const row of res.data ?? []) {
+    const r = row as { user_id: string; categories?: string[] };
+    map.set(
+      String(r.user_id),
+      (r.categories ?? []).filter((c): c is PersonnelLicenseCategory => c === "B" || c === "C" || c === "CE"),
+    );
+  }
+  return map;
+}
+
+export async function loadPersonnelRoster(filters?: {
+  platoon?: number | "all";
+  section?: number | "all";
+  search?: string;
+}) {
+  const supabase = getServerSupabaseServiceClient();
+  let q = supabase
+    .from("app_users")
+    .select(
+      "id,name,callsign,position,duty_location,unit_assignment,rota_platoon,rota_section,created_at,status",
+    )
+    .eq("unit_assignment", "company_4")
+    .eq("status", "active")
+    .order("name", { ascending: true })
+    .limit(500);
+
+  if (filters?.platoon && filters.platoon !== "all") {
+    q = q.eq("rota_platoon", filters.platoon);
+  }
+  if (filters?.section && filters.section !== "all") {
+    q = q.eq("rota_section", filters.section);
+  }
+
+  const usersRes = await q;
+  if (usersRes.error) {
+    if (isMissingColumnError(usersRes.error.message)) {
+      return { ok: false as const, error: "missing_columns", users: [] as PersonnelUserCard[] };
+    }
+    return { ok: false as const, error: usersRes.error.message, users: [] as PersonnelUserCard[] };
+  }
+
+  let rows = (usersRes.data ?? []) as Array<Record<string, unknown>>;
+  const search = (filters?.search ?? "").trim().toLowerCase();
+  if (search) {
+    rows = rows.filter((r) => {
+      const name = String(r.name ?? "").toLowerCase();
+      const callsign = String(r.callsign ?? "").toLowerCase();
+      return name.includes(search) || callsign.includes(search);
+    });
+  }
+
+  const userIds = rows.map((r) => String(r.id));
+  const [examsMap, depMap, medalsMap, licensesMap] = await Promise.all([
+    loadExamsForUsers(userIds),
+    loadDeploymentStats(userIds),
+    loadMedalsCount(userIds),
+    loadLicenses(userIds),
+  ]);
+
+  const users: PersonnelUserCard[] = rows.map((u) => {
+    const id = String(u.id);
+    const dep = depMap.get(id) ?? { count: 0, days: 0, hits: 0, premiums: 0 };
+    return {
+      id,
+      name: String(u.name ?? ""),
+      callsign: String(u.callsign ?? ""),
+      position: String(u.position ?? "Специалист") as Position,
+      dutyLocation: (u.duty_location === "deployment" ? "deployment" : "base") as DutyLocation,
+      unitAssignment: normalizeUnitAssignment(u.unit_assignment),
+      rotaPlatoon: u.rota_platoon != null ? Number(u.rota_platoon) : null,
+      rotaSection: u.rota_section != null ? Number(u.rota_section) : null,
+      createdAt: String(u.created_at ?? new Date().toISOString()),
+      exams: examsMap.get(id) ?? [],
+      deploymentsCount: dep.count,
+      deploymentDays: dep.days,
+      uavHitsTotal: dep.hits,
+      premiumsTotal: dep.premiums,
+      medalsCount: medalsMap.get(id) ?? 0,
+      licenseCategories: licensesMap.get(id) ?? [],
+    };
+  });
+
+  return { ok: true as const, users };
+}
+
+export async function loadPersonnelProfile(userId: string): Promise<PersonnelProfilePayload | null> {
+  const basic = await loadPersonnelUserBasics(userId);
+  if (!basic) return null;
+
+  const supabase = getServerSupabaseServiceClient();
+  const [depRes, medalRes, premiumRes, examRes, licenseRes, pendingRes] = await Promise.all([
+    supabase.from("personnel_deployments").select("*").eq("user_id", userId).order("date_from", { ascending: false }),
+    supabase.from("personnel_medals").select("*").eq("user_id", userId).order("awarded_at", { ascending: false }),
+    supabase.from("personnel_premiums").select("*").eq("user_id", userId).order("awarded_at", { ascending: false }),
+    supabase.from("personnel_exams").select("*").eq("user_id", userId),
+    supabase.from("personnel_licenses").select("categories").eq("user_id", userId).maybeSingle(),
+    supabase
+      .from("personnel_requests")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("status", "pending"),
+  ]);
+
+  const deployments: PersonnelDeploymentRow[] = (depRes.data ?? []).map((row) => {
+    const r = row as {
+      id: string;
+      date_from: string;
+      date_to: string;
+      uav_hits?: number;
+      premium_amount?: number;
+    };
+    return {
+      id: String(r.id),
+      dateFrom: String(r.date_from),
+      dateTo: String(r.date_to),
+      uavHits: Number(r.uav_hits ?? 0),
+      premiumAmount: Number(r.premium_amount ?? 0),
+      days: daysBetween(String(r.date_from), String(r.date_to)),
+    };
+  });
+
+  const depStats = deployments.reduce(
+    (acc, d) => {
+      acc.count += 1;
+      acc.days += d.days;
+      acc.hits += d.uavHits;
+      acc.premiums += d.premiumAmount;
+      return acc;
+    },
+    { count: 0, days: 0, hits: 0, premiums: 0 },
+  );
+
+  const medals: PersonnelMedalRow[] = (medalRes.data ?? []).map((row) => {
+    const r = row as { id: string; medal_type: string; title: string; awarded_at: string };
+    return {
+      id: String(r.id),
+      medalType: String(r.medal_type),
+      title: String(r.title),
+      awardedAt: String(r.awarded_at),
+    };
+  });
+
+  const premiums: PersonnelPremiumRow[] = (premiumRes.data ?? []).map((row) => {
+    const r = row as { id: string; title: string; amount: number; awarded_at: string };
+    return {
+      id: String(r.id),
+      title: String(r.title ?? "Премия"),
+      amount: Number(r.amount ?? 0),
+      awardedAt: String(r.awarded_at),
+    };
+  });
+
+  const exams = (examRes.data ?? []).map((row) => mapExamRow(row as Record<string, unknown>));
+  const licenseCategories = (
+    (licenseRes.data as { categories?: string[] } | null)?.categories ?? []
+  ).filter((c): c is PersonnelLicenseCategory => c === "B" || c === "C" || c === "CE");
+
+  const monthNames = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"];
+  const activityByMonth = monthNames.slice(0, 7).map((month, idx) => ({
+    month,
+    days: deployments.filter((d) => new Date(d.dateFrom).getMonth() === idx).reduce((s, d) => s + d.days, 0),
+  }));
+
+  const hitsByUavType = [
+    { label: "Geran-4", value: Math.round(depStats.hits * 0.45) },
+    { label: "Leleka-2", value: Math.round(depStats.hits * 0.35) },
+    { label: "FPV-1", value: Math.max(0, depStats.hits - Math.round(depStats.hits * 0.8)) },
+  ].filter((x) => x.value > 0);
+
+  return {
+    ...basic,
+    exams,
+    deploymentsCount: depStats.count,
+    deploymentDays: depStats.days,
+    uavHitsTotal: depStats.hits,
+    premiumsTotal: depStats.premiums,
+    medalsCount: medals.length,
+    licenseCategories,
+    deployments,
+    medals,
+    premiums,
+    pendingRequests: pendingRes.count ?? 0,
+    daysInSystem: daysInSystemSince(basic.createdAt),
+    activityByMonth,
+    hitsByUavType: hitsByUavType.length ? hitsByUavType : [{ label: "Нет данных", value: 1 }],
+  };
+}
+
+export async function createPersonnelRequest(input: {
+  userId: string;
+  requestType: "medal" | "premium" | "deployment" | "exam";
+  payload: Record<string, unknown>;
+}) {
+  const supabase = getServerSupabaseServiceClient();
+  const ins = await supabase
+    .from("personnel_requests")
+    .insert({
+      user_id: input.userId,
+      request_type: input.requestType,
+      payload: input.payload,
+      status: "pending",
+    })
+    .select("id")
+    .single();
+  return ins;
+}
+
+export async function notifyModerators(title: string, body: string, href: string) {
+  const supabase = getServerSupabaseServiceClient();
+  const mods = await supabase
+    .from("app_users")
+    .select("id")
+    .or("can_moderate_personnel.eq.true,role.eq.admin")
+    .eq("status", "active")
+    .limit(200);
+  if (mods.error || !mods.data?.length) return;
+  const rows = mods.data.map((m) => ({
+    user_id: String((m as { id: string }).id),
+    kind: "personnel_request",
+    title,
+    body,
+    href,
+  }));
+  await supabase.from("app_notifications").insert(rows);
+}
+
+export async function notifyUser(userId: string, title: string, body: string, href?: string) {
+  const supabase = getServerSupabaseServiceClient();
+  await supabase.from("app_notifications").insert({
+    user_id: userId,
+    kind: "personnel",
+    title,
+    body,
+    href: href ?? null,
+  });
+}
+
+export async function loadNotifications(userId: string, limit = 30) {
+  const supabase = getServerSupabaseServiceClient();
+  const res = await supabase
+    .from("app_notifications")
+    .select("id,title,body,href,is_read,created_at,kind")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (res.error) return [];
+  return (res.data ?? []).map((r) => ({
+    id: String((r as { id: string }).id),
+    title: String((r as { title: string }).title),
+    body: String((r as { body?: string }).body ?? ""),
+    href: (r as { href?: string | null }).href ?? null,
+    isRead: (r as { is_read?: boolean }).is_read === true,
+    createdAt: String((r as { created_at: string }).created_at),
+    kind: String((r as { kind?: string }).kind ?? "info"),
+  }));
+}
+
+export async function countUnreadNotifications(userId: string) {
+  const supabase = getServerSupabaseServiceClient();
+  const res = await supabase
+    .from("app_notifications")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("is_read", false);
+  return res.count ?? 0;
+}
+
+export async function loadPendingRequests(limit = 100) {
+  const supabase = getServerSupabaseServiceClient();
+  const res = await supabase
+    .from("personnel_requests")
+    .select("id,user_id,request_type,payload,status,created_at")
+    .eq("status", "pending")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (res.error) return [];
+  const rows = res.data ?? [];
+  const userIds = [...new Set(rows.map((r) => String((r as { user_id: string }).user_id)))];
+  const usersRes =
+    userIds.length > 0
+      ? await supabase.from("app_users").select("id,name,callsign").in("id", userIds)
+      : { data: [] as Array<{ id: string; name: string; callsign: string }> };
+  const userMap = new Map((usersRes.data ?? []).map((u) => [String(u.id), u]));
+  return rows.map((row) => {
+    const r = row as { id: string; user_id: string; request_type: string; payload: Record<string, unknown>; created_at: string };
+    const user = userMap.get(r.user_id);
+    return {
+      id: r.id,
+      request_type: r.request_type,
+      payload: r.payload,
+      created_at: r.created_at,
+      app_users: user ? { name: user.name, callsign: user.callsign } : undefined,
+    };
+  });
+}
+
+export async function reviewPersonnelRequest(input: {
+  requestId: string;
+  reviewerId: string;
+  approve: boolean;
+  note?: string;
+}) {
+  const supabase = getServerSupabaseServiceClient();
+  const reqRes = await supabase.from("personnel_requests").select("*").eq("id", input.requestId).maybeSingle();
+  if (reqRes.error || !reqRes.data) return { ok: false as const, error: "not_found" };
+  const req = reqRes.data as {
+    id: string;
+    user_id: string;
+    request_type: string;
+    payload: Record<string, unknown>;
+    status: string;
+  };
+  if (req.status !== "pending") return { ok: false as const, error: "already_reviewed" };
+
+  const status = input.approve ? "approved" : "rejected";
+  await supabase
+    .from("personnel_requests")
+    .update({
+      status,
+      reviewer_id: input.reviewerId,
+      review_note: input.note ?? null,
+      reviewed_at: new Date().toISOString(),
+    })
+    .eq("id", input.requestId);
+
+  if (input.approve) {
+    const p = req.payload ?? {};
+    if (req.request_type === "medal") {
+      await supabase.from("personnel_medals").insert({
+        user_id: req.user_id,
+        medal_type: String(p.medalType ?? "custom"),
+        title: String(p.title ?? "Медаль"),
+        awarded_at: String(p.awardedAt ?? new Date().toISOString().slice(0, 10)),
+      });
+    } else if (req.request_type === "premium") {
+      await supabase.from("personnel_premiums").insert({
+        user_id: req.user_id,
+        title: String(p.title ?? "Премия за сбитие"),
+        amount: Number(p.amount ?? 0),
+        awarded_at: String(p.awardedAt ?? new Date().toISOString().slice(0, 10)),
+      });
+    } else if (req.request_type === "deployment") {
+      await supabase.from("personnel_deployments").insert({
+        user_id: req.user_id,
+        date_from: String(p.dateFrom),
+        date_to: String(p.dateTo),
+        uav_hits: Number(p.uavHits ?? 0),
+        premium_amount: Number(p.premiumAmount ?? 0),
+      });
+    } else if (req.request_type === "exam") {
+      await supabase.from("personnel_exams").upsert(
+        {
+          user_id: req.user_id,
+          exam_type: String(p.examType),
+          status: p.status === "failed" ? "failed" : "passed",
+          passed_at: p.passedAt ? String(p.passedAt) : null,
+          expires_at: p.expiresAt ? String(p.expiresAt) : null,
+        },
+        { onConflict: "user_id,exam_type" },
+      );
+    }
+  }
+
+  await notifyUser(
+    req.user_id,
+    input.approve ? "Заявка одобрена" : "Заявка отклонена",
+    input.approve ? "Запись добавлена в личное дело." : input.note || "Модератор отклонил заявку.",
+    `/personnel/${req.user_id}`,
+  );
+
+  return { ok: true as const };
+}

@@ -777,25 +777,7 @@ export default function ProfilePage() {
             </div>
             <div className="profile-hero-duty">
               <p className="label profile-hero-duty-label">Подразделение</p>
-              <select
-                className="select profile-unit-select"
-                value={unitAssignment ?? ""}
-                onChange={(e) => void onUnitChange(e.target.value)}
-                disabled={unitSaving}
-                aria-label="Подразделение"
-              >
-                <option value="">Не указано</option>
-                {UNIT_ASSIGNMENT_OPTIONS.map((unit) => (
-                  <option key={unit} value={unit}>
-                    {unitAssignmentLabel[unit]}
-                  </option>
-                ))}
-              </select>
-              {!!unitSaveError && (
-                <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0, color: "var(--bad)", maxWidth: 280 }}>
-                  {unitSaveError}
-                </p>
-              )}
+              <span className="unit-assignment-badge">{unitAssignmentLabelOrEmpty(unitAssignment)}</span>
             </div>
             <div className="profile-hero-duty">
               <p className="label profile-hero-duty-label">Место положения</p>

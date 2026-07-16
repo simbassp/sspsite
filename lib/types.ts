@@ -37,6 +37,8 @@ export interface UserPermissions {
   /** Полное управление пользователями (права, должность, удаление). */
   users: boolean;
   online: boolean;
+  /** Модерация заявок личного дела 4 роты. */
+  personnelModeration: boolean;
 }
 
 export interface SessionUser {
@@ -47,6 +49,8 @@ export interface SessionUser {
   position: Position;
   canManageContent: boolean;
   permissions: UserPermissions;
+  /** Подразделение для проверки доступа к модулю 4 роты. */
+  unitAssignment?: UnitAssignment | null;
 }
 
 export interface UserRecord extends SessionUser {

@@ -26,6 +26,8 @@ type ProfileRow = {
   can_view_user_list?: boolean;
   can_reset_test_results?: boolean;
   can_view_online?: boolean;
+  can_moderate_personnel?: boolean;
+  unit_assignment?: string | null;
   status: "active" | "inactive";
 };
 
@@ -211,6 +213,7 @@ export async function POST(request: Request) {
     profile.can_reset_test_results,
     profile.can_manage_users,
     profile.can_view_user_list,
+    profile.can_moderate_personnel,
   ].some((value) => typeof value === "boolean");
 
   const permissions =
@@ -225,6 +228,7 @@ export async function POST(request: Request) {
           userList: true,
           users: true,
           online: true,
+          personnelModeration: true,
         }
       : hasGranularContentPermissions
         ? {
@@ -237,6 +241,7 @@ export async function POST(request: Request) {
             userList: profile.can_view_user_list === true,
             users: profile.can_manage_users === true,
             online: profile.can_view_online === true,
+            personnelModeration: profile.can_moderate_personnel === true,
           }
         : {
             news: profile.can_manage_content === true,
@@ -248,7 +253,19 @@ export async function POST(request: Request) {
             userList: profile.can_view_user_list === true,
             users: profile.can_manage_users === true,
             online: profile.can_view_online === true,
+            personnelModeration: profile.can_moderate_personnel === true,
           };
+
+  const unitRaw = profile.unit_assignment;
+  const unitAssignment =
+    unitRaw === "platoon_1" ||
+    unitRaw === "platoon_2" ||
+    unitRaw === "platoon_3" ||
+    unitRaw === "company_4" ||
+    unitRaw === "staff" ||
+    unitRaw === "office"
+      ? unitRaw
+      : null;
 
   return NextResponse.json({
     ok: true,
@@ -260,6 +277,7 @@ export async function POST(request: Request) {
       position: profile.position,
       canManageContent: permissions.news || permissions.tests || permissions.uav || permissions.counteraction,
       permissions,
+      unitAssignment,
     },
     auth: {
       accessToken,

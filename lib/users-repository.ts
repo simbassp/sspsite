@@ -34,6 +34,7 @@ type UserRow = {
   can_view_user_list?: boolean;
   can_reset_test_results?: boolean;
   can_view_online?: boolean;
+  can_moderate_personnel?: boolean;
   is_online?: boolean;
   duty_location?: string | null;
   unit_assignment?: string | null;
@@ -126,6 +127,7 @@ function defaultPermissionsFromLegacy(row: {
     userList: false,
     users: isAdmin,
     online: isAdmin,
+    personnelModeration: isAdmin,
   };
 }
 
@@ -141,6 +143,7 @@ function normalizePermissions(input: {
   can_view_user_list?: boolean;
   can_reset_test_results?: boolean;
   can_view_online?: boolean;
+  can_moderate_personnel?: boolean;
   permissions?: Partial<UserPermissions> | undefined;
 }) {
   const fallback = defaultPermissionsFromLegacy(input);
@@ -156,6 +159,9 @@ function normalizePermissions(input: {
     ...(input.can_manage_users !== undefined ? { users: input.can_manage_users === true } : {}),
     ...(input.can_view_user_list !== undefined ? { userList: input.can_view_user_list === true } : {}),
     ...(input.can_view_online !== undefined ? { online: input.can_view_online === true } : {}),
+    ...(input.can_moderate_personnel !== undefined
+      ? { personnelModeration: input.can_moderate_personnel === true }
+      : {}),
   };
   if (input.role === "admin") {
     return {
@@ -168,6 +174,7 @@ function normalizePermissions(input: {
       userList: true,
       users: true,
       online: true,
+      personnelModeration: true,
     } satisfies UserPermissions;
   }
   return merged satisfies UserPermissions;
@@ -183,6 +190,7 @@ function toSessionUser(row: UserRow): SessionUser {
     position: row.position as Position,
     canManageContent: permissions.news || permissions.tests || permissions.uav || permissions.counteraction,
     permissions,
+    unitAssignment: normalizeUnitAssignment(row.unit_assignment),
   };
 }
 
@@ -879,6 +887,7 @@ export async function registerUser(payload: {
   password: string;
   position: Position;
   inviteCode: string;
+  unitAssignment: UnitAssignment;
 }) {
   const inviteCodeRaw = payload.inviteCode.trim();
   if (!isSupabaseConfigured) {
@@ -901,6 +910,9 @@ export async function registerUser(payload: {
   const supabase = getSupabaseBrowserClient();
   if (!inviteCodeRaw) {
     return { ok: false as const, error: "Введите персональный код приглашения." };
+  }
+  if (!payload.unitAssignment || !UNIT_ASSIGNMENT_OPTIONS.includes(payload.unitAssignment)) {
+    return { ok: false as const, error: "Выберите подразделение." };
   }
 
   // Параллельно: занятость email/логина + валидация кода — быстрее, чем строго по очереди.
@@ -973,6 +985,7 @@ export async function registerUser(payload: {
             callsign: payload.callsign,
             position: payload.position,
             invite_code: inviteCode,
+            unit_assignment: payload.unitAssignment,
           },
         },
       }),
@@ -1237,15 +1250,16 @@ export async function patchUser(
       ? {
           ...patch,
           permissions: {
-    news: true,
-    tests: true,
-    results: true,
-    resetResults: true,
-    uav: true,
-    counteraction: true,
-    userList: true,
-    users: true,
-    online: true,
+            news: true,
+            tests: true,
+            results: true,
+            resetResults: true,
+            uav: true,
+            counteraction: true,
+            userList: true,
+            users: true,
+            online: true,
+            personnelModeration: true,
           },
           canManageContent: true,
         }
