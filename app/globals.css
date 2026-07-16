@@ -2994,6 +2994,53 @@ html[data-theme="dark"] .final-review-answer--correct {
   white-space: nowrap;
 }
 
+.personnel-table__filters th {
+  padding: 4px 6px 8px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.personnel-table__filters .personnel-table__sticky {
+  z-index: 3;
+}
+
+.personnel-table__filter-input {
+  width: 100%;
+  min-width: 56px;
+  max-width: 120px;
+  padding: 4px 6px;
+  font-size: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+}
+
+.personnel-table__filter-input:focus {
+  outline: 2px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  outline-offset: 0;
+}
+
+.personnel-table__empty {
+  text-align: center;
+  color: var(--muted);
+  padding: 18px 8px !important;
+}
+
+.personnel-table-filter-meta {
+  margin: 0 0 8px;
+}
+
+.personnel-table-filter-reset {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
+}
+
 .personnel-roster-tests {
   display: flex;
   flex-direction: column;

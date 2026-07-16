@@ -27,8 +27,96 @@ import { readClientSession } from "@/lib/client-auth";
 import { canManageUsers, canResetTestResults } from "@/lib/permissions";
 import { dutyLocationLabel } from "@/lib/duty-location";
 import { resolvePersonnelProfilePath } from "@/lib/personnel-profile-path";
-import { PERSONNEL_EXAM_TYPES, rotaUnitLabel } from "@/lib/personnel-catalog";
+import { PERSONNEL_EXAM_TYPES, personnelExamLabel, rotaUnitLabel } from "@/lib/personnel-catalog";
 import type { Position } from "@/lib/types";
+
+type ColumnFilters = {
+  employee: string;
+  unit: string;
+  exams: string;
+  tests: string;
+  deployments: string;
+  hits: string;
+  premiums: string;
+  status: string;
+  licenses: string;
+};
+
+const EMPTY_COLUMN_FILTERS: ColumnFilters = {
+  employee: "",
+  unit: "",
+  exams: "",
+  tests: "",
+  deployments: "",
+  hits: "",
+  premiums: "",
+  status: "",
+  licenses: "",
+};
+
+function hasActiveColumnFilters(filters: ColumnFilters) {
+  return Object.values(filters).some((value) => value.trim().length > 0);
+}
+
+function rosterExamsFilterText(
+  userId: string,
+  exams: UserRow["exams"],
+  examMap: Map<string, Map<string, string>>,
+) {
+  return PERSONNEL_EXAM_TYPES.map((type) => {
+    const status = examMap.get(userId)?.get(type) ?? exams.find((e) => e.examType === type)?.status;
+    const label = personnelExamLabel[type];
+    return `${label} ${status === "passed" ? "сдан" : "не сдан"}`;
+  }).join(" ");
+}
+
+function rosterTestsFilterText(stats?: PersonnelTestRosterStats) {
+  const resolved = stats ?? { trialPassed: 0, trialFailed: 0, finalPassed: 0, finalFailed: 0 };
+  return `пробные ${resolved.trialPassed}/${resolved.trialFailed} итоговые ${resolved.finalPassed}/${resolved.finalFailed}`;
+}
+
+function userMatchesColumnFilters(
+  user: UserRow,
+  filters: ColumnFilters,
+  examMap: Map<string, Map<string, string>>,
+) {
+  const fields: Array<[string, string]> = [
+    [filters.employee, `${user.name} ${user.callsign}`],
+    [filters.unit, rotaUnitLabel(user.rotaPlatoon, user.rotaSection)],
+    [filters.exams, rosterExamsFilterText(user.id, user.exams, examMap)],
+    [filters.tests, rosterTestsFilterText(user.testStats)],
+    [filters.deployments, `${user.deploymentsCount} ${user.deploymentDays}`],
+    [filters.hits, String(user.uavHitsTotal)],
+    [filters.premiums, `${user.premiumsTotal}`],
+    [filters.status, dutyLocationLabel[user.dutyLocation]],
+    [filters.licenses, user.licenseCategories.join("/")],
+  ];
+
+  for (const [query, value] of fields) {
+    const q = query.trim().toLowerCase();
+    if (!q) continue;
+    if (!value.toLowerCase().includes(q)) return false;
+  }
+  return true;
+}
+
+function calcFilteredStats(list: UserRow[]) {
+  const totals = list.reduce(
+    (acc, user) => {
+      acc.totalEmployees += 1;
+      if (user.dutyLocation === "deployment") acc.deployedNow += 1;
+      acc.totalDays += user.deploymentDays;
+      acc.totalHits += user.uavHitsTotal;
+      acc.totalPremiums += user.premiumsTotal;
+      return acc;
+    },
+    { totalEmployees: 0, deployedNow: 0, totalDays: 0, totalHits: 0, totalPremiums: 0 },
+  );
+  return {
+    ...totals,
+    avgDays: totals.totalEmployees ? Math.round(totals.totalDays / totals.totalEmployees) : 0,
+  };
+}
 
 type UserRow = {
   id: string;
@@ -73,6 +161,7 @@ export default function PersonnelListPage() {
   const [resetExamsMsg, setResetExamsMsg] = useState("");
   const [exportExcelLoading, setExportExcelLoading] = useState(false);
   const [exportExcelMsg, setExportExcelMsg] = useState("");
+  const [columnFilters, setColumnFilters] = useState<ColumnFilters>(EMPTY_COLUMN_FILTERS);
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -119,6 +208,18 @@ export default function PersonnelListPage() {
     }
     return m;
   }, [users]);
+
+  const filteredUsers = useMemo(
+    () => users.filter((user) => userMatchesColumnFilters(user, columnFilters, examMap)),
+    [users, columnFilters, examMap],
+  );
+
+  const tableStats = useMemo(() => calcFilteredStats(filteredUsers), [filteredUsers]);
+  const columnFiltersActive = hasActiveColumnFilters(columnFilters);
+
+  const setColumnFilter = (key: keyof ColumnFilters, value: string) => {
+    setColumnFilters((prev) => ({ ...prev, [key]: value }));
+  };
 
   const profilePath = (id: string) => resolvePersonnelProfilePath(session, id);
 
@@ -264,25 +365,35 @@ export default function PersonnelListPage() {
           <div className="personnel-stat-grid">
             <div className="personnel-stat-card">
               <p className="label">Всего</p>
-              <strong>{stats.totalEmployees}</strong>
+              <strong>{tableStats.totalEmployees}</strong>
             </div>
             <div className="personnel-stat-card">
               <p className="label">В командировке</p>
-              <strong>{stats.deployedNow}</strong>
+              <strong>{tableStats.deployedNow}</strong>
             </div>
             <div className="personnel-stat-card">
               <p className="label">Ср. дней</p>
-              <strong>{stats.avgDays}</strong>
+              <strong>{tableStats.avgDays}</strong>
             </div>
             <div className="personnel-stat-card">
               <p className="label">Сбитий</p>
-              <strong>{stats.totalHits}</strong>
+              <strong>{tableStats.totalHits}</strong>
             </div>
             <div className="personnel-stat-card">
               <p className="label">Премии</p>
-              <strong>{stats.totalPremiums.toLocaleString("ru-RU")} ₽</strong>
+              <strong>{tableStats.totalPremiums.toLocaleString("ru-RU")} ₽</strong>
             </div>
           </div>
+
+          {columnFiltersActive && (
+            <p className="page-subtitle personnel-table-filter-meta">
+              Показано {filteredUsers.length} из {users.length}
+              {" · "}
+              <button type="button" className="personnel-table-filter-reset" onClick={() => setColumnFilters(EMPTY_COLUMN_FILTERS)}>
+                Сбросить фильтры таблицы
+              </button>
+            </p>
+          )}
 
           {loadError && <p style={{ color: "var(--bad)" }}>{loadError}</p>}
           {isLoading && <p className="page-subtitle">Загрузка…</p>}
@@ -302,19 +413,96 @@ export default function PersonnelListPage() {
                     <th className="personnel-table__compact" title="Пробные и итоговые: сданы / не сданы">
                       Тесты
                     </th>
-                    <th className="personnel-table__compact" title="Категории прав">
-                      Права
-                    </th>
                     <th className="personnel-table__compact" title="Командировки">
                       Команд.
                     </th>
                     <th className="personnel-table__compact">Сбития</th>
                     <th className="personnel-table__compact">Премии</th>
                     <th className="personnel-table__compact">Статус</th>
+                    <th className="personnel-table__compact" title="Категории прав">
+                      Права
+                    </th>
+                  </tr>
+                  <tr className="personnel-table__filters">
+                    <th className="personnel-table__sticky">
+                      <input
+                        className="personnel-table__filter-input"
+                        placeholder="Имя…"
+                        value={columnFilters.employee}
+                        onChange={(e) => setColumnFilter("employee", e.target.value)}
+                      />
+                    </th>
+                    <th>
+                      <input
+                        className="personnel-table__filter-input"
+                        placeholder="Взвод…"
+                        value={columnFilters.unit}
+                        onChange={(e) => setColumnFilter("unit", e.target.value)}
+                      />
+                    </th>
+                    <th>
+                      <input
+                        className="personnel-table__filter-input"
+                        placeholder="Зачёт…"
+                        value={columnFilters.exams}
+                        onChange={(e) => setColumnFilter("exams", e.target.value)}
+                      />
+                    </th>
+                    <th>
+                      <input
+                        className="personnel-table__filter-input"
+                        placeholder="Тест…"
+                        value={columnFilters.tests}
+                        onChange={(e) => setColumnFilter("tests", e.target.value)}
+                      />
+                    </th>
+                    <th>
+                      <input
+                        className="personnel-table__filter-input"
+                        placeholder="Команд…"
+                        value={columnFilters.deployments}
+                        onChange={(e) => setColumnFilter("deployments", e.target.value)}
+                      />
+                    </th>
+                    <th>
+                      <input
+                        className="personnel-table__filter-input"
+                        placeholder="0"
+                        value={columnFilters.hits}
+                        onChange={(e) => setColumnFilter("hits", e.target.value)}
+                      />
+                    </th>
+                    <th>
+                      <input
+                        className="personnel-table__filter-input"
+                        placeholder="₽"
+                        value={columnFilters.premiums}
+                        onChange={(e) => setColumnFilter("premiums", e.target.value)}
+                      />
+                    </th>
+                    <th>
+                      <select
+                        className="personnel-table__filter-input"
+                        value={columnFilters.status}
+                        onChange={(e) => setColumnFilter("status", e.target.value)}
+                      >
+                        <option value="">Все</option>
+                        <option value="базе">На базе</option>
+                        <option value="командировке">В командировке</option>
+                      </select>
+                    </th>
+                    <th>
+                      <input
+                        className="personnel-table__filter-input"
+                        placeholder="B/C…"
+                        value={columnFilters.licenses}
+                        onChange={(e) => setColumnFilter("licenses", e.target.value)}
+                      />
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {users.map((u) => (
+                  {filteredUsers.map((u) => (
                     <tr key={u.id}>
                       <td className="personnel-table__sticky">
                         <Link href={profilePath(u.id)} style={{ fontWeight: 700, color: "inherit" }}>
@@ -337,9 +525,6 @@ export default function PersonnelListPage() {
                         <PersonnelRosterTestCell stats={u.testStats} />
                       </td>
                       <td className="personnel-table__compact">
-                        <PersonnelRosterLicenseCell categories={u.licenseCategories} />
-                      </td>
-                      <td className="personnel-table__compact">
                         {u.deploymentsCount} ({u.deploymentDays} дн.)
                       </td>
                       <td className="personnel-table__compact">{u.uavHitsTotal}</td>
@@ -349,14 +534,24 @@ export default function PersonnelListPage() {
                           {dutyLocationLabel[u.dutyLocation]}
                         </span>
                       </td>
+                      <td className="personnel-table__compact">
+                        <PersonnelRosterLicenseCell categories={u.licenseCategories} />
+                      </td>
                     </tr>
                   ))}
+                  {filteredUsers.length === 0 && (
+                    <tr>
+                      <td colSpan={9} className="personnel-table__empty">
+                        Нет сотрудников по выбранным фильтрам
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
               </PersonnelTableDualScroll>
             </div>
             <div className="card-body personnel-mobile-cards">
-              {users.map((u) => (
+              {filteredUsers.map((u) => (
                 <article key={u.id} className="card">
                   <div className="card-body">
                     <Link href={profilePath(u.id)} style={{ fontWeight: 700 }}>
