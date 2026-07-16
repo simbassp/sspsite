@@ -14,7 +14,7 @@ import {
   updateUser,
 } from "@/lib/storage";
 import { normalizeDutyLocation } from "@/lib/duty-location";
-import { normalizeUnitAssignment } from "@/lib/unit-assignment";
+import { normalizeUnitAssignment, UNIT_ASSIGNMENT_OPTIONS } from "@/lib/unit-assignment";
 import { DutyLocation, Position, SessionUser, UserPermissions, UserRecord, UnitAssignment } from "@/lib/types";
 
 type UserRow = {
@@ -835,7 +835,7 @@ export async function updateCurrentUserDutyLocation(location: DutyLocation) {
 }
 
 export async function updateCurrentUserUnitAssignment(unit: UnitAssignment | null) {
-  if (unit !== null && !["platoon_1", "platoon_2", "platoon_3", "company_4"].includes(unit)) {
+  if (unit !== null && !UNIT_ASSIGNMENT_OPTIONS.includes(unit)) {
     return { ok: false as const, error: "Некорректное подразделение." };
   }
 

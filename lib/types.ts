@@ -13,8 +13,14 @@ export type UserStatus = "active" | "inactive";
 /** Место положения сотрудника (профиль / админка). */
 export type DutyLocation = "base" | "deployment";
 
-/** Подразделение: 1–3 взвод, 4 рота. */
-export type UnitAssignment = "platoon_1" | "platoon_2" | "platoon_3" | "company_4";
+/** Подразделение: взводы, рота, штаб, канцелярия. */
+export type UnitAssignment =
+  | "platoon_1"
+  | "platoon_2"
+  | "platoon_3"
+  | "company_4"
+  | "staff"
+  | "office";
 export type TestType = "trial" | "final";
 export type TestStatus = "passed" | "failed";
 

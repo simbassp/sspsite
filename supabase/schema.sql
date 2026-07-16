@@ -44,7 +44,8 @@ alter table if exists public.app_users add constraint app_users_duty_location_ch
 alter table if exists public.app_users add column if not exists unit_assignment text;
 alter table if exists public.app_users drop constraint if exists app_users_unit_assignment_check;
 alter table if exists public.app_users add constraint app_users_unit_assignment_check check (
-  unit_assignment is null or unit_assignment in ('platoon_1', 'platoon_2', 'platoon_3', 'company_4')
+  unit_assignment is null
+  or unit_assignment in ('platoon_1', 'platoon_2', 'platoon_3', 'company_4', 'staff', 'office')
 );
 
 create table if not exists public.news (
@@ -453,7 +454,7 @@ begin
   v_unit := lower(trim(coalesce(p_unit, '')));
   if v_unit = '' then
     v_unit := null;
-  elsif v_unit not in ('platoon_1', 'platoon_2', 'platoon_3', 'company_4') then
+  elsif v_unit not in ('platoon_1', 'platoon_2', 'platoon_3', 'company_4', 'staff', 'office') then
     return false;
   end if;
 

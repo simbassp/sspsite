@@ -8,7 +8,7 @@ import { POSITION_OPTIONS, getPositionBadgeClass } from "@/lib/position-ui";
 import { canManageUsers } from "@/lib/permissions";
 import { fetchUsers, patchUser, removeUser } from "@/lib/users-repository";
 import type { DutyLocation, Position, Role, UnitAssignment, UserRecord } from "@/lib/types";
-import { UNIT_ASSIGNMENT_OPTIONS, unitAssignmentLabel, unitAssignmentLabelOrEmpty } from "@/lib/unit-assignment";
+import { UNIT_ASSIGNMENT_OPTIONS, unitAssignmentLabel, unitAssignmentLabelOrEmpty, matchesUnitFilter } from "@/lib/unit-assignment";
 
 const permissionOptions = [
   { key: "news", label: "Новости" },
@@ -238,12 +238,7 @@ export default function AdminUsersPage() {
       .includes(query.toLowerCase().trim());
     const matchesPosition = positionFilter === "all" ? true : item.position === positionFilter;
     const matchesDuty = dutyFilter === "all" ? true : item.dutyLocation === dutyFilter;
-    const matchesUnit =
-      unitFilter === "all"
-        ? true
-        : unitFilter === "unset"
-          ? !item.unitAssignment
-          : item.unitAssignment === unitFilter;
+    const matchesUnit = matchesUnitFilter(unitFilter, item.unitAssignment);
     return matchesText && matchesPosition && matchesDuty && matchesUnit;
   });
   const pages = Math.max(1, Math.ceil(visible.length / pageSize));

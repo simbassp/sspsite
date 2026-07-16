@@ -5,6 +5,7 @@ import { seedData, STORAGE_KEY } from "@/lib/seed";
 import { normalizeTestConfig } from "@/lib/test-config";
 import { createDefaultQuestionBank } from "@/lib/test-question-bank";
 import { normalizeUnitAssignment } from "@/lib/unit-assignment";
+import { isTrialPassed } from "@/lib/test-pass-rules";
 import {
   AppData,
   CatalogItem,
@@ -437,11 +438,12 @@ export function addTrialResult(
   meta?: { questionsTotal: number; questionsCorrect: number },
 ) {
   const data = readData();
+  const passed = meta ? isTrialPassed(meta.questionsCorrect, meta.questionsTotal) : false;
   data.testResults.unshift({
     id: uid("t"),
     userId,
     type: "trial",
-    status: score >= 60 ? "passed" : "failed",
+    status: passed ? "passed" : "failed",
     score,
     createdAt: new Date().toISOString(),
     ...(meta

@@ -18,6 +18,7 @@ import {
 } from "@/lib/tests-repository";
 import { filterDbPoolByManualTopicSettings } from "@/lib/manual-topic";
 import { DEFAULT_TEST_CONFIG } from "@/lib/test-config";
+import { formatTestResultDisplay, isFinalPassed } from "@/lib/test-pass-rules";
 import { loadRecentQuestionIds, pickTestQuestions, rememberQuestionIds } from "@/lib/test-question-selection";
 import { generateUavTtxQuestionBank } from "@/lib/uav-test-generator";
 import { fetchUavItems } from "@/lib/uav-repository";
@@ -506,11 +507,14 @@ export default function TestsPage() {
     if (!session) return;
     const questions = activeQuestionsRef.current;
     const correct = questions.reduce((acc, q) => acc + (finalAnswers[q.id] === q.correctIndex ? 1 : 0), 0);
-    const score = Math.round((correct / Math.max(questions.length, 1)) * 100);
+    const qTotal = questions.length;
+    const score = Math.round((correct / Math.max(qTotal, 1)) * 100);
     const messageText =
       type === "trial"
-        ? `Пробный тест завершен: ${score}%.`
-        : `Итоговый тест завершен: ${score}%. Статус: ${score >= 80 ? "СДАЛ" : "НЕ СДАЛ"}.`;
+        ? `Пробный тест завершен: ${formatTestResultDisplay({ questionsCorrect: correct, questionsTotal: qTotal, scorePercent: score })}.`
+        : `Итоговый тест завершен: ${formatTestResultDisplay({ questionsCorrect: correct, questionsTotal: qTotal, scorePercent: score })}. Статус: ${
+            isFinalPassed(correct, qTotal) ? "СДАЛ" : "НЕ СДАЛ"
+          }.`;
 
     // Снимаем активный тест сразу, чтобы не было повторной обработки последнего вопроса.
     setActiveTest(null);
@@ -531,7 +535,6 @@ export default function TestsPage() {
       trialRevealTimerRef.current = null;
     }
 
-    const qTotal = questions.length;
     const nowIso = new Date().toISOString();
     const startedAt = testStartedAtRef.current;
     const durationSeconds =
@@ -549,7 +552,7 @@ export default function TestsPage() {
       if (type === "trial") {
         await createTrialResult(session.id, score, meta);
       } else {
-        const passed = score >= 80;
+        const passed = isFinalPassed(correct, qTotal);
         await finishFinalAttempt(session.id, score, passed, meta);
       }
       setMessage(messageText);
@@ -1029,7 +1032,13 @@ export default function TestsPage() {
                       <td>
                         <span className={`pill ${passed ? "pill-green" : "pill-red"}`}>{passed ? "Сдал" : "Не сдал"}</span>
                       </td>
-                      <td>{result.score}% ({correct}/{total})</td>
+                      <td>
+                        {formatTestResultDisplay({
+                          questionsCorrect: correct,
+                          questionsTotal: total,
+                          scorePercent: result.score,
+                        })}
+                      </td>
                       <td>{formatAttemptDuration(result.durationSeconds)}</td>
                       <td>{formatDateTime(result.createdAt)}</td>
                     </tr>
@@ -1092,7 +1101,12 @@ export default function TestsPage() {
                     </span>
                   </h3>
                   <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0 }}>
-                    Результат: {result.score}% ({correct}/{total})
+                    Результат:{" "}
+                    {formatTestResultDisplay({
+                      questionsCorrect: correct,
+                      questionsTotal: total,
+                      scorePercent: result.score,
+                    })}
                   </p>
                   {result.type === "final" && attemptIdx != null && (
                     <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0 }}>

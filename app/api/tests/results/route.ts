@@ -1,5 +1,6 @@
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
+import { isFinalPassed, isTrialPassed } from "@/lib/test-pass-rules";
 
 export const runtime = "nodejs";
 
@@ -127,8 +128,10 @@ export async function POST(request: Request) {
 
   if (kind === "final") {
     const score = Number(body.score ?? 0);
-    const passed = body.passed === true;
     const meta = (body.meta || {}) as ResultMeta;
+    const questionsTotal = Math.max(1, Number(meta.questionsTotal ?? 0) || 1);
+    const questionsCorrect = Math.max(0, Math.min(Number(meta.questionsCorrect ?? 0), questionsTotal));
+    const passed = isFinalPassed(questionsCorrect, questionsTotal);
     const inserted = await insertTestResultCompat(supabase, {
       user_id: session.id,
       type: "final",
@@ -150,10 +153,12 @@ export async function POST(request: Request) {
 
   const score = Number(body.score ?? 0);
   const meta = (body.meta || {}) as ResultMeta;
+  const questionsTotal = Math.max(1, Number(meta.questionsTotal ?? 0) || 1);
+  const questionsCorrect = Math.max(0, Math.min(Number(meta.questionsCorrect ?? 0), questionsTotal));
   const inserted = await insertTestResultCompat(supabase, {
     user_id: session.id,
     type: "trial",
-    status: score >= 60 ? "passed" : "failed",
+    status: isTrialPassed(questionsCorrect, questionsTotal) ? "passed" : "failed",
     score,
     started_at: meta.startedAt,
     finished_at: meta.finishedAt,

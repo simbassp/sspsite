@@ -6,6 +6,14 @@ import { readClientSession } from "@/lib/client-auth";
 import { canResetTestResults } from "@/lib/permissions";
 import { getPositionBadgeClass } from "@/lib/position-ui";
 import { formatDateTime } from "@/lib/format";
+import { formatTestResultDisplay } from "@/lib/test-pass-rules";
+import {
+  matchesUnitFilter,
+  UNIT_ASSIGNMENT_OPTIONS,
+  unitAssignmentLabel,
+  type UnitAssignmentFilter,
+} from "@/lib/unit-assignment";
+import type { UnitAssignment } from "@/lib/types";
 
 type DateRange = "all" | "today" | "7d" | "30d";
 type TestTypeFilter = "all" | "trial" | "final";
@@ -16,6 +24,7 @@ type UserSummary = {
   name: string;
   callsign: string;
   position?: string;
+  unitAssignment?: UnitAssignment | null;
   status: "passed" | "failed" | "not_started";
   scorePercent: number | null;
   questionsCorrect: number | null;
@@ -32,6 +41,7 @@ type AttemptRow = {
   name: string;
   callsign: string;
   position?: string;
+  unitAssignment?: UnitAssignment | null;
   type: "trial" | "final";
   status: "passed" | "failed";
   scorePercent: number;
@@ -88,16 +98,19 @@ function formatLastPersonLine(row: LastPersonAt | null) {
   return `Последний: ${who} · ${formatDateTime(row.at)}`;
 }
 
-function fractionLabel(row: { questionsTotal: number | null; questionsCorrect: number | null; scorePercent: number | null }) {
-  const qt = row.questionsTotal;
-  const qc = row.questionsCorrect;
-  if (qt != null && qc != null && qt > 0) {
-    return `${qc} / ${qt}`;
-  }
-  if (row.scorePercent != null) {
-    return `${row.scorePercent}%`;
-  }
-  return "—";
+function formatAttemptResult(row: {
+  type: "trial" | "final";
+  questionsTotal: number | null;
+  questionsCorrect: number | null;
+  scorePercent: number | null;
+}) {
+  const defaultTotal = row.type === "final" ? 15 : 15;
+  return formatTestResultDisplay({
+    questionsCorrect: row.questionsCorrect,
+    questionsTotal: row.questionsTotal,
+    scorePercent: row.scorePercent,
+    defaultTotal,
+  });
 }
 
 export default function AdminResultsPage() {
@@ -107,6 +120,7 @@ export default function AdminResultsPage() {
   const [range, setRange] = useState<DateRange>("all");
   const [typeFilter, setTypeFilter] = useState<TestTypeFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [unitFilter, setUnitFilter] = useState<UnitAssignmentFilter>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [summaries, setSummaries] = useState<UserSummary[]>([]);
   const [attempts, setAttempts] = useState<AttemptRow[]>([]);
@@ -161,20 +175,22 @@ export default function AdminResultsPage() {
     return attempts.filter((row) => {
       if (typeFilter !== "all" && row.type !== typeFilter) return false;
       if (statusFilter !== "all" && row.status !== statusFilter) return false;
+      if (!matchesUnitFilter(unitFilter, row.unitAssignment)) return false;
       if (!query) return true;
       return row.name.toLowerCase().includes(query) || row.callsign.toLowerCase().includes(query);
     });
-  }, [attempts, typeFilter, statusFilter, searchTerm]);
+  }, [attempts, typeFilter, statusFilter, unitFilter, searchTerm]);
 
   const visibleNotStarted = useMemo(() => {
     if (statusFilter !== "not_started" || typeFilter === "trial") return [];
     const query = searchTerm.trim().toLowerCase();
     return summaries.filter((row) => {
       if (row.status !== "not_started") return false;
+      if (!matchesUnitFilter(unitFilter, row.unitAssignment)) return false;
       if (!query) return true;
       return row.name.toLowerCase().includes(query) || row.callsign.toLowerCase().includes(query);
     });
-  }, [summaries, statusFilter, typeFilter, searchTerm]);
+  }, [summaries, statusFilter, typeFilter, unitFilter, searchTerm]);
 
   const onResetAttempts = async (userId: string) => {
     if (!viewerCanReset) return;
@@ -403,6 +419,25 @@ export default function AdminResultsPage() {
         </>
       )}
 
+      <label className="label" htmlFor="results-unit-filter" style={{ marginTop: 12 }}>
+        Подразделение
+      </label>
+      <select
+        id="results-unit-filter"
+        className="select"
+        value={unitFilter}
+        onChange={(e) => setUnitFilter(e.target.value as UnitAssignmentFilter)}
+        style={{ marginTop: 6, maxWidth: 320 }}
+      >
+        <option value="all">Все подразделения</option>
+        <option value="unset">Не указано</option>
+        {UNIT_ASSIGNMENT_OPTIONS.map((unit) => (
+          <option key={unit} value={unit}>
+            {unitAssignmentLabel[unit]}
+          </option>
+        ))}
+      </select>
+
       <label className="label" htmlFor="results-search" style={{ marginTop: 12 }}>
         Поиск по имени и позывному
       </label>
@@ -443,7 +478,7 @@ export default function AdminResultsPage() {
                 </span>
               </p>
               <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0 }}>
-                Результат: {row.scorePercent}% ({fractionLabel(row)})
+                Результат: {formatAttemptResult(row)}
               </p>
               {row.type === "final" && row.finalAttemptIndex != null && row.finalAttemptIndex > 0 && (
                 <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0 }}>

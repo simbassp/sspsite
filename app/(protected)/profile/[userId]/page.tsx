@@ -5,8 +5,9 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { readClientSession } from "@/lib/client-auth";
 import { formatDateTime, formatTotalTestDuration } from "@/lib/format";
+import { formatTestResultDisplay } from "@/lib/test-pass-rules";
 import { dutyLocationLabel } from "@/lib/duty-location";
-import { unitAssignmentLabelOrEmpty } from "@/lib/unit-assignment";
+import { unitAssignmentLabelOrEmpty, normalizeUnitAssignment } from "@/lib/unit-assignment";
 import { getPositionBadgeClass } from "@/lib/position-ui";
 import { canManageUsers, canViewUserList } from "@/lib/permissions";
 import { DutyLocation, TestResult, UnitAssignment } from "@/lib/types";
@@ -100,13 +101,7 @@ export default function ProfileUserInspectPage() {
         }
         const u = payload.user;
         const duty_location: DutyLocation = u.duty_location === "deployment" ? "deployment" : "base";
-        const unit_assignment =
-          u.unit_assignment === "platoon_1" ||
-          u.unit_assignment === "platoon_2" ||
-          u.unit_assignment === "platoon_3" ||
-          u.unit_assignment === "company_4"
-            ? u.unit_assignment
-            : null;
+        const unit_assignment = normalizeUnitAssignment(u.unit_assignment);
         setInspectUser({ ...u, duty_location, unit_assignment });
         setEditName(String(u.name || ""));
         setEditCallsign(String(u.callsign || ""));
@@ -133,13 +128,7 @@ export default function ProfileUserInspectPage() {
           const u = payload.user;
           const duty_location: DutyLocation =
             u.duty_location === "deployment" ? "deployment" : "base";
-          const unit_assignment =
-            u.unit_assignment === "platoon_1" ||
-            u.unit_assignment === "platoon_2" ||
-            u.unit_assignment === "platoon_3" ||
-            u.unit_assignment === "company_4"
-              ? u.unit_assignment
-              : null;
+          const unit_assignment = normalizeUnitAssignment(u.unit_assignment);
           setInspectUser({ ...u, duty_location, unit_assignment });
           setEditName(String(u.name || ""));
           setEditCallsign(String(u.callsign || ""));
@@ -244,7 +233,14 @@ export default function ProfileUserInspectPage() {
               <p style={{ marginTop: 6 }}>
                 <span className={`pill ${item.status === "passed" ? "pill-green" : "pill-red"}`}>{statusText}</span>
               </p>
-              <p style={{ marginTop: 6, fontWeight: 700 }}>{item.score}%</p>
+              <p style={{ marginTop: 6, fontWeight: 700 }}>
+                {formatTestResultDisplay({
+                  questionsCorrect: item.questionsCorrect,
+                  questionsTotal: item.questionsTotal,
+                  scorePercent: item.score,
+                  defaultTotal: item.type === "final" ? 15 : 15,
+                })}
+              </p>
             </div>
             <div>
               <p className="label">Время</p>

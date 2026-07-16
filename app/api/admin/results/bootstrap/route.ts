@@ -3,6 +3,8 @@ import { FINAL_TEST_MAX_ATTEMPTS } from "@/lib/final-test-constants";
 import { canManageResults, canResetTestResults } from "@/lib/permissions";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
+import { normalizeUnitAssignment } from "@/lib/unit-assignment";
+import type { UnitAssignment } from "@/lib/types";
 
 export const runtime = "nodejs";
 
@@ -20,6 +22,7 @@ type AppUserListRow = {
   role: string;
   status: string;
   final_test_counting_from?: string | null;
+  unit_assignment?: string | null;
 };
 
 function rangeStartIso(range: string): Date | null {
@@ -52,16 +55,18 @@ export async function GET(req: Request) {
 
     const usersPrimary = await supabase
       .from("app_users")
-      .select("id,name,callsign,position,role,status,final_test_counting_from")
+      .select("id,name,callsign,position,role,status,final_test_counting_from,unit_assignment")
       .limit(1000);
 
     let usersRows: AppUserListRow[] | null = usersPrimary.data as AppUserListRow[] | null;
     let usersErr = usersPrimary.error;
+    let unitFromDb = true;
 
     if (usersErr && isMissingColumnError(usersErr.message)) {
       const usersFallback = await supabase.from("app_users").select("id,name,callsign,role,status").limit(1000);
       usersRows = usersFallback.data as AppUserListRow[] | null;
       usersErr = usersFallback.error;
+      unitFromDb = false;
     }
 
     if (usersErr || !usersRows) {
@@ -178,6 +183,7 @@ export async function GET(req: Request) {
           name: user.name,
           callsign: user.callsign,
           position: String(user.position ?? ""),
+          unitAssignment: unitFromDb ? normalizeUnitAssignment(user.unit_assignment) : null,
           status: statusLabel,
           scorePercent: latestFinal ? latestFinal.score : null,
           questionsCorrect: qc,
@@ -236,7 +242,12 @@ export async function GET(req: Request) {
     const userById = new Map(
       users.map((u) => [
         u.id,
-        { name: u.name, callsign: u.callsign, position: String(u.position ?? "") },
+        {
+          name: u.name,
+          callsign: u.callsign,
+          position: String(u.position ?? ""),
+          unitAssignment: unitFromDb ? normalizeUnitAssignment(u.unit_assignment) : null,
+        },
       ]),
     );
 
@@ -254,6 +265,7 @@ export async function GET(req: Request) {
           name: user?.name ?? "—",
           callsign: user?.callsign ?? "",
           position: user?.position ?? "",
+          unitAssignment: (user?.unitAssignment ?? null) as UnitAssignment | null,
           type: row.type,
           status: row.status,
           scorePercent: row.score,
