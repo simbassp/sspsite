@@ -252,22 +252,6 @@ export default function PersonnelListPage() {
                   onChange={(e) => setSearch(e.target.value)}
                 />
               </div>
-              <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
-                <button type="button" className="btn" onClick={() => void load()}>
-                  Применить
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => {
-                    setPlatoon("all");
-                    setSection("all");
-                    setSearch("");
-                  }}
-                >
-                  Сбросить
-                </button>
-              </div>
             </div>
           </article>
 
