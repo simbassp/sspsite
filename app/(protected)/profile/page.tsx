@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { readClientSession } from "@/lib/client-auth";
 import { formatDate, formatDateTime, formatTotalTestDuration } from "@/lib/format";
-import { formatTestResultDisplay } from "@/lib/test-pass-rules";
+import { formatTestResultForType } from "@/lib/test-pass-rules";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import {
   createInviteCode,
@@ -269,11 +269,11 @@ export default function ProfilePage() {
                 <span className={`pill ${item.status === "passed" ? "pill-green" : "pill-red"}`}>{statusText}</span>
               </p>
               <p style={{ marginTop: 6, fontWeight: 700 }}>
-                {formatTestResultDisplay({
+                {formatTestResultForType({
+                  type: item.type,
                   questionsCorrect: item.questionsCorrect,
                   questionsTotal: item.questionsTotal,
                   scorePercent: item.score,
-                  defaultTotal: item.type === "final" ? 15 : 15,
                 })}
               </p>
             </div>

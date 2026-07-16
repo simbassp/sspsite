@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { readClientSession } from "@/lib/client-auth";
 import { formatDateTime, formatTotalTestDuration } from "@/lib/format";
-import { formatTestResultDisplay } from "@/lib/test-pass-rules";
+import { formatTestResultForType } from "@/lib/test-pass-rules";
 import { dutyLocationLabel } from "@/lib/duty-location";
 import { unitAssignmentLabelOrEmpty, normalizeUnitAssignment } from "@/lib/unit-assignment";
 import { getPositionBadgeClass } from "@/lib/position-ui";
@@ -234,11 +234,11 @@ export default function ProfileUserInspectPage() {
                 <span className={`pill ${item.status === "passed" ? "pill-green" : "pill-red"}`}>{statusText}</span>
               </p>
               <p style={{ marginTop: 6, fontWeight: 700 }}>
-                {formatTestResultDisplay({
+                {formatTestResultForType({
+                  type: item.type,
                   questionsCorrect: item.questionsCorrect,
                   questionsTotal: item.questionsTotal,
                   scorePercent: item.score,
-                  defaultTotal: item.type === "final" ? 15 : 15,
                 })}
               </p>
             </div>

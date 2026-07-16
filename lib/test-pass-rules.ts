@@ -1,3 +1,6 @@
+import { DEFAULT_TEST_CONFIG } from "@/lib/test-config";
+import type { TestConfig } from "@/lib/types";
+
 /** Допустимое число ошибок в пробном тесте. */
 export const MAX_TRIAL_ERRORS = 2;
 
@@ -49,4 +52,33 @@ export function formatTestResultDisplay(input: {
 }) {
   const { correct, total, percent } = resolveQuestionCounts(input);
   return `${correct}/${total} (${percent}%)`;
+}
+
+export type TestQuestionCountConfig = Pick<TestConfig, "trialQuestionCount" | "finalQuestionCount">;
+
+export function defaultQuestionCountForTestType(
+  type: "trial" | "final",
+  config?: Partial<TestQuestionCountConfig> | null,
+): number {
+  if (type === "final") {
+    return config?.finalQuestionCount ?? DEFAULT_TEST_CONFIG.finalQuestionCount;
+  }
+  return config?.trialQuestionCount ?? DEFAULT_TEST_CONFIG.trialQuestionCount;
+}
+
+export function formatTestResultForType(
+  row: {
+    type: "trial" | "final";
+    questionsCorrect: number | null | undefined;
+    questionsTotal: number | null | undefined;
+    scorePercent: number | null | undefined;
+  },
+  config?: Partial<TestQuestionCountConfig> | null,
+) {
+  return formatTestResultDisplay({
+    questionsCorrect: row.questionsCorrect,
+    questionsTotal: row.questionsTotal,
+    scorePercent: row.scorePercent,
+    defaultTotal: defaultQuestionCountForTestType(row.type, config),
+  });
 }

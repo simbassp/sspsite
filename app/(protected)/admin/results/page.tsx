@@ -6,7 +6,7 @@ import { readClientSession } from "@/lib/client-auth";
 import { canResetTestResults } from "@/lib/permissions";
 import { getPositionBadgeClass } from "@/lib/position-ui";
 import { formatDateTime } from "@/lib/format";
-import { formatTestResultDisplay } from "@/lib/test-pass-rules";
+import { formatTestResultForType } from "@/lib/test-pass-rules";
 import {
   matchesUnitFilter,
   UNIT_ASSIGNMENT_OPTIONS,
@@ -104,13 +104,7 @@ function formatAttemptResult(row: {
   questionsCorrect: number | null;
   scorePercent: number | null;
 }) {
-  const defaultTotal = row.type === "final" ? 15 : 15;
-  return formatTestResultDisplay({
-    questionsCorrect: row.questionsCorrect,
-    questionsTotal: row.questionsTotal,
-    scorePercent: row.scorePercent,
-    defaultTotal,
-  });
+  return formatTestResultForType(row);
 }
 
 export default function AdminResultsPage() {
