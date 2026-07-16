@@ -783,7 +783,25 @@ export default function ProfilePage() {
             </div>
             <div className="profile-hero-duty">
               <p className="label profile-hero-duty-label">Подразделение</p>
-              <span className="unit-assignment-badge">{unitAssignmentLabelOrEmpty(unitAssignment)}</span>
+              <select
+                className="select profile-unit-select"
+                value={unitAssignment ?? ""}
+                onChange={(e) => void onUnitChange(e.target.value)}
+                disabled={unitSaving}
+                aria-label="Подразделение"
+              >
+                <option value="">Не указано</option>
+                {UNIT_ASSIGNMENT_OPTIONS.map((unit) => (
+                  <option key={unit} value={unit}>
+                    {unitAssignmentLabel[unit]}
+                  </option>
+                ))}
+              </select>
+              {!!unitSaveError && (
+                <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0, color: "var(--bad)", maxWidth: 280 }}>
+                  {unitSaveError}
+                </p>
+              )}
             </div>
             <div className="profile-hero-duty">
               <p className="label profile-hero-duty-label">Место положения</p>
@@ -874,42 +892,6 @@ export default function ProfilePage() {
               <button className="btn btn-primary profile-save-btn" type="button" onClick={() => void onSaveProfile()}>
                 Сохранить профиль
               </button>
-            </section>
-
-            <section className="profile-settings-section">
-              <h4 className="profile-settings-section-title">Подразделение</h4>
-              <label className="label" htmlFor="profile-unit-assignment">
-                Ваше подразделение
-              </label>
-              <select
-                id="profile-unit-assignment"
-                className="select"
-                value={unitAssignment ?? ""}
-                onChange={(e) => void onUnitChange(e.target.value)}
-                disabled={unitSaving}
-              >
-                <option value="">Выберите подразделение</option>
-                {UNIT_ASSIGNMENT_OPTIONS.map((unit) => (
-                  <option key={unit} value={unit}>
-                    {unitAssignmentLabel[unit]}
-                  </option>
-                ))}
-              </select>
-              {!unitAssignment && (
-                <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
-                  Если вы зарегистрировались раньше — выберите подразделение здесь.
-                </p>
-              )}
-              {unitSaving && (
-                <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
-                  Сохраняем…
-                </p>
-              )}
-              {!!unitSaveError && (
-                <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0, color: "var(--bad)" }}>
-                  {unitSaveError}
-                </p>
-              )}
             </section>
 
             <section className="profile-settings-section">
