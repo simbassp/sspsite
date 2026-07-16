@@ -77,7 +77,11 @@ export function ProfileNameEditModal({
                 {fieldError.callsign}
               </p>
             )}
-            {!!message && <p className="page-subtitle" style={{ margin: 0 }}>{message}</p>}
+            {!!message && (
+              <p className="page-subtitle" style={{ margin: 0, color: "var(--bad)" }}>
+                {message}
+              </p>
+            )}
             <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
               <button
                 type="button"

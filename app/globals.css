@@ -3084,7 +3084,7 @@ html[data-theme="dark"] .final-review-answer--correct {
   background: rgba(0, 0, 0, 0.45);
   display: grid;
   place-items: center;
-  z-index: 50;
+  z-index: 1000;
   padding: 16px;
 }
 

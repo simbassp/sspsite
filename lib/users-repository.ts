@@ -777,32 +777,27 @@ export async function updateCurrentUserProfile(payload: { name: string; callsign
     return { ok: true as const, name, callsign };
   }
 
-  const supabase = getSupabaseBrowserClient();
-  const { data, error } = await supabase.rpc("update_my_profile", {
-    p_name: name,
-    p_callsign: callsign,
-  });
-
-  if (error) {
-    const raw = error.message || "";
-    const low = raw.toLowerCase();
-    if (low.includes("duplicate") || low.includes("unique constraint")) {
-      return { ok: false as const, error: "Такой позывной уже занят. Укажите другой." };
+  try {
+    const response = await fetch("/api/profile/me", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name, callsign }),
+    });
+    const payload = (await response.json()) as { ok?: boolean; error?: string; name?: string; callsign?: string };
+    if (!response.ok || !payload.ok) {
+      return {
+        ok: false as const,
+        error: payload.error || "Не удалось обновить профиль. Попробуйте позже.",
+      };
     }
     return {
-      ok: false as const,
-      error: raw ? `Не удалось обновить профиль: ${raw}` : "Не удалось обновить профиль. Попробуйте позже.",
+      ok: true as const,
+      name: typeof payload.name === "string" ? payload.name : name,
+      callsign: typeof payload.callsign === "string" ? payload.callsign : callsign,
     };
+  } catch {
+    return { ok: false as const, error: "Ошибка сети. Попробуйте ещё раз." };
   }
-
-  if (data !== true) {
-    return {
-      ok: false as const,
-      error:
-        "Профиль не сохранён: запись пользователя не найдена в базе. Выйдите из аккаунта и войдите снова; если не поможет — напишите администратору.",
-    };
-  }
-  return { ok: true as const, name, callsign };
 }
 
 export async function updateCurrentUserDutyLocation(location: DutyLocation) {

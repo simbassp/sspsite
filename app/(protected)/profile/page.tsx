@@ -67,6 +67,8 @@ export default function ProfilePage() {
   const [unitSaveError, setUnitSaveError] = useState("");
   const [dutySaving, setDutySaving] = useState(false);
   const [fieldError, setFieldError] = useState<{ name?: string; callsign?: string }>({});
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileModalMessage, setProfileModalMessage] = useState("");
   const [isResettingStats, setIsResettingStats] = useState(false);
   const [showAllAttempts, setShowAllAttempts] = useState(false);
   const [attemptsPage, setAttemptsPage] = useState(1);
@@ -513,8 +515,8 @@ export default function ProfilePage() {
   };
 
   const onSaveProfile = async ({ name, callsign }: { name: string; callsign: string }) => {
-    if (!session) return;
-    setSettingsMessage("");
+    if (!session || profileSaving) return;
+    setProfileModalMessage("");
     setFieldError({});
     const trimmedName = name.trim();
     const trimmedCallsign = callsign.trim();
@@ -525,26 +527,39 @@ export default function ProfilePage() {
       setFieldError(nextError);
       return;
     }
-    const result = await updateCurrentUserProfile({
-      name: trimmedName,
-      callsign: trimmedCallsign,
-    });
-    if (!result.ok) {
-      setSettingsMessage(result.error);
+    const currentName = (session.name ?? "").trim();
+    const currentCallsign = (session.callsign ?? "").trim();
+    if (trimmedName === currentName && trimmedCallsign === currentCallsign) {
+      setProfileEditModalOpen(false);
       return;
     }
-    persistSession({
-      ...session,
-      name: result.name,
-      callsign: result.callsign,
-    });
-    setSession({
-      ...session,
-      name: result.name,
-      callsign: result.callsign,
-    });
-    setSettingsMessage("Профиль сохранён");
-    setProfileEditModalOpen(false);
+    setProfileSaving(true);
+    try {
+      const result = await updateCurrentUserProfile({
+        name: trimmedName,
+        callsign: trimmedCallsign,
+      });
+      if (!result.ok) {
+        setProfileModalMessage(result.error);
+        return;
+      }
+      persistSession({
+        ...session,
+        name: result.name,
+        callsign: result.callsign,
+      });
+      setSession({
+        ...session,
+        name: result.name,
+        callsign: result.callsign,
+      });
+      setProfileEditModalOpen(false);
+      setProfileModalMessage("");
+    } catch {
+      setProfileModalMessage("Ошибка сети. Попробуйте ещё раз.");
+    } finally {
+      setProfileSaving(false);
+    }
   };
 
   const onResetStats = async () => {
@@ -739,6 +754,7 @@ export default function ProfilePage() {
                   aria-label="Редактировать имя и позывной"
                   onClick={() => {
                     setFieldError({});
+                    setProfileModalMessage("");
                     setProfileEditModalOpen(true);
                   }}
                 >
@@ -826,13 +842,17 @@ export default function ProfilePage() {
       <ProfileNameEditModal
         open={profileEditModalOpen}
         onClose={() => {
+          if (profileSaving) return;
           setProfileEditModalOpen(false);
           setFieldError({});
+          setProfileModalMessage("");
         }}
         initialName={session.name ?? ""}
         initialCallsign={session.callsign ?? ""}
         onSave={(values) => void onSaveProfile(values)}
+        saving={profileSaving}
         fieldError={fieldError}
+        message={profileModalMessage}
       />
 
       <article className="card profile-danger-card" style={{ marginTop: 12 }}>
