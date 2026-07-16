@@ -32,7 +32,7 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
     const buffer = await buildPersonnelProfileExcelBuffer(bundle);
     const filename = buildPersonnelExportFilename(bundle);
 
-    return new Response(buffer, {
+    return new Response(new Uint8Array(buffer), {
       status: 200,
       headers: {
         "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -41,6 +41,7 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
       },
     });
   } catch (error) {
+    console.error("[export-excel]", error);
     return Response.json(
       { ok: false, error: error instanceof Error ? error.message : "export_excel_exception" },
       { status: 500 },

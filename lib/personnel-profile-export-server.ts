@@ -78,7 +78,7 @@ function formatRuDateTime(value: string | null | undefined) {
 
 export async function loadPersonnelProfileExportBundle(userId: string): Promise<PersonnelProfileExportBundle | null> {
   const supabase = getServerSupabaseServiceClient();
-  const userRes = await supabase
+  let userRes = await supabase
     .from("app_users")
     .select(
       "id,name,callsign,position,role,status,login,duty_location,unit_assignment,rota_platoon,rota_section,employment_date,created_at",
@@ -86,30 +86,49 @@ export async function loadPersonnelProfileExportBundle(userId: string): Promise<
     .eq("id", userId)
     .maybeSingle();
 
+  if (userRes.error && isMissingColumnError(userRes.error.message)) {
+    userRes = await supabase
+      .from("app_users")
+      .select(
+        "id,name,callsign,position,role,status,login,duty_location,unit_assignment,rota_platoon,rota_section,created_at",
+      )
+      .eq("id", userId)
+      .maybeSingle();
+  }
+
   if (userRes.error || !userRes.data) return null;
   const u = userRes.data as Record<string, unknown>;
 
-  const profile = await loadPersonnelProfile(userId);
-  const { linkedUserIds } = await resolveFinalUserContext(supabase, userId);
+  let profile: PersonnelProfilePayload | null = null;
+  try {
+    profile = await loadPersonnelProfile(userId);
+  } catch {
+    profile = null;
+  }
 
+  const { linkedUserIds } = await resolveFinalUserContext(supabase, userId);
+  const userIdsForTests = linkedUserIds.length > 0 ? linkedUserIds : [userId];
+
+  let testRows: Array<Record<string, unknown>> = [];
   const testPrimary = await supabase
     .from("test_results")
-    .select(
-      "id,type,status,score,created_at,duration_seconds,questions_total,questions_correct,test_type",
-    )
-    .in("user_id", linkedUserIds)
+    .select("id,type,status,score,created_at,duration_seconds,questions_total,questions_correct,test_type")
+    .in("user_id", userIdsForTests)
     .order("created_at", { ascending: false })
     .limit(500);
 
-  let testRows = (testPrimary.data ?? []) as Array<Record<string, unknown>>;
-  if (testPrimary.error && isMissingColumnError(testPrimary.error.message)) {
+  if (!testPrimary.error) {
+    testRows = (testPrimary.data ?? []) as Array<Record<string, unknown>>;
+  } else if (isMissingColumnError(testPrimary.error.message)) {
     const legacy = await supabase
       .from("test_results")
       .select("id,test_type,status,score,created_at,questions_total,questions_correct")
-      .in("user_id", linkedUserIds)
+      .in("user_id", userIdsForTests)
       .order("created_at", { ascending: false })
       .limit(500);
-    testRows = (legacy.data ?? []) as Array<Record<string, unknown>>;
+    if (!legacy.error) {
+      testRows = (legacy.data ?? []) as Array<Record<string, unknown>>;
+    }
   }
 
   const examMap = new Map((profile?.exams ?? []).map((e) => [e.examType, e]));
@@ -125,7 +144,10 @@ export async function loadPersonnelProfileExportBundle(userId: string): Promise<
     };
   });
 
-  const employmentDateRaw = u.employment_date ? String(u.employment_date).slice(0, 10) : null;
+  const employmentDateRaw =
+    u.employment_date != null && String(u.employment_date).trim()
+      ? String(u.employment_date).slice(0, 10)
+      : null;
   const days = employmentDaysSince(employmentDateRaw);
 
   const testResults: PersonnelProfileExportTestRow[] = testRows.map((row) => {

@@ -35,8 +35,9 @@ export function ProfileExportExcelButton({ userId, className = "" }: ProfileExpo
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-    } catch {
-      setError("Не удалось скачать Excel.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "export_failed";
+      setError(message === "export_failed" ? "Не удалось скачать Excel." : `Не удалось скачать Excel: ${message}`);
     } finally {
       setLoading(false);
     }

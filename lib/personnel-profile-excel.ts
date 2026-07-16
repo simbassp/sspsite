@@ -1,6 +1,6 @@
-import ExcelJS from "exceljs";
 import type { PersonnelProfileExportBundle } from "@/lib/personnel-profile-export-server";
 import { formatExportDuration, formatExportMoney } from "@/lib/personnel-profile-export-server";
+import type ExcelJS from "exceljs";
 
 const HEADER_FILL = "FFC42B2B";
 const HEADER_FONT = "FFFFFFFF";
@@ -27,6 +27,12 @@ function styleSectionTitle(cell: ExcelJS.Cell) {
   cell.font = { bold: true, size: 12, color: { argb: "FF111827" } };
   cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: SECTION_FILL } };
   cell.alignment = { vertical: "middle" };
+}
+
+function formatSheetDate(value: string | null | undefined) {
+  if (!value?.trim()) return "—";
+  const d = new Date(value.includes("T") ? value : `${value}T12:00:00`);
+  return Number.isFinite(d.getTime()) ? d.toLocaleDateString("ru-RU") : value;
 }
 
 function styleTableCell(cell: ExcelJS.Cell) {
@@ -106,11 +112,11 @@ function addOverviewSheet(workbook: ExcelJS.Workbook, bundle: PersonnelProfileEx
     ["Дней в командировках", p ? String(p.deploymentDays) : "0"],
     ["Сбитий БПЛА", p ? String(p.uavHitsTotal) : "0"],
     ["Премии", p ? formatExportMoney(p.premiumsTotal) : "0 ₽"],
-    ["Медалей", p ? String(p.medals.length) : "0"],
-    ["Категории прав", p?.licenseCategories.length ? p.licenseCategories.join(", ") : "—"],
+    ["Медалей", p?.medals?.length != null ? String(p.medals.length) : "0"],
+    ["Категории прав", p?.licenseCategories?.length ? p.licenseCategories.join(", ") : "—"],
   ]);
 
-  if (p?.activitySummary.length) {
+  if (p?.activitySummary?.length) {
     sheet.addRow([]);
     addSection("Активность (сводка)");
     const actHeader = sheet.addRow(["Показатель", "Количество"]);
@@ -155,8 +161,8 @@ function addDeploymentsSheet(workbook: ExcelJS.Workbook, bundle: PersonnelProfil
   }
   for (const d of rows) {
     const row = sheet.addRow([
-      new Date(`${d.dateFrom}T12:00:00`).toLocaleDateString("ru-RU"),
-      new Date(`${d.dateTo}T12:00:00`).toLocaleDateString("ru-RU"),
+      formatSheetDate(d.dateFrom),
+      formatSheetDate(d.dateTo),
       d.days,
       d.uavHits,
       formatExportMoney(d.premiumAmount),
@@ -176,7 +182,7 @@ function addMedalsSheet(workbook: ExcelJS.Workbook, bundle: PersonnelProfileExpo
     return;
   }
   for (const m of rows) {
-    const row = sheet.addRow([m.title, new Date(`${m.awardedAt}T12:00:00`).toLocaleDateString("ru-RU")]);
+    const row = sheet.addRow([m.title, formatSheetDate(m.awardedAt)]);
     row.eachCell((cell) => styleTableCell(cell));
   }
 }
@@ -196,7 +202,7 @@ function addPremiumsSheet(workbook: ExcelJS.Workbook, bundle: PersonnelProfileEx
     const row = sheet.addRow([
       p.title,
       formatExportMoney(p.amount),
-      new Date(`${p.awardedAt}T12:00:00`).toLocaleDateString("ru-RU"),
+      formatSheetDate(p.awardedAt),
       p.source === "deployment" ? "Командировка" : "Отдельная",
     ]);
     row.eachCell((cell) => styleTableCell(cell));
@@ -258,6 +264,8 @@ function addActivitySheet(workbook: ExcelJS.Workbook, bundle: PersonnelProfileEx
 }
 
 export async function buildPersonnelProfileExcelBuffer(bundle: PersonnelProfileExportBundle) {
+  const ExcelJSModule = await import("exceljs");
+  const ExcelJS = ExcelJSModule.default ?? ExcelJSModule;
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "SSP";
   workbook.created = new Date();
