@@ -76,6 +76,12 @@ export async function resolveFinalUserContext(supabase: SupabaseClient, sessionU
   };
 }
 
+function chunkIds(ids: string[], size = 80) {
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += size) chunks.push(ids.slice(i, i + size));
+  return chunks;
+}
+
 /** Пакетно: id связанного аккаунта → id сотрудника из выгрузки. */
 export async function resolveBulkLinkedUserIds(supabase: SupabaseClient, rosterUserIds: string[]) {
   const rosterSet = new Set(rosterUserIds);
@@ -83,30 +89,55 @@ export async function resolveBulkLinkedUserIds(supabase: SupabaseClient, rosterU
   for (const id of rosterUserIds) toCanonical.set(id, id);
 
   type AppUserRow = { id: string; auth_user_id?: string | null };
-  const rows: AppUserRow[] = [];
 
-  const byId = await supabase.from("app_users").select("id,auth_user_id").in("id", rosterUserIds);
-  if (!byId.error) rows.push(...((byId.data ?? []) as AppUserRow[]));
-
-  const byAuth = await supabase.from("app_users").select("id,auth_user_id").in("auth_user_id", rosterUserIds);
-  if (!byAuth.error) rows.push(...((byAuth.data ?? []) as AppUserRow[]));
+  const resolveCanon = (id: string, authId: string | null): string | null => {
+    if (rosterSet.has(id)) return id;
+    if (authId && rosterSet.has(authId)) return authId;
+    const fromId = toCanonical.get(id);
+    if (fromId) return fromId;
+    if (authId) {
+      const fromAuth = toCanonical.get(authId);
+      if (fromAuth) return fromAuth;
+    }
+    return null;
+  };
 
   const linkRow = (row: AppUserRow) => {
     const id = String(row.id);
     const authId = row.auth_user_id ? String(row.auth_user_id) : null;
-    const canon = rosterSet.has(id) ? id : authId && rosterSet.has(authId) ? authId : null;
+    const canon = resolveCanon(id, authId);
     if (!canon) return;
     toCanonical.set(id, canon);
     if (authId) toCanonical.set(authId, canon);
   };
 
-  for (const row of rows) linkRow(row);
+  let frontier = [...rosterUserIds];
+  const seenQueries = new Set<string>();
 
-  const authIds = [...new Set(rows.map((row) => (row.auth_user_id ? String(row.auth_user_id) : null)).filter(Boolean))] as string[];
-  if (authIds.length) {
-    const linkedByAuth = await supabase.from("app_users").select("id,auth_user_id").in("auth_user_id", authIds).limit(500);
-    if (!linkedByAuth.error) {
-      for (const row of (linkedByAuth.data ?? []) as AppUserRow[]) linkRow(row);
+  for (let hop = 0; hop < 5 && frontier.length; hop++) {
+    const batch = [...new Set(frontier)].filter((id) => {
+      const key = `q:${id}`;
+      if (seenQueries.has(key)) return false;
+      seenQueries.add(key);
+      return true;
+    });
+    if (!batch.length) break;
+    frontier = [];
+
+    for (const part of chunkIds(batch)) {
+      const [byId, byAuth] = await Promise.all([
+        supabase.from("app_users").select("id,auth_user_id").in("id", part),
+        supabase.from("app_users").select("id,auth_user_id").in("auth_user_id", part),
+      ]);
+
+      const merged = [...((byId.data ?? []) as AppUserRow[]), ...((byAuth.data ?? []) as AppUserRow[])];
+      for (const row of merged) {
+        linkRow(row);
+        const id = String(row.id);
+        const authId = row.auth_user_id ? String(row.auth_user_id) : null;
+        frontier.push(id);
+        if (authId) frontier.push(authId);
+      }
     }
   }
 

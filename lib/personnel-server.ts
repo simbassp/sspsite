@@ -404,23 +404,33 @@ async function loadTestStatsForUsers(userIds: string[]) {
   const queryIds = [...new Set(linkedMap.keys())];
 
   let testRows = [] as Array<Record<string, unknown>>;
-  const primary = await supabase
-    .from("test_results")
-    .select("user_id,type,status,test_type")
-    .in("user_id", queryIds)
-    .order("created_at", { ascending: false })
-    .limit(Math.min(queryIds.length * 120, 8000));
 
-  if (!primary.error) {
-    testRows = (primary.data ?? []) as Array<Record<string, unknown>>;
-  } else if (isMissingColumnError(primary.error.message)) {
-    const legacy = await supabase
+  const fetchChunk = async (ids: string[]) => {
+    const primary = await supabase
       .from("test_results")
-      .select("user_id,test_type,status")
-      .in("user_id", queryIds)
+      .select("user_id,type,status,test_type")
+      .in("user_id", ids)
       .order("created_at", { ascending: false })
-      .limit(Math.min(queryIds.length * 120, 8000));
-    if (!legacy.error) testRows = (legacy.data ?? []) as Array<Record<string, unknown>>;
+      .limit(Math.min(ids.length * 120, 8000));
+
+    if (!primary.error) {
+      return (primary.data ?? []) as Array<Record<string, unknown>>;
+    }
+    if (isMissingColumnError(primary.error.message)) {
+      const legacy = await supabase
+        .from("test_results")
+        .select("user_id,test_type,status")
+        .in("user_id", ids)
+        .order("created_at", { ascending: false })
+        .limit(Math.min(ids.length * 120, 8000));
+      if (!legacy.error) return (legacy.data ?? []) as Array<Record<string, unknown>>;
+    }
+    return [] as Array<Record<string, unknown>>;
+  };
+
+  for (let i = 0; i < queryIds.length; i += 80) {
+    const chunk = queryIds.slice(i, i + 80);
+    testRows.push(...(await fetchChunk(chunk)));
   }
 
   const rowsByUser = new Map<string, Array<{ type?: string; test_type?: string; status?: string }>>();
@@ -437,6 +447,30 @@ async function loadTestStatsForUsers(userIds: string[]) {
 
   for (const [id, rows] of rowsByUser) {
     map.set(id, summarizeTestResultRows(rows));
+  }
+
+  const zeroIds = userIds.filter((id) => {
+    const s = map.get(id)!;
+    return s.trialPassed + s.trialFailed + s.finalPassed + s.finalFailed === 0;
+  });
+
+  if (zeroIds.length > 0) {
+    for (let i = 0; i < zeroIds.length; i += 8) {
+      const chunk = zeroIds.slice(i, i + 8);
+      await Promise.all(
+        chunk.map(async (id) => {
+          const ctx = await resolveFinalUserContext(supabase, id);
+          const linkedIds = ctx.linkedUserIds.length ? ctx.linkedUserIds : [id];
+          const extraRows: Array<Record<string, unknown>> = [];
+          for (let j = 0; j < linkedIds.length; j += 80) {
+            extraRows.push(...(await fetchChunk(linkedIds.slice(j, j + 80))));
+          }
+          if (extraRows.length) {
+            map.set(id, summarizeTestResultRows(extraRows));
+          }
+        }),
+      );
+    }
   }
 
   return map;

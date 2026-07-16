@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { PersonnelPreviewBanner } from "@/components/personnel/PersonnelPreviewBanner";
+import { PersonnelTableDualScroll } from "@/components/personnel/PersonnelTableDualScroll";
 import {
   postResetPersonnelExams,
   ResetPersonnelExamsButton,
@@ -287,8 +288,9 @@ export default function PersonnelListPage() {
           {isLoading && <p className="page-subtitle">Загрузка…</p>}
 
           <article className="card">
-            <div className="card-body personnel-table-wrap">
+            <div className="card-body">
               <p className="personnel-table-scroll-hint">Прокрутите таблицу вбок, чтобы увидеть все колонки</p>
+              <PersonnelTableDualScroll>
               <table className="personnel-table">
                 <thead>
                   <tr>
@@ -351,6 +353,7 @@ export default function PersonnelListPage() {
                   ))}
                 </tbody>
               </table>
+              </PersonnelTableDualScroll>
             </div>
             <div className="card-body personnel-mobile-cards">
               {users.map((u) => (

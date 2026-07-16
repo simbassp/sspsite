@@ -2936,6 +2936,31 @@ html[data-theme="dark"] .final-review-answer--correct {
   -webkit-overflow-scrolling: touch;
 }
 
+.personnel-table-dual-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.personnel-table-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.personnel-table-scroll--top {
+  height: 14px;
+}
+
+.personnel-table-scroll__spacer {
+  height: 1px;
+}
+
+.personnel-table-scroll--main {
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
 .personnel-table-scroll-hint {
   margin: 0 0 10px;
   font-size: 12px;
@@ -3012,15 +3037,17 @@ html[data-theme="dark"] .final-review-answer--correct {
 .personnel-roster-licenses {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  max-width: 88px;
+  gap: 3px;
+  max-width: 64px;
 }
 
 .personnel-license-badge--compact {
-  min-width: 26px;
-  height: 26px;
-  border-radius: 6px;
-  font-size: 12px;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .personnel-table th,

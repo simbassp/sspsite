@@ -313,14 +313,15 @@ function personnelRosterTestLine(
   );
 }
 
-export function PersonnelRosterTestCell({ stats }: { stats: PersonnelTestRosterStats }) {
-  const total = stats.trialPassed + stats.trialFailed + stats.finalPassed + stats.finalFailed;
+export function PersonnelRosterTestCell({ stats }: { stats?: PersonnelTestRosterStats }) {
+  const resolved = stats ?? { trialPassed: 0, trialFailed: 0, finalPassed: 0, finalFailed: 0 };
+  const total = resolved.trialPassed + resolved.trialFailed + resolved.finalPassed + resolved.finalFailed;
   if (total === 0) return <span className="personnel-roster-tests__empty">—</span>;
 
   return (
     <div className="personnel-roster-tests" title="Сданы / не сданы">
-      {personnelRosterTestLine("П", stats.trialPassed, stats.trialFailed, "Пробные: сданы / не сданы")}
-      {personnelRosterTestLine("И", stats.finalPassed, stats.finalFailed, "Итоговые: сданы / не сданы")}
+      {personnelRosterTestLine("П", resolved.trialPassed, resolved.trialFailed, "Пробные: сданы / не сданы")}
+      {personnelRosterTestLine("И", resolved.finalPassed, resolved.finalFailed, "Итоговые: сданы / не сданы")}
     </div>
   );
 }
