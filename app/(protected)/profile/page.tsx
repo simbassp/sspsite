@@ -25,7 +25,8 @@ import {
   updateCurrentUserPassword,
   updateCurrentUserPasswordWithOldPassword,
 } from "@/lib/users-repository";
-import { PersonnelProfileStats } from "@/components/personnel/PersonnelProfileStats";
+import { PersonnelProfileStats, type PersonnelActivityData } from "@/components/personnel/PersonnelProfileStats";
+import { PersonnelTestActivityBlock } from "@/components/personnel/PersonnelTestActivityBlock";
 import { getPositionBadgeClass } from "@/lib/position-ui";
 import { dutyLocationLabel } from "@/lib/duty-location";
 import {
@@ -74,6 +75,7 @@ export default function ProfilePage() {
   const [attemptsPage, setAttemptsPage] = useState(1);
   const [showAllFinalAttempts, setShowAllFinalAttempts] = useState(false);
   const [finalAttemptsPage, setFinalAttemptsPage] = useState(1);
+  const [personnelActivity, setPersonnelActivity] = useState<PersonnelActivityData | null>(null);
   const canManageInvites = session?.role === "admin";
 
   useEffect(() => {
@@ -837,7 +839,9 @@ export default function ProfilePage() {
         </div>
       </article>
 
-      {session?.id ? <PersonnelProfileStats userId={session.id} /> : null}
+      {session?.id ? (
+        <PersonnelProfileStats userId={session.id} onActivityData={setPersonnelActivity} />
+      ) : null}
 
       <ProfileNameEditModal
         open={profileEditModalOpen}
@@ -1052,20 +1056,28 @@ export default function ProfilePage() {
                   </div>
                 </div>
               </div>
-              <div
-                style={{
-                  marginTop: 10,
-                  borderRadius: 12,
-                  border: "1px solid var(--line)",
-                  background: "color-mix(in srgb, var(--panel2) 70%, transparent)",
-                  padding: "10px 12px",
-                  color: "var(--muted)",
-                  fontSize: 13,
-                }}
-              >
-                Статистика обновляется после каждой попытки прохождения теста.
-              </div>
             </>
+          )}
+          {personnelActivity ? (
+            <PersonnelTestActivityBlock
+              activityByMonth={personnelActivity.activityByMonth}
+              activitySummary={personnelActivity.activitySummary}
+            />
+          ) : null}
+          {rows.length > 0 && (
+            <div
+              style={{
+                marginTop: 10,
+                borderRadius: 12,
+                border: "1px solid var(--line)",
+                background: "color-mix(in srgb, var(--panel2) 70%, transparent)",
+                padding: "10px 12px",
+                color: "var(--muted)",
+                fontSize: 13,
+              }}
+            >
+              Статистика обновляется после каждой попытки прохождения теста.
+            </div>
           )}
         </div>
       </article>

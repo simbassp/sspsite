@@ -10,7 +10,8 @@ import { formatDateTime, formatTotalTestDuration } from "@/lib/format";
 import { formatTestResultForType } from "@/lib/test-pass-rules";
 import { dutyLocationLabel } from "@/lib/duty-location";
 import { unitAssignmentLabelOrEmpty, normalizeUnitAssignment } from "@/lib/unit-assignment";
-import { PersonnelProfileStats } from "@/components/personnel/PersonnelProfileStats";
+import { PersonnelProfileStats, type PersonnelActivityData } from "@/components/personnel/PersonnelProfileStats";
+import { PersonnelTestActivityBlock } from "@/components/personnel/PersonnelTestActivityBlock";
 import { getPositionBadgeClass } from "@/lib/position-ui";
 import { canManageUsers, canViewUserList } from "@/lib/permissions";
 import { DutyLocation, TestResult, UnitAssignment } from "@/lib/types";
@@ -74,6 +75,7 @@ export default function ProfileUserInspectPage() {
   const [profileMessage, setProfileMessage] = useState("");
   const [profileEditModalOpen, setProfileEditModalOpen] = useState(false);
   const [fieldError, setFieldError] = useState<{ name?: string; callsign?: string }>({});
+  const [personnelActivity, setPersonnelActivity] = useState<PersonnelActivityData | null>(null);
 
   useEffect(() => {
     if (!session || !userId || !canOpen) return;
@@ -548,7 +550,7 @@ export default function ProfileUserInspectPage() {
             message={profileMessage}
           />
 
-          {userId ? <PersonnelProfileStats userId={userId} /> : null}
+          {userId ? <PersonnelProfileStats userId={userId} onActivityData={setPersonnelActivity} /> : null}
 
           <article className="card" style={{ marginTop: 12 }}>
             <div className="card-body">
@@ -610,6 +612,12 @@ export default function ProfileUserInspectPage() {
                   </div>
                 </>
               )}
+              {personnelActivity ? (
+                <PersonnelTestActivityBlock
+                  activityByMonth={personnelActivity.activityByMonth}
+                  activitySummary={personnelActivity.activitySummary}
+                />
+              ) : null}
             </div>
           </article>
 

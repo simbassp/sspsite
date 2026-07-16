@@ -16,9 +16,12 @@ import {
   PersonnelStackedBarChart,
   PersonnelActivityLegend,
   personnelActivityPieData,
+  filterPersonnelActivityByMonth,
+  filterPersonnelActivitySummary,
   type PersonnelActivityMonth,
   type PersonnelActivitySegment,
 } from "@/components/personnel/PersonnelIcons";
+import { PersonnelTestActivityBlock } from "@/components/personnel/PersonnelTestActivityBlock";
 import { dutyLocationLabel } from "@/lib/duty-location";
 import { formatDate } from "@/lib/format";
 import {
@@ -111,6 +114,16 @@ export default function PersonnelProfilePage() {
     for (const e of profile?.exams ?? []) m.set(e.examType, e);
     return m;
   }, [profile?.exams]);
+
+  const serviceActivitySummary = useMemo(
+    () => filterPersonnelActivitySummary(profile?.activitySummary ?? [], "service"),
+    [profile?.activitySummary],
+  );
+
+  const serviceActivityByMonth = useMemo(
+    () => filterPersonnelActivityByMonth(profile?.activityByMonth ?? [], "service"),
+    [profile?.activityByMonth],
+  );
 
   const onRequestSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -318,20 +331,20 @@ export default function PersonnelProfilePage() {
             <article className="card">
               <div className="card-body">
                 <h3 style={{ marginTop: 0 }}>Активность по месяцам</h3>
-                <PersonnelStackedBarChart data={profile.activityByMonth} />
-                <PersonnelActivityLegend segments={profile.activitySummary} />
+                <PersonnelStackedBarChart data={serviceActivityByMonth} />
+                <PersonnelActivityLegend segments={serviceActivitySummary} />
               </div>
             </article>
             <article className="card">
               <div className="card-body">
                 <h3 style={{ marginTop: 0 }}>Общая статистика</h3>
-                <PersonnelPieChart data={personnelActivityPieData(profile.activitySummary)} />
+                <PersonnelPieChart data={personnelActivityPieData(serviceActivitySummary)} />
               </div>
             </article>
           </div>
-          {profile.activitySummary.some((item) => item.value > 0) && (
+          {serviceActivitySummary.some((item) => item.value > 0) && (
             <div className="personnel-activity-mini-grid" style={{ marginTop: 12 }}>
-              {profile.activitySummary
+              {serviceActivitySummary
                 .filter((item) => item.value > 0)
                 .map((item) => (
                   <article key={item.key} className="card personnel-activity-mini-card">
@@ -342,7 +355,7 @@ export default function PersonnelProfilePage() {
                       <strong style={{ fontSize: 20 }}>{item.value}</strong>
                       <PersonnelMiniBarChart
                         color={item.color}
-                        data={profile.activityByMonth.map((month) => ({
+                        data={serviceActivityByMonth.map((month) => ({
                           month: month.month,
                           value: month.segments.find((seg) => seg.key === item.key)?.value ?? 0,
                         }))}
@@ -352,6 +365,10 @@ export default function PersonnelProfilePage() {
                 ))}
             </div>
           )}
+          <PersonnelTestActivityBlock
+            activityByMonth={profile.activityByMonth}
+            activitySummary={profile.activitySummary}
+          />
         </>
       )}
 

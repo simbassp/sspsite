@@ -296,6 +296,44 @@ export type PersonnelActivityMonth = {
   total: number;
 };
 
+export const PERSONNEL_TEST_ACTIVITY_KEYS = [
+  "trialPassed",
+  "trialFailed",
+  "finalPassed",
+  "finalFailed",
+] as const;
+
+export type PersonnelTestActivityKey = (typeof PERSONNEL_TEST_ACTIVITY_KEYS)[number];
+
+export function isPersonnelTestActivityKey(key: string): key is PersonnelTestActivityKey {
+  return (PERSONNEL_TEST_ACTIVITY_KEYS as readonly string[]).includes(key);
+}
+
+export function filterPersonnelActivitySummary(
+  segments: PersonnelActivitySegment[],
+  mode: "test" | "service",
+): PersonnelActivitySegment[] {
+  return segments.filter((seg) =>
+    mode === "test" ? isPersonnelTestActivityKey(seg.key) : !isPersonnelTestActivityKey(seg.key),
+  );
+}
+
+export function filterPersonnelActivityByMonth(
+  data: PersonnelActivityMonth[],
+  mode: "test" | "service",
+): PersonnelActivityMonth[] {
+  return data.map((month) => {
+    const segments = month.segments.filter((seg) =>
+      mode === "test" ? isPersonnelTestActivityKey(seg.key) : !isPersonnelTestActivityKey(seg.key),
+    );
+    return {
+      ...month,
+      segments,
+      total: segments.reduce((sum, seg) => sum + seg.value, 0),
+    };
+  });
+}
+
 export function personnelActivityPieData(segments: PersonnelActivitySegment[]) {
   const nonEmpty = segments.filter((seg) => seg.value > 0);
   if (!nonEmpty.length) {
