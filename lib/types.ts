@@ -12,6 +12,9 @@ export type UserStatus = "active" | "inactive";
 
 /** Место положения сотрудника (профиль / админка). */
 export type DutyLocation = "base" | "deployment";
+
+/** Подразделение: 1–3 взвод, 4 рота. */
+export type UnitAssignment = "platoon_1" | "platoon_2" | "platoon_3" | "company_4";
 export type TestType = "trial" | "final";
 export type TestStatus = "passed" | "failed";
 
@@ -47,6 +50,8 @@ export interface UserRecord extends SessionUser {
   isOnline?: boolean;
   /** На базе или в командировке; по умолчанию base. */
   dutyLocation: DutyLocation;
+  /** Взвод или рота; null — не указано. */
+  unitAssignment: UnitAssignment | null;
 }
 
 export interface NewsItem {

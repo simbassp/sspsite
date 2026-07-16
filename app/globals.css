@@ -729,6 +729,29 @@ html[data-theme="dark"] .duty-location-badge--deployment {
   color: #f0cb79;
 }
 
+.unit-assignment-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  width: fit-content;
+  max-width: 100%;
+  background: rgba(59, 130, 246, 0.14);
+  color: #2563eb;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+}
+
+html[data-theme="dark"] .unit-assignment-badge {
+  color: #93c5fd;
+}
+
+.profile-unit-select {
+  min-width: 140px;
+  max-width: 100%;
+}
+
 .profile-page .profile-hero-divider {
   width: 1px;
   align-self: stretch;

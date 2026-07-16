@@ -14,7 +14,8 @@ import {
   updateUser,
 } from "@/lib/storage";
 import { normalizeDutyLocation } from "@/lib/duty-location";
-import { DutyLocation, Position, SessionUser, UserPermissions, UserRecord } from "@/lib/types";
+import { normalizeUnitAssignment } from "@/lib/unit-assignment";
+import { DutyLocation, Position, SessionUser, UserPermissions, UserRecord, UnitAssignment } from "@/lib/types";
 
 type UserRow = {
   id: string;
@@ -35,6 +36,7 @@ type UserRow = {
   can_view_online?: boolean;
   is_online?: boolean;
   duty_location?: string | null;
+  unit_assignment?: string | null;
   role: "employee" | "admin";
   status: "active" | "inactive";
 };
@@ -192,6 +194,7 @@ function toUserRecord(row: UserRow): UserRecord {
     password: "",
     isOnline: row.is_online === true,
     dutyLocation: normalizeDutyLocation(row.duty_location),
+    unitAssignment: normalizeUnitAssignment(row.unit_assignment),
   };
 }
 
@@ -829,6 +832,43 @@ export async function updateCurrentUserDutyLocation(location: DutyLocation) {
   }
 
   return { ok: true as const, dutyLocation: location };
+}
+
+export async function updateCurrentUserUnitAssignment(unit: UnitAssignment | null) {
+  if (unit !== null && !["platoon_1", "platoon_2", "platoon_3", "company_4"].includes(unit)) {
+    return { ok: false as const, error: "Некорректное подразделение." };
+  }
+
+  if (!isSupabaseConfigured) {
+    const current = readClientSession();
+    if (!current) {
+      return { ok: false as const, error: "Сессия не найдена." };
+    }
+    updateUser(current.id, { unitAssignment: unit });
+    return { ok: true as const, unitAssignment: unit };
+  }
+
+  try {
+    const response = await fetch("/api/profile/unit-assignment", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ unitAssignment: unit }),
+    });
+    const payload = (await response.json()) as { ok?: boolean; error?: string; unitAssignment?: UnitAssignment | null };
+    if (!response.ok || !payload.ok) {
+      return {
+        ok: false as const,
+        error: payload.error || "Не удалось сохранить подразделение.",
+      };
+    }
+    const current = readClientSession();
+    if (current) {
+      updateUser(current.id, { unitAssignment: payload.unitAssignment ?? unit });
+    }
+    return { ok: true as const, unitAssignment: payload.unitAssignment ?? unit };
+  } catch {
+    return { ok: false as const, error: "Не удалось сохранить подразделение." };
+  }
 }
 
 export async function registerUser(payload: {

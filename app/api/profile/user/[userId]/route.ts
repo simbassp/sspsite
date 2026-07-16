@@ -1,4 +1,5 @@
 import { ONLINE_LAST_SEEN_MAX_MS } from "@/lib/presence-constants";
+import { normalizeUnitAssignment } from "@/lib/unit-assignment";
 import { canManageUsers, canViewUserList } from "@/lib/permissions";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
@@ -43,7 +44,7 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
     const userPrimary = await supabase
       .from("app_users")
       .select(
-        "id,name,callsign,position,role,status,login,is_online,last_seen_at,duty_location",
+        "id,name,callsign,position,role,status,login,is_online,last_seen_at,duty_location,unit_assignment",
       )
       .eq("id", userId)
       .maybeSingle();
@@ -52,9 +53,11 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
     let userErr = userPrimary.error?.message || null;
     let onlineFromFlagOnly = false;
     let dutyFromDb = true;
+    let unitFromDb = true;
 
     if (userPrimary.error && isMissingColumnError(userPrimary.error.message)) {
       dutyFromDb = false;
+      unitFromDb = false;
       const fallback = await supabase
         .from("app_users")
         .select("id,name,callsign,position,role,status,login,is_online")
@@ -110,6 +113,8 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
         ? "deployment"
         : "base";
 
+    const unitAssignment = unitFromDb ? normalizeUnitAssignment(userRow.unit_assignment) : null;
+
     return Response.json({
       ok: true,
       user: {
@@ -122,6 +127,7 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
         status: userRow.status === "inactive" ? "inactive" : "active",
         is_online: isOnline,
         duty_location: dutyLocation,
+        unit_assignment: unitAssignment,
       },
       results: resultsRows.map((r) => ({
         id: r.id,

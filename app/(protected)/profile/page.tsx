@@ -16,14 +16,20 @@ import {
   requestPasswordReset,
   updateCurrentUserProfile,
   updateCurrentUserDutyLocation,
+  updateCurrentUserUnitAssignment,
   updateCurrentUserEmail,
   updateCurrentUserPassword,
   updateCurrentUserPasswordWithOldPassword,
 } from "@/lib/users-repository";
 import { getPositionBadgeClass } from "@/lib/position-ui";
 import { dutyLocationLabel } from "@/lib/duty-location";
+import {
+  UNIT_ASSIGNMENT_OPTIONS,
+  unitAssignmentLabel,
+  unitAssignmentLabelOrEmpty,
+} from "@/lib/unit-assignment";
 import { removeTrialResultsForUser } from "@/lib/storage";
-import { DutyLocation, TestResult } from "@/lib/types";
+import { DutyLocation, TestResult, UnitAssignment } from "@/lib/types";
 
 export default function ProfilePage() {
   const [session, setSession] = useState<ReturnType<typeof readClientSession>>(null);
@@ -52,6 +58,8 @@ export default function ProfilePage() {
   const [profileCallsignInput, setProfileCallsignInput] = useState(() => session?.callsign ?? "");
   const [isOnline, setIsOnline] = useState(true);
   const [dutyLocation, setDutyLocation] = useState<DutyLocation>("base");
+  const [unitAssignment, setUnitAssignment] = useState<UnitAssignment | null>(null);
+  const [unitSaving, setUnitSaving] = useState(false);
   const [dutySaving, setDutySaving] = useState(false);
   const [fieldError, setFieldError] = useState<{ name?: string; callsign?: string }>({});
   const [isResettingStats, setIsResettingStats] = useState(false);
@@ -85,6 +93,7 @@ export default function ProfilePage() {
           error?: string;
           email?: string;
           dutyLocation?: DutyLocation;
+          unitAssignment?: UnitAssignment | null;
           results?: Array<Record<string, unknown>>;
           inviteCodes?: Array<Record<string, unknown>>;
         };
@@ -113,6 +122,11 @@ export default function ProfilePage() {
         setRows(mappedRows.sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)));
         if (payload.dutyLocation === "deployment" || payload.dutyLocation === "base") {
           setDutyLocation(payload.dutyLocation);
+        }
+        if (payload.unitAssignment === null || payload.unitAssignment === undefined) {
+          setUnitAssignment(null);
+        } else if (UNIT_ASSIGNMENT_OPTIONS.includes(payload.unitAssignment)) {
+          setUnitAssignment(payload.unitAssignment);
         }
         if (typeof payload.email === "string" && payload.email) {
           setEmailInput(payload.email);
@@ -469,6 +483,23 @@ export default function ProfilePage() {
     }
   };
 
+  const onUnitChange = async (nextRaw: string) => {
+    if (!session || unitSaving) return;
+    const next: UnitAssignment | null = nextRaw ? (nextRaw as UnitAssignment) : null;
+    if (next !== null && !UNIT_ASSIGNMENT_OPTIONS.includes(next)) return;
+    if (next === unitAssignment) return;
+    const prev = unitAssignment;
+    setUnitAssignment(next);
+    setUnitSaving(true);
+    setSettingsMessage("");
+    const res = await updateCurrentUserUnitAssignment(next);
+    setUnitSaving(false);
+    if (!res.ok) {
+      setUnitAssignment(prev);
+      setSettingsMessage(res.error);
+    }
+  };
+
   const onSaveProfile = async () => {
     setSettingsMessage("");
     setFieldError({});
@@ -735,6 +766,23 @@ export default function ProfilePage() {
               </div>
             </div>
             <div className="profile-hero-duty">
+              <p className="label profile-hero-duty-label">Подразделение</p>
+              <select
+                className="select profile-unit-select"
+                value={unitAssignment ?? ""}
+                onChange={(e) => void onUnitChange(e.target.value)}
+                disabled={unitSaving}
+                aria-label="Подразделение"
+              >
+                <option value="">Не указано</option>
+                {UNIT_ASSIGNMENT_OPTIONS.map((unit) => (
+                  <option key={unit} value={unit}>
+                    {unitAssignmentLabel[unit]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="profile-hero-duty">
               <p className="label profile-hero-duty-label">Место положения</p>
               <div className="profile-duty-toggle" role="group" aria-label="Место положения">
                 <button
@@ -766,6 +814,9 @@ export default function ProfilePage() {
               </p>
               <span className={`profile-duty-status-badge profile-duty-status-badge--${dutyLocation}`}>
                 {dutyLocationLabel[dutyLocation]}
+              </span>
+              <span className="unit-assignment-badge">
+                {unitAssignmentLabelOrEmpty(unitAssignment)}
               </span>
             </div>
           </div>

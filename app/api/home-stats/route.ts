@@ -2,6 +2,7 @@ import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 import { canManageUsers, canViewOnline } from "@/lib/permissions";
 import { ONLINE_LAST_SEEN_MAX_MS } from "@/lib/presence-constants";
+import { UNIT_COMMANDERS, unitAssignmentLabel } from "@/lib/unit-assignment";
 
 export const runtime = "nodejs";
 
@@ -129,13 +130,13 @@ export async function GET() {
             created_at: promoted.created_at ? String(promoted.created_at) : null,
           }
         : null,
-      {
-        id: "commander",
-        type: "commander_assigned",
-        title: "Наш командир",
-        description: "Владислав Клиган",
+      ...UNIT_COMMANDERS.map((item) => ({
+        id: `commander:${item.unit}`,
+        type: "commander_assigned" as const,
+        title: unitAssignmentLabel[item.unit],
+        description: item.commander,
         created_at: null,
-      },
+      })),
     ]
       .filter(Boolean)
       .sort((a, b) => {

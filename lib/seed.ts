@@ -30,6 +30,7 @@ export const seedData: AppData = {
       },
       status: "active",
       dutyLocation: "base",
+      unitAssignment: null,
     },
     {
       id: "u-employee-1",
@@ -53,6 +54,7 @@ export const seedData: AppData = {
       },
       status: "active",
       dutyLocation: "base",
+      unitAssignment: null,
     },
     {
       id: "u-employee-2",
@@ -76,6 +78,7 @@ export const seedData: AppData = {
       },
       status: "active",
       dutyLocation: "base",
+      unitAssignment: null,
     },
   ],
   news: [

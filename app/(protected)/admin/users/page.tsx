@@ -7,7 +7,8 @@ import { dutyLocationLabel } from "@/lib/duty-location";
 import { POSITION_OPTIONS, getPositionBadgeClass } from "@/lib/position-ui";
 import { canManageUsers } from "@/lib/permissions";
 import { fetchUsers, patchUser, removeUser } from "@/lib/users-repository";
-import type { DutyLocation, Position, Role, UserRecord } from "@/lib/types";
+import type { DutyLocation, Position, Role, UnitAssignment, UserRecord } from "@/lib/types";
+import { UNIT_ASSIGNMENT_OPTIONS, unitAssignmentLabel, unitAssignmentLabelOrEmpty } from "@/lib/unit-assignment";
 
 const permissionOptions = [
   { key: "news", label: "Новости" },
@@ -44,6 +45,7 @@ export default function AdminUsersPage() {
   const [query, setQuery] = useState("");
   const [positionFilter, setPositionFilter] = useState<"all" | Position>("all");
   const [dutyFilter, setDutyFilter] = useState<"all" | DutyLocation>("all");
+  const [unitFilter, setUnitFilter] = useState<"all" | "unset" | UnitAssignment>("all");
   const [pageSize, setPageSize] = useState(10);
   const [page, setPage] = useState(1);
   const [info, setInfo] = useState("");
@@ -236,7 +238,13 @@ export default function AdminUsersPage() {
       .includes(query.toLowerCase().trim());
     const matchesPosition = positionFilter === "all" ? true : item.position === positionFilter;
     const matchesDuty = dutyFilter === "all" ? true : item.dutyLocation === dutyFilter;
-    return matchesText && matchesPosition && matchesDuty;
+    const matchesUnit =
+      unitFilter === "all"
+        ? true
+        : unitFilter === "unset"
+          ? !item.unitAssignment
+          : item.unitAssignment === unitFilter;
+    return matchesText && matchesPosition && matchesDuty && matchesUnit;
   });
   const pages = Math.max(1, Math.ceil(visible.length / pageSize));
   const currentPage = Math.min(page, pages);
@@ -305,11 +313,27 @@ export default function AdminUsersPage() {
           <option value="base">На базе</option>
           <option value="deployment">В командировке</option>
         </select>
+        <select
+          className="select"
+          value={unitFilter}
+          onChange={(e) => {
+            setUnitFilter(e.target.value as typeof unitFilter);
+            setPage(1);
+          }}
+        >
+          <option value="all">Все подразделения</option>
+          <option value="unset">Не указано</option>
+          {UNIT_ASSIGNMENT_OPTIONS.map((unit) => (
+            <option key={unit} value={unit}>
+              {unitAssignmentLabel[unit]}
+            </option>
+          ))}
+        </select>
       </div>
       )}
       {isHydrated && (
         <p className="page-subtitle" style={{ marginBottom: 10 }}>
-          Фильтрация по должности и месту положения (на базе / в командировке).
+          Фильтрация по должности, месту положения и подразделению (взвод / рота).
         </p>
       )}
       {info && <p className="page-subtitle admin-users-page__info">{info}</p>}
@@ -386,6 +410,7 @@ export default function AdminUsersPage() {
                 <th>Пользователь</th>
                 <th>Должность</th>
                 <th>Место</th>
+                <th>Подразделение</th>
                 {showPermissionsColumn ? <th>Права</th> : null}
                 {canEditUsers ? <th>Действия</th> : null}
               </tr>
@@ -442,6 +467,11 @@ export default function AdminUsersPage() {
                       title={dutyLocationLabel[user.dutyLocation]}
                     >
                       {dutyLocationLabel[user.dutyLocation]}
+                    </span>
+                  </td>
+                  <td>
+                    <span className="unit-assignment-badge" title="Подразделение">
+                      {unitAssignmentLabelOrEmpty(user.unitAssignment)}
                     </span>
                   </td>
                   {showPermissionsColumn ? (
@@ -532,6 +562,8 @@ export default function AdminUsersPage() {
                     <span className={`duty-location-badge duty-location-badge--${user.dutyLocation}`}>
                       {dutyLocationLabel[user.dutyLocation]}
                     </span>
+                    {" · "}
+                    <span className="unit-assignment-badge">{unitAssignmentLabelOrEmpty(user.unitAssignment)}</span>
                   </p>
                   {showPermissionsColumn ? <p className="admin-users-perms-text">{getPermissionsSummary(user)}</p> : null}
                   {canEditUsers ? (

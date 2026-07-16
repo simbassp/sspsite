@@ -1,5 +1,7 @@
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
+import { normalizeUnitAssignment } from "@/lib/unit-assignment";
+import type { UnitAssignment } from "@/lib/types";
 
 export const runtime = "nodejs";
 
@@ -34,18 +36,22 @@ export async function GET() {
     }
     const profilePrimaryQ = await supabase
       .from("app_users")
-      .select("auth_user_id,duty_location")
+      .select("auth_user_id,duty_location,unit_assignment")
       .eq("id", session.id)
       .maybeSingle();
     let profileRow: Record<string, unknown> | null = (profilePrimaryQ.data || null) as Record<string, unknown> | null;
     let profileError: string | null = profilePrimaryQ.error?.message || null;
     let dutyLocation: "base" | "deployment" = "base";
+    let unitAssignment: UnitAssignment | null = null;
     if (profilePrimaryQ.error && isMissingColumnError(profilePrimaryQ.error.message)) {
       const profileLegacyQ = await supabase.from("app_users").select("auth_user_id").eq("id", session.id).maybeSingle();
       profileRow = (profileLegacyQ.data || null) as Record<string, unknown> | null;
       profileError = profileLegacyQ.error?.message || null;
-    } else if (profileRow && typeof profileRow.duty_location === "string") {
-      dutyLocation = profileRow.duty_location.trim().toLowerCase() === "deployment" ? "deployment" : "base";
+    } else if (profileRow) {
+      if (typeof profileRow.duty_location === "string") {
+        dutyLocation = profileRow.duty_location.trim().toLowerCase() === "deployment" ? "deployment" : "base";
+      }
+      unitAssignment = normalizeUnitAssignment(profileRow.unit_assignment);
     }
 
     if (resultsError || profileError) {
@@ -78,6 +84,7 @@ export async function GET() {
       ok: true,
       email,
       dutyLocation,
+      unitAssignment,
       results: resultsRows.map((r) => ({
         id: r.id,
         user_id: r.user_id,

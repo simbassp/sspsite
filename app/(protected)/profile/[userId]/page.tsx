@@ -6,9 +6,10 @@ import { useEffect, useMemo, useState } from "react";
 import { readClientSession } from "@/lib/client-auth";
 import { formatDateTime, formatTotalTestDuration } from "@/lib/format";
 import { dutyLocationLabel } from "@/lib/duty-location";
+import { unitAssignmentLabelOrEmpty } from "@/lib/unit-assignment";
 import { getPositionBadgeClass } from "@/lib/position-ui";
 import { canManageUsers, canViewUserList } from "@/lib/permissions";
-import { DutyLocation, TestResult } from "@/lib/types";
+import { DutyLocation, TestResult, UnitAssignment } from "@/lib/types";
 
 type InspectUser = {
   id: string;
@@ -20,6 +21,7 @@ type InspectUser = {
   status: "active" | "inactive";
   is_online: boolean;
   duty_location: DutyLocation;
+  unit_assignment: UnitAssignment | null;
 };
 
 function mapRows(payload: { results?: Array<Record<string, unknown>> }): TestResult[] {
@@ -86,7 +88,7 @@ export default function ProfileUserInspectPage() {
         const payload = (await response.json()) as {
           ok?: boolean;
           error?: string;
-          user?: InspectUser & { duty_location?: string };
+          user?: InspectUser & { duty_location?: string; unit_assignment?: UnitAssignment | null };
           results?: Array<Record<string, unknown>>;
         };
         if (cancelled) return;
@@ -98,7 +100,14 @@ export default function ProfileUserInspectPage() {
         }
         const u = payload.user;
         const duty_location: DutyLocation = u.duty_location === "deployment" ? "deployment" : "base";
-        setInspectUser({ ...u, duty_location });
+        const unit_assignment =
+          u.unit_assignment === "platoon_1" ||
+          u.unit_assignment === "platoon_2" ||
+          u.unit_assignment === "platoon_3" ||
+          u.unit_assignment === "company_4"
+            ? u.unit_assignment
+            : null;
+        setInspectUser({ ...u, duty_location, unit_assignment });
         setEditName(String(u.name || ""));
         setEditCallsign(String(u.callsign || ""));
         setRows(mapRows({ results: payload.results }).sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)));
@@ -117,14 +126,21 @@ export default function ProfileUserInspectPage() {
           const response = await fetch(`/api/profile/user/${encodeURIComponent(userId)}`, { cache: "no-store" });
           const payload = (await response.json()) as {
             ok?: boolean;
-            user?: InspectUser & { duty_location?: string };
+            user?: InspectUser & { duty_location?: string; unit_assignment?: UnitAssignment | null };
             results?: Array<Record<string, unknown>>;
           };
           if (cancelled || !response.ok || !payload.ok || !payload.user) return;
           const u = payload.user;
           const duty_location: DutyLocation =
             u.duty_location === "deployment" ? "deployment" : "base";
-          setInspectUser({ ...u, duty_location });
+          const unit_assignment =
+            u.unit_assignment === "platoon_1" ||
+            u.unit_assignment === "platoon_2" ||
+            u.unit_assignment === "platoon_3" ||
+            u.unit_assignment === "company_4"
+              ? u.unit_assignment
+              : null;
+          setInspectUser({ ...u, duty_location, unit_assignment });
           setEditName(String(u.name || ""));
           setEditCallsign(String(u.callsign || ""));
         } catch {
@@ -482,6 +498,12 @@ export default function ProfileUserInspectPage() {
                   >
                     {inspectUser.position}
                   </div>
+                </div>
+                <div className="profile-hero-duty">
+                  <p className="label profile-hero-duty-label">Подразделение</p>
+                  <span className="unit-assignment-badge">
+                    {unitAssignmentLabelOrEmpty(inspectUser.unit_assignment)}
+                  </span>
                 </div>
                 <div className="profile-hero-duty">
                   <p className="label profile-hero-duty-label">Место положения</p>

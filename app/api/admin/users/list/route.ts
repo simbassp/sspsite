@@ -1,4 +1,5 @@
 import { ONLINE_LAST_SEEN_MAX_MS } from "@/lib/presence-constants";
+import { normalizeUnitAssignment } from "@/lib/unit-assignment";
 import { canManageUsers, canViewUserList } from "@/lib/permissions";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
@@ -30,7 +31,7 @@ export async function GET() {
     const primaryQ = await supabase
       .from("app_users")
       .select(
-        "id,auth_user_id,login,name,callsign,position,can_manage_content,can_manage_news,can_manage_tests,can_manage_results,can_manage_uav,can_manage_counteraction,can_manage_users,can_view_user_list,can_reset_test_results,can_view_online,is_online,last_seen_at,role,status,duty_location",
+        "id,auth_user_id,login,name,callsign,position,can_manage_content,can_manage_news,can_manage_tests,can_manage_results,can_manage_uav,can_manage_counteraction,can_manage_users,can_view_user_list,can_reset_test_results,can_view_online,is_online,last_seen_at,role,status,duty_location,unit_assignment",
       )
       .order("created_at", { ascending: false })
       .limit(1000);
@@ -38,11 +39,13 @@ export async function GET() {
     let queryError: string | null = primaryQ.error?.message || null;
     let onlineFromFlagOnly = false;
     let dutyFromDb = true;
+    let unitFromDb = true;
     if (primaryQ.error && isMissingColumnError(primaryQ.error.message)) {
       const fallbackQ = await supabase.from("app_users").select("*").limit(1000);
       rows = (fallbackQ.data || []) as Array<Record<string, unknown>>;
       queryError = fallbackQ.error?.message || null;
       dutyFromDb = rows.some((row) => Object.prototype.hasOwnProperty.call(row, "duty_location"));
+      unitFromDb = rows.some((row) => Object.prototype.hasOwnProperty.call(row, "unit_assignment"));
       onlineFromFlagOnly = !rows.some((row) => Object.prototype.hasOwnProperty.call(row, "last_seen_at"));
     }
     if (queryError) return Response.json({ ok: false, error: queryError }, { status: 500 });
@@ -68,6 +71,7 @@ export async function GET() {
         dutyFromDb && typeof r.duty_location === "string" && r.duty_location.trim().toLowerCase() === "deployment"
           ? "deployment"
           : "base",
+      unit_assignment: unitFromDb ? normalizeUnitAssignment(r.unit_assignment) : null,
       role: r.role === "admin" ? "admin" : "employee",
       status: r.status === "inactive" ? "inactive" : "active",
     }));

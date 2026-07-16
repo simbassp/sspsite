@@ -4,6 +4,7 @@ import { POSITION_OPTIONS } from "@/lib/position-ui";
 import { seedData, STORAGE_KEY } from "@/lib/seed";
 import { normalizeTestConfig } from "@/lib/test-config";
 import { createDefaultQuestionBank } from "@/lib/test-question-bank";
+import { normalizeUnitAssignment } from "@/lib/unit-assignment";
 import {
   AppData,
   CatalogItem,
@@ -47,9 +48,11 @@ function withNormalizedPermissions(user: UserRecord): UserRecord {
     ...(user.permissions ?? {}),
   };
   const dutyLocation = user.dutyLocation === "deployment" ? "deployment" : "base";
+  const unitAssignment = normalizeUnitAssignment(user.unitAssignment);
   return {
     ...user,
     dutyLocation,
+    unitAssignment,
     permissions: normalized,
     canManageContent: normalized.news || normalized.tests || normalized.uav || normalized.counteraction,
   };
@@ -73,6 +76,7 @@ export function readData(): AppData {
         ...user,
         canManageContent: user.canManageContent ?? false,
         dutyLocation: (user as UserRecord).dutyLocation === "deployment" ? "deployment" : "base",
+        unitAssignment: normalizeUnitAssignment((user as UserRecord).unitAssignment),
       } as UserRecord),
     );
     const normalized: AppData = {
@@ -149,6 +153,7 @@ export function registerEmployee(payload: {
     },
     status: "active",
     dutyLocation: "base",
+    unitAssignment: null,
   };
 
   data.users.unshift(user);
@@ -179,7 +184,7 @@ export function replaceAllUsersInLocalCache(nextUsers: UserRecord[]) {
 export function updateUser(
   userId: string,
   patch: Partial<
-    Pick<UserRecord, "name" | "callsign" | "position" | "status" | "canManageContent" | "permissions" | "role" | "dutyLocation">
+    Pick<UserRecord, "name" | "callsign" | "position" | "status" | "canManageContent" | "permissions" | "role" | "dutyLocation" | "unitAssignment">
   >,
 ) {
   const data = readData();
