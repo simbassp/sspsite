@@ -6,6 +6,14 @@ import { PersonnelMedalBadge } from "@/components/personnel/PersonnelMedalBadge"
 import { PersonnelModActions, postPersonnelManage } from "@/components/personnel/PersonnelModerationTools";
 import { PersonnelPreviewBanner } from "@/components/personnel/PersonnelPreviewBanner";
 import {
+  postResetPersonnelExams,
+  ResetPersonnelExamsButton,
+  ResetPersonnelExamsModal,
+  useResetPersonnelExamsModal,
+} from "@/components/personnel/ResetPersonnelExamsModal";
+import { readClientSession } from "@/lib/client-auth";
+import { canResetTestResults } from "@/lib/permissions";
+import {
   ExamStatusIcon,
   ExamTypeIcon,
   examTypeIconTone,
@@ -177,6 +185,11 @@ export function PersonnelProfileStats({
   const [editSaving, setEditSaving] = useState(false);
   const [manageMsg, setManageMsg] = useState("");
   const [deploymentsPage, setDeploymentsPage] = useState(1);
+  const session = useMemo(() => readClientSession(), []);
+  const canResetExams = useMemo(() => (session ? canResetTestResults(session) : false), [session]);
+  const resetExamsModal = useResetPersonnelExamsModal("filter");
+  const [resetExamsSaving, setResetExamsSaving] = useState(false);
+  const [resetExamsMsg, setResetExamsMsg] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -260,6 +273,24 @@ export function PersonnelProfileStats({
   useEffect(() => {
     setDeploymentsPage(1);
   }, [reloadToken, profile?.deployments.length]);
+
+  const onResetExams = async () => {
+    if (!profile || resetExamsSaving) return;
+    setResetExamsSaving(true);
+    setResetExamsMsg("");
+    try {
+      const affected = await postResetPersonnelExams({ scope: "single", userId: profile.id });
+      resetExamsModal.setOpen(false);
+      setResetExamsMsg(
+        affected > 0 ? `Зачёты сброшены (${affected} сотр.).` : "Записей зачётов не было.",
+      );
+      await load();
+    } catch {
+      setResetExamsMsg("Не удалось сбросить зачёты.");
+    } finally {
+      setResetExamsSaving(false);
+    }
+  };
 
   const saveSummaryPremiumTotal = async (totalPremium: number) => {
     if (!profile) return;
@@ -617,10 +648,29 @@ export function PersonnelProfileStats({
       {(tab === "overview" || tab === "exams") && (
         <article className="card" style={{ marginTop: 12 }}>
           <div className="card-body">
-            <h3 style={{ marginTop: 0 }}>Зачёты</h3>
-            {failedExamsCount > 0 && (
-              <p className="personnel-exam-alert">
-                <ExamStatusIcon passed={false} /> Не сдано: {failedExamsCount}
+            <div className="personnel-section-head">
+              <div>
+                <h3 style={{ marginTop: 0, marginBottom: failedExamsCount > 0 ? 8 : 0 }}>Зачёты</h3>
+                {failedExamsCount > 0 && (
+                  <p className="personnel-exam-alert" style={{ margin: 0 }}>
+                    <ExamStatusIcon passed={false} /> Не сдано: {failedExamsCount}
+                  </p>
+                )}
+              </div>
+              {canResetExams && (
+                <ResetPersonnelExamsButton
+                  compact
+                  busy={resetExamsSaving}
+                  onClick={() => {
+                    setResetExamsMsg("");
+                    resetExamsModal.setOpen(true);
+                  }}
+                />
+              )}
+            </div>
+            {resetExamsMsg && (
+              <p className="page-subtitle" style={{ marginTop: 0, marginBottom: 8 }}>
+                {resetExamsMsg}
               </p>
             )}
             <div className="personnel-exam-grid">
@@ -1079,6 +1129,19 @@ export function PersonnelProfileStats({
           </article>
         </div>
       )}
+
+      <ResetPersonnelExamsModal
+        open={resetExamsModal.open}
+        saving={resetExamsSaving}
+        mode="single"
+        userLabel={
+          profile?.callsign?.trim()
+            ? `${profile.name} (${profile.callsign})`
+            : profile?.name || undefined
+        }
+        onClose={() => resetExamsModal.setOpen(false)}
+        onConfirm={() => void onResetExams()}
+      />
     </section>
   );
 }

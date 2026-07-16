@@ -963,3 +963,71 @@ export async function createPersonnelRecord(input: {
   if (res.error) return { ok: false as const, error: res.error.message };
   return { ok: true as const };
 }
+
+export async function resetPersonnelExamsForUserIds(userIds: string[]) {
+  const uniqueIds = [...new Set(userIds.filter(Boolean))];
+  if (uniqueIds.length === 0) {
+    return { ok: true as const, affectedUsers: 0 };
+  }
+
+  const supabase = getServerSupabaseServiceClient();
+  const usersRes = await supabase
+    .from("app_users")
+    .select("id")
+    .eq("unit_assignment", "company_4")
+    .eq("status", "active")
+    .in("id", uniqueIds);
+
+  if (usersRes.error) {
+    return { ok: false as const, error: usersRes.error.message };
+  }
+
+  const allowedIds = (usersRes.data ?? []).map((row) => String((row as { id: string }).id));
+  if (allowedIds.length === 0) {
+    return { ok: false as const, error: "no_targets" };
+  }
+
+  const del = await supabase.from("personnel_exams").delete().in("user_id", allowedIds);
+  if (del.error) {
+    return { ok: false as const, error: del.error.message };
+  }
+
+  return { ok: true as const, affectedUsers: allowedIds.length };
+}
+
+export async function loadActiveCompany4UserIds(filters?: {
+  platoon?: number | "all";
+  section?: number | "all";
+  search?: string;
+}) {
+  const roster = await loadPersonnelRoster(filters);
+  if (!roster.ok) return { ok: false as const, error: roster.error, userIds: [] as string[] };
+  return { ok: true as const, userIds: roster.users.map((u) => u.id) };
+}
+
+export async function resetPersonnelExams(input: {
+  scope: "single" | "all" | "filter";
+  userId?: string;
+  platoon?: number | "all";
+  section?: number | "all";
+  search?: string;
+}) {
+  if (input.scope === "single") {
+    if (!input.userId) return { ok: false as const, error: "missing_user_id" };
+    return resetPersonnelExamsForUserIds([input.userId]);
+  }
+
+  if (input.scope === "all") {
+    const all = await loadActiveCompany4UserIds();
+    if (!all.ok) return { ok: false as const, error: all.error };
+    return resetPersonnelExamsForUserIds(all.userIds);
+  }
+
+  const filtered = await loadActiveCompany4UserIds({
+    platoon: input.platoon,
+    section: input.section,
+    search: input.search,
+  });
+  if (!filtered.ok) return { ok: false as const, error: filtered.error };
+  return resetPersonnelExamsForUserIds(filtered.userIds);
+}

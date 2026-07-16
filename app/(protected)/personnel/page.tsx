@@ -4,10 +4,17 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { PersonnelPreviewBanner } from "@/components/personnel/PersonnelPreviewBanner";
 import {
+  postResetPersonnelExams,
+  ResetPersonnelExamsButton,
+  ResetPersonnelExamsModal,
+  useResetPersonnelExamsModal,
+} from "@/components/personnel/ResetPersonnelExamsModal";
+import {
   IconUavHit,
   PersonnelExamRosterIcon,
 } from "@/components/personnel/PersonnelIcons";
 import { readClientSession } from "@/lib/client-auth";
+import { canResetTestResults } from "@/lib/permissions";
 import { dutyLocationLabel } from "@/lib/duty-location";
 import { resolvePersonnelProfilePath } from "@/lib/personnel-profile-path";
 import { PERSONNEL_EXAM_TYPES, rotaUnitLabel } from "@/lib/personnel-catalog";
@@ -46,6 +53,10 @@ export default function PersonnelListPage() {
   const [isPreview, setIsPreview] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const canResetExams = useMemo(() => (session ? canResetTestResults(session) : false), [session]);
+  const resetExamsModal = useResetPersonnelExamsModal("filter");
+  const [resetExamsSaving, setResetExamsSaving] = useState(false);
+  const [resetExamsMsg, setResetExamsMsg] = useState("");
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -95,6 +106,32 @@ export default function PersonnelListPage() {
 
   const profilePath = (id: string) => resolvePersonnelProfilePath(session, id);
 
+  const onResetExamsBulk = async () => {
+    if (resetExamsSaving) return;
+    setResetExamsSaving(true);
+    setResetExamsMsg("");
+    try {
+      const affected =
+        resetExamsModal.bulkScope === "all"
+          ? await postResetPersonnelExams({ scope: "all" })
+          : await postResetPersonnelExams({
+              scope: "filter",
+              platoon,
+              section,
+              search: search.trim(),
+            });
+      resetExamsModal.setOpen(false);
+      setResetExamsMsg(
+        affected > 0 ? `Зачёты сброшены для ${affected} сотрудник${affected === 1 ? "а" : "ов"}.` : "Записей зачётов не было.",
+      );
+      await load();
+    } catch {
+      setResetExamsMsg("Не удалось сбросить зачёты.");
+    } finally {
+      setResetExamsSaving(false);
+    }
+  };
+
   return (
     <section className="screen personnel-page">
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
@@ -102,10 +139,23 @@ export default function PersonnelListPage() {
           <h1 className="page-title">Сотрудники</h1>
           <p className="page-subtitle">4 рота — личное дело и статистика</p>
         </div>
-        <Link href="/profile" className="btn btn-primary">
-          Мой профиль
-        </Link>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {canResetExams && tab === "all" && (
+            <ResetPersonnelExamsButton
+              busy={resetExamsSaving}
+              onClick={() => {
+                setResetExamsMsg("");
+                resetExamsModal.setOpen(true);
+              }}
+            />
+          )}
+          <Link href="/profile" className="btn btn-primary">
+            Мой профиль
+          </Link>
+        </div>
       </div>
+
+      {resetExamsMsg && <p className="page-subtitle">{resetExamsMsg}</p>}
 
       {isPreview && <PersonnelPreviewBanner />}
 
@@ -288,6 +338,17 @@ export default function PersonnelListPage() {
           ))}
         </div>
       )}
+
+      <ResetPersonnelExamsModal
+        open={resetExamsModal.open}
+        saving={resetExamsSaving}
+        mode="bulk"
+        bulkScope={resetExamsModal.bulkScope}
+        filteredCount={users.length}
+        onBulkScopeChange={resetExamsModal.setBulkScope}
+        onClose={() => resetExamsModal.setOpen(false)}
+        onConfirm={() => void onResetExamsBulk()}
+      />
     </section>
   );
 }
