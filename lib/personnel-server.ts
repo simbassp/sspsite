@@ -1,6 +1,10 @@
 import { normalizeUnitAssignment } from "@/lib/unit-assignment";
 import type { DutyLocation, Position, UnitAssignment } from "@/lib/types";
-import type { PersonnelExamType, PersonnelLicenseCategory } from "@/lib/personnel-catalog";
+import {
+  formatNotificationBody,
+  type PersonnelExamType,
+  type PersonnelLicenseCategory,
+} from "@/lib/personnel-catalog";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 
 export type PersonnelModuleSettings = {
@@ -235,6 +239,20 @@ async function loadLicenses(userIds: string[]) {
   return map;
 }
 
+async function loadPremiumTotals(userIds: string[]) {
+  const map = new Map<string, number>();
+  if (userIds.length === 0) return map;
+  const supabase = getServerSupabaseServiceClient();
+  const res = await supabase.from("personnel_premiums").select("user_id,amount").in("user_id", userIds);
+  if (res.error) return map;
+  for (const row of res.data ?? []) {
+    const r = row as { user_id: string; amount?: number };
+    const uid = String(r.user_id);
+    map.set(uid, (map.get(uid) ?? 0) + Number(r.amount ?? 0));
+  }
+  return map;
+}
+
 export async function loadPersonnelRoster(filters?: {
   platoon?: number | "all";
   section?: number | "all";
@@ -277,16 +295,18 @@ export async function loadPersonnelRoster(filters?: {
   }
 
   const userIds = rows.map((r) => String(r.id));
-  const [examsMap, depMap, medalsMap, licensesMap] = await Promise.all([
+  const [examsMap, depMap, medalsMap, licensesMap, premiumMap] = await Promise.all([
     loadExamsForUsers(userIds),
     loadDeploymentStats(userIds),
     loadMedalsCount(userIds),
     loadLicenses(userIds),
+    loadPremiumTotals(userIds),
   ]);
 
   const users: PersonnelUserCard[] = rows.map((u) => {
     const id = String(u.id);
     const dep = depMap.get(id) ?? { count: 0, days: 0, hits: 0, premiums: 0 };
+    const standalonePremiums = premiumMap.get(id) ?? 0;
     return {
       id,
       name: String(u.name ?? ""),
@@ -301,7 +321,7 @@ export async function loadPersonnelRoster(filters?: {
       deploymentsCount: dep.count,
       deploymentDays: dep.days,
       uavHitsTotal: dep.hits,
-      premiumsTotal: dep.premiums,
+      premiumsTotal: dep.premiums + standalonePremiums,
       medalsCount: medalsMap.get(id) ?? 0,
       licenseCategories: licensesMap.get(id) ?? [],
     };
@@ -377,6 +397,8 @@ export async function loadPersonnelProfile(userId: string): Promise<PersonnelPro
     };
   });
 
+  const standalonePremiumsTotal = premiums.reduce((sum, p) => sum + p.amount, 0);
+
   const exams = (examRes.data ?? []).map((row) => mapExamRow(row as Record<string, unknown>));
   const licenseCategories = (
     (licenseRes.data as { categories?: string[] } | null)?.categories ?? []
@@ -400,7 +422,7 @@ export async function loadPersonnelProfile(userId: string): Promise<PersonnelPro
     deploymentsCount: depStats.count,
     deploymentDays: depStats.days,
     uavHitsTotal: depStats.hits,
-    premiumsTotal: depStats.premiums,
+    premiumsTotal: depStats.premiums + standalonePremiumsTotal,
     medalsCount: medals.length,
     licenseCategories,
     deployments,
@@ -474,12 +496,21 @@ export async function loadNotifications(userId: string, limit = 30) {
   return (res.data ?? []).map((r) => ({
     id: String((r as { id: string }).id),
     title: String((r as { title: string }).title),
-    body: String((r as { body?: string }).body ?? ""),
+    body: formatNotificationBody(String((r as { body?: string }).body ?? "")),
     href: (r as { href?: string | null }).href ?? null,
     isRead: (r as { is_read?: boolean }).is_read === true,
     createdAt: String((r as { created_at: string }).created_at),
     kind: String((r as { kind?: string }).kind ?? "info"),
   }));
+}
+
+export async function markNotificationsRead(userId: string, ids?: string[]) {
+  const supabase = getServerSupabaseServiceClient();
+  let q = supabase.from("app_notifications").update({ is_read: true }).eq("user_id", userId).eq("is_read", false);
+  if (ids?.length) {
+    q = q.in("id", ids);
+  }
+  await q;
 }
 
 export async function countUnreadNotifications(userId: string) {

@@ -33,6 +33,20 @@ export function PersonnelNotificationsBell() {
     }
   };
 
+  const markAllRead = async () => {
+    try {
+      await fetch("/api/personnel/notifications/read", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      setUnread(0);
+      setItems((prev) => prev.map((item) => ({ ...item, isRead: true })));
+    } catch {
+      /* ignore */
+    }
+  };
+
   useEffect(() => {
     void load();
     const t = setInterval(() => void load(), 60000);
@@ -55,8 +69,13 @@ export function PersonnelNotificationsBell() {
         className="personnel-notify-btn"
         aria-label="Уведомления"
         onClick={() => {
-          setOpen((v) => !v);
-          void load();
+          setOpen((v) => {
+            const next = !v;
+            if (next) {
+              void load().then(() => markAllRead());
+            }
+            return next;
+          });
         }}
       >
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>

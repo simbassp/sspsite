@@ -149,6 +149,18 @@ export function formatPersonnelRequestNotificationBody(
   return summary ? `${typeLabel}: ${summary}` : typeLabel;
 }
 
+/** Старые уведомления хранили «Тип: exam» — приводим к понятному виду. */
+export function formatNotificationBody(body: string): string {
+  const trimmed = body.trim();
+  if (!trimmed) return trimmed;
+  const legacy = /^Тип:\s*(\w+)\s*$/i.exec(trimmed);
+  if (legacy) {
+    const type = legacy[1] as PersonnelRequestType;
+    return personnelRequestTypeLabel[type] ?? legacy[1];
+  }
+  return trimmed;
+}
+
 export const ROTA_PLATOON_OPTIONS = [1, 2] as const;
 export const ROTA_SECTION_OPTIONS = [1, 2, 3, 4] as const;
 
