@@ -134,12 +134,12 @@ export default function PersonnelListPage() {
 
   return (
     <section className="screen personnel-page">
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+      <div className="personnel-page__header">
         <div>
           <h1 className="page-title">Сотрудники</h1>
           <p className="page-subtitle">4 рота — личное дело и статистика</p>
         </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div className="personnel-page__header-actions">
           {canResetExams && tab === "all" && (
             <ResetPersonnelExamsButton
               busy={resetExamsSaving}
@@ -149,7 +149,7 @@ export default function PersonnelListPage() {
               }}
             />
           )}
-          <Link href="/profile" className="btn btn-primary">
+          <Link href="/profile" className="btn btn-primary personnel-header-btn">
             Мой профиль
           </Link>
         </div>

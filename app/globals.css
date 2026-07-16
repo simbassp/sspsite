@@ -2676,6 +2676,46 @@ html[data-theme="dark"] .final-review-answer--correct {
   gap: 14px;
 }
 
+.personnel-page__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.personnel-page__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.personnel-reset-exams-btn,
+.personnel-page .personnel-header-btn {
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 8px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.personnel-reset-exams-btn {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  color: var(--accent);
+  background: var(--glass);
+  font-weight: 700;
+}
+
+.personnel-reset-exams-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+}
+
+.personnel-section-head .personnel-reset-exams-btn {
+  padding: 5px 9px;
+  font-size: 11px;
+}
+
 .personnel-tabs {
   display: flex;
   flex-wrap: wrap;

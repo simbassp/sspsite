@@ -201,13 +201,12 @@ export function ResetPersonnelExamsButton({
 }) {
   return (
     <button
-      className="btn profile-danger-btn profile-btn-with-icon"
+      className="btn personnel-reset-exams-btn"
       type="button"
       onClick={onClick}
       disabled={busy}
       aria-busy={busy}
     >
-      <TrashIcon size={18} />
       {busy ? "Сбрасываю…" : compact ? "Сбросить" : "Сбросить зачёты"}
     </button>
   );
