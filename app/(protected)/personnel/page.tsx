@@ -26,7 +26,7 @@ import { readClientSession } from "@/lib/client-auth";
 import { canManageUsers, canResetTestResults } from "@/lib/permissions";
 import { dutyLocationLabel } from "@/lib/duty-location";
 import { resolvePersonnelProfilePath } from "@/lib/personnel-profile-path";
-import { PERSONNEL_EXAM_TYPES, PERSONNEL_LICENSE_CATEGORIES, personnelExamLabel, rotaUnitLabel } from "@/lib/personnel-catalog";
+import { PERSONNEL_EXAM_TYPES, PERSONNEL_LICENSE_CATEGORIES, personnelExamLabel, rotaUnitLabel, rotaUnitLabelCompact } from "@/lib/personnel-catalog";
 import type { PersonnelExamType, PersonnelLicenseCategory } from "@/lib/personnel-catalog";
 import type { Position } from "@/lib/types";
 
@@ -545,7 +545,16 @@ export default function PersonnelListPage() {
                         </Link>
                         <div style={{ color: "var(--muted)", fontSize: 13 }}>{u.callsign}</div>
                       </td>
-                      <td className="personnel-table__compact">{rotaUnitLabel(u.rotaPlatoon, u.rotaSection)}</td>
+                      <td
+                        className="personnel-table__compact"
+                        title={
+                          u.rotaPlatoon || u.rotaSection
+                            ? rotaUnitLabel(u.rotaPlatoon, u.rotaSection)
+                            : undefined
+                        }
+                      >
+                        {rotaUnitLabelCompact(u.rotaPlatoon, u.rotaSection)}
+                      </td>
                       <td className="personnel-table__compact">
                         <div className="personnel-roster-exams">
                           {PERSONNEL_EXAM_TYPES.map((t) => {
@@ -613,7 +622,7 @@ export default function PersonnelListPage() {
                     </span>
                   </div>
                   <div className="personnel-mobile-card__meta">
-                    <span>{rotaUnitLabel(u.rotaPlatoon, u.rotaSection)}</span>
+                    <span>{rotaUnitLabelCompact(u.rotaPlatoon, u.rotaSection)}</span>
                     <PersonnelRosterLicenseCell categories={u.licenseCategories} />
                   </div>
                   <div className="personnel-mobile-card__exams">

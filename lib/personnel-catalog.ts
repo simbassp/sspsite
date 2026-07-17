@@ -211,3 +211,11 @@ export function rotaUnitLabel(platoon: number | null | undefined, section: numbe
   if (platoon && section) return `${p} / ${s}`;
   return platoon ? p : s;
 }
+
+/** Компактная подпись для таблицы ростера: 2В/1О */
+export function rotaUnitLabelCompact(platoon: number | null | undefined, section: number | null | undefined) {
+  if (!platoon && !section) return "—";
+  if (platoon && section) return `${platoon}В/${section}О`;
+  if (platoon) return `${platoon}В`;
+  return `${section}О`;
+}
