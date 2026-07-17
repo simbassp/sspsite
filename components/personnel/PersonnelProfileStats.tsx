@@ -681,7 +681,7 @@ export function PersonnelProfileStats({
                   <div key={t} className={`personnel-exam-card ${passed ? "is-passed" : "is-failed"}`}>
                     <div className="personnel-exam-card__head">
                       <span className={`personnel-exam-card__type-icon personnel-exam-card__type-icon--${examTypeIconTone(t)}`}>
-                        <ExamTypeIcon type={t} size={20} />
+                        <ExamTypeIcon type={t} size={12} />
                       </span>
                       <ExamStatusIcon passed={passed} />
                     </div>
