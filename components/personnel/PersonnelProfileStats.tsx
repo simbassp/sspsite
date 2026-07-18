@@ -606,21 +606,20 @@ export function PersonnelProfileStats({
                 <thead>
                   <tr className="personnel-deploy-totals">
                     <th scope="col">
-                      <span className="label">Всего командировок</span>
+                      <span className="label" title="Всего командировок">
+                        Всего
+                      </span>
                       <strong>{profile.deploymentsCount}</strong>
                     </th>
-                    <th scope="col" className="personnel-table__num">
-                      <span className="label">Общее количество дней</span>
+                    <th scope="col" className="personnel-table__num" title="Общее количество дней">
                       <strong>{profile.deploymentDays}</strong>
                     </th>
-                    <th scope="col" className="personnel-table__num">
-                      <span className="label">Сбитий БПЛА</span>
+                    <th scope="col" className="personnel-table__num" title="Сбитий БПЛА">
                       <strong>{profile.uavHitsTotal}</strong>
                     </th>
                     <th scope="col" className="personnel-table__money">
-                      <span className="label">Премии</span>
                       <div className="personnel-deploy-summary__value">
-                        <strong>{profile.premiumsTotal.toLocaleString("ru-RU")} ₽</strong>
+                        <strong title="Итого премий">{profile.premiumsTotal.toLocaleString("ru-RU")} ₽</strong>
                         {canModerate && (
                           <button
                             type="button"
@@ -634,7 +633,7 @@ export function PersonnelProfileStats({
                         )}
                       </div>
                     </th>
-                    {canModerate && <th scope="col" className="personnel-table__actions" />}
+                    {canModerate && <th scope="col" className="personnel-table__actions" aria-hidden="true" />}
                   </tr>
                   <tr className="personnel-deploy-columns">
                     <th scope="col">Период</th>
