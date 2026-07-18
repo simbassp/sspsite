@@ -1,13 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AvatarCropField } from "@/components/profile/AvatarCropField";
+
+type AvatarPending = { blob: Blob | null; remove: boolean } | null;
 
 type ProfileNameEditModalProps = {
   open: boolean;
   onClose: () => void;
   initialName: string;
   initialCallsign: string;
-  onSave: (values: { name: string; callsign: string }) => void | Promise<void>;
+  initialAvatarUrl?: string | null;
+  enableAvatarEditor?: boolean;
+  onSave: (values: {
+    name: string;
+    callsign: string;
+    avatarPending?: AvatarPending;
+  }) => void | Promise<void>;
   saving?: boolean;
   fieldError?: { name?: string; callsign?: string };
   message?: string;
@@ -18,6 +27,8 @@ export function ProfileNameEditModal({
   onClose,
   initialName,
   initialCallsign,
+  initialAvatarUrl = null,
+  enableAvatarEditor = false,
   onSave,
   saving = false,
   fieldError,
@@ -25,12 +36,18 @@ export function ProfileNameEditModal({
 }: ProfileNameEditModalProps) {
   const [name, setName] = useState(initialName);
   const [callsign, setCallsign] = useState(initialCallsign);
+  const avatarPendingRef = useRef<AvatarPending>(null);
 
   useEffect(() => {
     if (!open) return;
     setName(initialName);
     setCallsign(initialCallsign);
-  }, [open, initialName, initialCallsign]);
+    avatarPendingRef.current = null;
+  }, [open, initialName, initialCallsign, initialAvatarUrl]);
+
+  const onPendingChange = useCallback((payload: AvatarPending) => {
+    avatarPendingRef.current = payload;
+  }, []);
 
   if (!open) return null;
 
@@ -41,10 +58,20 @@ export function ProfileNameEditModal({
       className="personnel-modal-backdrop"
       onClick={onClose}
     >
-      <article className="card personnel-modal" onClick={(e) => e.stopPropagation()}>
+      <article className="card personnel-modal profile-edit-modal" onClick={(e) => e.stopPropagation()}>
         <div className="card-body">
           <h3 style={{ marginTop: 0 }}>Редактировать профиль</h3>
           <div className="form">
+            {enableAvatarEditor ? (
+              <AvatarCropField
+                name={name}
+                callsign={callsign}
+                currentAvatarUrl={initialAvatarUrl}
+                disabled={saving}
+                onPendingChange={onPendingChange}
+              />
+            ) : null}
+
             <label className="label" htmlFor="profile-edit-name">
               Имя
             </label>
@@ -82,11 +109,17 @@ export function ProfileNameEditModal({
                 {message}
               </p>
             )}
-            <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+            <div style={{ display: "flex", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
               <button
                 type="button"
                 className="btn btn-primary"
-                onClick={() => void onSave({ name, callsign })}
+                onClick={() =>
+                  void onSave({
+                    name,
+                    callsign,
+                    avatarPending: enableAvatarEditor ? avatarPendingRef.current : undefined,
+                  })
+                }
                 disabled={saving}
               >
                 {saving ? "Сохранение…" : "Сохранить"}

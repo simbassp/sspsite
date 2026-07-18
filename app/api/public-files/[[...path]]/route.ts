@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 
 const PUBLIC_ROOT = resolve(process.cwd(), "public");
 const UPLOADS_UAV_ROOT = resolve(PUBLIC_ROOT, "uploads", "uav");
+const UPLOADS_AVATARS_ROOT = resolve(PUBLIC_ROOT, "uploads", "avatars");
 
 function contentType(fileName: string): string {
   const low = fileName.toLowerCase();
@@ -32,16 +33,24 @@ export async function GET(
   if (!segments?.length) {
     return new Response("Not found", { status: 404 });
   }
-  if (segments[0] !== "uploads" || segments[1] !== "uav" || segments.length < 3) {
-    return new Response("Not found", { status: 404 });
-  }
   if (segments.some((part) => part.includes("..") || part.includes("/") || part.includes("\\"))) {
     return new Response("Not found", { status: 404 });
   }
 
-  const filePath = resolve(PUBLIC_ROOT, ...segments);
-  const rootWithSep = UPLOADS_UAV_ROOT + sep;
-  if (!filePath.startsWith(rootWithSep)) {
+  let filePath: string | null = null;
+  if (segments[0] === "uploads" && segments[1] === "uav" && segments.length >= 3) {
+    filePath = resolve(PUBLIC_ROOT, ...segments);
+    const rootWithSep = UPLOADS_UAV_ROOT + sep;
+    if (!filePath.startsWith(rootWithSep)) {
+      return new Response("Not found", { status: 404 });
+    }
+  } else if (segments[0] === "uploads" && segments[1] === "avatars" && segments.length >= 3) {
+    filePath = resolve(PUBLIC_ROOT, ...segments);
+    const rootWithSep = UPLOADS_AVATARS_ROOT + sep;
+    if (!filePath.startsWith(rootWithSep)) {
+      return new Response("Not found", { status: 404 });
+    }
+  } else {
     return new Response("Not found", { status: 404 });
   }
 

@@ -37,7 +37,7 @@ export async function GET() {
     }
     const profilePrimaryQ = await supabase
       .from("app_users")
-      .select("auth_user_id,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,employment_date")
+      .select("auth_user_id,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,employment_date,avatar_url")
       .eq("id", session.id)
       .maybeSingle();
     let profileRow: Record<string, unknown> | null = (profilePrimaryQ.data || null) as Record<string, unknown> | null;
@@ -48,6 +48,7 @@ export async function GET() {
     let rotaSection: number | null = null;
     let rotaModule: number | null = null;
     let employmentDate: string | null = null;
+    let avatarUrl: string | null = null;
     if (profilePrimaryQ.error && isMissingColumnError(profilePrimaryQ.error.message)) {
       const profileLegacyQ = await supabase.from("app_users").select("auth_user_id").eq("id", session.id).maybeSingle();
       profileRow = (profileLegacyQ.data || null) as Record<string, unknown> | null;
@@ -61,6 +62,9 @@ export async function GET() {
       rotaSection = profileRow.rota_section != null ? Number(profileRow.rota_section) : null;
       rotaModule = profileRow.rota_module != null ? Number(profileRow.rota_module) : null;
       employmentDate = profileRow.employment_date ? String(profileRow.employment_date).slice(0, 10) : null;
+      if (typeof profileRow.avatar_url === "string" && profileRow.avatar_url.trim()) {
+        avatarUrl = profileRow.avatar_url.trim();
+      }
     }
 
     if (resultsError || profileError) {
@@ -101,6 +105,7 @@ export async function GET() {
       rotaSection,
       rotaModule,
       employmentDate,
+      avatarUrl,
       licenseCategories: personnelMeta.licenseCategories,
       bloodGroup: personnelMeta.bloodGroup,
       results: resultsRows.map((r) => ({

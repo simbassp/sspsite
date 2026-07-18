@@ -52,6 +52,8 @@ export interface SessionUser {
   permissions: UserPermissions;
   /** Подразделение для проверки доступа к модулю 4 роты. */
   unitAssignment?: UnitAssignment | null;
+  /** Относительный путь uploads/avatars/... */
+  avatarUrl?: string | null;
 }
 
 export interface UserRecord extends SessionUser {

@@ -32,6 +32,7 @@ type ProfileRow = {
   can_view_online?: boolean;
   can_moderate_personnel?: boolean;
   unit_assignment?: string | null;
+  avatar_url?: string | null;
   status: "active" | "inactive";
 };
 
@@ -346,6 +347,7 @@ export async function POST(request: Request) {
       canManageContent: permissions.news || permissions.tests || permissions.uav || permissions.counteraction,
       permissions,
       unitAssignment,
+      avatarUrl: typeof profile.avatar_url === "string" && profile.avatar_url.trim() ? profile.avatar_url.trim() : null,
     },
     auth: {
       accessToken,

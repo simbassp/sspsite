@@ -7,6 +7,7 @@ import { ProfileDutyLocationToggle } from "@/components/profile/ProfileDutyLocat
 import { ProfileExportExcelButton } from "@/components/profile/ProfileExportExcelButton";
 import { ProfileHeroLoginBlock } from "@/components/profile/ProfileHeroLoginBlock";
 import { ProfileNameEditModal } from "@/components/profile/ProfileNameEditModal";
+import { UserAvatar } from "@/components/profile/UserAvatar";
 import { ProfileEmploymentDateField } from "@/components/profile/ProfileEmploymentDateField";
 import { ProfilePersonnelMetaFields } from "@/components/profile/ProfilePersonnelMetaFields";
 import { ProfileRotaUnitFields } from "@/components/profile/ProfileRotaUnitFields";
@@ -24,6 +25,8 @@ import {
   removeInviteCode,
   requestPasswordReset,
   updateCurrentUserProfile,
+  uploadCurrentUserAvatar,
+  deleteCurrentUserAvatar,
   updateCurrentUserDutyLocation,
   updateCurrentUserUnitAssignment,
   updateCurrentUserEmail,
@@ -131,6 +134,7 @@ export default function ProfilePage() {
   const [fieldError, setFieldError] = useState<{ name?: string; callsign?: string }>({});
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileModalMessage, setProfileModalMessage] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [isResettingStats, setIsResettingStats] = useState(false);
   const [showAllAttempts, setShowAllAttempts] = useState(false);
   const [attemptsPage, setAttemptsPage] = useState(1);
@@ -147,6 +151,10 @@ export default function ProfilePage() {
     setSession(readClientSession());
     setSessionResolved(true);
   }, []);
+
+  useEffect(() => {
+    setAvatarUrl(session?.avatarUrl ?? null);
+  }, [session?.avatarUrl, session?.id]);
 
   useEffect(() => {
     if (!session) return;
@@ -168,6 +176,7 @@ export default function ProfilePage() {
           employmentDate?: string | null;
           licenseCategories?: unknown;
           bloodGroup?: unknown;
+          avatarUrl?: string | null;
           results?: Array<Record<string, unknown>>;
           inviteCodes?: Array<Record<string, unknown>>;
         };
@@ -223,6 +232,14 @@ export default function ProfilePage() {
         );
         setLicenseCategories(normalizePersonnelLicenseCategories(payload.licenseCategories));
         setBloodGroup(normalizePersonnelBloodGroup(payload.bloodGroup));
+        const nextAvatarUrl =
+          typeof payload.avatarUrl === "string" && payload.avatarUrl.trim() ? payload.avatarUrl.trim() : null;
+        setAvatarUrl(nextAvatarUrl);
+        if (session) {
+          const nextSession = { ...session, avatarUrl: nextAvatarUrl };
+          persistSession(nextSession);
+          setSession(nextSession);
+        }
         if (typeof payload.email === "string" && payload.email) {
           setEmailInput(payload.email);
         } else {
@@ -701,7 +718,15 @@ export default function ProfilePage() {
     })();
   };
 
-  const onSaveProfile = async ({ name, callsign }: { name: string; callsign: string }) => {
+  const onSaveProfile = async ({
+    name,
+    callsign,
+    avatarPending,
+  }: {
+    name: string;
+    callsign: string;
+    avatarPending?: { blob: Blob | null; remove: boolean } | null;
+  }) => {
     if (!session || profileSaving) return;
     setProfileModalMessage("");
     setFieldError({});
@@ -716,30 +741,56 @@ export default function ProfilePage() {
     }
     const currentName = (session.name ?? "").trim();
     const currentCallsign = (session.callsign ?? "").trim();
-    if (trimmedName === currentName && trimmedCallsign === currentCallsign) {
+    const nameChanged = trimmedName !== currentName || trimmedCallsign !== currentCallsign;
+    const avatarChanged = Boolean(avatarPending?.blob || avatarPending?.remove);
+    if (!nameChanged && !avatarChanged) {
       setProfileEditModalOpen(false);
       return;
     }
     setProfileSaving(true);
     try {
-      const result = await updateCurrentUserProfile({
-        name: trimmedName,
-        callsign: trimmedCallsign,
-      });
-      if (!result.ok) {
-        setProfileModalMessage(result.error);
-        return;
+      let nextAvatarUrl = avatarUrl ?? session.avatarUrl ?? null;
+
+      if (avatarPending?.remove) {
+        const removed = await deleteCurrentUserAvatar();
+        if (!removed.ok) {
+          setProfileModalMessage(removed.error);
+          return;
+        }
+        nextAvatarUrl = null;
+      } else if (avatarPending?.blob) {
+        const uploaded = await uploadCurrentUserAvatar(avatarPending.blob);
+        if (!uploaded.ok) {
+          setProfileModalMessage(uploaded.error);
+          return;
+        }
+        nextAvatarUrl = uploaded.avatarUrl;
       }
-      persistSession({
+
+      let nextName = currentName;
+      let nextCallsign = currentCallsign;
+      if (nameChanged) {
+        const result = await updateCurrentUserProfile({
+          name: trimmedName,
+          callsign: trimmedCallsign,
+        });
+        if (!result.ok) {
+          setProfileModalMessage(result.error);
+          return;
+        }
+        nextName = result.name;
+        nextCallsign = result.callsign;
+      }
+
+      const nextSession = {
         ...session,
-        name: result.name,
-        callsign: result.callsign,
-      });
-      setSession({
-        ...session,
-        name: result.name,
-        callsign: result.callsign,
-      });
+        name: nextName,
+        callsign: nextCallsign,
+        avatarUrl: nextAvatarUrl,
+      };
+      persistSession(nextSession);
+      setSession(nextSession);
+      setAvatarUrl(nextAvatarUrl);
       setProfileEditModalOpen(false);
       setProfileModalMessage("");
     } catch {
@@ -825,13 +876,6 @@ export default function ProfilePage() {
       display: "block",
     }) as const;
 
-  const UserIcon = ({ color, size = 14 }: { color: string; size?: number }) => (
-    <svg viewBox="0 0 24 24" aria-hidden="true" style={{ ...iconStroke(color), width: size, height: size }}>
-      <circle cx="12" cy="8" r="4" />
-      <path d="M4 20c1.8-3.6 4.2-5 8-5s6.2 1.4 8 5" />
-    </svg>
-  );
-
   const WarningTriangleIcon = ({ color, size = 28 }: { color: string; size?: number }) => (
     <svg
       viewBox="0 0 24 24"
@@ -911,8 +955,14 @@ export default function ProfilePage() {
           <div className="profile-hero">
             <div className="profile-hero-sidebar">
               <div className="profile-hero-identity">
-                <div className="profile-hero-avatar" aria-hidden="true">
-                  <UserIcon color="#c42b2b" size={30} />
+                <div className="profile-hero-avatar">
+                  <UserAvatar
+                    name={session.name}
+                    callsign={session.callsign}
+                    avatarUrl={avatarUrl}
+                    size={64}
+                    title={`${session.name || ""} ${session.callsign || ""}`.trim()}
+                  />
                 </div>
                 <div className="profile-hero-identity-text">
                   <p className="profile-hero-kicker">Пользовательский профиль</p>
@@ -921,8 +971,8 @@ export default function ProfilePage() {
                     <button
                       type="button"
                       className="btn profile-hero-edit-btn"
-                      title="Редактировать имя и позывной"
-                      aria-label="Редактировать имя и позывной"
+                      title="Редактировать профиль"
+                      aria-label="Редактировать профиль"
                       onClick={() => {
                         setFieldError({});
                         setProfileModalMessage("");
@@ -1068,6 +1118,8 @@ export default function ProfilePage() {
         }}
         initialName={session.name ?? ""}
         initialCallsign={session.callsign ?? ""}
+        initialAvatarUrl={avatarUrl}
+        enableAvatarEditor
         onSave={(values) => void onSaveProfile(values)}
         saving={profileSaving}
         fieldError={fieldError}

@@ -803,6 +803,43 @@ export async function updateCurrentUserProfile(payload: { name: string; callsign
   }
 }
 
+export async function uploadCurrentUserAvatar(file: Blob) {
+  if (!isSupabaseConfigured) {
+    return { ok: false as const, error: "Загрузка фото доступна только при подключённой базе." };
+  }
+  try {
+    const formData = new FormData();
+    formData.append("file", file, "avatar.jpg");
+    const response = await fetch("/api/profile/avatar", { method: "POST", body: formData });
+    const payload = (await response.json()) as { ok?: boolean; error?: string; avatarUrl?: string | null };
+    if (!response.ok || !payload.ok) {
+      return { ok: false as const, error: payload.error || "Не удалось загрузить фото." };
+    }
+    return {
+      ok: true as const,
+      avatarUrl: typeof payload.avatarUrl === "string" ? payload.avatarUrl : null,
+    };
+  } catch {
+    return { ok: false as const, error: "Ошибка сети. Попробуйте ещё раз." };
+  }
+}
+
+export async function deleteCurrentUserAvatar() {
+  if (!isSupabaseConfigured) {
+    return { ok: false as const, error: "Удаление фото доступно только при подключённой базе." };
+  }
+  try {
+    const response = await fetch("/api/profile/avatar", { method: "DELETE" });
+    const payload = (await response.json()) as { ok?: boolean; error?: string };
+    if (!response.ok || !payload.ok) {
+      return { ok: false as const, error: payload.error || "Не удалось удалить фото." };
+    }
+    return { ok: true as const, avatarUrl: null as null };
+  } catch {
+    return { ok: false as const, error: "Ошибка сети. Попробуйте ещё раз." };
+  }
+}
+
 export async function updateCurrentUserDutyLocation(location: DutyLocation) {
   if (location !== "base" && location !== "deployment") {
     return { ok: false as const, error: "Некорректное значение места положения." };

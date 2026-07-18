@@ -38,6 +38,8 @@ alter table if exists public.app_users add column if not exists can_manage_users
 alter table if exists public.app_users add column if not exists can_reset_test_results boolean not null default false;
 alter table if exists public.app_users add column if not exists can_view_user_list boolean not null default false;
 
+alter table if exists public.app_users add column if not exists avatar_url text;
+
 alter table if exists public.app_users add column if not exists duty_location text not null default 'base';
 alter table if exists public.app_users drop constraint if exists app_users_duty_location_check;
 alter table if exists public.app_users add constraint app_users_duty_location_check check (duty_location in ('base', 'deployment'));
