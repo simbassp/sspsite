@@ -236,21 +236,33 @@ export function formatNotificationBody(body: string): string {
 
 export const ROTA_PLATOON_OPTIONS = [1, 2] as const;
 export const ROTA_SECTION_OPTIONS = [1, 2, 3, 4] as const;
+export const ROTA_MODULE_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] as const;
 
-export function rotaUnitLabel(platoon: number | null | undefined, section: number | null | undefined) {
-  if (!platoon && !section) return "—";
-  const p = platoon ? `${platoon} взвод` : "—";
-  const s = section ? `${section} отделение` : "—";
-  if (platoon && section) return `${p} / ${s}`;
-  return platoon ? p : s;
+export function rotaUnitLabel(
+  platoon: number | null | undefined,
+  section: number | null | undefined,
+  module: number | null | undefined = null,
+) {
+  if (!platoon && !section && !module) return "—";
+  const parts: string[] = [];
+  if (platoon) parts.push(`${platoon} взвод`);
+  if (section) parts.push(`${section} отделение`);
+  if (module) parts.push(`${module} модуль`);
+  return parts.join(" / ");
 }
 
-/** Компактная подпись для таблицы ростера: 2В/1О */
-export function rotaUnitLabelCompact(platoon: number | null | undefined, section: number | null | undefined) {
-  if (!platoon && !section) return "—";
-  if (platoon && section) return `${platoon}В/${section}О`;
-  if (platoon) return `${platoon}В`;
-  return `${section}О`;
+/** Компактная подпись для таблицы ростера и Excel: В1/О2/М11 */
+export function rotaUnitLabelCompact(
+  platoon: number | null | undefined,
+  section: number | null | undefined,
+  module: number | null | undefined = null,
+) {
+  if (!platoon && !section && !module) return "—";
+  const parts: string[] = [];
+  if (platoon) parts.push(`В${platoon}`);
+  if (section) parts.push(`О${section}`);
+  if (module) parts.push(`М${module}`);
+  return parts.join("/");
 }
 
 export type PersonnelRosterTopUser = {

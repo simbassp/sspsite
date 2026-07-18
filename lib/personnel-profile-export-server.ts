@@ -9,7 +9,7 @@ import { normalizeUnitAssignment, unitAssignmentLabelOrEmpty } from "@/lib/unit-
 import {
   PERSONNEL_EXAM_TYPES,
   personnelExamLabel,
-  rotaUnitLabel,
+  rotaUnitLabelCompact,
 } from "@/lib/personnel-catalog";
 import type { PersonnelProfilePayload } from "@/lib/personnel-server";
 
@@ -37,6 +37,7 @@ export type PersonnelProfileExportBundle = {
     dutyLocation: string;
     unitAssignment: string;
     rotaUnit: string;
+    rotaModule: string;
     employmentDate: string;
     employmentDays: string;
   };
@@ -181,6 +182,10 @@ function buildExportBundleFromUser(
       ? "deployment"
       : "base";
 
+  const rotaPlatoon = u.rota_platoon != null ? Number(u.rota_platoon) : null;
+  const rotaSection = u.rota_section != null ? Number(u.rota_section) : null;
+  const rotaModule = u.rota_module != null ? Number(u.rota_module) : null;
+
   return {
     exportedAt,
     user: {
@@ -193,11 +198,8 @@ function buildExportBundleFromUser(
       status: u.status === "inactive" ? "Неактивен" : "Активен",
       dutyLocation: dutyLocationLabel[duty],
       unitAssignment: unitAssignmentLabelOrEmpty(normalizeUnitAssignment(u.unit_assignment)),
-      rotaUnit:
-        rotaUnitLabel(
-          u.rota_platoon != null ? Number(u.rota_platoon) : null,
-          u.rota_section != null ? Number(u.rota_section) : null,
-        ) || "—",
+      rotaUnit: rotaUnitLabelCompact(rotaPlatoon, rotaSection, rotaModule),
+      rotaModule: rotaModule != null ? String(rotaModule) : "—",
       employmentDate: employmentDateRaw ? formatRuDate(employmentDateRaw) : "—",
       employmentDays: days != null ? `${days} дн.` : "—",
     },
@@ -212,7 +214,7 @@ export async function loadPersonnelProfileExportBundle(userId: string): Promise<
   let userRes = await supabase
     .from("app_users")
     .select(
-      "id,name,callsign,position,role,status,login,duty_location,unit_assignment,rota_platoon,rota_section,employment_date,created_at",
+      "id,name,callsign,position,role,status,login,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,employment_date,created_at",
     )
     .eq("id", userId)
     .maybeSingle();
@@ -221,7 +223,7 @@ export async function loadPersonnelProfileExportBundle(userId: string): Promise<
     userRes = await supabase
       .from("app_users")
       .select(
-        "id,name,callsign,position,role,status,login,duty_location,unit_assignment,rota_platoon,rota_section,created_at",
+        "id,name,callsign,position,role,status,login,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,created_at",
       )
       .eq("id", userId)
       .maybeSingle();
@@ -293,7 +295,7 @@ export async function loadPersonnelBulkExportBundles(userIds: string[]): Promise
   const usersPrimary = await supabase
     .from("app_users")
     .select(
-      "id,name,callsign,position,role,status,login,duty_location,unit_assignment,rota_platoon,rota_section,employment_date,created_at",
+      "id,name,callsign,position,role,status,login,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,employment_date,created_at",
     )
     .in("id", uniqueIds);
 
@@ -302,7 +304,7 @@ export async function loadPersonnelBulkExportBundles(userIds: string[]): Promise
     const fallback = await supabase
       .from("app_users")
       .select(
-        "id,name,callsign,position,role,status,login,duty_location,unit_assignment,rota_platoon,rota_section,created_at",
+        "id,name,callsign,position,role,status,login,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,created_at",
       )
       .in("id", uniqueIds);
     users = (fallback.data ?? []) as Array<Record<string, unknown>>;

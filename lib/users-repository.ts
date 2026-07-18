@@ -880,6 +880,7 @@ export async function updateCurrentUserUnitAssignment(unit: UnitAssignment | nul
 export async function updateCurrentUserRotaUnit(input: {
   rotaPlatoon: number | null;
   rotaSection: number | null;
+  rotaModule?: number | null;
 }) {
   if (!isSupabaseConfigured) {
     return { ok: false as const, error: "Доступно только при подключённой базе данных." };
@@ -896,6 +897,7 @@ export async function updateCurrentUserRotaUnit(input: {
       error?: string;
       rotaPlatoon?: number | null;
       rotaSection?: number | null;
+      rotaModule?: number | null;
     };
     if (!response.ok || !payload.ok) {
       return {
@@ -907,6 +909,7 @@ export async function updateCurrentUserRotaUnit(input: {
       ok: true as const,
       rotaPlatoon: payload.rotaPlatoon ?? input.rotaPlatoon,
       rotaSection: payload.rotaSection ?? input.rotaSection,
+      rotaModule: payload.rotaModule ?? input.rotaModule ?? null,
     };
   } catch {
     return { ok: false as const, error: "Не удалось сохранить взвод и отделение." };

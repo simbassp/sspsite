@@ -26,7 +26,7 @@ import { readClientSession } from "@/lib/client-auth";
 import { canManageUsers, canResetTestResults } from "@/lib/permissions";
 import { dutyLocationLabel } from "@/lib/duty-location";
 import { resolvePersonnelProfilePath } from "@/lib/personnel-profile-path";
-import { PERSONNEL_EXAM_TYPES, PERSONNEL_LICENSE_CATEGORIES, personnelExamLabel, rotaUnitLabel, rotaUnitLabelCompact } from "@/lib/personnel-catalog";
+import { PERSONNEL_EXAM_TYPES, PERSONNEL_LICENSE_CATEGORIES, ROTA_MODULE_OPTIONS, personnelExamLabel, rotaUnitLabel, rotaUnitLabelCompact } from "@/lib/personnel-catalog";
 import type { PersonnelExamType, PersonnelLicenseCategory, PersonnelRosterTops } from "@/lib/personnel-catalog";
 import { PersonnelTopGrid } from "@/components/personnel/PersonnelTopGrid";
 import type { Position } from "@/lib/types";
@@ -124,6 +124,7 @@ type UserRow = {
   dutyLocation: "base" | "deployment";
   rotaPlatoon: number | null;
   rotaSection: number | null;
+  rotaModule: number | null;
   exams: Array<{ examType: string; status: string }>;
   deploymentsCount: number;
   deploymentDays: number;
@@ -142,6 +143,7 @@ export default function PersonnelListPage() {
   const [tab, setTab] = useState<Tab>("all");
   const [platoon, setPlatoon] = useState<"all" | "1" | "2">("all");
   const [section, setSection] = useState<"all" | "1" | "2" | "3" | "4">("all");
+  const [module, setModule] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [users, setUsers] = useState<UserRow[]>([]);
   const [stats, setStats] = useState({ totalEmployees: 0, deployedNow: 0, avgDays: 0, totalHits: 0, totalPremiums: 0 });
@@ -172,6 +174,7 @@ export default function PersonnelListPage() {
       const q = new URLSearchParams();
       if (platoon !== "all") q.set("platoon", platoon);
       if (section !== "all") q.set("section", section);
+      if (module !== "all") q.set("module", module);
       if (search.trim()) q.set("search", search.trim());
       const res = await fetch(`/api/personnel/roster?${q.toString()}`, { cache: "no-store" });
       const payload = (await res.json()) as {
@@ -195,7 +198,7 @@ export default function PersonnelListPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [platoon, section, search]);
+  }, [platoon, section, module, search]);
 
   const examMap = useMemo(() => {
     const m = new Map<string, Map<string, string>>();
@@ -354,6 +357,17 @@ export default function PersonnelListPage() {
                   <option value="2">2</option>
                   <option value="3">3</option>
                   <option value="4">4</option>
+                </select>
+              </div>
+              <div>
+                <p className="label">Модуль</p>
+                <select className="select" value={module} onChange={(e) => setModule(e.target.value)}>
+                  <option value="all">Все</option>
+                  {ROTA_MODULE_OPTIONS.map((value) => (
+                    <option key={value} value={String(value)}>
+                      {value}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div className="personnel-filters__wide">
@@ -522,8 +536,8 @@ export default function PersonnelListPage() {
                 <thead>
                   <tr>
                     <th className="personnel-table__sticky">Сотрудник</th>
-                    <th className="personnel-table__compact" title="Взвод / отделение">
-                      Взвод/отд.
+                    <th className="personnel-table__compact" title="Взвод / отделение / модуль">
+                      Взвод/Отдел/Мод
                     </th>
                     <th className="personnel-table__compact">Зачёты</th>
                     <th className="personnel-table__compact" title="Пробные и итоговые: сданы / не сданы">
@@ -552,12 +566,12 @@ export default function PersonnelListPage() {
                       <td
                         className="personnel-table__compact"
                         title={
-                          u.rotaPlatoon || u.rotaSection
-                            ? rotaUnitLabel(u.rotaPlatoon, u.rotaSection)
+                          u.rotaPlatoon || u.rotaSection || u.rotaModule
+                            ? rotaUnitLabel(u.rotaPlatoon, u.rotaSection, u.rotaModule)
                             : undefined
                         }
                       >
-                        {rotaUnitLabelCompact(u.rotaPlatoon, u.rotaSection)}
+                        {rotaUnitLabelCompact(u.rotaPlatoon, u.rotaSection, u.rotaModule)}
                       </td>
                       <td className="personnel-table__compact">
                         <div className="personnel-roster-exams">
@@ -626,7 +640,7 @@ export default function PersonnelListPage() {
                     </span>
                   </div>
                   <div className="personnel-mobile-card__meta">
-                    <span>{rotaUnitLabelCompact(u.rotaPlatoon, u.rotaSection)}</span>
+                    <span>{rotaUnitLabelCompact(u.rotaPlatoon, u.rotaSection, u.rotaModule)}</span>
                     <PersonnelRosterLicenseCell categories={u.licenseCategories} />
                   </div>
                   <div className="personnel-mobile-card__exams">

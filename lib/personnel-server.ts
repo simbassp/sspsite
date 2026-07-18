@@ -59,6 +59,7 @@ export type PersonnelUserCard = {
   unitAssignment: UnitAssignment | null;
   rotaPlatoon: number | null;
   rotaSection: number | null;
+  rotaModule: number | null;
   createdAt: string;
   employmentDate: string | null;
   exams: PersonnelExamRow[];
@@ -291,7 +292,7 @@ export async function loadPersonnelUserBasics(userId: string) {
   const userRes = await supabase
     .from("app_users")
     .select(
-      "id,name,callsign,position,duty_location,unit_assignment,rota_platoon,rota_section,created_at,employment_date",
+      "id,name,callsign,position,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,created_at,employment_date",
     )
     .eq("id", userId)
     .maybeSingle();
@@ -306,6 +307,7 @@ export async function loadPersonnelUserBasics(userId: string) {
     unitAssignment: normalizeUnitAssignment(u.unit_assignment),
     rotaPlatoon: u.rota_platoon != null ? Number(u.rota_platoon) : null,
     rotaSection: u.rota_section != null ? Number(u.rota_section) : null,
+    rotaModule: u.rota_module != null ? Number(u.rota_module) : null,
     createdAt: String(u.created_at ?? new Date().toISOString()),
     employmentDate: u.employment_date ? String(u.employment_date).slice(0, 10) : null,
   };
@@ -514,6 +516,7 @@ function assemblePersonnelProfile(
     unitAssignment: UnitAssignment | null;
     rotaPlatoon: number | null;
     rotaSection: number | null;
+    rotaModule: number | null;
     createdAt: string;
     employmentDate: string | null;
   },
@@ -641,7 +644,7 @@ export async function loadPersonnelProfilesBulk(
     supabase
       .from("app_users")
       .select(
-        "id,name,callsign,position,duty_location,unit_assignment,rota_platoon,rota_section,created_at,employment_date",
+        "id,name,callsign,position,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,created_at,employment_date",
       )
       .in("id", uniqueIds),
     supabase.from("personnel_deployments").select("*").in("user_id", uniqueIds).order("date_from", { ascending: false }),
@@ -708,6 +711,7 @@ export async function loadPersonnelProfilesBulk(
       unitAssignment: normalizeUnitAssignment(u.unit_assignment),
       rotaPlatoon: u.rota_platoon != null ? Number(u.rota_platoon) : null,
       rotaSection: u.rota_section != null ? Number(u.rota_section) : null,
+      rotaModule: u.rota_module != null ? Number(u.rota_module) : null,
       createdAt: String(u.created_at ?? new Date().toISOString()),
       employmentDate: u.employment_date ? String(u.employment_date).slice(0, 10) : null,
     };
@@ -731,13 +735,14 @@ export async function loadPersonnelProfilesBulk(
 export async function loadPersonnelRoster(filters?: {
   platoon?: number | "all";
   section?: number | "all";
+  module?: number | "all";
   search?: string;
 }) {
   const supabase = getServerSupabaseServiceClient();
   let q = supabase
     .from("app_users")
     .select(
-      "id,name,callsign,position,duty_location,unit_assignment,rota_platoon,rota_section,created_at,status",
+      "id,name,callsign,position,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,created_at,status",
     )
     .eq("unit_assignment", "company_4")
     .eq("status", "active")
@@ -749,6 +754,9 @@ export async function loadPersonnelRoster(filters?: {
   }
   if (filters?.section && filters.section !== "all") {
     q = q.eq("rota_section", filters.section);
+  }
+  if (filters?.module && filters.module !== "all") {
+    q = q.eq("rota_module", filters.module);
   }
 
   const usersRes = await q;
@@ -792,6 +800,7 @@ export async function loadPersonnelRoster(filters?: {
       unitAssignment: normalizeUnitAssignment(u.unit_assignment),
       rotaPlatoon: u.rota_platoon != null ? Number(u.rota_platoon) : null,
       rotaSection: u.rota_section != null ? Number(u.rota_section) : null,
+      rotaModule: u.rota_module != null ? Number(u.rota_module) : null,
       createdAt: String(u.created_at ?? new Date().toISOString()),
       employmentDate: u.employment_date ? String(u.employment_date).slice(0, 10) : null,
       exams: examsMap.get(id) ?? [],
@@ -1348,6 +1357,7 @@ export async function resetPersonnelExamsForUserIds(userIds: string[]) {
 export async function loadActiveCompany4UserIds(filters?: {
   platoon?: number | "all";
   section?: number | "all";
+  module?: number | "all";
   search?: string;
 }) {
   const roster = await loadPersonnelRoster(filters);
@@ -1388,6 +1398,7 @@ export async function resetPersonnelExams(input: {
   userId?: string;
   platoon?: number | "all";
   section?: number | "all";
+  module?: number | "all";
   search?: string;
 }) {
   if (input.scope === "single") {

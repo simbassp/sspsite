@@ -13,12 +13,14 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const platoonRaw = url.searchParams.get("platoon");
   const sectionRaw = url.searchParams.get("section");
+  const moduleRaw = url.searchParams.get("module");
   const search = url.searchParams.get("search") ?? "";
 
   const platoon = platoonRaw && platoonRaw !== "all" ? Number(platoonRaw) : ("all" as const);
   const section = sectionRaw && sectionRaw !== "all" ? Number(sectionRaw) : ("all" as const);
+  const module = moduleRaw && moduleRaw !== "all" ? Number(moduleRaw) : ("all" as const);
 
-  const roster = await loadPersonnelRoster({ platoon, section, search });
+  const roster = await loadPersonnelRoster({ platoon, section, module, search });
   if (!roster.ok) {
     return Response.json({ ok: false, error: roster.error, users: [] }, { status: 500 });
   }

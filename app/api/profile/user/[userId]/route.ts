@@ -45,7 +45,7 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
     const userPrimary = await supabase
       .from("app_users")
       .select(
-        "id,name,callsign,position,role,status,login,is_online,last_seen_at,duty_location,unit_assignment,rota_platoon,rota_section,employment_date",
+        "id,name,callsign,position,role,status,login,is_online,last_seen_at,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,employment_date",
       )
       .eq("id", userId)
       .maybeSingle();
@@ -117,6 +117,7 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
     const unitAssignment = unitFromDb ? normalizeUnitAssignment(userRow.unit_assignment) : null;
     const rotaPlatoon = userRow.rota_platoon != null ? Number(userRow.rota_platoon) : null;
     const rotaSection = userRow.rota_section != null ? Number(userRow.rota_section) : null;
+    const rotaModule = userRow.rota_module != null ? Number(userRow.rota_module) : null;
     const employmentDate = userRow.employment_date ? String(userRow.employment_date).slice(0, 10) : null;
     const personnelMeta =
       unitAssignment === "company_4"
@@ -138,6 +139,7 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
         unit_assignment: unitAssignment,
         rota_platoon: rotaPlatoon,
         rota_section: rotaSection,
+        rota_module: rotaModule,
         employment_date: employmentDate,
         licenseCategories: personnelMeta.licenseCategories,
         bloodGroup: personnelMeta.bloodGroup,

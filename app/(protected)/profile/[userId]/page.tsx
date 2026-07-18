@@ -24,7 +24,7 @@ import {
 import { getPositionBadgeClass } from "@/lib/position-ui";
 import { canManageUsers, canResetTestResults, canViewUserList, canModeratePersonnel } from "@/lib/permissions";
 import { removeTestResultsForUser } from "@/lib/storage";
-import { rotaUnitCompactLabel, type RotaPlatoon, type RotaSection } from "@/lib/rota-unit";
+import { rotaUnitCompactLabel, type RotaModule, type RotaPlatoon, type RotaSection, normalizeRotaModule } from "@/lib/rota-unit";
 import {
   normalizePersonnelBloodGroup,
   normalizePersonnelLicenseCategories,
@@ -52,6 +52,7 @@ type InspectUser = {
   unit_assignment: UnitAssignment | null;
   rota_platoon?: number | null;
   rota_section?: number | null;
+  rota_module?: number | null;
   employment_date?: string | null;
   licenseCategories?: PersonnelLicenseCategory[];
   bloodGroup?: PersonnelBloodGroup | null;
@@ -117,6 +118,7 @@ export default function ProfileUserInspectPage() {
   const resetStatsModal = useResetTestStatsModal("all");
   const [rotaPlatoon, setRotaPlatoon] = useState<RotaPlatoon | null>(null);
   const [rotaSection, setRotaSection] = useState<RotaSection | null>(null);
+  const [rotaModule, setRotaModule] = useState<RotaModule | null>(null);
   const [rotaSaving, setRotaSaving] = useState(false);
   const [rotaSaveError, setRotaSaveError] = useState("");
   const [employmentDateStored, setEmploymentDateStored] = useState<string | null>(null);
@@ -162,6 +164,7 @@ export default function ProfileUserInspectPage() {
             ? u.rota_section
             : null,
         );
+        setRotaModule(normalizeRotaModule(u.rota_module));
         setEmploymentDateStored(typeof u.employment_date === "string" && u.employment_date ? u.employment_date : null);
         setLicenseCategories(normalizePersonnelLicenseCategories(u.licenseCategories));
         setBloodGroup(normalizePersonnelBloodGroup(u.bloodGroup));
@@ -197,6 +200,7 @@ export default function ProfileUserInspectPage() {
                 ? u.rota_section
                 : null,
             );
+            setRotaModule(normalizeRotaModule(u.rota_module));
           }
           if (!employmentSaving) {
             setEmploymentDateStored(
@@ -279,7 +283,11 @@ export default function ProfileUserInspectPage() {
     }
   }, [finalAttemptsPage, finalAttemptsTotalPages, showAllFinalAttempts]);
 
-  const saveRotaForUser = async (nextPlatoon: RotaPlatoon | null, nextSection: RotaSection | null) => {
+  const saveRotaForUser = async (
+    nextPlatoon: RotaPlatoon | null,
+    nextSection: RotaSection | null,
+    nextModule: RotaModule | null,
+  ) => {
     if (!userId || !canEditRotaForOthers || inspectUser?.unit_assignment !== "company_4" || rotaSaving) {
       return false;
     }
@@ -289,13 +297,14 @@ export default function ProfileUserInspectPage() {
       const response = await fetch(`/api/profile/user/${encodeURIComponent(userId)}/rota-unit`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ rotaPlatoon: nextPlatoon, rotaSection: nextSection }),
+        body: JSON.stringify({ rotaPlatoon: nextPlatoon, rotaSection: nextSection, rotaModule: nextModule }),
       });
       const payload = (await response.json()) as {
         ok?: boolean;
         error?: string;
         rotaPlatoon?: number | null;
         rotaSection?: number | null;
+        rotaModule?: number | null;
       };
       if (!response.ok || !payload.ok) {
         setRotaSaveError(payload.error || "Не удалось сохранить взвод и отделение.");
@@ -312,6 +321,7 @@ export default function ProfileUserInspectPage() {
           ? payload.rotaSection
           : null,
       );
+      setRotaModule(normalizeRotaModule(payload.rotaModule));
       return true;
     } catch {
       setRotaSaveError("Ошибка сети. Попробуйте ещё раз.");
@@ -325,7 +335,7 @@ export default function ProfileUserInspectPage() {
     const prev = rotaPlatoon;
     setRotaPlatoon(next);
     void (async () => {
-      const ok = await saveRotaForUser(next, rotaSection);
+      const ok = await saveRotaForUser(next, rotaSection, rotaModule);
       if (!ok) setRotaPlatoon(prev);
     })();
   };
@@ -334,8 +344,17 @@ export default function ProfileUserInspectPage() {
     const prev = rotaSection;
     setRotaSection(next);
     void (async () => {
-      const ok = await saveRotaForUser(rotaPlatoon, next);
+      const ok = await saveRotaForUser(rotaPlatoon, next, rotaModule);
       if (!ok) setRotaSection(prev);
+    })();
+  };
+
+  const onRotaModuleChangeForUser = (next: RotaModule | null) => {
+    const prev = rotaModule;
+    setRotaModule(next);
+    void (async () => {
+      const ok = await saveRotaForUser(rotaPlatoon, rotaSection, next);
+      if (!ok) setRotaModule(prev);
     })();
   };
 
@@ -704,8 +723,8 @@ export default function ProfileUserInspectPage() {
                       {unitAssignmentLabelOrEmpty(inspectUser.unit_assignment)}
                     </span>
                     {inspectUser.unit_assignment === "company_4" &&
-                    rotaUnitCompactLabel(rotaPlatoon, rotaSection) ? (
-                      <span className="profile-rota-badge">{rotaUnitCompactLabel(rotaPlatoon, rotaSection)}</span>
+                    rotaUnitCompactLabel(rotaPlatoon, rotaSection, rotaModule) ? (
+                      <span className="profile-rota-badge">{rotaUnitCompactLabel(rotaPlatoon, rotaSection, rotaModule)}</span>
                     ) : null}
                   </div>
                   {inspectUser.unit_assignment === "company_4" ? (
@@ -739,19 +758,34 @@ export default function ProfileUserInspectPage() {
                     </span>
                   </div>
                   {inspectUser.unit_assignment === "company_4" && canEditRotaForOthers ? (
-                    <ProfileRotaUnitFields
-                      platoon={rotaPlatoon}
-                      section={rotaSection}
-                      saving={rotaSaving}
-                      error={rotaSaveError}
-                      onPlatoonChange={onRotaPlatoonChangeForUser}
-                      onSectionChange={onRotaSectionChangeForUser}
-                    />
+                    <>
+                      <ProfileRotaUnitFields
+                        variant="platoon"
+                        platoon={rotaPlatoon}
+                        section={rotaSection}
+                        module={rotaModule}
+                        saving={rotaSaving}
+                        error={rotaSaveError}
+                        onPlatoonChange={onRotaPlatoonChangeForUser}
+                        onSectionChange={onRotaSectionChangeForUser}
+                        onModuleChange={onRotaModuleChangeForUser}
+                      />
+                      <ProfileRotaUnitFields
+                        variant="section-module"
+                        platoon={rotaPlatoon}
+                        section={rotaSection}
+                        module={rotaModule}
+                        saving={rotaSaving}
+                        onPlatoonChange={onRotaPlatoonChangeForUser}
+                        onSectionChange={onRotaSectionChangeForUser}
+                        onModuleChange={onRotaModuleChangeForUser}
+                      />
+                    </>
                   ) : inspectUser.unit_assignment === "company_4" ? (
                     <div className="profile-hero-duty">
-                      <p className="label profile-hero-duty-label">Взвод / отделение</p>
+                      <p className="label profile-hero-duty-label">Взвод / отделение / модуль</p>
                       <span className="profile-rota-badge profile-rota-badge--static">
-                        {rotaUnitCompactLabel(rotaPlatoon, rotaSection) || "Не указано"}
+                        {rotaUnitCompactLabel(rotaPlatoon, rotaSection, rotaModule) || "Не указано"}
                       </span>
                     </div>
                   ) : null}

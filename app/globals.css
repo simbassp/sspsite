@@ -960,6 +960,14 @@ html[data-theme="dark"] .unit-assignment-badge {
   align-items: start;
 }
 
+.profile-page .profile-hero-rota-platoon {
+  min-width: 0;
+}
+
+.profile-page .profile-hero-rota--section-module {
+  grid-column: 1 / -1;
+}
+
 .profile-page .profile-hero-rota__field {
   min-width: 0;
   display: flex;
