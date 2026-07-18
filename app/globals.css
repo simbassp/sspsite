@@ -1166,6 +1166,21 @@ html[data-theme="dark"] .chip:not(.active):hover {
   border-left-color: var(--warn);
 }
 
+/* Нейтральный фон: без красного radial-gradient body в колонке контента */
+.admin-results-shell {
+  background: var(--bg);
+  margin: -16px;
+  padding: 16px;
+  min-height: 100%;
+}
+
+@media (min-width: 820px) {
+  .admin-results-shell {
+    margin: -24px;
+    padding: 24px;
+  }
+}
+
 .list {
   display: grid;
   gap: 12px;

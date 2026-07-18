@@ -7,5 +7,5 @@ export default async function AdminResultsLayout({ children }: { children: React
   if (!canManageResults(session) && !canResetTestResults(session)) {
     redirect("/admin");
   }
-  return <>{children}</>;
+  return <div className="admin-results-shell">{children}</div>;
 }
