@@ -1697,7 +1697,7 @@ html[data-theme="dark"] .chip:not(.active):hover {
 .news-page__list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
 .news-page__footer {
@@ -1757,10 +1757,15 @@ html[data-theme="dark"] .chip:not(.active):hover {
 .news-message-card {
   position: relative;
   overflow: hidden;
+  background: linear-gradient(180deg, var(--panel), var(--panel2));
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
 }
 
 .news-message-card .card-body {
   padding: 14px 16px 14px 18px;
+  background: transparent;
 }
 
 .news-message-card__accent {

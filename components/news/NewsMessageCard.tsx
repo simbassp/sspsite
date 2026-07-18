@@ -72,7 +72,7 @@ export function NewsMessageCard({
 
   if (editing && editForm) {
     return (
-      <article className={`news-message-card is-${category}`}>
+      <article className={`card news-message-card is-${category}`}>
         <div className="news-message-card__accent" aria-hidden />
         <div className="card-body news-message-card__inner">{editForm}</div>
       </article>
@@ -80,7 +80,7 @@ export function NewsMessageCard({
   }
 
   return (
-    <article className={`news-message-card is-${category}`}>
+    <article className={`card news-message-card is-${category}`}>
       <div className="news-message-card__accent" aria-hidden />
       <div className="card-body news-message-card__inner">
         <div className="news-message-card__main">
