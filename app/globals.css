@@ -26,8 +26,7 @@ html[data-theme="dark"] {
     rgba(207, 46, 46, 0.16) 100%
   );
   --glass: rgba(255, 255, 255, 0.04);
-  --page-gradient: radial-gradient(circle at top right, rgba(207, 46, 46, 0.18), transparent 24%),
-    linear-gradient(180deg, #07090d 0%, #0b1016 100%);
+  --page-gradient: linear-gradient(180deg, #07090d 0%, #0b1016 100%);
   --grid-line: rgba(255, 255, 255, 0.03);
 }
 
@@ -52,8 +51,7 @@ html[data-theme="light"] {
     rgba(196, 43, 43, 0.12) 100%
   );
   --glass: rgba(255, 255, 255, 0.74);
-  --page-gradient: radial-gradient(circle at top right, rgba(196, 43, 43, 0.08), transparent 24%),
-    linear-gradient(180deg, #f3f5f8 0%, #eef2f7 100%);
+  --page-gradient: linear-gradient(180deg, #f3f5f8 0%, #eef2f7 100%);
   --grid-line: rgba(18, 24, 33, 0.03);
   --shadow: 0 14px 32px rgba(18, 24, 33, 0.08);
   --shadow-strong: 0 20px 42px rgba(18, 24, 33, 0.12);
@@ -1164,25 +1162,6 @@ html[data-theme="dark"] .chip:not(.active):hover {
 
 .admin-results-card--not_started {
   border-left-color: var(--warn);
-}
-
-/* Results page: neutral canvas without red body gradient on sides */
-body:has(.admin-results-shell) {
-  background: var(--bg);
-}
-
-@media (min-width: 820px) {
-  body:has(.admin-results-shell) .desktop-sidebar {
-    background: var(--bg);
-  }
-
-  body:has(.admin-results-shell) .app-shell > main {
-    background: var(--bg);
-  }
-}
-
-.admin-results-shell {
-  min-height: 100%;
 }
 
 .list {
