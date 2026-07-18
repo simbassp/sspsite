@@ -1,4 +1,5 @@
 import { ONLINE_LAST_SEEN_MAX_MS } from "@/lib/presence-constants";
+import { loadProfilePersonnelMeta } from "@/lib/profile-personnel-meta";
 import { normalizeUnitAssignment } from "@/lib/unit-assignment";
 import { canManageUsers, canModeratePersonnel, canViewUserList } from "@/lib/permissions";
 import { getServerSession } from "@/lib/server-auth";
@@ -117,6 +118,7 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
     const rotaPlatoon = userRow.rota_platoon != null ? Number(userRow.rota_platoon) : null;
     const rotaSection = userRow.rota_section != null ? Number(userRow.rota_section) : null;
     const employmentDate = userRow.employment_date ? String(userRow.employment_date).slice(0, 10) : null;
+    const personnelMeta = await loadProfilePersonnelMeta(userId);
 
     return Response.json({
       ok: true,
@@ -134,6 +136,8 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
         rota_platoon: rotaPlatoon,
         rota_section: rotaSection,
         employment_date: employmentDate,
+        licenseCategories: personnelMeta.licenseCategories,
+        bloodGroup: personnelMeta.bloodGroup,
       },
       results: resultsRows.map((r) => ({
         id: r.id,

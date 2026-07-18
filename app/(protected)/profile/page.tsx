@@ -7,6 +7,7 @@ import { ProfileExportExcelButton } from "@/components/profile/ProfileExportExce
 import { ProfileHeroLoginBlock } from "@/components/profile/ProfileHeroLoginBlock";
 import { ProfileNameEditModal } from "@/components/profile/ProfileNameEditModal";
 import { ProfileEmploymentDateField } from "@/components/profile/ProfileEmploymentDateField";
+import { ProfilePersonnelMetaFields } from "@/components/profile/ProfilePersonnelMetaFields";
 import { ProfileRotaUnitFields } from "@/components/profile/ProfileRotaUnitFields";
 import { readClientSession } from "@/lib/client-auth";
 import { formatDate, formatDateTime, formatTotalTestDuration } from "@/lib/format";
@@ -46,6 +47,12 @@ import {
 } from "@/lib/unit-assignment";
 import { removeTestResultsForUser } from "@/lib/storage";
 import { rotaUnitCompactLabel, type RotaPlatoon, type RotaSection } from "@/lib/rota-unit";
+import {
+  normalizePersonnelBloodGroup,
+  normalizePersonnelLicenseCategories,
+  type PersonnelBloodGroup,
+  type PersonnelLicenseCategory,
+} from "@/lib/personnel-catalog";
 import { DutyLocation, TestResult, TestResultsResetScope, UnitAssignment } from "@/lib/types";
 
 function mapBootstrapResults(raw: Array<Record<string, unknown>>): TestResult[] {
@@ -116,6 +123,8 @@ export default function ProfilePage() {
   const [employmentDateStored, setEmploymentDateStored] = useState<string | null>(null);
   const [employmentSaving, setEmploymentSaving] = useState(false);
   const [employmentSaveError, setEmploymentSaveError] = useState("");
+  const [licenseCategories, setLicenseCategories] = useState<PersonnelLicenseCategory[]>([]);
+  const [bloodGroup, setBloodGroup] = useState<PersonnelBloodGroup | null>(null);
   const [dutySaving, setDutySaving] = useState(false);
   const [fieldError, setFieldError] = useState<{ name?: string; callsign?: string }>({});
   const [profileSaving, setProfileSaving] = useState(false);
@@ -154,6 +163,8 @@ export default function ProfilePage() {
           rotaPlatoon?: number | null;
           rotaSection?: number | null;
           employmentDate?: string | null;
+          licenseCategories?: unknown;
+          bloodGroup?: unknown;
           results?: Array<Record<string, unknown>>;
           inviteCodes?: Array<Record<string, unknown>>;
         };
@@ -206,6 +217,8 @@ export default function ProfilePage() {
         setEmploymentDateStored(
           typeof payload.employmentDate === "string" && payload.employmentDate ? payload.employmentDate : null,
         );
+        setLicenseCategories(normalizePersonnelLicenseCategories(payload.licenseCategories));
+        setBloodGroup(normalizePersonnelBloodGroup(payload.bloodGroup));
         if (typeof payload.email === "string" && payload.email) {
           setEmailInput(payload.email);
         } else {
@@ -909,6 +922,14 @@ export default function ProfilePage() {
                   <span className="profile-rota-badge">{rotaUnitCompactLabel(rotaPlatoon, rotaSection)}</span>
                 ) : null}
               </div>
+              {session?.id ? (
+                <ProfilePersonnelMetaFields
+                  userId={session.id}
+                  canEdit
+                  licenseCategories={licenseCategories}
+                  bloodGroup={bloodGroup}
+                />
+              ) : null}
               <div
                 className={`admin-users-position-badge ${getPositionBadgeClass(session.position)}`}
                 title="Должность"

@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ProfileExportExcelButton } from "@/components/profile/ProfileExportExcelButton";
 import { ProfileNameEditModal } from "@/components/profile/ProfileNameEditModal";
 import { ProfileEmploymentDateField } from "@/components/profile/ProfileEmploymentDateField";
+import { ProfilePersonnelMetaFields } from "@/components/profile/ProfilePersonnelMetaFields";
 import { ProfileRotaUnitFields } from "@/components/profile/ProfileRotaUnitFields";
 import { readClientSession } from "@/lib/client-auth";
 import { formatDate, formatDateTime, formatTotalTestDuration } from "@/lib/format";
@@ -24,6 +25,12 @@ import { getPositionBadgeClass } from "@/lib/position-ui";
 import { canManageUsers, canResetTestResults, canViewUserList, canModeratePersonnel } from "@/lib/permissions";
 import { removeTestResultsForUser } from "@/lib/storage";
 import { rotaUnitCompactLabel, type RotaPlatoon, type RotaSection } from "@/lib/rota-unit";
+import {
+  normalizePersonnelBloodGroup,
+  normalizePersonnelLicenseCategories,
+  type PersonnelBloodGroup,
+  type PersonnelLicenseCategory,
+} from "@/lib/personnel-catalog";
 import { DutyLocation, TestResult, TestResultsResetScope, UnitAssignment } from "@/lib/types";
 
 const RESET_SCOPE_LABELS: Record<TestResultsResetScope, string> = {
@@ -46,6 +53,8 @@ type InspectUser = {
   rota_platoon?: number | null;
   rota_section?: number | null;
   employment_date?: string | null;
+  licenseCategories?: PersonnelLicenseCategory[];
+  bloodGroup?: PersonnelBloodGroup | null;
 };
 
 function mapRows(payload: { results?: Array<Record<string, unknown>> }): TestResult[] {
@@ -83,6 +92,7 @@ export default function ProfileUserInspectPage() {
   const canEditProfileFields = session ? canManageUsers(session) : false;
   const canEditRotaForOthers = session ? canManageUsers(session) || canModeratePersonnel(session) : false;
   const canEditEmploymentForOthers = canEditRotaForOthers;
+  const canEditPersonnelMeta = canEditRotaForOthers;
   const canExportExcel = session ? canManageUsers(session) : false;
   const canResetStats = session ? canResetTestResults(session) : false;
 
@@ -112,6 +122,8 @@ export default function ProfileUserInspectPage() {
   const [employmentDateStored, setEmploymentDateStored] = useState<string | null>(null);
   const [employmentSaving, setEmploymentSaving] = useState(false);
   const [employmentSaveError, setEmploymentSaveError] = useState("");
+  const [licenseCategories, setLicenseCategories] = useState<PersonnelLicenseCategory[]>([]);
+  const [bloodGroup, setBloodGroup] = useState<PersonnelBloodGroup | null>(null);
 
   useEffect(() => {
     if (!session || !userId || !canOpen) return;
@@ -151,6 +163,8 @@ export default function ProfileUserInspectPage() {
             : null,
         );
         setEmploymentDateStored(typeof u.employment_date === "string" && u.employment_date ? u.employment_date : null);
+        setLicenseCategories(normalizePersonnelLicenseCategories(u.licenseCategories));
+        setBloodGroup(normalizePersonnelBloodGroup(u.bloodGroup));
         setRows(mapRows({ results: payload.results }).sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)));
       } catch {
         if (!cancelled) setError("network");
@@ -694,6 +708,12 @@ export default function ProfileUserInspectPage() {
                       <span className="profile-rota-badge">{rotaUnitCompactLabel(rotaPlatoon, rotaSection)}</span>
                     ) : null}
                   </div>
+                  <ProfilePersonnelMetaFields
+                    userId={inspectUser.id}
+                    canEdit={canEditPersonnelMeta}
+                    licenseCategories={licenseCategories}
+                    bloodGroup={bloodGroup}
+                  />
                   <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
                     @{inspectUser.login}
                     {inspectUser.status === "inactive" ? (

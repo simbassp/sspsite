@@ -1,4 +1,5 @@
 import { getServerSession } from "@/lib/server-auth";
+import { loadProfilePersonnelMeta } from "@/lib/profile-personnel-meta";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 import { normalizeUnitAssignment } from "@/lib/unit-assignment";
 import type { UnitAssignment } from "@/lib/types";
@@ -86,6 +87,8 @@ export async function GET() {
       if (!invitesQ.error) inviteCodes = invitesQ.data || [];
     }
 
+    const personnelMeta = await loadProfilePersonnelMeta(session.id);
+
     return Response.json({
       ok: true,
       email,
@@ -94,6 +97,8 @@ export async function GET() {
       rotaPlatoon,
       rotaSection,
       employmentDate,
+      licenseCategories: personnelMeta.licenseCategories,
+      bloodGroup: personnelMeta.bloodGroup,
       results: resultsRows.map((r) => ({
         id: r.id,
         user_id: r.user_id,

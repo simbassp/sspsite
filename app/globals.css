@@ -733,6 +733,81 @@ html[data-theme="dark"] .select option {
   margin-top: 0;
 }
 
+.profile-page .profile-hero-meta-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 10px 14px;
+  margin-top: 10px;
+  max-width: 420px;
+}
+
+.profile-page .profile-hero-meta-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.profile-page .profile-hero-meta-label {
+  margin: 0;
+  font-size: 11px;
+}
+
+.profile-page .profile-hero-meta-empty,
+.profile-page .profile-hero-meta-value {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.profile-page .profile-hero-meta-error {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--bad);
+}
+
+.profile-page .profile-license-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.profile-page .profile-license-picker--readonly {
+  gap: 6px;
+}
+
+.profile-page .profile-license-picker__btn {
+  min-width: 30px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.profile-page .profile-license-picker__btn--active {
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+  color: var(--text);
+}
+
+.profile-page .profile-license-picker__btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.profile-page .profile-blood-group-select {
+  width: 100%;
+  max-width: 180px;
+  min-height: 32px;
+  font-size: 13px;
+}
+
 .profile-page .profile-hero-main .admin-users-position-badge {
   margin-top: 8px;
   font-size: 11px;
@@ -958,6 +1033,15 @@ html[data-theme="dark"] .profile-rota-badge {
 
   .profile-page .profile-hero-rota {
     grid-template-columns: 1fr;
+  }
+
+  .profile-page .profile-hero-meta-fields {
+    grid-template-columns: 1fr;
+    max-width: none;
+  }
+
+  .profile-page .profile-blood-group-select {
+    max-width: none;
   }
 }
 

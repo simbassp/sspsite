@@ -21,6 +21,38 @@ export function normalizePersonnelLicenseCategories(values: unknown): PersonnelL
   return values.filter(isPersonnelLicenseCategory);
 }
 
+export const PERSONNEL_BLOOD_GROUPS = [
+  "1_pos",
+  "1_neg",
+  "2_pos",
+  "2_neg",
+  "3_pos",
+  "3_neg",
+  "4_pos",
+  "4_neg",
+] as const;
+export type PersonnelBloodGroup = (typeof PERSONNEL_BLOOD_GROUPS)[number];
+
+export const personnelBloodGroupLabel: Record<PersonnelBloodGroup, string> = {
+  "1_pos": "1 (O) Rh+",
+  "1_neg": "1 (O) Rh−",
+  "2_pos": "2 (A) Rh+",
+  "2_neg": "2 (A) Rh−",
+  "3_pos": "3 (B) Rh+",
+  "3_neg": "3 (B) Rh−",
+  "4_pos": "4 (AB) Rh+",
+  "4_neg": "4 (AB) Rh−",
+};
+
+export function isPersonnelBloodGroup(value: unknown): value is PersonnelBloodGroup {
+  return typeof value === "string" && (PERSONNEL_BLOOD_GROUPS as readonly string[]).includes(value);
+}
+
+export function normalizePersonnelBloodGroup(value: unknown): PersonnelBloodGroup | null {
+  if (value === null || value === undefined || value === "") return null;
+  return isPersonnelBloodGroup(value) ? value : null;
+}
+
 export const PERSONNEL_MEDAL_SVO_TYPE = "svo_victory_contribution" as const;
 
 export const PERSONNEL_MEDAL_PRESETS = [
