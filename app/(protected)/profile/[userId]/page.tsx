@@ -14,7 +14,7 @@ import { readClientSession } from "@/lib/client-auth";
 import { formatDate, formatDateTime, formatTotalTestDuration } from "@/lib/format";
 import { formatTestResultForType } from "@/lib/test-pass-rules";
 import { dutyLocationLabel } from "@/lib/duty-location";
-import { unitAssignmentLabelOrEmpty, normalizeUnitAssignment } from "@/lib/unit-assignment";
+import { unitAssignmentLabel, unitAssignmentLabelOrEmpty, normalizeUnitAssignment, UNIT_ASSIGNMENT_OPTIONS } from "@/lib/unit-assignment";
 import { PersonnelProfileStats, type PersonnelActivityData } from "@/components/personnel/PersonnelProfileStats";
 import { PersonnelTestActivityBlock } from "@/components/personnel/PersonnelTestActivityBlock";
 import {
@@ -89,6 +89,7 @@ export default function ProfileUserInspectPage() {
   const session = useMemo(() => readClientSession(), []);
   const canOpen = session ? canInspectOtherUserProfile(session) : false;
   const canEditDutyForOthers = session ? canManageUsers(session) : false;
+  const canEditUnitForOthers = session ? canManageUsers(session) || canModeratePersonnel(session) : false;
   const canEditProfileFields = session ? canManageUsers(session) : false;
   const canEditRotaForOthers = session ? canManageUsers(session) || canModeratePersonnel(session) : false;
   const canEditEmploymentForOthers = canEditRotaForOthers;
@@ -118,6 +119,8 @@ export default function ProfileUserInspectPage() {
   const [finalAttemptsPage, setFinalAttemptsPage] = useState(1);
   const [dutySaving, setDutySaving] = useState(false);
   const [dutyMessage, setDutyMessage] = useState("");
+  const [unitSaving, setUnitSaving] = useState(false);
+  const [unitSaveError, setUnitSaveError] = useState("");
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileMessage, setProfileMessage] = useState("");
   const [profileEditModalOpen, setProfileEditModalOpen] = useState(false);
@@ -622,6 +625,47 @@ export default function ProfileUserInspectPage() {
     }
   };
 
+  const onUnitChangeForUser = async (nextRaw: string) => {
+    if (!canEditUnitForOthers || !inspectUser || unitSaving) return;
+    const next: UnitAssignment | null = nextRaw ? (nextRaw as UnitAssignment) : null;
+    if (next !== null && !UNIT_ASSIGNMENT_OPTIONS.includes(next)) return;
+    if (next === inspectUser.unit_assignment) return;
+
+    const snapshot = inspectUser;
+    const prevUnit = snapshot.unit_assignment;
+    setUnitSaveError("");
+    setInspectUser({ ...snapshot, unit_assignment: next });
+    if (next !== "company_4") {
+      setRotaPlatoon(null);
+      setRotaSection(null);
+      setRotaModule(null);
+      setRotaSaveError("");
+    }
+    setUnitSaving(true);
+    try {
+      const response = await fetch(`/api/profile/user/${encodeURIComponent(userId)}/unit-assignment`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ unitAssignment: next }),
+      });
+      const payload = (await response.json()) as { ok?: boolean; error?: string; unitAssignment?: UnitAssignment | null };
+      if (!response.ok || !payload.ok) {
+        setInspectUser({ ...snapshot, unit_assignment: prevUnit });
+        setUnitSaveError(payload.error || "Не удалось сохранить подразделение.");
+        return;
+      }
+      setInspectUser({
+        ...snapshot,
+        unit_assignment: payload.unitAssignment ?? next,
+      });
+    } catch {
+      setInspectUser({ ...snapshot, unit_assignment: prevUnit });
+      setUnitSaveError("Ошибка сети. Повторите попытку.");
+    } finally {
+      setUnitSaving(false);
+    }
+  };
+
   const onSaveProfileFields = async ({ name, callsign }: { name: string; callsign: string }) => {
     if (!canEditProfileFields || !inspectUser || profileSaving) return;
     const trimmedName = name.trim();
@@ -785,9 +829,33 @@ export default function ProfileUserInspectPage() {
                 <div className="profile-hero-controls">
                   <div className="profile-hero-duty">
                     <p className="label profile-hero-duty-label">Подразделение</p>
-                    <span className="unit-assignment-badge">
-                      {unitAssignmentLabelOrEmpty(inspectUser.unit_assignment)}
-                    </span>
+                    {canEditUnitForOthers ? (
+                      <>
+                        <select
+                          className="select profile-unit-select"
+                          value={inspectUser.unit_assignment ?? ""}
+                          onChange={(e) => void onUnitChangeForUser(e.target.value)}
+                          disabled={unitSaving}
+                          aria-label="Подразделение"
+                        >
+                          <option value="">Не указано</option>
+                          {UNIT_ASSIGNMENT_OPTIONS.map((unit) => (
+                            <option key={unit} value={unit}>
+                              {unitAssignmentLabel[unit]}
+                            </option>
+                          ))}
+                        </select>
+                        {!!unitSaveError && (
+                          <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0, color: "var(--bad)", maxWidth: 280 }}>
+                            {unitSaveError}
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <span className="unit-assignment-badge">
+                        {unitAssignmentLabelOrEmpty(inspectUser.unit_assignment)}
+                      </span>
+                    )}
                   </div>
                   {inspectUser.unit_assignment === "company_4" && canEditRotaForOthers ? (
                     <>
