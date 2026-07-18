@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo } from "react";
-import { usePathname } from "next/navigation";
 import { formatSiteDuration } from "@/lib/site-analytics";
 import { useHomeStats } from "@/hooks/useHomeStats";
 
@@ -16,7 +15,6 @@ function formatOnlineUsers(online: Array<{ name: string; callsign: string }>) {
 }
 
 export function SiteFooterStats() {
-  const pathname = usePathname();
   const { loading, usersSummary, siteAnalytics } = useHomeStats();
 
   const text = useMemo(() => {
@@ -32,8 +30,6 @@ export function SiteFooterStats() {
     }
     return parts.join(" · ");
   }, [loading, siteAnalytics, usersSummary]);
-
-  if (pathname === "/dashboard") return null;
 
   return <p className="app-site-footer__stats">{text}</p>;
 }

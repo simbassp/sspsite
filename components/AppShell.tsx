@@ -17,6 +17,7 @@ import {
   canViewUserList,
 } from "@/lib/permissions";
 import { PersonnelNotificationsBell } from "@/components/personnel/PersonnelNotificationsBell";
+import { HomeStatsBar } from "@/components/HomeStatsBar";
 import { SiteFooterStats } from "@/components/SiteFooterStats";
 import {
   PRESENCE_HEARTBEAT_MS,
@@ -480,7 +481,7 @@ export function AppShell({ session, children }: AppShellProps) {
 
         <div className="screen">{children}</div>
         <footer className="app-site-footer" aria-label="Информация о платформе">
-          <SiteFooterStats />
+          {pathname === "/dashboard" ? <HomeStatsBar /> : <SiteFooterStats />}
           <p className="app-site-footer__line">Закрытая обучающая платформа</p>
           <p className="app-site-footer__line">© 2026 ССП ПВО · Developed by Simba</p>
         </footer>

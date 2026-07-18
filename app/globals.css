@@ -436,6 +436,10 @@ html[data-theme="dark"] .selfcheck-hint__text svg {
   user-select: none;
 }
 
+.app-site-footer:has(.home-stats-bar) {
+  padding-top: 12px;
+}
+
 .app-site-footer__stats {
   margin: 0 0 8px;
   font-size: 12px;
@@ -1956,11 +1960,16 @@ html[data-theme="dark"] .chip:not(.active):hover {
 }
 
 .home-stats-bar {
-  margin-bottom: 12px;
+  margin: 0 0 10px;
+  text-align: left;
+}
+
+.app-site-footer .home-stats-bar {
+  max-width: none;
 }
 
 .home-stats-bar .card-body {
-  padding: 14px 16px;
+  padding: 10px 12px;
 }
 
 .home-stats-bar__body {
@@ -1972,11 +1981,11 @@ html[data-theme="dark"] .chip:not(.active):hover {
 
 .home-stats-bar__item {
   flex: 1 1 0;
-  min-width: 120px;
+  min-width: 108px;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 14px;
+  gap: 8px;
+  padding: 0 10px;
 }
 
 .home-stats-bar__item--wide {
@@ -2001,22 +2010,22 @@ html[data-theme="dark"] .chip:not(.active):hover {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
   color: color-mix(in srgb, var(--text) 72%, var(--muted));
 }
 
 .home-stats-bar__icon .home-icon-svg {
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
 }
 
 .home-stats-bar__online-dot {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: var(--ok);
-  box-shadow: 0 0 0 3px rgba(35, 147, 92, 0.18);
+  box-shadow: 0 0 0 2px rgba(35, 147, 92, 0.16);
 }
 
 .home-stats-bar__content {
@@ -2027,22 +2036,22 @@ html[data-theme="dark"] .chip:not(.active):hover {
 }
 
 .home-stats-bar__label {
-  font-size: 11px;
-  line-height: 1.3;
+  font-size: 10px;
+  line-height: 1.25;
   color: var(--muted);
   font-weight: 500;
 }
 
 .home-stats-bar__value {
-  font-size: 18px;
-  line-height: 1.25;
-  font-weight: 800;
+  font-size: 14px;
+  line-height: 1.3;
+  font-weight: 700;
   color: var(--text);
   word-break: break-word;
 }
 
 .home-stats-bar__value--names {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 700;
   line-height: 1.35;
 }
@@ -2071,7 +2080,11 @@ html[data-theme="dark"] .chip:not(.active):hover {
   }
 
   .home-stats-bar__value {
-    font-size: 16px;
+    font-size: 13px;
+  }
+
+  .home-stats-bar__value--names {
+    font-size: 11px;
   }
 }
 
