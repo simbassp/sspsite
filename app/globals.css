@@ -1935,10 +1935,8 @@ html[data-theme="dark"] .chip:not(.active):hover {
 .news-message-card__author {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 7px;
   max-width: 220px;
-  align-self: flex-start;
-  margin-right: auto;
 }
 
 .news-message-card__author-avatar {
