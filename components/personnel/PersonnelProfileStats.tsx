@@ -597,7 +597,7 @@ export function PersonnelProfileStats({
             <div className="personnel-table-wrap personnel-deploy-table-wrap" style={{ marginTop: 12 }}>
               <table className="personnel-table personnel-table--deployments">
                 <colgroup>
-                  <col />
+                  <col className="personnel-deploy-col-period" />
                   <col className="personnel-deploy-col-num" />
                   <col className="personnel-deploy-col-num" />
                   <col className="personnel-deploy-col-money" />
@@ -606,20 +606,21 @@ export function PersonnelProfileStats({
                 <thead>
                   <tr className="personnel-deploy-totals">
                     <th scope="col">
-                      <span className="label" title="Всего командировок">
-                        Всего
-                      </span>
+                      <span className="label">Всего командировок</span>
                       <strong>{profile.deploymentsCount}</strong>
                     </th>
-                    <th scope="col" className="personnel-table__num" title="Общее количество дней">
+                    <th scope="col" className="personnel-table__num">
+                      <span className="label">Общее количество дней</span>
                       <strong>{profile.deploymentDays}</strong>
                     </th>
-                    <th scope="col" className="personnel-table__num" title="Сбитий БПЛА">
+                    <th scope="col" className="personnel-table__num">
+                      <span className="label">Сбитий БПЛА</span>
                       <strong>{profile.uavHitsTotal}</strong>
                     </th>
                     <th scope="col" className="personnel-table__money">
+                      <span className="label">Премии</span>
                       <div className="personnel-deploy-summary__value">
-                        <strong title="Итого премий">{profile.premiumsTotal.toLocaleString("ru-RU")} ₽</strong>
+                        <strong>{profile.premiumsTotal.toLocaleString("ru-RU")} ₽</strong>
                         {canModerate && (
                           <button
                             type="button"

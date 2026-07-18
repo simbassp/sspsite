@@ -4016,12 +4016,16 @@ html[data-theme="dark"] .final-review-answer--correct {
   table-layout: fixed;
 }
 
+.personnel-deploy-col-period {
+  width: 34%;
+}
+
 .personnel-deploy-col-num {
-  width: 96px;
+  width: 108px;
 }
 
 .personnel-deploy-col-money {
-  width: 148px;
+  width: 152px;
 }
 
 .personnel-deploy-col-actions {
@@ -4048,7 +4052,7 @@ html[data-theme="dark"] .final-review-answer--correct {
   background: color-mix(in srgb, var(--panel2) 60%, var(--panel));
   border-bottom: 1px solid var(--line);
   font-weight: 400;
-  vertical-align: middle;
+  vertical-align: top;
   text-align: left;
   overflow: hidden;
   padding-top: 10px;
@@ -4061,6 +4065,13 @@ html[data-theme="dark"] .final-review-answer--correct {
   font-size: 11px;
   line-height: 1.25;
   color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.personnel-deploy-totals th:first-child .label {
+  white-space: normal;
 }
 
 .personnel-deploy-totals th strong {
@@ -4082,6 +4093,14 @@ html[data-theme="dark"] .final-review-answer--correct {
   margin-top: 0;
 }
 
+.personnel-deploy-totals th.personnel-table__money .personnel-deploy-summary__value strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  font-size: 16px;
+}
+
 .personnel-deploy-totals th.personnel-table__num {
   text-align: center;
 }
@@ -4089,6 +4108,13 @@ html[data-theme="dark"] .final-review-answer--correct {
 .personnel-deploy-totals th.personnel-table__num .label,
 .personnel-deploy-totals th.personnel-table__num strong {
   text-align: center;
+}
+
+.personnel-deploy-totals th.personnel-table__num .label {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  hyphens: auto;
 }
 
 .personnel-deploy-totals th.personnel-table__money {
