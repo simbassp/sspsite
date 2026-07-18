@@ -454,30 +454,6 @@ async function loadTestStatsForUsers(userIds: string[]) {
     map.set(id, summarizeTestResultRows(rows));
   }
 
-  const zeroIds = userIds.filter((id) => {
-    const s = map.get(id)!;
-    return s.trialPassed + s.trialFailed + s.finalPassed + s.finalFailed === 0;
-  });
-
-  if (zeroIds.length > 0) {
-    for (let i = 0; i < zeroIds.length; i += 8) {
-      const chunk = zeroIds.slice(i, i + 8);
-      await Promise.all(
-        chunk.map(async (id) => {
-          const ctx = await resolveFinalUserContext(supabase, id);
-          const linkedIds = ctx.linkedUserIds.length ? ctx.linkedUserIds : [id];
-          const extraRows: Array<Record<string, unknown>> = [];
-          for (let j = 0; j < linkedIds.length; j += 80) {
-            extraRows.push(...(await fetchChunk(linkedIds.slice(j, j + 80))));
-          }
-          if (extraRows.length) {
-            map.set(id, summarizeTestResultRows(extraRows));
-          }
-        }),
-      );
-    }
-  }
-
   return map;
 }
 

@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { withTimeout } from "@/lib/async-utils";
 import { PersonnelPreviewBanner } from "@/components/personnel/PersonnelPreviewBanner";
 import { PersonnelTableDualScroll } from "@/components/personnel/PersonnelTableDualScroll";
 import {
@@ -137,6 +138,9 @@ type UserRow = {
 
 type Tab = "all" | "top";
 
+const ROSTER_FETCH_TIMEOUT_MS = 45000;
+const SEARCH_DEBOUNCE_MS = 350;
+
 export default function PersonnelListPage() {
   const [isHydrated, setIsHydrated] = useState(false);
   const session = useMemo(() => (isHydrated ? readClientSession() : null), [isHydrated]);
@@ -144,7 +148,8 @@ export default function PersonnelListPage() {
   const [platoon, setPlatoon] = useState<"all" | "1" | "2">("all");
   const [section, setSection] = useState<"all" | "1" | "2" | "3" | "4">("all");
   const [module, setModule] = useState<string>("all");
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [users, setUsers] = useState<UserRow[]>([]);
   const [stats, setStats] = useState({ totalEmployees: 0, deployedNow: 0, avgDays: 0, totalHits: 0, totalPremiums: 0 });
   const [tops, setTops] = useState<PersonnelRosterTops<UserRow>>({
@@ -166,8 +171,15 @@ export default function PersonnelListPage() {
   const [exportExcelLoading, setExportExcelLoading] = useState(false);
   const [exportExcelMsg, setExportExcelMsg] = useState("");
   const [rosterFilters, setRosterFilters] = useState<RosterFilters>(EMPTY_ROSTER_FILTERS);
+  const loadSeqRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
 
   const load = useCallback(async () => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const seq = ++loadSeqRef.current;
+
     setIsLoading(true);
     setLoadError("");
     try {
@@ -175,8 +187,12 @@ export default function PersonnelListPage() {
       if (platoon !== "all") q.set("platoon", platoon);
       if (section !== "all") q.set("section", section);
       if (module !== "all") q.set("module", module);
-      if (search.trim()) q.set("search", search.trim());
-      const res = await fetch(`/api/personnel/roster?${q.toString()}`, { cache: "no-store" });
+      if (debouncedSearch) q.set("search", debouncedSearch);
+      const res = await withTimeout(
+        fetch(`/api/personnel/roster?${q.toString()}`, { cache: "no-store", signal: controller.signal }),
+        ROSTER_FETCH_TIMEOUT_MS,
+        "roster_timeout",
+      );
       const payload = (await res.json()) as {
         ok?: boolean;
         error?: string;
@@ -185,20 +201,26 @@ export default function PersonnelListPage() {
         tops?: typeof tops;
         isPreview?: boolean;
       };
+      if (seq !== loadSeqRef.current) return;
       if (!res.ok || !payload.ok) {
         setLoadError(payload.error || "Не удалось загрузить список.");
         return;
       }
       setUsers(payload.users ?? []);
-      setStats(payload.stats ?? stats);
-      setTops(payload.tops ?? tops);
+      if (payload.stats) setStats(payload.stats);
+      if (payload.tops) setTops(payload.tops);
       setIsPreview(payload.isPreview === true);
-    } catch {
+    } catch (error) {
+      if (controller.signal.aborted || seq !== loadSeqRef.current) return;
+      if (error instanceof Error && error.message === "roster_timeout") {
+        setLoadError("Сервер долго отвечает. Сузьте фильтр или обновите страницу.");
+        return;
+      }
       setLoadError("Ошибка сети.");
     } finally {
-      setIsLoading(false);
+      if (seq === loadSeqRef.current) setIsLoading(false);
     }
-  }, [platoon, section, module, search]);
+  }, [platoon, section, module, debouncedSearch]);
 
   const examMap = useMemo(() => {
     const m = new Map<string, Map<string, string>>();
@@ -228,9 +250,21 @@ export default function PersonnelListPage() {
   }, []);
 
   useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(searchInput.trim()), SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
+
+  useEffect(() => {
     if (!isHydrated) return;
     void load();
   }, [isHydrated, load]);
+
+  useEffect(
+    () => () => {
+      abortRef.current?.abort();
+    },
+    [],
+  );
 
   const profilePath = (id: string) => resolvePersonnelProfilePath(session, id);
 
@@ -277,7 +311,7 @@ export default function PersonnelListPage() {
               scope: "filter",
               platoon,
               section,
-              search: search.trim(),
+              search: debouncedSearch,
             });
       resetExamsModal.setOpen(false);
       setResetExamsMsg(
@@ -375,8 +409,8 @@ export default function PersonnelListPage() {
                 <input
                   className="input"
                   placeholder="Имя или позывной"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
                 />
               </div>
               <div>
