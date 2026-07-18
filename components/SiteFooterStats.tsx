@@ -63,8 +63,8 @@ export function SiteFooterStats() {
     if (loading && !usersSummary && !siteAnalytics) return "Загрузка статистики…";
     const parts: string[] = [];
     if (siteAnalytics) {
-      parts.push(`Посещений: ${siteAnalytics.totalVisits.toLocaleString("ru-RU")}`);
-      parts.push(`На сайте всего: ${formatSiteDuration(siteAnalytics.totalActiveSeconds)}`);
+      parts.push(`Посещений всего: ${siteAnalytics.totalVisits.toLocaleString("ru-RU")}`);
+      parts.push(`Общее время всех пользователей: ${formatSiteDuration(siteAnalytics.totalActiveSeconds)}`);
     }
     if (usersSummary) {
       parts.push(`Пользователей: ${usersSummary.totalUsers.toLocaleString("ru-RU")}`);

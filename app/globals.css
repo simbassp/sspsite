@@ -435,20 +435,20 @@ html[data-theme="dark"] .selfcheck-hint__text svg {
   line-height: 1.35;
   letter-spacing: 0.02em;
   color: var(--muted);
-  opacity: 0.38;
   user-select: none;
 }
 
 .app-site-footer__stats {
   margin: 0 0 8px;
-  font-size: 11px;
-  line-height: 1.45;
-  color: var(--muted);
-  opacity: 0.72;
+  font-size: 12px;
+  line-height: 1.5;
+  color: color-mix(in srgb, var(--text) 78%, var(--muted));
+  font-weight: 600;
 }
 
 .app-site-footer__line {
   margin: 0;
+  opacity: 0.42;
 }
 
 .app-site-footer__line + .app-site-footer__line {
@@ -460,7 +460,10 @@ html[data-theme="dark"] .selfcheck-hint__text svg {
     padding-left: 24px;
     padding-right: 24px;
     font-size: 11px;
-    opacity: 0.42;
+  }
+
+  .app-site-footer__stats {
+    font-size: 12px;
   }
 }
 

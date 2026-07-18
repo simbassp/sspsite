@@ -8,7 +8,7 @@ alter table public.app_users add column if not exists analytics_last_ping_at tim
 comment on column public.app_users.visit_count is 'Число сессий (визитов) пользователя на сайте.';
 comment on column public.app_users.active_seconds_total is 'Суммарное активное время пользователя на сайте, секунды.';
 
--- Базовая оценка по уже существующим данным: каждая попытка теста ≈ визит, duration_seconds ≈ время.
+-- Базовая оценка: время тестов + ~20 мин на каждый визит (просмотр разделов вне тестов).
 update public.app_users u
 set
   visit_count = greatest(
@@ -25,7 +25,14 @@ set
     where tr.user_id = u.id
       and tr.duration_seconds is not null
       and tr.duration_seconds > 0
-  ), 0);
+  ), 0) + greatest(
+    1,
+    coalesce((
+      select count(*)::bigint
+      from public.test_results tr
+      where tr.user_id = u.id
+    ), 0)
+  ) * 1200;
 
 insert into public.site_settings (key, value, updated_at)
 select 'site_total_visits', to_jsonb(coalesce(sum(visit_count), 0)), now()
