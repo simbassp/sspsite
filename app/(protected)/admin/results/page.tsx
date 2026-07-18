@@ -240,7 +240,7 @@ export default function AdminResultsPage() {
   const showNotStartedFilter = typeFilter !== "trial";
 
   return (
-    <section>
+    <section className="admin-results-page">
       <h1 className="page-title">Админ / Результаты тестов</h1>
 
       {viewerCanReset && lastResetAudit && (
@@ -409,174 +409,137 @@ export default function AdminResultsPage() {
       </article>
 
       {!isLoading && !loadError && (
-        <>
-          <div className="grid grid-two" style={{ marginTop: 14, gap: 12 }}>
-            <div className="card">
-              <div className="card-body" style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                <span className="home-icon-wrap is-green" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" className="home-icon-svg">
-                    <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="2" />
-                    <path d="M8 12l2.5 2.5L16 9" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </span>
-                <div style={{ minWidth: 0 }}>
-                  <p className="label" style={{ marginBottom: 4 }}>
-                    Сдали итог
-                  </p>
-                  <p className="stat-value" style={{ margin: 0 }}>
-                    {bannerStats.passedCount}
-                  </p>
-                  <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0, fontSize: 12 }}>
-                    {formatLastPersonLine(bannerStats.lastPassed)}
-                  </p>
-                </div>
-              </div>
+        <div className="admin-results-summary">
+          <article className="admin-results-summary-card">
+            <span className="admin-results-summary-card__icon home-icon-wrap is-green" aria-hidden="true">
+              <svg viewBox="0 0 24 24" className="home-icon-svg">
+                <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="2" />
+                <path d="M8 12l2.5 2.5L16 9" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+            <div className="admin-results-summary-card__body">
+              <p className="label">Сдали итог</p>
+              <p className="admin-results-summary-card__value">{bannerStats.passedCount}</p>
+              <p className="admin-results-summary-card__sub">{formatLastPersonLine(bannerStats.lastPassed)}</p>
             </div>
-            <div className="card">
-              <div className="card-body" style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                <span className="home-icon-wrap is-red" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" className="home-icon-svg">
-                    <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="2" />
-                    <path d="M15 9l-6 6M9 9l6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  </svg>
-                </span>
-                <div style={{ minWidth: 0 }}>
-                  <p className="label" style={{ marginBottom: 4 }}>
-                    Не сдали итог
-                  </p>
-                  <p className="stat-value" style={{ margin: 0 }}>
-                    {bannerStats.notPassedCount}
-                  </p>
-                  <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0, fontSize: 12 }}>
-                    {formatLastPersonLine(bannerStats.lastNotPassed)}
-                  </p>
-                </div>
-              </div>
+          </article>
+          <article className="admin-results-summary-card">
+            <span className="admin-results-summary-card__icon home-icon-wrap is-red" aria-hidden="true">
+              <svg viewBox="0 0 24 24" className="home-icon-svg">
+                <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="2" />
+                <path d="M15 9l-6 6M9 9l6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            </span>
+            <div className="admin-results-summary-card__body">
+              <p className="label">Не сдали итог</p>
+              <p className="admin-results-summary-card__value">{bannerStats.notPassedCount}</p>
+              <p className="admin-results-summary-card__sub">{formatLastPersonLine(bannerStats.lastNotPassed)}</p>
             </div>
-          </div>
-          <div className="grid grid-two" style={{ marginTop: 12, gap: 12 }}>
-            <div className="card">
-              <div className="card-body" style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                <span className="home-icon-wrap is-orange" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" className="home-icon-svg">
-                    <rect x="5" y="4" width="14" height="17" rx="2" />
-                    <rect x="9" y="2.5" width="6" height="3.5" rx="1.2" />
-                    <line x1="8" y1="11" x2="16" y2="11" />
-                    <line x1="8" y1="15" x2="13" y2="15" />
-                  </svg>
-                </span>
-                <div style={{ minWidth: 0 }}>
-                  <p className="label" style={{ marginBottom: 4 }}>
-                    Пробных попыток
-                  </p>
-                  <p className="stat-value" style={{ margin: 0 }}>
-                    {bannerStats.trialAttemptsCount}
-                  </p>
-                  <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0, fontSize: 12 }}>
-                    {formatLastPersonLine(bannerStats.lastTrial)}
-                  </p>
-                </div>
-              </div>
+          </article>
+          <article className="admin-results-summary-card">
+            <span className="admin-results-summary-card__icon home-icon-wrap is-orange" aria-hidden="true">
+              <svg viewBox="0 0 24 24" className="home-icon-svg">
+                <rect x="5" y="4" width="14" height="17" rx="2" />
+                <rect x="9" y="2.5" width="6" height="3.5" rx="1.2" />
+                <line x1="8" y1="11" x2="16" y2="11" />
+                <line x1="8" y1="15" x2="13" y2="15" />
+              </svg>
+            </span>
+            <div className="admin-results-summary-card__body">
+              <p className="label">Пробных попыток</p>
+              <p className="admin-results-summary-card__value">{bannerStats.trialAttemptsCount}</p>
+              <p className="admin-results-summary-card__sub">{formatLastPersonLine(bannerStats.lastTrial)}</p>
             </div>
-            <div className="card">
-              <div className="card-body" style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                <span className="home-icon-wrap is-blue" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" className="home-icon-svg">
-                    <rect x="4" y="5" width="16" height="14" rx="2" />
-                    <path d="M8 9h8M8 13h5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                    <path d="M12 3v3" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                  </svg>
-                </span>
-                <div style={{ minWidth: 0 }}>
-                  <p className="label" style={{ marginBottom: 4 }}>
-                    Итоговых попыток
-                  </p>
-                  <p className="stat-value" style={{ margin: 0 }}>
-                    {bannerStats.finalAttemptsCount}
-                  </p>
-                  <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0, fontSize: 12 }}>
-                    {formatLastPersonLine(bannerStats.lastFinal)}
-                  </p>
-                </div>
-              </div>
+          </article>
+          <article className="admin-results-summary-card">
+            <span className="admin-results-summary-card__icon home-icon-wrap is-blue" aria-hidden="true">
+              <svg viewBox="0 0 24 24" className="home-icon-svg">
+                <rect x="4" y="5" width="16" height="14" rx="2" />
+                <path d="M8 9h8M8 13h5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                <path d="M12 3v3" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+            </span>
+            <div className="admin-results-summary-card__body">
+              <p className="label">Итоговых попыток</p>
+              <p className="admin-results-summary-card__value">{bannerStats.finalAttemptsCount}</p>
+              <p className="admin-results-summary-card__sub">{formatLastPersonLine(bannerStats.lastFinal)}</p>
             </div>
-          </div>
-        </>
+          </article>
+        </div>
       )}
 
-      <div className="list" style={{ marginTop: 12 }}>
+      <div className="admin-results-list">
         {visibleAttempts.map((row) => (
           <article
-            className={`card admin-results-card admin-results-card--${row.status}`}
+            className={`card admin-results-card admin-results-row admin-results-card--${row.status}`}
             key={row.id}
           >
-            <div className="card-body">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
-                <h3 style={{ margin: 0 }}>
-                  <Link href={`/profile/${row.userId}`} prefetch={false} className="admin-users-profile-link">
-                    {row.name}
-                    {row.callsign ? ` (${row.callsign})` : ""}
-                  </Link>
-                </h3>
-                <span className={`admin-users-position-badge ${getPositionBadgeClass(row.position || "")}`}>
-                  {row.position || "—"}
-                </span>
+            <div className="card-body admin-results-row__body">
+              <div className="admin-results-row__main">
+                <div className="admin-results-row__head">
+                  <h3 className="admin-results-row__name">
+                    <Link href={`/profile/${row.userId}`} prefetch={false} className="admin-users-profile-link">
+                      {row.name}
+                      {row.callsign ? ` (${row.callsign})` : ""}
+                    </Link>
+                  </h3>
+                  <span className={`admin-users-position-badge ${getPositionBadgeClass(row.position || "")}`}>
+                    {row.position || "—"}
+                  </span>
+                </div>
+                <div className="admin-results-row__tags">
+                  <span className={`pill ${row.type === "trial" ? "pill-orange" : "pill-blue"}`}>
+                    {row.type === "trial" ? "Пробный" : "Итоговый"}
+                  </span>
+                  <span className={`pill ${row.status === "passed" ? "pill-green" : "pill-red"}`}>
+                    {row.status === "passed" ? "Сдал" : "Не сдал"}
+                  </span>
+                  {row.type === "final" && row.finalAttemptIndex != null && row.finalAttemptIndex > 0 && (
+                    <span className="admin-results-row__date">Попытка №{row.finalAttemptIndex}</span>
+                  )}
+                </div>
+                {row.showResetAttempts && (
+                  <div className="admin-results-row__actions">
+                    <button
+                      className="btn"
+                      type="button"
+                      disabled={resetBusyId === row.userId}
+                      onClick={() => void onResetAttempts(row.userId)}
+                    >
+                      {resetBusyId === row.userId ? "Сброс…" : "Сбросить попытки итога"}
+                    </button>
+                  </div>
+                )}
               </div>
-              <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                <span className={`pill ${row.type === "trial" ? "pill-orange" : "pill-blue"}`}>
-                  {row.type === "trial" ? "Пробный" : "Итоговый"}
-                </span>
-                <span className={`pill ${row.status === "passed" ? "pill-green" : "pill-red"}`}>
-                  {row.status === "passed" ? "Сдал" : "Не сдал"}
-                </span>
-              </p>
-              <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0 }}>
-                Результат: {formatAttemptResult(row)}
-              </p>
-              {row.type === "final" && row.finalAttemptIndex != null && row.finalAttemptIndex > 0 && (
-                <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0 }}>
-                  Попытка итога №{row.finalAttemptIndex}
-                </p>
-              )}
-              <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0 }}>
-                Дата: {row.createdAt ? formatDateTime(row.createdAt) : "—"}
-              </p>
-              {row.showResetAttempts && (
-                <button
-                  className="btn"
-                  type="button"
-                  style={{ marginTop: 10 }}
-                  disabled={resetBusyId === row.userId}
-                  onClick={() => void onResetAttempts(row.userId)}
-                >
-                  {resetBusyId === row.userId ? "Сброс…" : "Сбросить попытки итога"}
-                </button>
-              )}
+              <div className="admin-results-row__meta">
+                <span className="admin-results-row__score">{formatAttemptResult(row)}</span>
+                <span className="admin-results-row__date">{row.createdAt ? formatDateTime(row.createdAt) : "—"}</span>
+              </div>
             </div>
           </article>
         ))}
 
         {visibleNotStarted.map((row) => (
-          <article className="card admin-results-card admin-results-card--not_started" key={`ns-${row.userId}`}>
-            <div className="card-body">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
-                <h3 style={{ margin: 0 }}>
-                  <Link href={`/profile/${row.userId}`} prefetch={false} className="admin-users-profile-link">
-                    {row.name}
-                    {row.callsign ? ` (${row.callsign})` : ""}
-                  </Link>
-                </h3>
-                <span className={`admin-users-position-badge ${getPositionBadgeClass(row.position || "")}`}>
-                  {row.position || "—"}
-                </span>
+          <article className="card admin-results-card admin-results-row admin-results-card--not_started" key={`ns-${row.userId}`}>
+            <div className="card-body admin-results-row__body">
+              <div className="admin-results-row__main">
+                <div className="admin-results-row__head">
+                  <h3 className="admin-results-row__name">
+                    <Link href={`/profile/${row.userId}`} prefetch={false} className="admin-users-profile-link">
+                      {row.name}
+                      {row.callsign ? ` (${row.callsign})` : ""}
+                    </Link>
+                  </h3>
+                  <span className={`admin-users-position-badge ${getPositionBadgeClass(row.position || "")}`}>
+                    {row.position || "—"}
+                  </span>
+                </div>
+                <div className="admin-results-row__tags">
+                  <span className="pill pill-blue">Итоговый</span>
+                  <span className="pill pill-yellow">Не проходил</span>
+                </div>
+                <p className="admin-results-row__note">Итоговый тест ещё не сдавался в выбранном периоде.</p>
               </div>
-              <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                <span className="pill pill-blue">Итоговый</span>
-                <span className="pill pill-yellow">Не проходил</span>
-              </p>
-              <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0 }}>
-                Итоговый тест ещё не сдавался в выбранном периоде.
-              </p>
             </div>
           </article>
         ))}
