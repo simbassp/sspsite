@@ -1,9 +1,9 @@
-import { canManageUsers, canModeratePersonnel, canViewUserList } from "@/lib/permissions";
+import { canInspectOtherUserProfile } from "@/lib/permissions";
 import type { SessionUser } from "@/lib/types";
 
 export function canUseFullPersonnelProfileInspect(session: SessionUser | null) {
   if (!session) return false;
-  return canManageUsers(session) || canViewUserList(session) || canModeratePersonnel(session);
+  return canInspectOtherUserProfile(session);
 }
 
 /** Куда вести ссылку на профиль из раздела «Сотрудники». */

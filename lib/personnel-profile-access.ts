@@ -1,4 +1,4 @@
-import { canModeratePersonnel, canViewUserList } from "@/lib/permissions";
+import { canInspectOtherUserProfile, canModeratePersonnel } from "@/lib/permissions";
 import { resolvePersonnelAccess } from "@/lib/personnel-access";
 import { loadPersonnelModuleSettings, loadPersonnelUserBasics } from "@/lib/personnel-server";
 import type { SessionUser } from "@/lib/types";
@@ -28,6 +28,7 @@ export async function resolvePersonnelProfileViewAccess(
 
   const access = resolvePersonnelAccess({ session, unitAssignment: viewerUnit, settings });
   const isAdminOrMod = session.role === "admin" || canModeratePersonnel(session);
+  const canInspectOthers = canInspectOtherUserProfile(session);
 
   if (isAdminOrMod) {
     return {
@@ -35,6 +36,15 @@ export async function resolvePersonnelProfileViewAccess(
       isPreview: !settings.moduleEnabled,
       canEditOwn: session.id === targetUserId,
       canModerate: true,
+    };
+  }
+
+  if (canInspectOthers) {
+    return {
+      show: true,
+      isPreview: !settings.moduleEnabled,
+      canEditOwn: session.id === targetUserId,
+      canModerate: false,
     };
   }
 
@@ -46,7 +56,7 @@ export async function resolvePersonnelProfileViewAccess(
     return { show: true, isPreview: false, canEditOwn: true, canModerate: false };
   }
 
-  if (canViewUserList(session) || (access.isCompany4 && viewerUnit === "company_4")) {
+  if (access.isCompany4 && viewerUnit === "company_4") {
     return { show: true, isPreview: false, canEditOwn: false, canModerate: false };
   }
 

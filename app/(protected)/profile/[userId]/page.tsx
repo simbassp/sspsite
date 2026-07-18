@@ -23,7 +23,7 @@ import {
   useResetTestStatsModal,
 } from "@/components/profile/ResetTestStatsModal";
 import { getPositionBadgeClass } from "@/lib/position-ui";
-import { canManageUsers, canResetTestResults, canViewUserList, canModeratePersonnel } from "@/lib/permissions";
+import { canManageUsers, canManageResults, canResetTestResults, canInspectOtherUserProfile, canModeratePersonnel, canViewUserList } from "@/lib/permissions";
 import { removeTestResultsForUser } from "@/lib/storage";
 import { rotaUnitCompactLabel, type RotaModule, type RotaPlatoon, type RotaSection, normalizeRotaModule } from "@/lib/rota-unit";
 import {
@@ -87,9 +87,7 @@ export default function ProfileUserInspectPage() {
   const userId = typeof params?.userId === "string" ? params.userId : "";
 
   const session = useMemo(() => readClientSession(), []);
-  const canOpen = session
-    ? canManageUsers(session) || canViewUserList(session) || canModeratePersonnel(session)
-    : false;
+  const canOpen = session ? canInspectOtherUserProfile(session) : false;
   const canEditDutyForOthers = session ? canManageUsers(session) : false;
   const canEditProfileFields = session ? canManageUsers(session) : false;
   const canEditRotaForOthers = session ? canManageUsers(session) || canModeratePersonnel(session) : false;
@@ -97,6 +95,18 @@ export default function ProfileUserInspectPage() {
   const canEditPersonnelMeta = canEditRotaForOthers;
   const canExportExcel = session ? canManageUsers(session) : false;
   const canResetStats = session ? canResetTestResults(session) : false;
+  const profileBackHref = useMemo(() => {
+    if (!session) return "/dashboard";
+    if (canManageUsers(session) || canViewUserList(session)) return "/admin/users";
+    if (canManageResults(session) || canResetTestResults(session)) return "/admin/results";
+    return "/personnel";
+  }, [session]);
+  const profileBackLabel = useMemo(() => {
+    if (!session) return "← На главную";
+    if (canManageUsers(session) || canViewUserList(session)) return "← К списку пользователей";
+    if (canManageResults(session) || canResetTestResults(session)) return "← К результатам";
+    return "← Сотрудники";
+  }, [session]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -127,6 +137,10 @@ export default function ProfileUserInspectPage() {
   const [employmentSaveError, setEmploymentSaveError] = useState("");
   const [licenseCategories, setLicenseCategories] = useState<PersonnelLicenseCategory[]>([]);
   const [bloodGroup, setBloodGroup] = useState<PersonnelBloodGroup | null>(null);
+  const showPersonnelStats = useMemo(
+    () => normalizeUnitAssignment(inspectUser?.unit_assignment) === "company_4",
+    [inspectUser?.unit_assignment],
+  );
 
   useEffect(() => {
     if (!session || !userId || !canOpen) return;
@@ -403,6 +417,7 @@ export default function ProfileUserInspectPage() {
   };
 
   const refreshPersonnelActivity = async () => {
+    if (normalizeUnitAssignment(inspectUser?.unit_assignment) !== "company_4") return;
     setPersonnelReloadToken((token) => token + 1);
     try {
       const res = await fetch(`/api/personnel/profile/${encodeURIComponent(userId)}`, { cache: "no-store" });
@@ -661,14 +676,12 @@ export default function ProfileUserInspectPage() {
     <section className="profile-page">
       <div style={{ marginBottom: 12 }}>
         <Link
-          href={session && (canManageUsers(session) || canViewUserList(session)) ? "/admin/users" : "/personnel"}
+          href={profileBackHref}
           prefetch={false}
           className="page-subtitle"
           style={{ textDecoration: "none", fontWeight: 600 }}
         >
-          {session && (canManageUsers(session) || canViewUserList(session))
-            ? "← К списку пользователей"
-            : "← Сотрудники"}
+          {profileBackLabel}
         </Link>
       </div>
 
@@ -878,7 +891,7 @@ export default function ProfileUserInspectPage() {
             message={profileMessage}
           />
 
-          {userId ? (
+          {userId && showPersonnelStats ? (
             <PersonnelProfileStats
               userId={userId}
               onActivityData={setPersonnelActivity}

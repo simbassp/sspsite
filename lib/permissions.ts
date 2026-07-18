@@ -59,6 +59,17 @@ export function canViewUserList(session: SessionLike) {
   return p.userList || p.users;
 }
 
+/** Просмотр чужого профиля (read-only): из списка пользователей, результатов, кадров. */
+export function canInspectOtherUserProfile(session: SessionLike) {
+  return (
+    canManageUsers(session) ||
+    canViewUserList(session) ||
+    canModeratePersonnel(session) ||
+    canManageResults(session) ||
+    canResetTestResults(session)
+  );
+}
+
 export function canManageNews(session: SessionLike) {
   return resolvePermissions(session).news;
 }
