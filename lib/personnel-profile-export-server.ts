@@ -37,7 +37,6 @@ export type PersonnelProfileExportBundle = {
     dutyLocation: string;
     unitAssignment: string;
     rotaUnit: string;
-    rotaModule: string;
     employmentDate: string;
     employmentDays: string;
   };
@@ -199,7 +198,6 @@ function buildExportBundleFromUser(
       dutyLocation: dutyLocationLabel[duty],
       unitAssignment: unitAssignmentLabelOrEmpty(normalizeUnitAssignment(u.unit_assignment)),
       rotaUnit: rotaUnitLabelCompact(rotaPlatoon, rotaSection, rotaModule),
-      rotaModule: rotaModule != null ? String(rotaModule) : "—",
       employmentDate: employmentDateRaw ? formatRuDate(employmentDateRaw) : "—",
       employmentDays: days != null ? `${days} дн.` : "—",
     },
