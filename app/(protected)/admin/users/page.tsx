@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { AdminPermissionPicker } from "@/components/admin/AdminPermissionPicker";
 import { readClientSession } from "@/lib/client-auth";
+import { ADMIN_PERMISSION_OPTIONS } from "@/lib/admin-permission-ui";
 import { dutyLocationLabel } from "@/lib/duty-location";
 import { POSITION_OPTIONS, getPositionBadgeClass } from "@/lib/position-ui";
 import { canManageUsers } from "@/lib/permissions";
@@ -10,17 +12,7 @@ import { fetchUsers, patchUser, removeUser } from "@/lib/users-repository";
 import type { DutyLocation, Position, Role, UnitAssignment, UserRecord } from "@/lib/types";
 import { UNIT_ASSIGNMENT_OPTIONS, unitAssignmentLabel, unitAssignmentLabelOrEmpty, matchesUnitFilter } from "@/lib/unit-assignment";
 
-const permissionOptions = [
-  { key: "news", label: "Новости" },
-  { key: "tests", label: "Тесты" },
-  { key: "results", label: "Проверка результатов" },
-  { key: "resetResults", label: "Сброс результатов" },
-  { key: "uav", label: "БПЛА" },
-  { key: "counteraction", label: "Противодействие" },
-  { key: "userList", label: "Список пользователей" },
-  { key: "users", label: "Редактирование и удаление пользователей" },
-  { key: "personnelModeration", label: "Модерация личного дела (4 рота)" },
-] as const;
+const permissionOptions = ADMIN_PERMISSION_OPTIONS;
 
 const fullAdminPermissions = {
   news: true,
@@ -357,26 +349,17 @@ export default function AdminUsersPage() {
                 />
               </label>
             )}
-            <h3 className="admin-users-page__perm-title" style={{ marginTop: 12 }}>
-              Права доступа
-            </h3>
-            <div className="form admin-users-page__perm-form">
-              {permissionOptions.map((item) => (
-                <label key={`${permissionsTargetUser.id}-${item.key}`} className="admin-users-page__perm-row">
-                  <input
-                    className="admin-users-perm-checkbox"
-                    type="checkbox"
-                    checked={getDraftPermissions(permissionsTargetUser)[item.key]}
-                    onChange={(event) => {
-                      if (permissionsTargetUser.role === "admin") return;
-                      const nextPermissions = { ...getDraftPermissions(permissionsTargetUser), [item.key]: event.target.checked };
-                      setPermissionDrafts((prev) => ({ ...prev, [permissionsTargetUser.id]: nextPermissions }));
-                    }}
-                    disabled={permissionsTargetUser.role === "admin"}
-                  />
-                  <span>{item.label}</span>
-                </label>
-              ))}
+            <h3 className="admin-users-page__perm-title">Права доступа</h3>
+            <AdminPermissionPicker
+              permissions={getDraftPermissions(permissionsTargetUser)}
+              disabled={permissionsTargetUser.role === "admin"}
+              onToggle={(key, checked) => {
+                if (permissionsTargetUser.role === "admin") return;
+                const nextPermissions = { ...getDraftPermissions(permissionsTargetUser), [key]: checked };
+                setPermissionDrafts((prev) => ({ ...prev, [permissionsTargetUser.id]: nextPermissions }));
+              }}
+            />
+            <div className="admin-users-page__perm-actions">
               {permissionsTargetUser.role !== "admin" ? (
                 <button
                   className="btn btn-primary"
