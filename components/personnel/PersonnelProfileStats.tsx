@@ -594,25 +594,25 @@ export function PersonnelProfileStats({
               </div>
             </div>
 
-            <div className="personnel-table-wrap" style={{ marginTop: 12 }}>
-              <table className="personnel-table">
+            <div className="personnel-table-wrap personnel-table-wrap--fit" style={{ marginTop: 12 }}>
+              <table className="personnel-table personnel-table--compact">
                 <thead>
                   <tr>
                     <th>Период</th>
-                    <th>Дней</th>
-                    <th>Сбитий</th>
-                    <th>Премия</th>
-                    {canModerate && <th />}
+                    <th className="personnel-table__num">Дней</th>
+                    <th className="personnel-table__num">Сбитий</th>
+                    <th className="personnel-table__money">Премия</th>
+                    {canModerate && <th className="personnel-table__actions" />}
                   </tr>
                 </thead>
                 <tbody>
                   {visibleDeployments.map((d) => (
                     <tr key={d.id}>
                       <td>{formatPeriod(d.dateFrom, d.dateTo)}</td>
-                      <td>{d.days}</td>
-                      <td>{d.uavHits}</td>
-                      <td>{d.premiumAmount.toLocaleString("ru-RU")} ₽</td>
-                      {canModerate && <td>{renderDeploymentActions(d)}</td>}
+                      <td className="personnel-table__num">{d.days}</td>
+                      <td className="personnel-table__num">{d.uavHits}</td>
+                      <td className="personnel-table__money">{d.premiumAmount.toLocaleString("ru-RU")} ₽</td>
+                      {canModerate && <td className="personnel-table__actions">{renderDeploymentActions(d)}</td>}
                     </tr>
                   ))}
                 </tbody>
@@ -857,24 +857,24 @@ export function PersonnelProfileStats({
         <article className="card" style={{ marginTop: 12 }}>
           <div className="card-body">
             {profile.premiums.length > 0 ? (
-              <div className="personnel-table-wrap">
-                <table className="personnel-table">
+              <div className="personnel-table-wrap personnel-table-wrap--fit">
+                <table className="personnel-table personnel-table--compact">
                   <thead>
                     <tr>
                       <th>За что</th>
-                      <th>Дата</th>
-                      <th>Премия</th>
-                      {canModerate && <th />}
+                      <th className="personnel-table__money">Дата</th>
+                      <th className="personnel-table__money">Премия</th>
+                      {canModerate && <th className="personnel-table__actions" />}
                     </tr>
                   </thead>
                   <tbody>
                     {profile.premiums.map((p) => (
                       <tr key={p.id}>
                         <td>{p.title}</td>
-                        <td>{formatDate(p.awardedAt)}</td>
-                        <td>{p.amount.toLocaleString("ru-RU")} ₽</td>
+                        <td className="personnel-table__money">{formatDate(p.awardedAt)}</td>
+                        <td className="personnel-table__money">{p.amount.toLocaleString("ru-RU")} ₽</td>
                         {canModerate && (
-                          <td>
+                          <td className="personnel-table__actions">
                             {p.source === "deployment" && p.deploymentId ? (
                               <PersonnelModActions
                                 onEdit={() => {

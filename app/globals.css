@@ -3230,9 +3230,43 @@ html[data-theme="dark"] .final-review-answer--correct {
 
 .personnel-table {
   width: 100%;
-  min-width: 1040px;
   border-collapse: collapse;
   font-size: 14px;
+}
+
+.personnel-roster-card .personnel-table {
+  min-width: 1040px;
+}
+
+.personnel-table-wrap--fit {
+  overflow-x: visible;
+}
+
+.personnel-table--compact {
+  min-width: 0;
+  table-layout: auto;
+}
+
+.personnel-table--compact th,
+.personnel-table--compact td {
+  padding: 8px 6px;
+}
+
+.personnel-table--compact .personnel-table__num {
+  width: 1%;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.personnel-table--compact .personnel-table__money {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.personnel-table--compact .personnel-table__actions {
+  width: 1%;
+  white-space: nowrap;
+  padding-right: 4px;
 }
 
 .personnel-table th.personnel-table__sticky,
