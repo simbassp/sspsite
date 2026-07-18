@@ -248,6 +248,18 @@ export function computePersonnelActivityScore(user: PersonnelRosterTopUser) {
   );
 }
 
+export const PERSONNEL_ACTIVITY_SCORE_PARTS = [
+  "сбития",
+  "командировки",
+  "медали",
+  "сданные пробные тесты",
+  "сданные итоговые тесты",
+  "сданные зачёты",
+] as const;
+
+export const PERSONNEL_ACTIVITY_SCORE_NOTE =
+  "Каждый пункт даёт 1 очко. Премии и дни в командировках не учитываются.";
+
 const ROSTER_TOP_LIMIT = 5;
 
 export type PersonnelRosterTops<T extends PersonnelRosterTopUser> = {

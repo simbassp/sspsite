@@ -3338,13 +3338,199 @@ html[data-theme="dark"] .final-review-answer--correct {
 
 .personnel-top-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.personnel-top-section {
+  display: grid;
   gap: 12px;
 }
 
-.personnel-top-card ol {
-  margin: 8px 0 0;
-  padding-left: 18px;
+.personnel-top-intro {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel2) 55%, var(--panel));
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.personnel-top-card {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 92%, #fff) 0%, var(--panel) 100%);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+.personnel-top-card--wide {
+  grid-column: 1 / -1;
+}
+
+.personnel-top-card--red {
+  border-top: 3px solid #c42b2b;
+}
+
+.personnel-top-card--blue {
+  border-top: 3px solid #3b82f6;
+}
+
+.personnel-top-card--green {
+  border-top: 3px solid #23935c;
+}
+
+.personnel-top-card--amber {
+  border-top: 3px solid #d97706;
+}
+
+.personnel-top-card--purple {
+  border-top: 3px solid #8b5cf6;
+}
+
+.personnel-top-card__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.personnel-top-card__title {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.25;
+}
+
+.personnel-top-card__subtitle {
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.personnel-top-card__icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.personnel-top-card__icon--red {
+  background: rgba(196, 43, 43, 0.12);
+  color: #c42b2b;
+}
+
+.personnel-top-card__icon--blue {
+  background: rgba(59, 130, 246, 0.12);
+  color: #3b82f6;
+}
+
+.personnel-top-card__icon--green {
+  background: rgba(35, 147, 92, 0.14);
+  color: #23935c;
+}
+
+.personnel-top-card__icon--amber {
+  background: rgba(217, 119, 6, 0.14);
+  color: #d97706;
+}
+
+.personnel-top-card__icon--purple {
+  background: rgba(139, 92, 246, 0.14);
+  color: #8b5cf6;
+}
+
+.personnel-top-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.personnel-top-list__item {
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+}
+
+.personnel-top-list__item.is-leader {
+  border-color: color-mix(in srgb, var(--accent) 18%, var(--line));
+  background: color-mix(in srgb, var(--accent) 5%, var(--panel));
+}
+
+.personnel-top-list__rank {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 800;
+  background: var(--panel2);
+  color: var(--muted);
+}
+
+.personnel-top-list__rank.is-1 {
+  background: linear-gradient(135deg, #fde68a, #f59e0b);
+  color: #78350f;
+}
+
+.personnel-top-list__rank.is-2 {
+  background: linear-gradient(135deg, #e5e7eb, #9ca3af);
+  color: #374151;
+}
+
+.personnel-top-list__rank.is-3 {
+  background: linear-gradient(135deg, #fdba74, #ea580c);
+  color: #7c2d12;
+}
+
+.personnel-top-list__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: inherit;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.personnel-top-list__name:hover {
+  color: var(--accent);
+}
+
+.personnel-top-list__value {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.personnel-top-card__note {
+  margin: 10px 0 0;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.personnel-top-card__note strong {
+  color: var(--text);
+}
+
+@media (min-width: 900px) {
+  .personnel-top-card--wide {
+    grid-column: span 2;
+  }
 }
 
 .personnel-notify-wrap {

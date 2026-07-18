@@ -26,8 +26,9 @@ import { readClientSession } from "@/lib/client-auth";
 import { canManageUsers, canResetTestResults } from "@/lib/permissions";
 import { dutyLocationLabel } from "@/lib/duty-location";
 import { resolvePersonnelProfilePath } from "@/lib/personnel-profile-path";
-import { PERSONNEL_EXAM_TYPES, PERSONNEL_LICENSE_CATEGORIES, computePersonnelActivityScore, personnelExamLabel, rotaUnitLabel, rotaUnitLabelCompact } from "@/lib/personnel-catalog";
+import { PERSONNEL_EXAM_TYPES, PERSONNEL_LICENSE_CATEGORIES, personnelExamLabel, rotaUnitLabel, rotaUnitLabelCompact } from "@/lib/personnel-catalog";
 import type { PersonnelExamType, PersonnelLicenseCategory, PersonnelRosterTops } from "@/lib/personnel-catalog";
+import { PersonnelTopGrid } from "@/components/personnel/PersonnelTopGrid";
 import type { Position } from "@/lib/types";
 
 type ExamFilterStatus = "all" | "passed" | "failed";
@@ -661,40 +662,7 @@ export default function PersonnelListPage() {
         </>
       )}
 
-      {tab === "top" && (
-        <div className="personnel-top-grid">
-          {(
-            [
-              ["Топ по сбитиям", tops.hits, (u: UserRow) => String(u.uavHitsTotal)],
-              ["Топ по пробным тестам", tops.trialTests, (u: UserRow) => `${u.testStats.trialPassed} сдано`],
-              ["Топ по итоговым тестам", tops.finalTests, (u: UserRow) => `${u.testStats.finalPassed} сдано`],
-              ["Топ по командировкам", tops.deployments, (u: UserRow) => `${u.deploymentsCount} шт.`],
-              ["Самые активные", tops.activity, (u: UserRow) => `${computePersonnelActivityScore(u)} очк.`],
-            ] as const
-          ).map(([title, list, fmt]) => (
-            <article
-              key={title}
-              className="card personnel-top-card"
-              title={
-                title === "Самые активные"
-                  ? "Сбития + командировки + медали + сданные тесты и зачёты"
-                  : undefined
-              }
-            >
-              <div className="card-body">
-                <h3 style={{ margin: 0 }}>{title}</h3>
-                <ol>
-                  {list.map((u, idx) => (
-                    <li key={u.id}>
-                      <Link href={profilePath(u.id)}>{idx + 1}. {u.name}</Link> — {fmt(u)}
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            </article>
-          ))}
-        </div>
-      )}
+      {tab === "top" && <PersonnelTopGrid tops={tops} profilePath={profilePath} />}
 
       <ResetPersonnelExamsModal
         open={resetExamsModal.open}

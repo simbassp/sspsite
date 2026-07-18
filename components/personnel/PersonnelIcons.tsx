@@ -142,6 +142,37 @@ export function IconUavHit({ size = 20 }: { size?: number }) {
   );
 }
 
+export function IconTestTrial({ size = 20 }: { size?: number }) {
+  return (
+    <svg {...svgBase} width={size} height={size} aria-hidden>
+      <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
+      <rect x="9" y="3" width="6" height="4" rx="1" />
+      <path d="m9 12 2 2 4-4" />
+    </svg>
+  );
+}
+
+export function IconTestFinal({ size = 20 }: { size?: number }) {
+  return (
+    <svg {...svgBase} width={size} height={size} aria-hidden>
+      <path d="M8 21h8" />
+      <path d="M12 17v4" />
+      <path d="M7 4h10l1 5H6l1-5Z" />
+      <path d="M9 9v3" />
+      <path d="M15 9v3" />
+      <path d="M12 4V2" />
+    </svg>
+  );
+}
+
+export function IconActivity({ size = 20 }: { size?: number }) {
+  return (
+    <svg {...svgBase} width={size} height={size} aria-hidden>
+      <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z" />
+    </svg>
+  );
+}
+
 export function IconLicense({ label, compact = false }: { label: string; compact?: boolean }) {
   return (
     <span
