@@ -105,6 +105,25 @@ function isMissingColumn(message: string, column: string) {
   );
 }
 
+function getNewsCreatorId(row: Record<string, unknown>) {
+  return (
+    (typeof row.author_id === "string" && row.author_id.trim()) ||
+    (typeof row.created_by === "string" && row.created_by.trim()) ||
+    (typeof row.user_id === "string" && row.user_id.trim()) ||
+    (typeof row.created_by_user_id === "string" && row.created_by_user_id.trim()) ||
+    ""
+  );
+}
+
+function hasStoredAuthorPosition(item: {
+  author_position?: unknown;
+  author_profile?: { position?: unknown } | null;
+}) {
+  const direct = typeof item.author_position === "string" ? item.author_position.trim() : "";
+  const profile = typeof item.author_profile?.position === "string" ? item.author_profile.position.trim() : "";
+  return Boolean(direct || profile);
+}
+
 async function resolveNewsAuthorForInsert(
   supabase: ReturnType<typeof getServerSupabaseServiceClient>,
   session: SessionUser,
@@ -164,33 +183,20 @@ export async function GET(request: Request) {
     const needsAuthorEnrichment = (idx: number) => {
       const item = mapped[idx];
       const row = rows[idx];
-      const hasCreator =
-        (typeof row.created_by === "string" && row.created_by.trim().length > 0) ||
-        (typeof row.author_id === "string" && row.author_id.trim().length > 0) ||
-        (typeof row.user_id === "string" && row.user_id.trim().length > 0) ||
-        (typeof row.created_by_user_id === "string" && row.created_by_user_id.trim().length > 0);
+      const hasCreator = Boolean(getNewsCreatorId(row));
       // Если есть ссылка на пользователя, всегда приоритезируем профиль из app_users.
       if (hasCreator) return true;
       return isPlaceholderNewsAuthor(item?.author ?? "");
     };
 
-    const candidateUserIds = Array.from(
-      new Set(
-        rows.flatMap((row, idx) => {
-          if (!needsAuthorEnrichment(idx)) return [];
-          const id =
-            (typeof row.author_id === "string" && row.author_id.trim()) ||
-            (typeof row.created_by === "string" && row.created_by.trim()) ||
-            (typeof row.author_id === "string" && row.author_id.trim()) ||
-            (typeof row.user_id === "string" && row.user_id.trim()) ||
-            (typeof row.created_by_user_id === "string" && row.created_by_user_id.trim()) ||
-            "";
-          return id ? [id] : [];
-        }),
-      ),
-    );
+    const shouldResolveAuthors = mapped.some((item, idx) => {
+      if (needsAuthorEnrichment(idx)) return true;
+      if (hasStoredAuthorPosition(item)) return false;
+      if (item.author && !isPlaceholderNewsAuthor(item.author)) return true;
+      return false;
+    });
 
-    if (!candidateUserIds.length) {
+    if (!shouldResolveAuthors) {
       return Response.json({ ok: true, rows: mapped });
     }
 
@@ -211,74 +217,57 @@ export async function GET(request: Request) {
       };
       const label = [person.name, person.callsign].filter(Boolean).join(" ").trim().toLowerCase();
       if (label) usersByLabel.set(label, person);
+      if (person.name) usersByLabel.set(person.name.trim().toLowerCase(), person);
       if (id) usersMap.set(id, person);
       if (authUserId) usersMap.set(authUserId, person);
     }
 
     const resolveAuthorUser = (item: (typeof mapped)[number], row: Record<string, unknown>) => {
-      const candidateId =
-        (typeof row.author_id === "string" && row.author_id.trim()) ||
-        (typeof row.created_by === "string" && row.created_by.trim()) ||
-        (typeof row.user_id === "string" && row.user_id.trim()) ||
-        (typeof row.created_by_user_id === "string" && row.created_by_user_id.trim()) ||
-        "";
+      const candidateId = getNewsCreatorId(row);
       if (candidateId) {
         const byId = usersMap.get(candidateId);
         if (byId) return byId;
       }
       const authorLabel = typeof item.author === "string" ? item.author.trim().toLowerCase() : "";
-      if (authorLabel) return usersByLabel.get(authorLabel) ?? null;
+      if (authorLabel) {
+        const byAuthor = usersByLabel.get(authorLabel);
+        if (byAuthor) return byAuthor;
+      }
       const joined = [item.author_name, item.author_callsign]
         .map((part) => (typeof part === "string" ? part.trim() : ""))
         .filter(Boolean)
         .join(" ")
         .trim()
         .toLowerCase();
-      return joined ? usersByLabel.get(joined) ?? null : null;
+      if (joined) return usersByLabel.get(joined) ?? null;
+      return null;
     };
 
     const withAuthorFallback = mapped.map((item, idx) => {
-      if (!needsAuthorEnrichment(idx)) {
-        const user = resolveAuthorUser(item, rows[idx]);
-        if (!user?.position || item.author_position) return item;
-        return {
-          ...item,
-          author_position: user.position,
-          author_profile: {
-            ...(item.author_profile ?? {
-              id:
-                (typeof rows[idx].author_id === "string" && rows[idx].author_id.trim()) ||
-                (typeof rows[idx].created_by === "string" && rows[idx].created_by.trim()) ||
-                "",
-              name: item.author_name || "",
-              callsign: item.author_callsign || "",
-            }),
-            position: user.position,
-          },
-        };
-      }
       const row = rows[idx];
+      const fullReplace = needsAuthorEnrichment(idx);
+      if (!fullReplace && hasStoredAuthorPosition(item)) return item;
+
       const user = resolveAuthorUser(item, row);
       if (!user) return item;
-      const authorText = `${user.name}${user.callsign ? ` ${user.callsign}` : ""}`.trim();
-      const candidateId =
-        (typeof row.author_id === "string" && row.author_id.trim()) ||
-        (typeof row.created_by === "string" && row.created_by.trim()) ||
-        (typeof row.user_id === "string" && row.user_id.trim()) ||
-        (typeof row.created_by_user_id === "string" && row.created_by_user_id.trim()) ||
-        "";
+      if (!fullReplace && !user.position) return item;
+
+      const candidateId = getNewsCreatorId(row) || item.author_id || null;
+      const authorText = [user.name, user.callsign].filter(Boolean).join(" ").trim();
+      const nextPosition = user.position || item.author_position || null;
+
       return {
         ...item,
-        author_id: candidateId || item.author_id || null,
-        author: authorText || item.author,
+        author_id: candidateId,
+        author: fullReplace ? authorText || item.author : item.author,
         author_name: user.name || item.author_name || null,
         author_callsign: user.callsign || item.author_callsign || null,
-        author_position: user.position || item.author_position || null,
+        author_position: nextPosition,
         author_profile: {
-          id: candidateId,
-          name: user.name || "",
-          callsign: user.callsign || "",
-          position: user.position || null,
+          id: candidateId || "",
+          name: user.name || item.author_name || "",
+          callsign: user.callsign || item.author_callsign || "",
+          position: nextPosition,
         },
       };
     });

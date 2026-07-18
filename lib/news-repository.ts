@@ -40,7 +40,7 @@ type NewsRow = {
 };
 
 const NEWS_CACHE_TTL_MS = 60_000;
-const NEWS_CACHE_KEY = "ssp_news_cache_v1";
+const NEWS_CACHE_KEY = "ssp_news_cache_v2";
 let newsMemoryCache: { ts: number; rows: NewsItem[] } | null = null;
 const DEFAULT_NEWS_TEXT_STYLE: NewsTextStyle = {
   fontSize: 16,
