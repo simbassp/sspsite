@@ -1,6 +1,6 @@
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
-import { canManageUsers, canViewOnline } from "@/lib/permissions";
+import { readSiteSettingNumber } from "@/lib/site-analytics";
 import { ONLINE_LAST_SEEN_MAX_MS } from "@/lib/presence-constants";
 import { UNIT_COMMANDERS, unitAssignmentLabel } from "@/lib/unit-assignment";
 
@@ -61,41 +61,61 @@ export async function GET() {
     const promoted = Array.isArray(promotedQ.data) ? promotedQ.data[0] : null;
     const leftPayload = (left?.payload || {}) as Record<string, unknown>;
     const promotedPayload = (promoted?.payload || {}) as Record<string, unknown>;
-    let usersSummary: { totalUsers: number; onlineUsers: Array<{ id: string; name: string; callsign: string }> } | null = null;
-    const canReadUsersSummary = canManageUsers(session) || canViewOnline(session);
+    let usersSummary: { totalUsers: number; onlineUsers: Array<{ id: string; name: string; callsign: string }> } | null =
+      null;
+    let siteAnalytics: { totalVisits: number; totalActiveSeconds: number } | null = null;
 
-    if (canReadUsersSummary) {
-      const onlineStrictQ = await supabase
-        .from("app_users")
-        .select("id,name,callsign,is_online,last_seen_at,status")
-        .eq("status", "active");
-      if (onlineStrictQ.error && isMissingColumnError(onlineStrictQ.error.message)) {
-        const fallbackQ = await supabase.from("app_users").select("id,name,callsign,is_online,status");
-        if (!fallbackQ.error) {
-          const rows = Array.isArray(fallbackQ.data) ? fallbackQ.data : [];
-          const activeRows = rows.filter((row) => String(row.status || "active") === "active");
-          const onlineRows = activeRows.filter((row) => row.is_online === true);
-          usersSummary = {
-            totalUsers: activeRows.length,
-            onlineUsers: onlineRows.map((row) => ({
-              id: String(row.id || ""),
-              name: toSafeString(row.name),
-              callsign: toSafeString(row.callsign),
-            })),
-          };
-        }
-      } else if (!onlineStrictQ.error) {
-        const rows = Array.isArray(onlineStrictQ.data) ? onlineStrictQ.data : [];
-        const onlineRows = rows
-          .filter((row) => effectiveOnlineStrict(row.is_online, row.last_seen_at))
-          .sort((a, b) => toSafeString(a.name).localeCompare(toSafeString(b.name), "ru"));
+    const onlineStrictQ = await supabase
+      .from("app_users")
+      .select("id,name,callsign,is_online,last_seen_at,status")
+      .eq("status", "active");
+    if (onlineStrictQ.error && isMissingColumnError(onlineStrictQ.error.message)) {
+      const fallbackQ = await supabase.from("app_users").select("id,name,callsign,is_online,status");
+      if (!fallbackQ.error) {
+        const rows = Array.isArray(fallbackQ.data) ? fallbackQ.data : [];
+        const activeRows = rows.filter((row) => String(row.status || "active") === "active");
+        const onlineRows = activeRows.filter((row) => row.is_online === true);
         usersSummary = {
-          totalUsers: rows.length,
+          totalUsers: activeRows.length,
           onlineUsers: onlineRows.map((row) => ({
             id: String(row.id || ""),
             name: toSafeString(row.name),
             callsign: toSafeString(row.callsign),
           })),
+        };
+      }
+    } else if (!onlineStrictQ.error) {
+      const rows = Array.isArray(onlineStrictQ.data) ? onlineStrictQ.data : [];
+      const onlineRows = rows
+        .filter((row) => effectiveOnlineStrict(row.is_online, row.last_seen_at))
+        .sort((a, b) => toSafeString(a.name).localeCompare(toSafeString(b.name), "ru"));
+      usersSummary = {
+        totalUsers: rows.length,
+        onlineUsers: onlineRows.map((row) => ({
+          id: String(row.id || ""),
+          name: toSafeString(row.name),
+          callsign: toSafeString(row.callsign),
+        })),
+      };
+    }
+
+    const analyticsQ = await supabase
+      .from("site_settings")
+      .select("key,value")
+      .in("key", ["site_total_visits", "site_total_active_seconds"]);
+    if (!analyticsQ.error) {
+      const map = new Map((analyticsQ.data ?? []).map((row) => [String(row.key), row.value]));
+      siteAnalytics = {
+        totalVisits: readSiteSettingNumber(map.get("site_total_visits")),
+        totalActiveSeconds: readSiteSettingNumber(map.get("site_total_active_seconds")),
+      };
+    } else {
+      const totalsQ = await supabase.from("app_users").select("visit_count,active_seconds_total");
+      if (!totalsQ.error) {
+        const rows = totalsQ.data ?? [];
+        siteAnalytics = {
+          totalVisits: rows.reduce((sum, row) => sum + readSiteSettingNumber(row.visit_count), 0),
+          totalActiveSeconds: rows.reduce((sum, row) => sum + readSiteSettingNumber(row.active_seconds_total), 0),
         };
       }
     }
@@ -150,6 +170,7 @@ export async function GET() {
       ok: true,
       events,
       usersSummary,
+      siteAnalytics,
     });
   } catch (error) {
     return Response.json(

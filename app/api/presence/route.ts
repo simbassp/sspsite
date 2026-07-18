@@ -8,15 +8,38 @@ export async function POST(request: Request) {
   if (!session) return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
 
   try {
-    const body = (await request.json()) as { online?: unknown };
+    const body = (await request.json()) as {
+      online?: unknown;
+      newSession?: unknown;
+      elapsedSeconds?: unknown;
+    };
     const online = body.online === true;
+    const newSession = body.newSession === true;
+    const elapsedRaw = typeof body.elapsedSeconds === "number" ? body.elapsedSeconds : Number(body.elapsedSeconds);
+    const elapsedSeconds =
+      Number.isFinite(elapsedRaw) && elapsedRaw > 0 ? Math.max(0, Math.min(Math.floor(elapsedRaw), 600)) : 0;
+
     const supabase = getServerSupabaseServiceClient();
-    // При уходе в офлайн не трогаем last_seen — иначе после logout человек ещё «свежий» по времени.
     const patch = online
       ? { is_online: true, last_seen_at: new Date().toISOString() }
       : { is_online: false };
     const q = await supabase.from("app_users").update(patch).eq("id", session.id);
     if (q.error) return Response.json({ ok: false, error: q.error.message || "presence_update_failed" }, { status: 500 });
+
+    if (newSession || elapsedSeconds > 0) {
+      const analytics = await supabase.rpc("record_site_analytics", {
+        p_user_id: session.id,
+        p_new_session: newSession,
+        p_elapsed_seconds: elapsedSeconds,
+      });
+      if (analytics.error) {
+        const msg = analytics.error.message.toLowerCase();
+        if (!msg.includes("record_site_analytics") && !msg.includes("does not exist")) {
+          return Response.json({ ok: false, error: analytics.error.message || "analytics_update_failed" }, { status: 500 });
+        }
+      }
+    }
+
     return Response.json({ ok: true });
   } catch (error) {
     return Response.json(

@@ -439,6 +439,14 @@ html[data-theme="dark"] .selfcheck-hint__text svg {
   user-select: none;
 }
 
+.app-site-footer__stats {
+  margin: 0 0 8px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--muted);
+  opacity: 0.72;
+}
+
 .app-site-footer__line {
   margin: 0;
 }

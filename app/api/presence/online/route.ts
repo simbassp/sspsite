@@ -1,5 +1,4 @@
 import { ONLINE_LAST_SEEN_MAX_MS } from "@/lib/presence-constants";
-import { canViewOnline } from "@/lib/permissions";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 
@@ -8,9 +7,6 @@ export const runtime = "nodejs";
 export async function GET() {
   const session = await getServerSession();
   if (!session) return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
-  if (session.role !== "admin" && !canViewOnline(session)) {
-    return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
-  }
 
   const staleBefore = new Date(Date.now() - ONLINE_LAST_SEEN_MAX_MS).toISOString();
 

@@ -19,7 +19,6 @@ const permissionOptions = [
   { key: "counteraction", label: "Противодействие" },
   { key: "userList", label: "Список пользователей" },
   { key: "users", label: "Редактирование и удаление пользователей" },
-  { key: "online", label: "Показывать кто онлайн" },
   { key: "personnelModeration", label: "Модерация личного дела (4 рота)" },
 ] as const;
 
@@ -32,7 +31,7 @@ const fullAdminPermissions = {
   counteraction: true,
   userList: true,
   users: true,
-  online: true,
+  online: false,
   personnelModeration: true,
 } as const satisfies UserRecord["permissions"];
 
@@ -226,7 +225,7 @@ export default function AdminUsersPage() {
         if (opt.key === "counteraction") return "Против.";
         if (opt.key === "userList") return "Список";
         if (opt.key === "users") return "Польз.";
-        if (opt.key === "online") return "Онлайн";
+        if (opt.key === "personnelModeration") return "Лич. дело";
         return "Сброс";
       });
     if (!labels.length) return "Нет прав";

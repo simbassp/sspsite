@@ -2,8 +2,6 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { readClientSession } from "@/lib/client-auth";
-import { resolvePermissions } from "@/lib/permissions";
 
 type HomePayload = {
   ok?: boolean;
@@ -33,22 +31,11 @@ type HomeEvent = {
   createdAt: string | null;
 };
 
-type OnlineUser = {
-  id: string;
-  name: string;
-  callsign: string;
-};
-
-type UsersSummary = {
-  totalUsers: number;
-  onlineUsers: OnlineUser[];
-};
-
-function parsePayload(raw: unknown): { events: HomeEvent[]; usersSummary: UsersSummary | null } | null {
+function parsePayload(raw: unknown): HomeEvent[] | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as HomePayload;
   const sourceEvents = Array.isArray(o.events) ? o.events : [];
-  const events: HomeEvent[] = sourceEvents
+  return sourceEvents
     .map((item, index) => ({
       id: String(item.id || `${item.type || "event"}:${item.created_at || index}`),
       type: item.type || "user_added",
@@ -57,23 +44,6 @@ function parsePayload(raw: unknown): { events: HomeEvent[]; usersSummary: UsersS
       createdAt: item.created_at ? String(item.created_at) : null,
     }))
     .filter((item) => item.title.length > 0);
-  let usersSummary: UsersSummary | null = null;
-  if (o.usersSummary && typeof o.usersSummary === "object") {
-    const totalUsers = Number(o.usersSummary.totalUsers ?? 0);
-    const online = Array.isArray(o.usersSummary.onlineUsers) ? o.usersSummary.onlineUsers : [];
-    usersSummary = {
-      totalUsers: Number.isFinite(totalUsers) ? totalUsers : 0,
-      onlineUsers: online.map((item) => ({
-        id: String(item.id || ""),
-        name: String(item.name || ""),
-        callsign: String(item.callsign || ""),
-      })),
-    };
-  }
-  return {
-    events,
-    usersSummary,
-  };
 }
 
 function formatDayLabel(dateValue: string | null) {
@@ -132,16 +102,9 @@ function iconByType(type: HomeEvent["type"]) {
 }
 
 export default function DashboardPage() {
-  const [session, setSession] = useState<ReturnType<typeof readClientSession>>(null);
-  const [sessionResolved, setSessionResolved] = useState(false);
-  const permissions = resolvePermissions(session);
-  const canSeeUserStats = Boolean(permissions.users || permissions.online);
   const [events, setEvents] = useState<HomeEvent[]>([]);
-  const [usersSummary, setUsersSummary] = useState<UsersSummary | null>(null);
   const [isLoadingEvents, setIsLoadingEvents] = useState(true);
-  const [isLoadingStats, setIsLoadingStats] = useState(true);
   const [eventsError, setEventsError] = useState("");
-  const [statsError, setStatsError] = useState("");
 
   const sections = useMemo(() => {
     return [
@@ -218,72 +181,34 @@ export default function DashboardPage() {
 
   const refresh = async () => {
     setIsLoadingEvents(true);
-    setIsLoadingStats(true);
     setEventsError("");
-    setStatsError("");
     try {
       const response = await fetch("/api/home-stats", { cache: "no-store" });
       const payload = (await response.json()) as HomePayload;
       if (!response.ok || payload.ok !== true) {
         setEventsError("Не удалось загрузить события.");
-        if (canSeeUserStats) setStatsError("Статистика пользователей недоступна.");
         return;
       }
       const parsed = parsePayload(payload);
       if (!parsed) {
         setEventsError("Не удалось загрузить события.");
-        if (canSeeUserStats) setStatsError("Статистика пользователей недоступна.");
         return;
       }
-      setEvents(parsed.events);
-      setUsersSummary(parsed.usersSummary);
-      if (canSeeUserStats && !parsed.usersSummary) {
-        setStatsError("Статистика пользователей недоступна.");
-      }
+      setEvents(parsed);
     } catch {
       setEventsError("Не удалось загрузить события.");
-      if (canSeeUserStats) setStatsError("Статистика пользователей недоступна.");
     } finally {
       setIsLoadingEvents(false);
-      setIsLoadingStats(false);
     }
   };
 
   useEffect(() => {
-    setSession(readClientSession());
-    setSessionResolved(true);
-  }, []);
-
-  useEffect(() => {
-    if (!sessionResolved) return;
-    let cancelled = false;
-    const run = async () => {
-      await refresh();
-      if (cancelled) return;
-    };
-    void run();
-    // Список онлайн обновляем периодически — иначе «залипает» до перезагрузки страницы.
+    void refresh();
     const timer = setInterval(() => {
-      void run();
+      void refresh();
     }, 45_000);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [sessionResolved]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const usersSummaryText = useMemo(() => {
-    if (!usersSummary) return "";
-    const total = usersSummary.totalUsers;
-    const online = usersSummary.onlineUsers;
-    if (!online.length) return `Пользователей: ${total} · Онлайн: 0`;
-    const shown = online.slice(0, 8).map((item) => {
-      const name = item.name || "Пользователь";
-      return item.callsign ? `${name} ${item.callsign}` : name;
-    });
-    const extra = online.length > 8 ? ` +${online.length - 8}` : "";
-    return `Пользователей: ${total} · Онлайн: ${online.length} — ${shown.join(", ")}${extra}`;
-  }, [usersSummary]);
+    return () => clearInterval(timer);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <section className="dashboard-page">
@@ -352,16 +277,6 @@ export default function DashboardPage() {
             )}
           </div>
         </article>
-
-        {canSeeUserStats && (
-          <p className="home-users-summary">
-            {isLoadingStats
-              ? "Загрузка статистики..."
-              : statsError
-                ? statsError
-                : usersSummaryText || "Пользователей: 0 · Онлайн: 0"}
-          </p>
-        )}
       </div>
     </section>
   );

@@ -44,7 +44,6 @@ function getAdminGrant() {
     can_manage_counteraction: true,
     can_manage_users: true,
     can_view_user_list: true,
-    can_view_online: true,
     can_reset_test_results: true,
     can_moderate_personnel: true,
   } as const;
@@ -112,7 +111,6 @@ export async function PATCH(request: Request, context: { params: Promise<{ userI
     ...(nextPermissions !== undefined ? { can_manage_counteraction: nextPermissions.counteraction } : {}),
     ...(nextPermissions !== undefined ? { can_manage_users: nextPermissions.users } : {}),
     ...(nextPermissions !== undefined ? { can_view_user_list: nextPermissions.userList } : {}),
-    ...(nextPermissions !== undefined ? { can_view_online: nextPermissions.online } : {}),
     ...(nextPermissions !== undefined ? { can_reset_test_results: nextPermissions.resetResults } : {}),
     ...(nextPermissions !== undefined ? { can_moderate_personnel: nextPermissions.personnelModeration } : {}),
     ...roleFragment,

@@ -17,6 +17,7 @@ import {
   canViewUserList,
 } from "@/lib/permissions";
 import { PersonnelNotificationsBell } from "@/components/personnel/PersonnelNotificationsBell";
+import { SiteFooterStats } from "@/components/SiteFooterStats";
 import {
   PRESENCE_HEARTBEAT_MS,
   PRESENCE_HIDDEN_OFFLINE_DELAY_MS,
@@ -93,6 +94,8 @@ export function AppShell({ session, children }: AppShellProps) {
   const [isOnline, setIsOnline] = useState(true);
   const [showPersonnelNav, setShowPersonnelNav] = useState(false);
   const isLoggingOutRef = useRef(false);
+  const sessionCountedRef = useRef(false);
+  const lastAnalyticsPingRef = useRef(Date.now());
 
   useEffect(() => {
     void fetch("/api/personnel/nav", { cache: "no-store" })
@@ -142,10 +145,31 @@ export function AppShell({ session, children }: AppShellProps) {
 
     const postPresence = (online: boolean, keepalive?: boolean) => {
       if (isLoggingOutRef.current) return;
+      const now = Date.now();
+      let newSession = false;
+      let elapsedSeconds = 0;
+      if (online) {
+        if (!sessionCountedRef.current) {
+          newSession = true;
+          sessionCountedRef.current = true;
+          lastAnalyticsPingRef.current = now;
+        } else {
+          elapsedSeconds = Math.round((now - lastAnalyticsPingRef.current) / 1000);
+          lastAnalyticsPingRef.current = now;
+        }
+      } else if (sessionCountedRef.current) {
+        elapsedSeconds = Math.round((now - lastAnalyticsPingRef.current) / 1000);
+        lastAnalyticsPingRef.current = now;
+      }
+      elapsedSeconds = Math.min(Math.max(0, elapsedSeconds), 600);
       void fetch("/api/presence", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ online }),
+        body: JSON.stringify({
+          online,
+          newSession,
+          elapsedSeconds: newSession || elapsedSeconds > 0 ? elapsedSeconds : 0,
+        }),
         ...(keepalive ? { keepalive: true as const } : {}),
       }).catch(() => undefined);
     };
@@ -456,6 +480,7 @@ export function AppShell({ session, children }: AppShellProps) {
 
         <div className="screen">{children}</div>
         <footer className="app-site-footer" aria-label="Информация о платформе">
+          <SiteFooterStats />
           <p className="app-site-footer__line">Закрытая обучающая платформа</p>
           <p className="app-site-footer__line">© 2026 ССП ПВО · Developed by Simba</p>
         </footer>
