@@ -53,6 +53,26 @@ export function matchesUnitFilter(filter: UnitAssignmentFilter, unit: UnitAssign
   return unit === filter;
 }
 
+export type RotaPlatoonFilter = "all" | "1" | "2";
+export type RotaSectionFilter = "all" | "1" | "2" | "3" | "4";
+
+export function matchesResultsUnitFilter(
+  unitFilter: UnitAssignmentFilter,
+  platoon: RotaPlatoonFilter,
+  section: RotaSectionFilter,
+  row: {
+    unitAssignment?: UnitAssignment | null;
+    rotaPlatoon?: number | null;
+    rotaSection?: number | null;
+  },
+) {
+  if (!matchesUnitFilter(unitFilter, row.unitAssignment)) return false;
+  if (unitFilter !== "company_4") return true;
+  if (platoon !== "all" && row.rotaPlatoon !== Number(platoon)) return false;
+  if (section !== "all" && row.rotaSection !== Number(section)) return false;
+  return true;
+}
+
 export function formatUnitAssignmentSaveError(raw: string | undefined) {
   const message = (raw ?? "").trim();
   const lower = message.toLowerCase();

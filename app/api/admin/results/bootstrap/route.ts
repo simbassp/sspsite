@@ -23,20 +23,72 @@ type AppUserListRow = {
   status: string;
   final_test_counting_from?: string | null;
   unit_assignment?: string | null;
+  rota_platoon?: number | null;
+  rota_section?: number | null;
 };
 
-function rangeStartIso(range: string): Date | null {
-  const now = new Date();
+function parseDateParam(raw: string | null): Date | null {
+  if (!raw || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+  const [y, m, d] = raw.split("-").map(Number);
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return null;
+  return new Date(Date.UTC(y, m - 1, d));
+}
+
+function resolveDateRange(searchParams: URLSearchParams) {
+  const range = searchParams.get("range") || "all";
   if (range === "today") {
-    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const now = new Date();
+    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    return {
+      range: "today" as const,
+      dateFrom: null as string | null,
+      dateTo: null as string | null,
+      startMs: start.getTime(),
+      endMs: start.getTime() + 86400000,
+    };
   }
-  if (range === "7d") {
-    return new Date(now.getTime() - 7 * 86400000);
+
+  const dateFrom = searchParams.get("dateFrom");
+  const dateTo = searchParams.get("dateTo");
+  const start = parseDateParam(dateFrom);
+  const end = parseDateParam(dateTo);
+
+  if (!start && !end) {
+    return {
+      range: "all" as const,
+      dateFrom: null as string | null,
+      dateTo: null as string | null,
+      startMs: null as number | null,
+      endMs: null as number | null,
+    };
   }
-  if (range === "30d") {
-    return new Date(now.getTime() - 30 * 86400000);
-  }
-  return null;
+
+  return {
+    range: "custom" as const,
+    dateFrom: dateFrom && start ? dateFrom : null,
+    dateTo: dateTo && end ? dateTo : null,
+    startMs: start ? start.getTime() : null,
+    endMs: end ? end.getTime() + 86400000 : null,
+  };
+}
+
+function timestampInRange(timestamp: string, startMs: number | null, endMs: number | null) {
+  const t = new Date(timestamp).getTime();
+  if (!Number.isFinite(t)) return false;
+  if (startMs != null && t < startMs) return false;
+  if (endMs != null && t >= endMs) return false;
+  return true;
+}
+
+function applyCreatedAtRange<T extends { gte: (col: string, val: string) => T; lt: (col: string, val: string) => T }>(
+  query: T,
+  startIso: string | null,
+  endIso: string | null,
+) {
+  let next = query;
+  if (startIso) next = next.gte("created_at", startIso);
+  if (endIso) next = next.lt("created_at", endIso);
+  return next;
 }
 
 export async function GET(req: Request) {
@@ -46,7 +98,11 @@ export async function GET(req: Request) {
   }
 
   const url = new URL(req.url);
-  const range = url.searchParams.get("range") || "all";
+  const period = resolveDateRange(url.searchParams);
+  const { startMs, endMs } = period;
+  const startIso = startMs != null ? new Date(startMs).toISOString() : null;
+  const endIso = endMs != null ? new Date(endMs).toISOString() : null;
+  const hasPeriodFilter = startMs != null || endMs != null;
   const viewerIsAdmin = session.role === "admin";
   const viewerCanResetAttempts = canResetTestResults(session);
 
@@ -55,18 +111,30 @@ export async function GET(req: Request) {
 
     const usersPrimary = await supabase
       .from("app_users")
-      .select("id,name,callsign,position,role,status,final_test_counting_from,unit_assignment")
+      .select("id,name,callsign,position,role,status,final_test_counting_from,unit_assignment,rota_platoon,rota_section")
       .limit(1000);
 
     let usersRows: AppUserListRow[] | null = usersPrimary.data as AppUserListRow[] | null;
     let usersErr = usersPrimary.error;
     let unitFromDb = true;
+    let rotaFromDb = true;
+
+    if (usersErr && isMissingColumnError(usersErr.message)) {
+      const usersMid = await supabase
+        .from("app_users")
+        .select("id,name,callsign,position,role,status,final_test_counting_from,unit_assignment")
+        .limit(1000);
+      usersRows = usersMid.data as AppUserListRow[] | null;
+      usersErr = usersMid.error;
+      rotaFromDb = false;
+    }
 
     if (usersErr && isMissingColumnError(usersErr.message)) {
       const usersFallback = await supabase.from("app_users").select("id,name,callsign,role,status").limit(1000);
       usersRows = usersFallback.data as AppUserListRow[] | null;
       usersErr = usersFallback.error;
       unitFromDb = false;
+      rotaFromDb = false;
     }
 
     if (usersErr || !usersRows) {
@@ -146,9 +214,6 @@ export async function GET(req: Request) {
       finalsByUser.set(row.user_id, list);
     }
 
-    const cutoff = rangeStartIso(range);
-    const cutoffMs = cutoff ? cutoff.getTime() : null;
-
     /** Сотрудники и администраторы — админ видит себя и может сбросить себе попытки. */
     const summaries = users
       .filter((u) => u.role === "employee" || u.role === "admin")
@@ -184,6 +249,8 @@ export async function GET(req: Request) {
           callsign: user.callsign,
           position: String(user.position ?? ""),
           unitAssignment: unitFromDb ? normalizeUnitAssignment(user.unit_assignment) : null,
+          rotaPlatoon: rotaFromDb && user.rota_platoon != null ? Number(user.rota_platoon) : null,
+          rotaSection: rotaFromDb && user.rota_section != null ? Number(user.rota_section) : null,
           status: statusLabel,
           scorePercent: latestFinal ? latestFinal.score : null,
           questionsCorrect: qc,
@@ -195,10 +262,9 @@ export async function GET(req: Request) {
         };
       })
       .filter((s) => {
-        if (range === "all") return true;
-        if (!cutoff) return true;
+        if (!hasPeriodFilter) return true;
         if (!s.latestFinalAt) return false;
-        return new Date(s.latestFinalAt).getTime() >= cutoff.getTime();
+        return timestampInRange(s.latestFinalAt, startMs, endMs);
       });
 
     let lastResetAudit: {
@@ -247,15 +313,16 @@ export async function GET(req: Request) {
           callsign: u.callsign,
           position: String(u.position ?? ""),
           unitAssignment: unitFromDb ? normalizeUnitAssignment(u.unit_assignment) : null,
+          rotaPlatoon: rotaFromDb && u.rota_platoon != null ? Number(u.rota_platoon) : null,
+          rotaSection: rotaFromDb && u.rota_section != null ? Number(u.rota_section) : null,
         },
       ]),
     );
 
     const attempts = allRows
       .filter((row) => {
-        if (cutoffMs == null) return true;
-        const t = new Date(row.created_at).getTime();
-        return Number.isFinite(t) && t >= cutoffMs;
+        if (!hasPeriodFilter) return true;
+        return timestampInRange(row.created_at, startMs, endMs);
       })
       .map((row) => {
         const user = userById.get(row.user_id);
@@ -266,6 +333,8 @@ export async function GET(req: Request) {
           callsign: user?.callsign ?? "",
           position: user?.position ?? "",
           unitAssignment: (user?.unitAssignment ?? null) as UnitAssignment | null,
+          rotaPlatoon: user?.rotaPlatoon ?? null,
+          rotaSection: user?.rotaSection ?? null,
           type: row.type,
           status: row.status,
           scorePercent: row.score,
@@ -309,41 +378,63 @@ export async function GET(req: Request) {
       return best;
     }, null);
 
-    const cutoffIso = cutoff ? cutoff.toISOString() : null;
-
-    let trialCountQ = supabase.from("test_results").select("id", { count: "exact", head: true }).eq("type", "trial");
-    if (cutoffIso) trialCountQ = trialCountQ.gte("created_at", cutoffIso);
+    let trialCountQ = applyCreatedAtRange(
+      supabase.from("test_results").select("id", { count: "exact", head: true }).eq("type", "trial"),
+      startIso,
+      endIso,
+    );
     let trialCountRes = await trialCountQ;
     if (trialCountRes.error && isMissingColumnError(trialCountRes.error.message)) {
-      let q = supabase.from("test_results").select("id", { count: "exact", head: true }).eq("test_type", "trial");
-      if (cutoffIso) q = q.gte("created_at", cutoffIso);
+      let q = applyCreatedAtRange(
+        supabase.from("test_results").select("id", { count: "exact", head: true }).eq("test_type", "trial"),
+        startIso,
+        endIso,
+      );
       trialCountRes = await q;
     }
 
-    let trialLastQ = supabase.from("test_results").select("user_id,created_at").eq("type", "trial");
-    if (cutoffIso) trialLastQ = trialLastQ.gte("created_at", cutoffIso);
+    let trialLastQ = applyCreatedAtRange(
+      supabase.from("test_results").select("user_id,created_at").eq("type", "trial"),
+      startIso,
+      endIso,
+    );
     let trialLastRes = await trialLastQ.order("created_at", { ascending: false }).limit(1).maybeSingle();
     if (trialLastRes.error && isMissingColumnError(trialLastRes.error.message)) {
-      let q = supabase.from("test_results").select("user_id,created_at").eq("test_type", "trial");
-      if (cutoffIso) q = q.gte("created_at", cutoffIso);
+      let q = applyCreatedAtRange(
+        supabase.from("test_results").select("user_id,created_at").eq("test_type", "trial"),
+        startIso,
+        endIso,
+      );
       trialLastRes = await q.order("created_at", { ascending: false }).limit(1).maybeSingle();
     }
 
-    let finalCountQ = supabase.from("test_results").select("id", { count: "exact", head: true }).eq("type", "final");
-    if (cutoffIso) finalCountQ = finalCountQ.gte("created_at", cutoffIso);
+    let finalCountQ = applyCreatedAtRange(
+      supabase.from("test_results").select("id", { count: "exact", head: true }).eq("type", "final"),
+      startIso,
+      endIso,
+    );
     let finalCountRes = await finalCountQ;
     if (finalCountRes.error && isMissingColumnError(finalCountRes.error.message)) {
-      let q = supabase.from("test_results").select("id", { count: "exact", head: true }).eq("test_type", "final");
-      if (cutoffIso) q = q.gte("created_at", cutoffIso);
+      let q = applyCreatedAtRange(
+        supabase.from("test_results").select("id", { count: "exact", head: true }).eq("test_type", "final"),
+        startIso,
+        endIso,
+      );
       finalCountRes = await q;
     }
 
-    let finalLastQ = supabase.from("test_results").select("user_id,created_at").eq("type", "final");
-    if (cutoffIso) finalLastQ = finalLastQ.gte("created_at", cutoffIso);
+    let finalLastQ = applyCreatedAtRange(
+      supabase.from("test_results").select("user_id,created_at").eq("type", "final"),
+      startIso,
+      endIso,
+    );
     let finalLastRes = await finalLastQ.order("created_at", { ascending: false }).limit(1).maybeSingle();
     if (finalLastRes.error && isMissingColumnError(finalLastRes.error.message)) {
-      let q = supabase.from("test_results").select("user_id,created_at").eq("test_type", "final");
-      if (cutoffIso) q = q.gte("created_at", cutoffIso);
+      let q = applyCreatedAtRange(
+        supabase.from("test_results").select("user_id,created_at").eq("test_type", "final"),
+        startIso,
+        endIso,
+      );
       finalLastRes = await q.order("created_at", { ascending: false }).limit(1).maybeSingle();
     }
 
@@ -378,7 +469,7 @@ export async function GET(req: Request) {
       viewerIsAdmin,
       viewerCanResetAttempts,
       nextAutoResetAt: nextAutoResetUtcIso(),
-      range,
+      period,
       summaries,
       attempts,
       lastResetAudit,

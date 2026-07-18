@@ -8,14 +8,17 @@ import { getPositionBadgeClass } from "@/lib/position-ui";
 import { formatDateTime } from "@/lib/format";
 import { formatTestResultForType } from "@/lib/test-pass-rules";
 import {
-  matchesUnitFilter,
+  matchesResultsUnitFilter,
   UNIT_ASSIGNMENT_OPTIONS,
   unitAssignmentLabel,
+  type RotaPlatoonFilter,
+  type RotaSectionFilter,
   type UnitAssignmentFilter,
 } from "@/lib/unit-assignment";
 import type { UnitAssignment } from "@/lib/types";
+import { ROTA_PLATOON_OPTIONS, ROTA_SECTION_OPTIONS } from "@/lib/personnel-catalog";
 
-type DateRange = "all" | "today" | "7d" | "30d";
+type PeriodMode = "all" | "today" | "custom";
 type TestTypeFilter = "all" | "trial" | "final";
 type StatusFilter = "all" | "passed" | "failed" | "not_started";
 
@@ -25,6 +28,8 @@ type UserSummary = {
   callsign: string;
   position?: string;
   unitAssignment?: UnitAssignment | null;
+  rotaPlatoon?: number | null;
+  rotaSection?: number | null;
   status: "passed" | "failed" | "not_started";
   scorePercent: number | null;
   questionsCorrect: number | null;
@@ -42,6 +47,8 @@ type AttemptRow = {
   callsign: string;
   position?: string;
   unitAssignment?: UnitAssignment | null;
+  rotaPlatoon?: number | null;
+  rotaSection?: number | null;
   type: "trial" | "final";
   status: "passed" | "failed";
   scorePercent: number;
@@ -111,10 +118,14 @@ export default function AdminResultsPage() {
   const session = readClientSession();
   const viewerCanReset = session ? canResetTestResults(session) : false;
 
-  const [range, setRange] = useState<DateRange>("all");
+  const [periodMode, setPeriodMode] = useState<PeriodMode>("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [typeFilter, setTypeFilter] = useState<TestTypeFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [unitFilter, setUnitFilter] = useState<UnitAssignmentFilter>("all");
+  const [rotaPlatoon, setRotaPlatoon] = useState<RotaPlatoonFilter>("all");
+  const [rotaSection, setRotaSection] = useState<RotaSectionFilter>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [summaries, setSummaries] = useState<UserSummary[]>([]);
   const [attempts, setAttempts] = useState<AttemptRow[]>([]);
@@ -130,7 +141,14 @@ export default function AdminResultsPage() {
     setIsLoading(true);
     setLoadError("");
     try {
-      const response = await fetch(`/api/admin/results/bootstrap?range=${encodeURIComponent(range)}`, {
+      const params = new URLSearchParams();
+      if (periodMode === "today") {
+        params.set("range", "today");
+      } else if (periodMode === "custom") {
+        if (dateFrom) params.set("dateFrom", dateFrom);
+        if (dateTo) params.set("dateTo", dateTo);
+      }
+      const response = await fetch(`/api/admin/results/bootstrap?${params.toString()}`, {
         cache: "no-store",
       });
       const payload = (await response.json()) as BootstrapPayload;
@@ -151,7 +169,7 @@ export default function AdminResultsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [range]);
+  }, [periodMode, dateFrom, dateTo]);
 
   useEffect(() => {
     void load();
@@ -163,28 +181,35 @@ export default function AdminResultsPage() {
     }
   }, [typeFilter, statusFilter]);
 
+  useEffect(() => {
+    if (unitFilter !== "company_4") {
+      setRotaPlatoon("all");
+      setRotaSection("all");
+    }
+  }, [unitFilter]);
+
   const visibleAttempts = useMemo(() => {
     if (statusFilter === "not_started") return [];
     const query = searchTerm.trim().toLowerCase();
     return attempts.filter((row) => {
       if (typeFilter !== "all" && row.type !== typeFilter) return false;
       if (statusFilter !== "all" && row.status !== statusFilter) return false;
-      if (!matchesUnitFilter(unitFilter, row.unitAssignment)) return false;
+      if (!matchesResultsUnitFilter(unitFilter, rotaPlatoon, rotaSection, row)) return false;
       if (!query) return true;
       return row.name.toLowerCase().includes(query) || row.callsign.toLowerCase().includes(query);
     });
-  }, [attempts, typeFilter, statusFilter, unitFilter, searchTerm]);
+  }, [attempts, typeFilter, statusFilter, unitFilter, rotaPlatoon, rotaSection, searchTerm]);
 
   const visibleNotStarted = useMemo(() => {
     if (statusFilter !== "not_started" || typeFilter === "trial") return [];
     const query = searchTerm.trim().toLowerCase();
     return summaries.filter((row) => {
       if (row.status !== "not_started") return false;
-      if (!matchesUnitFilter(unitFilter, row.unitAssignment)) return false;
+      if (!matchesResultsUnitFilter(unitFilter, rotaPlatoon, rotaSection, row)) return false;
       if (!query) return true;
       return row.name.toLowerCase().includes(query) || row.callsign.toLowerCase().includes(query);
     });
-  }, [summaries, statusFilter, typeFilter, unitFilter, searchTerm]);
+  }, [summaries, statusFilter, typeFilter, unitFilter, rotaPlatoon, rotaSection, searchTerm]);
 
   const onResetAttempts = async (userId: string) => {
     if (!viewerCanReset) return;
@@ -226,7 +251,7 @@ export default function AdminResultsPage() {
       )}
 
       <p className="page-subtitle">
-        Пробные и итоговые попытки, фильтр по периоду, типу теста и результату.
+        Пробные и итоговые попытки. Фильтры по периоду, подразделению, типу теста и результату.
       </p>
       <div className="selfcheck-hint" style={{ marginBottom: 10 }}>
         Сброс попыток доступен вручную (администратором или пользователем с правом сброса) и автоматически 25-го числа
@@ -236,86 +261,152 @@ export default function AdminResultsPage() {
       {loadError && <p className="page-subtitle">{loadError}</p>}
       {!!resetMessage && <p className="page-subtitle">{resetMessage}</p>}
 
-      <div className="chips" style={{ marginBottom: 8 }}>
-        <span className="label" style={{ width: "100%", marginBottom: 4 }}>
-          Период
-        </span>
-        <button className={`chip ${range === "today" ? "active" : ""}`} type="button" onClick={() => setRange("today")}>
-          Сегодня
-        </button>
-        <button className={`chip ${range === "7d" ? "active" : ""}`} type="button" onClick={() => setRange("7d")}>
-          За 7 дней
-        </button>
-        <button className={`chip ${range === "30d" ? "active" : ""}`} type="button" onClick={() => setRange("30d")}>
-          За 30 дней
-        </button>
-        <button className={`chip ${range === "all" ? "active" : ""}`} type="button" onClick={() => setRange("all")}>
-          Все
-        </button>
-      </div>
+      <article className="card" style={{ marginTop: 12 }}>
+        <div className="card-body personnel-filters">
+          <div className="personnel-filters__wide">
+            <p className="label">Период</p>
+            <div className="admin-results-period">
+              <input
+                className="input admin-results-period__date"
+                type="date"
+                value={dateFrom}
+                onChange={(e) => {
+                  setDateFrom(e.target.value);
+                  setPeriodMode(e.target.value || dateTo ? "custom" : "all");
+                }}
+              />
+              <span className="admin-results-period__sep">—</span>
+              <input
+                className="input admin-results-period__date"
+                type="date"
+                value={dateTo}
+                onChange={(e) => {
+                  setDateTo(e.target.value);
+                  setPeriodMode(e.target.value || dateFrom ? "custom" : "all");
+                }}
+              />
+              <button
+                className={`btn ${periodMode === "today" ? "btn-primary" : ""}`}
+                type="button"
+                onClick={() => {
+                  setPeriodMode("today");
+                  setDateFrom("");
+                  setDateTo("");
+                }}
+              >
+                Сегодня
+              </button>
+              <button
+                className={`btn ${periodMode === "all" ? "btn-primary" : ""}`}
+                type="button"
+                onClick={() => {
+                  setPeriodMode("all");
+                  setDateFrom("");
+                  setDateTo("");
+                }}
+              >
+                Все
+              </button>
+            </div>
+          </div>
 
-      <div className="chips" style={{ marginBottom: 8 }}>
-        <span className="label" style={{ width: "100%", marginBottom: 4 }}>
-          Тип теста
-        </span>
-        <button
-          className={`chip ${typeFilter === "all" ? "active" : ""}`}
-          type="button"
-          onClick={() => setTypeFilter("all")}
-        >
-          Все
-        </button>
-        <button
-          className={`chip ${typeFilter === "trial" ? "active" : ""}`}
-          type="button"
-          onClick={() => setTypeFilter("trial")}
-        >
-          Пробный
-        </button>
-        <button
-          className={`chip ${typeFilter === "final" ? "active" : ""}`}
-          type="button"
-          onClick={() => setTypeFilter("final")}
-        >
-          Итоговый
-        </button>
-      </div>
+          <div>
+            <p className="label">Подразделение</p>
+            <select
+              className="select"
+              value={unitFilter}
+              onChange={(e) => setUnitFilter(e.target.value as UnitAssignmentFilter)}
+            >
+              <option value="all">Все подразделения</option>
+              <option value="unset">Не указано</option>
+              {UNIT_ASSIGNMENT_OPTIONS.map((unit) => (
+                <option key={unit} value={unit}>
+                  {unitAssignmentLabel[unit]}
+                </option>
+              ))}
+            </select>
+          </div>
 
-      <div className="chips">
-        <span className="label" style={{ width: "100%", marginBottom: 4 }}>
-          Результат
-        </span>
-        <button
-          className={`chip ${statusFilter === "all" ? "active" : ""}`}
-          type="button"
-          onClick={() => setStatusFilter("all")}
-        >
-          Все
-        </button>
-        <button
-          className={`chip ${statusFilter === "passed" ? "active" : ""}`}
-          type="button"
-          onClick={() => setStatusFilter("passed")}
-        >
-          Сдал
-        </button>
-        <button
-          className={`chip ${statusFilter === "failed" ? "active" : ""}`}
-          type="button"
-          onClick={() => setStatusFilter("failed")}
-        >
-          Не сдал
-        </button>
-        {showNotStartedFilter && (
-          <button
-            className={`chip ${statusFilter === "not_started" ? "active" : ""}`}
-            type="button"
-            onClick={() => setStatusFilter("not_started")}
-          >
-            Не проходил итог
-          </button>
-        )}
-      </div>
+          {unitFilter === "company_4" && (
+            <>
+              <div>
+                <p className="label">Взвод</p>
+                <select
+                  className="select"
+                  value={rotaPlatoon}
+                  onChange={(e) => setRotaPlatoon(e.target.value as RotaPlatoonFilter)}
+                >
+                  <option value="all">Все</option>
+                  {ROTA_PLATOON_OPTIONS.map((value) => (
+                    <option key={value} value={String(value)}>
+                      {value} взвод
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <p className="label">Отделение</p>
+                <select
+                  className="select"
+                  value={rotaSection}
+                  onChange={(e) => setRotaSection(e.target.value as RotaSectionFilter)}
+                >
+                  <option value="all">Все</option>
+                  {ROTA_SECTION_OPTIONS.map((value) => (
+                    <option key={value} value={String(value)}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </>
+          )}
+
+          <div className="personnel-filters__wide">
+            <p className="label">Поиск</p>
+            <input
+              className="input"
+              type="text"
+              placeholder="Имя или позывной"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <p className="label">Тест</p>
+            <select
+              className="select"
+              value={typeFilter}
+              onChange={(e) => {
+                const next = e.target.value as TestTypeFilter;
+                setTypeFilter(next);
+                if (next === "trial" && statusFilter === "not_started") {
+                  setStatusFilter("all");
+                }
+              }}
+            >
+              <option value="all">Все</option>
+              <option value="trial">Пробный</option>
+              <option value="final">Итоговый</option>
+            </select>
+          </div>
+
+          <div>
+            <p className="label">Результат</p>
+            <select
+              className="select"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+            >
+              <option value="all">Все</option>
+              <option value="passed">Сдал</option>
+              <option value="failed">Не сдал</option>
+              {showNotStartedFilter && <option value="not_started">Не проходил итог</option>}
+            </select>
+          </div>
+        </div>
+      </article>
 
       {!isLoading && !loadError && (
         <>
@@ -412,38 +503,6 @@ export default function AdminResultsPage() {
           </div>
         </>
       )}
-
-      <label className="label" htmlFor="results-unit-filter" style={{ marginTop: 12 }}>
-        Подразделение
-      </label>
-      <select
-        id="results-unit-filter"
-        className="select"
-        value={unitFilter}
-        onChange={(e) => setUnitFilter(e.target.value as UnitAssignmentFilter)}
-        style={{ marginTop: 6, maxWidth: 320 }}
-      >
-        <option value="all">Все подразделения</option>
-        <option value="unset">Не указано</option>
-        {UNIT_ASSIGNMENT_OPTIONS.map((unit) => (
-          <option key={unit} value={unit}>
-            {unitAssignmentLabel[unit]}
-          </option>
-        ))}
-      </select>
-
-      <label className="label" htmlFor="results-search" style={{ marginTop: 12 }}>
-        Поиск по имени и позывному
-      </label>
-      <input
-        id="results-search"
-        className="input"
-        type="text"
-        placeholder="Введите имя или позывной"
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        style={{ marginTop: 6 }}
-      />
 
       <div className="list" style={{ marginTop: 12 }}>
         {visibleAttempts.map((row) => (
