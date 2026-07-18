@@ -223,6 +223,7 @@ export function rotaUnitLabelCompact(platoon: number | null | undefined, section
 export type PersonnelRosterTopUser = {
   id: string;
   name: string;
+  callsign: string;
   uavHitsTotal: number;
   deploymentsCount: number;
   medalsCount: number;

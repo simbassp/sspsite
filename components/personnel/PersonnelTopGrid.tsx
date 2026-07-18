@@ -122,8 +122,11 @@ export function PersonnelTopGrid<T extends PersonnelRosterTopUser>({
                 {card.list.map((user, idx) => (
                   <li key={user.id} className={`personnel-top-list__item${idx === 0 ? " is-leader" : ""}`}>
                     <span className={`personnel-top-list__rank${idx < 3 ? ` is-${idx + 1}` : ""}`}>{idx + 1}</span>
-                    <Link href={profilePath(user.id)} className="personnel-top-list__name">
-                      {user.name}
+                    <Link href={profilePath(user.id)} className="personnel-top-list__person">
+                      <span className="personnel-top-list__name">{user.name}</span>
+                      {user.callsign.trim() ? (
+                        <span className="personnel-top-list__callsign">{user.callsign.trim()}</span>
+                      ) : null}
                     </Link>
                     <span className="personnel-top-list__value">{card.formatValue(user)}</span>
                   </li>
