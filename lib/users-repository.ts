@@ -14,6 +14,7 @@ import {
   updateUser,
 } from "@/lib/storage";
 import { normalizeDutyLocation } from "@/lib/duty-location";
+import { normalizeAvatarStoragePath } from "@/lib/avatar-display";
 import { normalizeUnitAssignment, UNIT_ASSIGNMENT_OPTIONS, formatUnitAssignmentSaveError } from "@/lib/unit-assignment";
 import { normalizeRotaPlatoon, normalizeRotaSection, type RotaPlatoon, type RotaSection } from "@/lib/rota-unit";
 import { DutyLocation, Position, SessionUser, UserPermissions, UserRecord, UnitAssignment } from "@/lib/types";
@@ -41,6 +42,7 @@ type UserRow = {
   unit_assignment?: string | null;
   role: "employee" | "admin";
   status: "active" | "inactive";
+  avatar_url?: string | null;
 };
 
 type InviteCodeRow = {
@@ -192,6 +194,7 @@ function toSessionUser(row: UserRow): SessionUser {
     canManageContent: permissions.news || permissions.tests || permissions.uav || permissions.counteraction,
     permissions,
     unitAssignment: normalizeUnitAssignment(row.unit_assignment),
+    avatarUrl: normalizeAvatarStoragePath(typeof row.avatar_url === "string" ? row.avatar_url : null),
   };
 }
 

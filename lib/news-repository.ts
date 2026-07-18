@@ -34,13 +34,14 @@ type NewsRow = {
     name?: string | null;
     callsign?: string | null;
     position?: string | null;
+    avatar_url?: string | null;
   } | null;
   created_at: string;
   format?: unknown;
 };
 
 const NEWS_CACHE_TTL_MS = 60_000;
-const NEWS_CACHE_KEY = "ssp_news_cache_v2";
+const NEWS_CACHE_KEY = "ssp_news_cache_v3";
 let newsMemoryCache: { ts: number; rows: NewsItem[] } | null = null;
 const DEFAULT_NEWS_TEXT_STYLE: NewsTextStyle = {
   fontSize: 16,
@@ -71,8 +72,14 @@ function isUuidLike(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
+function mapAuthorAvatarUrl(profile?: NewsRow["author_profile"] | null) {
+  const raw = profile?.avatar_url;
+  return typeof raw === "string" && raw.trim() ? raw.trim() : null;
+}
+
 function mapNewsRow(row: NewsRow): NewsItem {
   const body = row.body ?? row.text ?? row.content ?? "";
+  const avatarUrl = mapAuthorAvatarUrl(row.author_profile);
   return {
     id: row.id,
     title: row.title,
@@ -87,12 +94,14 @@ function mapNewsRow(row: NewsRow): NewsItem {
       name: row.author_profile?.name?.trim() || row.author_name?.trim() || null,
       callsign: row.author_profile?.callsign?.trim() || row.author_callsign?.trim() || null,
       position: normalizeAuthorPosition(row.author_profile?.position ?? row.author_position),
+      avatarUrl,
     },
     authorProfile: {
       id: row.author_profile?.id ?? row.author_id ?? null,
       name: row.author_profile?.name?.trim() || row.author_name?.trim() || null,
       callsign: row.author_profile?.callsign?.trim() || row.author_callsign?.trim() || null,
       position: normalizeAuthorPosition(row.author_profile?.position ?? row.author_position),
+      avatarUrl,
     },
     createdAt: row.created_at,
     textStyle: normalizeNewsTextStyle(row.format),

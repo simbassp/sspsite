@@ -1,11 +1,12 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { UserAvatar } from "@/components/profile/UserAvatar";
 import { getPositionBadgeClass } from "@/lib/position-ui";
 import {
   formatNewsDateParts,
+  getAuthorAvatarUrl,
   getAuthorDisplayName,
-  getAuthorInitials,
   getAuthorPositionLabel,
   getNewsCategory,
   getNewsCategoryLabel,
@@ -66,7 +67,7 @@ export function NewsMessageCard({
   const category = getNewsCategory(item);
   const { date, time } = formatNewsDateParts(item.createdAt);
   const authorLine = getAuthorDisplayName(item);
-  const authorInitials = getAuthorInitials(item);
+  const authorParts = item.authorProfile ?? item.authorInfo;
   const position = getAuthorPositionLabel(item);
   const textStyle = normalizeNewsTextStyle(item.textStyle);
   const longBody = isLongNewsBody(item.body);
@@ -122,9 +123,14 @@ export function NewsMessageCard({
 
         <div className="news-message-card__aside">
           <div className="news-message-card__author">
-            <span className="news-message-card__author-avatar" aria-hidden>
-              {authorInitials}
-            </span>
+            <UserAvatar
+              name={authorParts?.name}
+              callsign={authorParts?.callsign}
+              avatarUrl={getAuthorAvatarUrl(item)}
+              size={34}
+              className="news-message-card__author-avatar"
+              title={authorLine}
+            />
             <span className="news-message-card__author-copy">
               <strong className="news-message-card__author-name">{authorLine}</strong>
               {position ? (

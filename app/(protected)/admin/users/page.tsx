@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AdminPermissionPicker } from "@/components/admin/AdminPermissionPicker";
+import { UserAvatar } from "@/components/profile/UserAvatar";
 import { readClientSession } from "@/lib/client-auth";
 import { ADMIN_PERMISSION_OPTIONS } from "@/lib/admin-permission-ui";
 import { dutyLocationLabel } from "@/lib/duty-location";
@@ -195,16 +196,16 @@ export default function AdminUsersPage() {
     }
   };
 
-  const palette = ["#3e7bfa", "#7d51df", "#2f9e7b", "#d97706", "#c2417b", "#0891b2", "#a855f7", "#16a34a"];
-  const hash = (input: string) => input.split("").reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
-  const getInitials = (user: UserRecord) => {
-    const source = (user.name || user.login || "").trim();
-    if (!source) return "?";
-    const words = source.split(/\s+/).filter(Boolean);
-    if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
-    return `${words[0][0] || ""}${words[1][0] || ""}`.toUpperCase();
-  };
-  const getAvatarColor = (user: UserRecord) => palette[hash(`${user.name}:${user.login}`) % palette.length];
+  const renderUserAvatar = (user: UserRecord) => (
+    <UserAvatar
+      name={user.name}
+      callsign={user.callsign}
+      avatarUrl={user.avatarUrl}
+      size={38}
+      className="admin-users-avatar"
+      title={`${user.name || "Без имени"}${user.callsign ? ` ${user.callsign}` : ""}`}
+    />
+  );
 
   const getPermissionsSummary = (user: UserRecord) => {
     const labels = permissionOptions
@@ -330,9 +331,7 @@ export default function AdminUsersPage() {
         <div className="card admin-users-page__permissions-editor" ref={permissionEditorRef}>
           <div className="card-body">
             <div className="admin-users-person">
-              <span className="admin-users-avatar" style={{ backgroundColor: getAvatarColor(permissionsTargetUser) }}>
-                {getInitials(permissionsTargetUser)}
-              </span>
+              {renderUserAvatar(permissionsTargetUser)}
               <span>
                 <strong>{permissionsTargetUser.name || "Без имени"}{permissionsTargetUser.callsign ? ` ${permissionsTargetUser.callsign}` : ""}</strong>
                 <small>@{permissionsTargetUser.login}</small>
@@ -400,9 +399,7 @@ export default function AdminUsersPage() {
                   <td>
                     <Link href={`/profile/${user.id}`} prefetch={false} className="admin-users-profile-link">
                       <div className="admin-users-person">
-                        <span className="admin-users-avatar" style={{ backgroundColor: getAvatarColor(user) }}>
-                          {getInitials(user)}
-                        </span>
+                        {renderUserAvatar(user)}
                         <span>
                           <strong>{user.name || "Без имени"}{user.callsign ? ` ${user.callsign}` : ""}</strong>
                           <small>@{user.login}</small>
@@ -500,9 +497,7 @@ export default function AdminUsersPage() {
                 <div className="card-body">
                   <Link href={`/profile/${user.id}`} prefetch={false} className="admin-users-profile-link">
                     <div className="admin-users-person">
-                      <span className="admin-users-avatar" style={{ backgroundColor: getAvatarColor(user) }}>
-                        {getInitials(user)}
-                      </span>
+                      {renderUserAvatar(user)}
                       <span>
                         <strong>{user.name || "Без имени"}{user.callsign ? ` ${user.callsign}` : ""}</strong>
                         <small>@{user.login}</small>

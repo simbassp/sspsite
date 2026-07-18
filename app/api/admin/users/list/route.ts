@@ -1,5 +1,6 @@
 import { ONLINE_LAST_SEEN_MAX_MS } from "@/lib/presence-constants";
 import { normalizeUnitAssignment } from "@/lib/unit-assignment";
+import { normalizeAvatarStoragePath } from "@/lib/avatar-display";
 import { canManageUsers, canViewUserList } from "@/lib/permissions";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
@@ -31,7 +32,7 @@ export async function GET() {
     const primaryQ = await supabase
       .from("app_users")
       .select(
-        "id,auth_user_id,login,name,callsign,position,can_manage_content,can_manage_news,can_manage_tests,can_manage_results,can_manage_uav,can_manage_counteraction,can_manage_users,can_view_user_list,can_reset_test_results,can_view_online,can_moderate_personnel,is_online,last_seen_at,role,status,duty_location,unit_assignment",
+        "id,auth_user_id,login,name,callsign,position,avatar_url,can_manage_content,can_manage_news,can_manage_tests,can_manage_results,can_manage_uav,can_manage_counteraction,can_manage_users,can_view_user_list,can_reset_test_results,can_view_online,can_moderate_personnel,is_online,last_seen_at,role,status,duty_location,unit_assignment",
       )
       .order("created_at", { ascending: false })
       .limit(1000);
@@ -56,6 +57,7 @@ export async function GET() {
       name: r.name,
       callsign: r.callsign,
       position: r.position,
+      avatar_url: normalizeAvatarStoragePath(typeof r.avatar_url === "string" ? r.avatar_url : null),
       can_manage_content: r.can_manage_content ?? false,
       can_manage_news: r.can_manage_news ?? undefined,
       can_manage_tests: r.can_manage_tests ?? undefined,

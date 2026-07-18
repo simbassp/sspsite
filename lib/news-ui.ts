@@ -78,3 +78,9 @@ export function getAuthorInitials(item: NewsItem) {
   if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
   return `${words[0][0] || ""}${words[1][0] || ""}`.toUpperCase();
 }
+
+export function getAuthorAvatarUrl(item: NewsItem) {
+  const profile = item.authorProfile ?? item.authorInfo;
+  const raw = profile?.avatarUrl;
+  return typeof raw === "string" && raw.trim() ? raw.trim() : null;
+}

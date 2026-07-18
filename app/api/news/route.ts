@@ -1,3 +1,4 @@
+import { normalizeAvatarStoragePath } from "@/lib/avatar-display";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 import { canManageNews } from "@/lib/permissions";
@@ -74,6 +75,14 @@ function normalizeNewsRows(rows: Array<Record<string, unknown>>) {
               name: resolvedAuthor.name || "",
               callsign: resolvedAuthor.callsign || "",
               position: typeof row.author_position === "string" ? row.author_position : null,
+              avatar_url:
+                normalizeAvatarStoragePath(
+                  typeof row.author_avatar_url === "string"
+                    ? row.author_avatar_url
+                    : typeof (row.author_profile as { avatar_url?: unknown } | null)?.avatar_url === "string"
+                      ? String((row.author_profile as { avatar_url: string }).avatar_url)
+                      : null,
+                ) ?? null,
             }
           : null,
       created_at: row.created_at,
@@ -191,6 +200,7 @@ export async function GET(request: Request) {
 
     const shouldResolveAuthors = mapped.some((item, idx) => {
       if (needsAuthorEnrichment(idx)) return true;
+      if (getNewsCreatorId(rows[idx])) return true;
       if (hasStoredAuthorPosition(item)) return false;
       if (item.author && !isPlaceholderNewsAuthor(item.author)) return true;
       return false;
@@ -200,20 +210,34 @@ export async function GET(request: Request) {
       return Response.json({ ok: true, rows: mapped });
     }
 
-    const usersQ = await supabase.from("app_users").select("id,auth_user_id,name,callsign,position");
-    if (usersQ.error || !Array.isArray(usersQ.data)) {
+    let usersRows: Array<Record<string, unknown>> | null = null;
+    const usersQ = await supabase.from("app_users").select("id,auth_user_id,name,callsign,position,avatar_url");
+    if (usersQ.error && isMissingColumn(usersQ.error.message || "", "avatar_url")) {
+      const fallbackUsersQ = await supabase.from("app_users").select("id,auth_user_id,name,callsign,position");
+      if (fallbackUsersQ.error || !Array.isArray(fallbackUsersQ.data)) {
+        return Response.json({ ok: true, rows: mapped });
+      }
+      usersRows = fallbackUsersQ.data as Array<Record<string, unknown>>;
+    } else if (usersQ.error || !Array.isArray(usersQ.data)) {
+      return Response.json({ ok: true, rows: mapped });
+    } else {
+      usersRows = usersQ.data as Array<Record<string, unknown>>;
+    }
+
+    if (!usersRows) {
       return Response.json({ ok: true, rows: mapped });
     }
 
-    const usersMap = new Map<string, { name: string; callsign: string; position: string }>();
-    const usersByLabel = new Map<string, { name: string; callsign: string; position: string }>();
-    for (const user of usersQ.data as Array<Record<string, unknown>>) {
+    const usersMap = new Map<string, { name: string; callsign: string; position: string; avatarUrl: string | null }>();
+    const usersByLabel = new Map<string, { name: string; callsign: string; position: string; avatarUrl: string | null }>();
+    for (const user of usersRows) {
       const id = typeof user.id === "string" ? user.id : "";
       const authUserId = typeof user.auth_user_id === "string" ? user.auth_user_id : "";
       const person = {
         name: typeof user.name === "string" ? user.name.trim() : "",
         callsign: typeof user.callsign === "string" ? user.callsign.trim() : "",
         position: typeof user.position === "string" ? user.position.trim() : "",
+        avatarUrl: normalizeAvatarStoragePath(typeof user.avatar_url === "string" ? user.avatar_url : null),
       };
       const label = [person.name, person.callsign].filter(Boolean).join(" ").trim().toLowerCase();
       if (label) usersByLabel.set(label, person);
@@ -246,15 +270,34 @@ export async function GET(request: Request) {
     const withAuthorFallback = mapped.map((item, idx) => {
       const row = rows[idx];
       const fullReplace = needsAuthorEnrichment(idx);
-      if (!fullReplace && hasStoredAuthorPosition(item)) return item;
-
       const user = resolveAuthorUser(item, row);
       if (!user) return item;
-      if (!fullReplace && !user.position) return item;
 
       const candidateId = getNewsCreatorId(row) || item.author_id || null;
       const authorText = [user.name, user.callsign].filter(Boolean).join(" ").trim();
       const nextPosition = user.position || item.author_position || null;
+      const existingAvatar = normalizeAvatarStoragePath(
+        typeof item.author_profile?.avatar_url === "string" ? item.author_profile.avatar_url : null,
+      );
+      const nextAvatar = user.avatarUrl || existingAvatar;
+
+      if (!fullReplace && hasStoredAuthorPosition(item)) {
+        if (!user.avatarUrl) return item;
+        return {
+          ...item,
+          author_profile: {
+            ...(item.author_profile || {
+              id: candidateId || "",
+              name: item.author_name || "",
+              callsign: item.author_callsign || "",
+              position: item.author_position || null,
+            }),
+            avatar_url: user.avatarUrl,
+          },
+        };
+      }
+
+      if (!fullReplace && !user.position && !user.avatarUrl) return item;
 
       return {
         ...item,
@@ -268,6 +311,7 @@ export async function GET(request: Request) {
           name: user.name || item.author_name || "",
           callsign: user.callsign || item.author_callsign || "",
           position: nextPosition,
+          avatar_url: nextAvatar,
         },
       };
     });
