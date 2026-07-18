@@ -1968,12 +1968,19 @@ html[data-theme="dark"] .chip:not(.active):hover {
   word-break: break-word;
 }
 
+.news-message-card__author-callsign {
+  font-size: 11px;
+  line-height: 1.25;
+  color: var(--muted);
+}
+
 .news-message-card__author-copy small {
   font-size: 11px;
   color: var(--muted);
 }
 
-.news-message-card__author-copy .admin-users-position-badge {
+.news-message-card__author-copy .admin-users-position-badge,
+.news-message-card__author-position {
   font-size: 10px;
   padding: 2px 7px;
 }
@@ -2066,6 +2073,15 @@ html[data-theme="dark"] .chip:not(.active):hover {
   color: var(--text);
   max-width: 280px;
   overflow-wrap: anywhere;
+}
+
+.news-author-callsign {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.news-author-position {
+  font-size: 10px;
 }
 
 .pill {

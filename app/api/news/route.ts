@@ -200,6 +200,7 @@ export async function GET(request: Request) {
     }
 
     const usersMap = new Map<string, { name: string; callsign: string; position: string }>();
+    const usersByLabel = new Map<string, { name: string; callsign: string; position: string }>();
     for (const user of usersQ.data as Array<Record<string, unknown>>) {
       const id = typeof user.id === "string" ? user.id : "";
       const authUserId = typeof user.auth_user_id === "string" ? user.auth_user_id : "";
@@ -208,27 +209,67 @@ export async function GET(request: Request) {
         callsign: typeof user.callsign === "string" ? user.callsign.trim() : "",
         position: typeof user.position === "string" ? user.position.trim() : "",
       };
+      const label = [person.name, person.callsign].filter(Boolean).join(" ").trim().toLowerCase();
+      if (label) usersByLabel.set(label, person);
       if (id) usersMap.set(id, person);
       if (authUserId) usersMap.set(authUserId, person);
     }
 
-    const withAuthorFallback = mapped.map((item, idx) => {
-      if (!needsAuthorEnrichment(idx)) return item;
-      const row = rows[idx];
+    const resolveAuthorUser = (item: (typeof mapped)[number], row: Record<string, unknown>) => {
       const candidateId =
         (typeof row.author_id === "string" && row.author_id.trim()) ||
         (typeof row.created_by === "string" && row.created_by.trim()) ||
-        (typeof row.author_id === "string" && row.author_id.trim()) ||
         (typeof row.user_id === "string" && row.user_id.trim()) ||
         (typeof row.created_by_user_id === "string" && row.created_by_user_id.trim()) ||
         "";
-      if (!candidateId) return item;
-      const user = usersMap.get(candidateId);
+      if (candidateId) {
+        const byId = usersMap.get(candidateId);
+        if (byId) return byId;
+      }
+      const authorLabel = typeof item.author === "string" ? item.author.trim().toLowerCase() : "";
+      if (authorLabel) return usersByLabel.get(authorLabel) ?? null;
+      const joined = [item.author_name, item.author_callsign]
+        .map((part) => (typeof part === "string" ? part.trim() : ""))
+        .filter(Boolean)
+        .join(" ")
+        .trim()
+        .toLowerCase();
+      return joined ? usersByLabel.get(joined) ?? null : null;
+    };
+
+    const withAuthorFallback = mapped.map((item, idx) => {
+      if (!needsAuthorEnrichment(idx)) {
+        const user = resolveAuthorUser(item, rows[idx]);
+        if (!user?.position || item.author_position) return item;
+        return {
+          ...item,
+          author_position: user.position,
+          author_profile: {
+            ...(item.author_profile ?? {
+              id:
+                (typeof rows[idx].author_id === "string" && rows[idx].author_id.trim()) ||
+                (typeof rows[idx].created_by === "string" && rows[idx].created_by.trim()) ||
+                "",
+              name: item.author_name || "",
+              callsign: item.author_callsign || "",
+            }),
+            position: user.position,
+          },
+        };
+      }
+      const row = rows[idx];
+      const user = resolveAuthorUser(item, row);
       if (!user) return item;
       const authorText = `${user.name}${user.callsign ? ` ${user.callsign}` : ""}`.trim();
+      const candidateId =
+        (typeof row.author_id === "string" && row.author_id.trim()) ||
+        (typeof row.created_by === "string" && row.created_by.trim()) ||
+        (typeof row.user_id === "string" && row.user_id.trim()) ||
+        (typeof row.created_by_user_id === "string" && row.created_by_user_id.trim()) ||
+        "";
       return {
         ...item,
-        author_id: candidateId,
+        author_id: candidateId || item.author_id || null,
         author: authorText || item.author,
         author_name: user.name || item.author_name || null,
         author_callsign: user.callsign || item.author_callsign || null,

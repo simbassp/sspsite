@@ -49,11 +49,26 @@ export function formatNewsDateParts(iso: string) {
 }
 
 export function getAuthorDisplayName(item: NewsItem) {
+  const { name, callsign } = getAuthorNameParts(item);
+  const combined = [name, callsign].filter(Boolean).join(" ").trim();
+  return combined || item.author?.trim() || "Автор не указан";
+}
+
+export function getAuthorNameParts(item: NewsItem) {
   const profile = item.authorProfile ?? item.authorInfo;
   const name = profile?.name?.trim() || "";
   const callsign = profile?.callsign?.trim() || "";
-  const combined = [name, callsign].filter(Boolean).join(" ").trim();
-  return combined || item.author?.trim() || "Автор не указан";
+  if (name || callsign) return { name: name || "Автор не указан", callsign };
+  const fallback = item.author?.trim() || "";
+  if (!fallback) return { name: "Автор не указан", callsign: "" };
+  return { name: fallback, callsign: "" };
+}
+
+export function getAuthorPositionLabel(item: NewsItem) {
+  const raw = item.authorProfile?.position ?? item.authorInfo?.position ?? item.authorPosition ?? null;
+  if (raw == null) return null;
+  const trimmed = String(raw).trim();
+  return trimmed || null;
 }
 
 export function getAuthorInitials(item: NewsItem) {

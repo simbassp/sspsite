@@ -11,9 +11,10 @@ const AUTHOR_POSITIONS: readonly Position[] = POSITION_OPTIONS;
 
 function normalizeAuthorPosition(value: string | null | undefined): Position | null {
   if (value == null || value.trim() === "") return null;
-  const normalized = value.trim().toLowerCase();
+  const trimmed = value.trim();
+  const normalized = trimmed.toLowerCase();
   const matched = AUTHOR_POSITIONS.find((item) => item.toLowerCase() === normalized);
-  return matched ?? null;
+  return matched ?? (trimmed as Position);
 }
 
 type NewsRow = {

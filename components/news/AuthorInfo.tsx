@@ -24,10 +24,13 @@ export function AuthorInfo({ author, fallbackName }: AuthorInfoProps) {
     <div className="news-author-info">
       <div className="news-author-row">
         <div className="news-author-name">{authorName}</div>
-        {position ? (
-          <span className={`admin-users-position-badge ${getPositionBadgeClass(position)}`}>{position}</span>
-        ) : null}
       </div>
+      {callsign ? <div className="news-author-callsign">{callsign}</div> : null}
+      {position ? (
+        <span className={`news-author-position admin-users-position-badge ${getPositionBadgeClass(position)}`}>
+          {position}
+        </span>
+      ) : null}
     </div>
   );
 }
