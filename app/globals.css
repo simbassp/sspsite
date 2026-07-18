@@ -3132,20 +3132,21 @@ html[data-theme="dark"] .final-review-answer--correct {
 
 .personnel-exam-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(96px, max-content));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .personnel-exam-card {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 8px;
+  padding: 10px 8px;
   background: var(--panel);
   min-height: 0;
+  min-width: 0;
 }
 
 .personnel-exam-card__head {
@@ -3165,14 +3166,14 @@ html[data-theme="dark"] .final-review-answer--correct {
 }
 
 .personnel-exam-card__title {
-  font-size: 11px;
-  line-height: 1.2;
+  font-size: 12px;
+  line-height: 1.25;
 }
 
 .personnel-exam-card__status {
   margin: 0;
   font-weight: 700;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .personnel-exam-card__date {
@@ -4424,6 +4425,10 @@ html[data-theme="dark"] .final-review-answer--correct {
   }
 
   .personnel-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .personnel-exam-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
