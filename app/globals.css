@@ -1491,18 +1491,12 @@ html[data-theme="dark"] .chip:not(.active):hover {
   .app-shell {
     display: grid;
     grid-template-columns: 250px minmax(0, 1fr);
+    align-items: start;
     padding-bottom: 24px;
   }
 
   .desktop-sidebar {
     display: block;
-    position: sticky;
-    top: 0;
-    height: 100vh;
-    max-height: 100vh;
-    overflow-x: hidden;
-    overflow-y: auto;
-    overscroll-behavior: contain;
     padding: 24px 18px 32px;
     border-right: 1px solid var(--line);
     background: color-mix(in srgb, var(--bg) 86%, transparent);
