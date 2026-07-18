@@ -45,7 +45,8 @@ export function ProfileExportExcelButton({ userId, className = "" }: ProfileExpo
 
   return (
     <div className={`profile-export-excel ${className}`.trim()}>
-      <button type="button" className="btn profile-export-excel__btn" onClick={() => void onDownload()} disabled={loading}>
+      <button type="button" className="btn profile-btn-with-icon profile-export-excel__btn" onClick={() => void onDownload()} disabled={loading}>
+        <DownloadIcon />
         {loading ? "Формирую…" : "Скачать Excel"}
       </button>
       {error ? (
@@ -54,5 +55,15 @@ export function ProfileExportExcelButton({ userId, className = "" }: ProfileExpo
         </p>
       ) : null}
     </div>
+  );
+}
+
+function DownloadIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M12 4v10" />
+      <path d="m8 10 4 4 4-4" />
+      <path d="M5 20h14" />
+    </svg>
   );
 }

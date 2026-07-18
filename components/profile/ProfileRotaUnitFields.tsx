@@ -29,7 +29,7 @@ export function ProfileRotaUnitFields({
   if (variant === "platoon") {
     return (
       <div className="profile-hero-duty profile-hero-rota-platoon">
-        <p className="label profile-hero-duty-label">Взвод (4 рота)</p>
+        <p className="label profile-hero-duty-label">Взвод</p>
         <select
           className="select profile-unit-select"
           value={platoon ?? ""}

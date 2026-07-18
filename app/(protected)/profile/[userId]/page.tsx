@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Pencil } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { ProfileDutyLocationToggle } from "@/components/profile/ProfileDutyLocationToggle";
 import { ProfileExportExcelButton } from "@/components/profile/ProfileExportExcelButton";
 import { ProfileNameEditModal } from "@/components/profile/ProfileNameEditModal";
 import { ProfileEmploymentDateField } from "@/components/profile/ProfileEmploymentDateField";
@@ -569,6 +570,12 @@ export default function ProfileUserInspectPage() {
     </svg>
   );
 
+  const PositionStarIcon = () => (
+    <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden>
+      <path d="M12 2.5 14.6 9H22l-6 4.5 2.3 7L12 17.8 5.7 20.5 8 13.5 2 9h7.4z" />
+    </svg>
+  );
+
   if (!session) {
     return <p className="page-subtitle">Загружаем...</p>;
   }
@@ -682,49 +689,62 @@ export default function ProfileUserInspectPage() {
           <article className="card profile-hero-card">
             <div className="card-body">
               <div className="profile-hero">
-                <div className="profile-hero-avatar" aria-hidden="true">
-                  <UserIcon color="#c42b2b" size={28} />
-                </div>
-                <div className="profile-hero-main">
-                  <p className="profile-hero-kicker">Пользовательский профиль</p>
-                  <div className="profile-hero-name-row">
-                    <p className="profile-hero-name">{inspectUser.name || "—"}</p>
-                    {canEditProfileFields && (
-                      <button
-                        type="button"
-                        className="btn profile-hero-edit-btn"
-                        title="Редактировать имя и позывной"
-                        aria-label="Редактировать имя и позывной"
-                        onClick={() => {
-                          setFieldError({});
-                          setProfileMessage("");
-                          setProfileEditModalOpen(true);
-                        }}
-                      >
-                        <Pencil width={16} height={16} strokeWidth={2} aria-hidden />
-                      </button>
-                    )}
+                <div className="profile-hero-sidebar">
+                  <div className="profile-hero-identity">
+                    <div className="profile-hero-avatar" aria-hidden="true">
+                      <UserIcon color="#c42b2b" size={30} />
+                    </div>
+                    <div className="profile-hero-identity-text">
+                      <p className="profile-hero-kicker">Пользовательский профиль</p>
+                      <div className="profile-hero-name-row">
+                        <p className="profile-hero-name">{inspectUser.name || "—"}</p>
+                        {canEditProfileFields && (
+                          <button
+                            type="button"
+                            className="btn profile-hero-edit-btn"
+                            title="Редактировать имя и позывной"
+                            aria-label="Редактировать имя и позывной"
+                            onClick={() => {
+                              setFieldError({});
+                              setProfileMessage("");
+                              setProfileEditModalOpen(true);
+                            }}
+                          >
+                            <Pencil width={16} height={16} strokeWidth={2} aria-hidden />
+                          </button>
+                        )}
+                      </div>
+                      <p className="profile-hero-callsign">
+                        Позывной: <strong>{inspectUser.callsign.trim() || "—"}</strong>
+                      </p>
+                      {canExportExcel ? <ProfileExportExcelButton userId={inspectUser.id} /> : null}
+                    </div>
                   </div>
-                  <p className="profile-hero-callsign">
-                    Позывной: <strong>{inspectUser.callsign.trim() || "—"}</strong>
-                  </p>
-                  {canExportExcel ? <ProfileExportExcelButton userId={inspectUser.id} /> : null}
-                  <div className="profile-hero-status-inline">
-                    <span className="profile-hero-status-value">
-                      <StatusDotIcon online={inspectUser.is_online} />
-                      {inspectUser.is_online ? "Онлайн" : "Офлайн"}
-                    </span>
-                    <span
-                      className={`profile-duty-status-badge profile-duty-status-badge--${inspectUser.duty_location}`}
-                    >
-                      {dutyLocationLabel[inspectUser.duty_location]}
-                    </span>
-                    <span className="unit-assignment-badge">
-                      {unitAssignmentLabelOrEmpty(inspectUser.unit_assignment)}
-                    </span>
+                  <div className="profile-hero-status-block">
+                    <div className="profile-hero-status-inline">
+                      <span className="profile-hero-status-value">
+                        <StatusDotIcon online={inspectUser.is_online} />
+                        {inspectUser.is_online ? "Онлайн" : "Офлайн"}
+                      </span>
+                      <span
+                        className={`profile-duty-status-badge profile-duty-status-badge--${inspectUser.duty_location}`}
+                      >
+                        {dutyLocationLabel[inspectUser.duty_location]}
+                      </span>
+                      <span className="unit-assignment-badge">
+                        {unitAssignmentLabelOrEmpty(inspectUser.unit_assignment)}
+                      </span>
+                      {inspectUser.status === "inactive" ? (
+                        <span className="pill pill-red">Неактивен</span>
+                      ) : null}
+                    </div>
                     {inspectUser.unit_assignment === "company_4" &&
                     rotaUnitCompactLabel(rotaPlatoon, rotaSection, rotaModule) ? (
-                      <span className="profile-rota-badge">{rotaUnitCompactLabel(rotaPlatoon, rotaSection, rotaModule)}</span>
+                      <div className="profile-hero-rota-row">
+                        <span className="profile-rota-badge">
+                          {rotaUnitCompactLabel(rotaPlatoon, rotaSection, rotaModule)}
+                        </span>
+                      </div>
                     ) : null}
                   </div>
                   {inspectUser.unit_assignment === "company_4" ? (
@@ -737,19 +757,18 @@ export default function ProfileUserInspectPage() {
                   ) : null}
                   <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
                     @{inspectUser.login}
-                    {inspectUser.status === "inactive" ? (
-                      <span className="pill pill-red" style={{ marginLeft: 8 }}>
-                        Неактивен
-                      </span>
-                    ) : null}
                   </p>
-                  <div
-                    className={`admin-users-position-badge ${getPositionBadgeClass(inspectUser.position)}`}
-                    title="Должность"
-                  >
-                    {inspectUser.position}
+                  <div className="profile-hero-position">
+                    <div
+                      className={`admin-users-position-badge ${getPositionBadgeClass(inspectUser.position)}`}
+                      title="Должность"
+                    >
+                      <PositionStarIcon />
+                      {inspectUser.position}
+                    </div>
                   </div>
                 </div>
+                <div className="profile-hero-divider" aria-hidden="true" />
                 <div className="profile-hero-controls">
                   <div className="profile-hero-duty">
                     <p className="label profile-hero-duty-label">Подразделение</p>
@@ -782,12 +801,26 @@ export default function ProfileUserInspectPage() {
                       />
                     </>
                   ) : inspectUser.unit_assignment === "company_4" ? (
-                    <div className="profile-hero-duty">
-                      <p className="label profile-hero-duty-label">Взвод / отделение / модуль</p>
-                      <span className="profile-rota-badge profile-rota-badge--static">
-                        {rotaUnitCompactLabel(rotaPlatoon, rotaSection, rotaModule) || "Не указано"}
-                      </span>
-                    </div>
+                    <>
+                      <div className="profile-hero-duty">
+                        <p className="label profile-hero-duty-label">Взвод</p>
+                        <span className="profile-rota-badge profile-rota-badge--static">
+                          {rotaPlatoon ? `${rotaPlatoon} взвод` : "Не указан"}
+                        </span>
+                      </div>
+                      <div className="profile-hero-duty">
+                        <p className="label profile-hero-duty-label">Отделение</p>
+                        <span className="profile-rota-badge profile-rota-badge--static">
+                          {rotaSection ? `${rotaSection} отделение` : "Не указано"}
+                        </span>
+                      </div>
+                      <div className="profile-hero-duty">
+                        <p className="label profile-hero-duty-label">Модуль</p>
+                        <span className="profile-rota-badge profile-rota-badge--static">
+                          {rotaModule ? `${rotaModule} модуль` : "Не указан"}
+                        </span>
+                      </div>
+                    </>
                   ) : null}
                   {canEditEmploymentForOthers ? (
                     <ProfileEmploymentDateField
@@ -797,35 +830,22 @@ export default function ProfileUserInspectPage() {
                       onChange={onEmploymentDateChangeForUser}
                     />
                   ) : (
-                    <div className="profile-hero-duty">
+                    <div className="profile-hero-duty profile-hero-employment">
                       <p className="label profile-hero-duty-label">Трудоустройство</p>
                       <span className="profile-rota-badge profile-rota-badge--static">
                         {employmentDateStored ? formatDate(employmentDateStored) : "Не указано"}
                       </span>
                     </div>
                   )}
-                  <div className="profile-hero-duty">
+                  <div className="profile-hero-duty profile-hero-duty--full">
                     <p className="label profile-hero-duty-label">Место положения</p>
                     {canEditDutyForOthers ? (
                       <>
-                        <div className="profile-duty-toggle" role="group" aria-label="Место положения сотрудника">
-                          <button
-                            type="button"
-                            className={`profile-duty-option${inspectUser.duty_location === "base" ? " profile-duty-option--active" : " profile-duty-option--inactive"}`}
-                            onClick={() => void onDutyChangeForUser("base")}
-                            disabled={dutySaving}
-                          >
-                            На базе
-                          </button>
-                          <button
-                            type="button"
-                            className={`profile-duty-option${inspectUser.duty_location === "deployment" ? " profile-duty-option--active" : " profile-duty-option--inactive"}`}
-                            onClick={() => void onDutyChangeForUser("deployment")}
-                            disabled={dutySaving}
-                          >
-                            В командировке
-                          </button>
-                        </div>
+                        <ProfileDutyLocationToggle
+                          value={inspectUser.duty_location}
+                          onChange={(next) => void onDutyChangeForUser(next)}
+                          disabled={dutySaving}
+                        />
                         {!!dutyMessage && (
                           <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0, color: "var(--bad)" }}>
                             {dutyMessage}

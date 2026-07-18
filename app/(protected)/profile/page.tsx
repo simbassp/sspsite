@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Pencil } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { ProfileDutyLocationToggle } from "@/components/profile/ProfileDutyLocationToggle";
 import { ProfileExportExcelButton } from "@/components/profile/ProfileExportExcelButton";
 import { ProfileHeroLoginBlock } from "@/components/profile/ProfileHeroLoginBlock";
 import { ProfileNameEditModal } from "@/components/profile/ProfileNameEditModal";
@@ -893,6 +894,12 @@ export default function ProfilePage() {
     </svg>
   );
 
+  const PositionStarIcon = () => (
+    <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden>
+      <path d="M12 2.5 14.6 9H22l-6 4.5 2.3 7L12 17.8 5.7 20.5 8 13.5 2 9h7.4z" />
+    </svg>
+  );
+
   return (
     <section className="profile-page">
       <h1 className="page-title">Профиль</h1>
@@ -902,43 +909,51 @@ export default function ProfilePage() {
       <article className="card profile-hero-card">
         <div className="card-body">
           <div className="profile-hero">
-            <div className="profile-hero-avatar" aria-hidden="true">
-              <UserIcon color="#c42b2b" size={28} />
-            </div>
-            <div className="profile-hero-main">
-              <p className="profile-hero-kicker">Пользовательский профиль</p>
-              <div className="profile-hero-name-row">
-                <p className="profile-hero-name">{session.name || "—"}</p>
-                <button
-                  type="button"
-                  className="btn profile-hero-edit-btn"
-                  title="Редактировать имя и позывной"
-                  aria-label="Редактировать имя и позывной"
-                  onClick={() => {
-                    setFieldError({});
-                    setProfileModalMessage("");
-                    setProfileEditModalOpen(true);
-                  }}
-                >
-                  <Pencil width={16} height={16} strokeWidth={2} aria-hidden />
-                </button>
+            <div className="profile-hero-sidebar">
+              <div className="profile-hero-identity">
+                <div className="profile-hero-avatar" aria-hidden="true">
+                  <UserIcon color="#c42b2b" size={30} />
+                </div>
+                <div className="profile-hero-identity-text">
+                  <p className="profile-hero-kicker">Пользовательский профиль</p>
+                  <div className="profile-hero-name-row">
+                    <p className="profile-hero-name">{session.name || "—"}</p>
+                    <button
+                      type="button"
+                      className="btn profile-hero-edit-btn"
+                      title="Редактировать имя и позывной"
+                      aria-label="Редактировать имя и позывной"
+                      onClick={() => {
+                        setFieldError({});
+                        setProfileModalMessage("");
+                        setProfileEditModalOpen(true);
+                      }}
+                    >
+                      <Pencil width={16} height={16} strokeWidth={2} aria-hidden />
+                    </button>
+                  </div>
+                  <p className="profile-hero-callsign">
+                    Позывной:{" "}
+                    <strong>{(session.callsign || "").trim() || "—"}</strong>
+                  </p>
+                  {canExportExcel && session?.id ? <ProfileExportExcelButton userId={session.id} /> : null}
+                </div>
               </div>
-              <p className="profile-hero-callsign">
-                Позывной:{" "}
-                <strong>{(session.callsign || "").trim() || "—"}</strong>
-              </p>
-              {canExportExcel && session?.id ? <ProfileExportExcelButton userId={session.id} /> : null}
-              <div className="profile-hero-status-inline">
-                <span className="profile-hero-status-value">
-                  <StatusDotIcon online={isOnline} />
-                  {isOnline ? "Онлайн" : "Офлайн"}
-                </span>
-                <span className={`profile-duty-status-badge profile-duty-status-badge--${dutyLocation}`}>
-                  {dutyLocationLabel[dutyLocation]}
-                </span>
-                <span className="unit-assignment-badge">{unitAssignmentLabelOrEmpty(unitAssignment)}</span>
+              <div className="profile-hero-status-block">
+                <div className="profile-hero-status-inline">
+                  <span className="profile-hero-status-value">
+                    <StatusDotIcon online={isOnline} />
+                    {isOnline ? "Онлайн" : "Офлайн"}
+                  </span>
+                  <span className={`profile-duty-status-badge profile-duty-status-badge--${dutyLocation}`}>
+                    {dutyLocationLabel[dutyLocation]}
+                  </span>
+                  <span className="unit-assignment-badge">{unitAssignmentLabelOrEmpty(unitAssignment)}</span>
+                </div>
                 {unitAssignment === "company_4" && rotaUnitCompactLabel(rotaPlatoon, rotaSection, rotaModule) ? (
-                  <span className="profile-rota-badge">{rotaUnitCompactLabel(rotaPlatoon, rotaSection, rotaModule)}</span>
+                  <div className="profile-hero-rota-row">
+                    <span className="profile-rota-badge">{rotaUnitCompactLabel(rotaPlatoon, rotaSection, rotaModule)}</span>
+                  </div>
                 ) : null}
               </div>
               {session?.id && unitAssignment === "company_4" ? (
@@ -949,13 +964,17 @@ export default function ProfilePage() {
                   bloodGroup={bloodGroup}
                 />
               ) : null}
-              <div
-                className={`admin-users-position-badge ${getPositionBadgeClass(session.position)}`}
-                title="Должность"
-              >
-                {session.position}
+              <div className="profile-hero-position">
+                <div
+                  className={`admin-users-position-badge ${getPositionBadgeClass(session.position)}`}
+                  title="Должность"
+                >
+                  <PositionStarIcon />
+                  {session.position}
+                </div>
               </div>
             </div>
+            <div className="profile-hero-divider" aria-hidden="true" />
             <div className="profile-hero-controls">
               <div className="profile-hero-duty">
                 <p className="label profile-hero-duty-label">Подразделение</p>
@@ -1010,33 +1029,22 @@ export default function ProfilePage() {
                 error={employmentSaveError}
                 onChange={onEmploymentDateChange}
               />
-              <div className="profile-hero-duty">
+              <div className="profile-hero-duty profile-hero-duty--full">
                 <p className="label profile-hero-duty-label">Место положения</p>
-                <div className="profile-duty-toggle" role="group" aria-label="Место положения">
-                  <button
-                    type="button"
-                    className={`profile-duty-option${dutyLocation === "base" ? " profile-duty-option--active" : " profile-duty-option--inactive"}`}
-                    onClick={() => void onDutyChange("base")}
-                    disabled={dutySaving}
-                  >
-                    На базе
-                  </button>
-                  <button
-                    type="button"
-                    className={`profile-duty-option${dutyLocation === "deployment" ? " profile-duty-option--active" : " profile-duty-option--inactive"}`}
-                    onClick={() => void onDutyChange("deployment")}
-                    disabled={dutySaving}
-                  >
-                    В командировке
-                  </button>
-                </div>
+                <ProfileDutyLocationToggle
+                  value={dutyLocation}
+                  onChange={(next) => void onDutyChange(next)}
+                  disabled={dutySaving}
+                />
               </div>
-              <ProfileHeroLoginBlock
-                email={emailInput}
-                onChangeEmail={() => setEmailModalOpen(true)}
-                onChangePassword={() => setPasswordModalOpen(true)}
-                message={settingsMessage}
-              />
+              <div className="profile-hero-login-wrap">
+                <ProfileHeroLoginBlock
+                  email={emailInput}
+                  onChangeEmail={() => setEmailModalOpen(true)}
+                  onChangePassword={() => setPasswordModalOpen(true)}
+                  message={settingsMessage}
+                />
+              </div>
             </div>
           </div>
         </div>

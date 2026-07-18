@@ -574,25 +574,52 @@ html[data-theme="dark"] .select option {
 
 /* Профиль: герой-блок, секции настроек, опасная зона */
 .profile-page .profile-hero-card .card-body {
-  padding: 12px 14px;
+  padding: 16px 18px;
 }
 
 .profile-page .profile-hero {
   display: flex;
+  align-items: stretch;
+  gap: 0;
+}
+
+.profile-page .profile-hero-sidebar {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding-right: 4px;
+}
+
+.profile-page .profile-hero-divider {
+  width: 1px;
+  flex-shrink: 0;
+  align-self: stretch;
+  background: var(--line);
+  margin: 0 18px;
+}
+
+.profile-page .profile-hero-identity {
+  display: flex;
   align-items: flex-start;
-  gap: 14px;
-  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .profile-page .profile-hero-avatar {
-  width: 56px;
-  height: 56px;
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
   background: rgba(196, 43, 43, 0.14);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+}
+
+.profile-page .profile-hero-identity-text {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .profile-page .profile-hero-main {
@@ -602,14 +629,16 @@ html[data-theme="dark"] .select option {
 
 .profile-page .profile-hero-kicker {
   margin: 0;
-  font-size: 11px;
+  font-size: 10px;
   color: var(--muted);
-  font-weight: 500;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .profile-page .profile-hero-name {
   margin: 2px 0 0;
-  font-size: 18px;
+  font-size: 22px;
   font-weight: 800;
   line-height: 1.25;
   color: var(--text);
@@ -638,13 +667,13 @@ html[data-theme="dark"] .select option {
 }
 
 .profile-page .profile-hero-controls {
-  flex: 1 1 280px;
-  max-width: 420px;
+  flex: 1 1 0;
   min-width: 0;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px 10px;
-  align-self: flex-start;
+  gap: 10px 12px;
+  align-self: stretch;
+  align-content: start;
 }
 
 .profile-page .profile-hero-controls .profile-hero-duty {
@@ -653,15 +682,17 @@ html[data-theme="dark"] .select option {
 }
 
 .profile-page .profile-hero-login {
-  grid-column: 1 / -1;
-  padding-top: 6px;
+  padding-top: 8px;
   margin-top: 2px;
   border-top: 1px solid var(--line);
 }
 
 .profile-page .profile-hero-login-label {
   margin: 0 0 2px;
-  font-size: 11px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .profile-page .profile-hero-login-email {
@@ -711,12 +742,15 @@ html[data-theme="dark"] .select option {
   font-size: 11px;
 }
 
+.profile-page .profile-hero-status-block {
+  margin-top: 10px;
+}
+
 .profile-page .profile-hero-status-inline {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  margin-top: 6px;
 }
 
 .profile-page .profile-hero-status-inline .profile-hero-status-value {
@@ -733,12 +767,15 @@ html[data-theme="dark"] .select option {
   margin-top: 0;
 }
 
+.profile-page .profile-hero-rota-row {
+  margin-top: 6px;
+}
+
 .profile-page .profile-hero-meta-fields {
-  display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
-  gap: 10px 14px;
-  margin-top: 10px;
-  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
 }
 
 .profile-page .profile-hero-meta-field {
@@ -750,7 +787,10 @@ html[data-theme="dark"] .select option {
 
 .profile-page .profile-hero-meta-label {
   margin: 0;
-  font-size: 11px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .profile-page .profile-hero-meta-empty,
@@ -803,15 +843,25 @@ html[data-theme="dark"] .select option {
 
 .profile-page .profile-blood-group-select {
   width: 100%;
-  max-width: 180px;
+  max-width: none;
   min-height: 32px;
   font-size: 13px;
 }
 
-.profile-page .profile-hero-main .admin-users-position-badge {
-  margin-top: 8px;
+.profile-page .profile-hero-position {
+  margin-top: auto;
+  padding-top: 14px;
+}
+
+.profile-page .profile-hero-position .admin-users-position-badge {
+  margin: 0;
   font-size: 11px;
-  padding: 3px 8px;
+  padding: 4px 10px;
+  gap: 5px;
+}
+
+.profile-page .profile-hero-position .admin-users-position-badge svg {
+  flex-shrink: 0;
 }
 
 .profile-page .profile-hero-duty {
@@ -825,28 +875,68 @@ html[data-theme="dark"] .select option {
 
 .profile-page .profile-hero-duty-label {
   margin: 0;
-  font-size: 11px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.profile-page .profile-hero-duty--full,
+.profile-page .profile-hero-employment,
+.profile-page .profile-hero-login-wrap {
+  grid-column: 1 / -1;
 }
 
 .profile-page .profile-duty-toggle {
-  display: flex;
-  flex-direction: row;
-  gap: 4px;
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  padding: 3px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--muted) 8%, var(--panel));
+  overflow: hidden;
+}
+
+.profile-page .profile-duty-toggle__slider {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc(50% - 4.5px);
+  border-radius: 8px;
+  background: rgba(35, 147, 92, 0.18);
+  border: 1px solid rgba(35, 147, 92, 0.35);
+  transition: transform 0.22s ease, background 0.22s ease, border-color 0.22s ease;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.profile-page .profile-duty-toggle--deployment .profile-duty-toggle__slider {
+  transform: translateX(calc(100% + 3px));
+  background: rgba(212, 166, 58, 0.18);
+  border-color: rgba(212, 166, 58, 0.35);
 }
 
 .profile-page .profile-duty-option {
+  position: relative;
+  z-index: 1;
   border-radius: 8px;
-  padding: 5px 8px;
+  padding: 6px 8px;
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
-  border: 1px solid var(--line);
-  background: var(--panel);
+  border: none;
+  background: transparent;
   color: var(--text);
   text-align: center;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-  flex: 1 1 auto;
+  transition: color 0.15s ease;
   min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
 }
 
 .profile-page .profile-duty-option:disabled {
@@ -855,8 +945,8 @@ html[data-theme="dark"] .select option {
 }
 
 .profile-page .profile-duty-option--active {
-  background: rgba(35, 147, 92, 0.18);
-  border-color: rgba(35, 147, 92, 0.45);
+  background: transparent;
+  border-color: transparent;
   color: var(--ok);
 }
 
@@ -864,9 +954,13 @@ html[data-theme="dark"] .profile-page .profile-duty-option--active {
   color: #83e0ae;
 }
 
+.profile-page .profile-duty-toggle--deployment .profile-duty-option--active {
+  color: var(--warn);
+}
+
 .profile-page .profile-duty-option--inactive {
-  background: color-mix(in srgb, var(--muted) 10%, var(--panel));
-  border-color: color-mix(in srgb, var(--muted) 28%, var(--line));
+  background: transparent;
+  border-color: transparent;
   color: var(--muted);
   font-weight: 600;
 }
@@ -965,7 +1059,7 @@ html[data-theme="dark"] .unit-assignment-badge {
 }
 
 .profile-page .profile-hero-rota--section-module {
-  grid-column: 1 / -1;
+  display: contents;
 }
 
 .profile-page .profile-hero-rota__field {
@@ -1019,33 +1113,34 @@ html[data-theme="dark"] .profile-rota-badge {
   font-size: 11px;
 }
 
+@media (max-width: 820px) {
+  .profile-page .profile-hero {
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .profile-page .profile-hero-divider {
+    width: 100%;
+    height: 1px;
+    margin: 14px 0;
+  }
+
+  .profile-page .profile-hero-sidebar {
+    padding-right: 0;
+  }
+
+  .profile-page .profile-hero-controls {
+    width: 100%;
+  }
+}
+
 @media (max-width: 700px) {
   .profile-page .profile-hero-controls {
-    flex: 1 1 100%;
-    width: 100%;
-    max-width: none;
-    padding-top: 10px;
-    border-top: 1px solid var(--line);
     grid-template-columns: 1fr;
-  }
-
-  .profile-page .profile-hero-duty {
-    flex: 1 1 100%;
-    width: 100%;
-  }
-
-  .profile-page .profile-duty-option {
-    flex: 1 1 calc(50% - 2px);
-    min-width: 0;
   }
 
   .profile-page .profile-hero-rota {
     grid-template-columns: 1fr;
-  }
-
-  .profile-page .profile-hero-meta-fields {
-    grid-template-columns: 1fr;
-    max-width: none;
   }
 
   .profile-page .profile-blood-group-select {
