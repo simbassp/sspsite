@@ -442,8 +442,9 @@ html[data-theme="dark"] .selfcheck-hint__text svg {
   margin: 0 0 8px;
   font-size: 12px;
   line-height: 1.5;
-  color: color-mix(in srgb, var(--text) 78%, var(--muted));
-  font-weight: 600;
+  color: var(--muted);
+  opacity: 0.62;
+  font-weight: 500;
 }
 
 .app-site-footer__line {
