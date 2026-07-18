@@ -3048,8 +3048,9 @@ html[data-theme="dark"] .final-review-answer--correct {
 
 .personnel-exam-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(96px, max-content));
   gap: 8px;
+  align-items: start;
 }
 
 .personnel-exam-card {
@@ -3102,8 +3103,8 @@ html[data-theme="dark"] .final-review-answer--correct {
 }
 
 .personnel-exam-card .personnel-mod-actions {
-  margin-top: auto;
-  padding-top: 2px;
+  margin-top: 4px;
+  padding-top: 0;
 }
 
 .personnel-exam-card .personnel-mod-actions.catalog-card-actions {
@@ -3242,31 +3243,63 @@ html[data-theme="dark"] .final-review-answer--correct {
   overflow-x: visible;
 }
 
+.personnel-table-wrap--fit .personnel-table--compact {
+  width: auto;
+  max-width: 100%;
+}
+
 .personnel-table--compact {
-  min-width: 0;
   table-layout: auto;
 }
 
 .personnel-table--compact th,
 .personnel-table--compact td {
-  padding: 8px 6px;
+  padding: 8px 10px;
+}
+
+.personnel-table--compact th:first-child,
+.personnel-table--compact td:first-child {
+  padding-left: 0;
+}
+
+.personnel-table--compact th:last-child,
+.personnel-table--compact td:last-child {
+  padding-right: 0;
 }
 
 .personnel-table--compact .personnel-table__num {
-  width: 1%;
   white-space: nowrap;
   text-align: center;
 }
 
 .personnel-table--compact .personnel-table__money {
-  width: 1%;
   white-space: nowrap;
+  text-align: right;
 }
 
 .personnel-table--compact .personnel-table__actions {
-  width: 1%;
   white-space: nowrap;
-  padding-right: 4px;
+  width: 1%;
+  padding-left: 6px;
+}
+
+.personnel-table--compact .personnel-table__actions .personnel-mod-actions {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  margin: 0;
+}
+
+.personnel-table--compact .personnel-table__actions .catalog-card-actions .btn {
+  width: 32px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+}
+
+.personnel-table--compact .personnel-table__actions .catalog-card-actions .btn svg {
+  width: 16px;
+  height: 16px;
 }
 
 .personnel-table th.personnel-table__sticky,
@@ -4085,7 +4118,7 @@ html[data-theme="dark"] .final-review-answer--correct {
 }
 
 .personnel-mod-actions--compact {
-  margin-top: auto;
+  margin-top: 4px;
 }
 
 .personnel-mod-banner {
