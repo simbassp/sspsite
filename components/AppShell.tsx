@@ -17,6 +17,7 @@ import {
   canViewUserList,
 } from "@/lib/permissions";
 import { PersonnelNotificationsBell } from "@/components/personnel/PersonnelNotificationsBell";
+import { canAccessGameSection } from "@/lib/game-feature";
 import { HomeStatsBar } from "@/components/HomeStatsBar";
 import { SiteFooterStats } from "@/components/SiteFooterStats";
 import {
@@ -76,7 +77,8 @@ type NavIconId =
   | "user"
   | "users"
   | "chart"
-  | "personnel";
+  | "personnel"
+  | "game";
 
 const mainLinks: { href: string; label: string; icon: NavIconId }[] = [
   { href: "/dashboard", label: "Главная", icon: "home" },
@@ -91,6 +93,7 @@ export function AppShell({ session, children }: AppShellProps) {
   const pathname = usePathname();
   const canSeeUserDirectory = canManageUsers(session) || canViewUserList(session);
   const hasAdminAccess = canAccessAdminPanel(session);
+  const canSeeGameSection = canAccessGameSection(session);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const [showPersonnelNav, setShowPersonnelNav] = useState(false);
@@ -263,6 +266,7 @@ export function AppShell({ session, children }: AppShellProps) {
     ...(session.role === "admin" || canModeratePersonnel(session)
       ? [{ href: "/admin/personnel", label: "Личное дело", icon: "personnel" as const }]
       : []),
+    ...(canSeeGameSection ? [{ href: "/game", label: "Полигон", icon: "game" as const }] : []),
   ];
 
   const withTimeout = (promise: Promise<unknown>, timeoutMs: number) =>
@@ -359,6 +363,17 @@ export function AppShell({ session, children }: AppShellProps) {
             <circle cx="9" cy="7" r="4" />
             <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
             <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+          </svg>
+        );
+      case "game":
+        return (
+          <svg viewBox="0 0 24 24" aria-hidden="true" style={iconStyle}>
+            <rect x="3" y="8" width="18" height="10" rx="3" />
+            <path d="M8 12h2" />
+            <path d="M9 11v2" />
+            <circle cx="16" cy="11" r="1" />
+            <circle cx="18" cy="13" r="1" />
+            <path d="M7 8V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2" />
           </svg>
         );
       default:

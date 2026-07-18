@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseSessionCookie } from "@/lib/auth";
 import { canAccessAdminPanel } from "@/lib/permissions";
+import { canAccessGameSection } from "@/lib/game-feature";
 import { SESSION_COOKIE } from "@/lib/seed";
 import { clearSessionCookie } from "@/lib/auth";
 import { isSessionStillValid } from "@/lib/server-session-validation";
@@ -42,6 +43,10 @@ export async function proxy(request: NextRequest) {
   const hasAdminAccess = session ? canAccessAdminPanel(session) : false;
 
   if (session && pathname.startsWith("/admin") && !hasAdminAccess) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+
+  if (session && pathname.startsWith("/game") && !canAccessGameSection(session)) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
