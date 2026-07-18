@@ -4,8 +4,8 @@ import type { ReactNode } from "react";
 import { getPositionBadgeClass } from "@/lib/position-ui";
 import {
   formatNewsDateParts,
+  getAuthorDisplayName,
   getAuthorInitials,
-  getAuthorNameParts,
   getAuthorPositionLabel,
   getNewsCategory,
   getNewsCategoryLabel,
@@ -65,7 +65,7 @@ export function NewsMessageCard({
 }: NewsMessageCardProps) {
   const category = getNewsCategory(item);
   const { date, time } = formatNewsDateParts(item.createdAt);
-  const { name: authorName, callsign: authorCallsign } = getAuthorNameParts(item);
+  const authorLine = getAuthorDisplayName(item);
   const authorInitials = getAuthorInitials(item);
   const position = getAuthorPositionLabel(item);
   const textStyle = normalizeNewsTextStyle(item.textStyle);
@@ -126,8 +126,7 @@ export function NewsMessageCard({
               {authorInitials}
             </span>
             <span className="news-message-card__author-copy">
-              <strong>{authorName}</strong>
-              {authorCallsign ? <span className="news-message-card__author-callsign">{authorCallsign}</span> : null}
+              <strong className="news-message-card__author-name">{authorLine}</strong>
               {position ? (
                 <span className={`news-message-card__author-position admin-users-position-badge ${getPositionBadgeClass(position)}`}>
                   {position}

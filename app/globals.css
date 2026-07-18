@@ -1935,8 +1935,10 @@ html[data-theme="dark"] .chip:not(.active):hover {
 .news-message-card__author {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
   max-width: 220px;
+  align-self: flex-start;
+  margin-right: auto;
 }
 
 .news-message-card__author-avatar {
@@ -1961,17 +1963,13 @@ html[data-theme="dark"] .chip:not(.active):hover {
   min-width: 0;
 }
 
-.news-message-card__author-copy strong {
+.news-message-card__author-copy strong,
+.news-message-card__author-name {
   font-size: 12px;
   line-height: 1.25;
   color: var(--text);
   word-break: break-word;
-}
-
-.news-message-card__author-callsign {
-  font-size: 11px;
-  line-height: 1.25;
-  color: var(--muted);
+  font-weight: 700;
 }
 
 .news-message-card__author-copy small {
