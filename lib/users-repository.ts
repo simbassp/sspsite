@@ -15,6 +15,7 @@ import {
 } from "@/lib/storage";
 import { normalizeDutyLocation } from "@/lib/duty-location";
 import { normalizeUnitAssignment, UNIT_ASSIGNMENT_OPTIONS, formatUnitAssignmentSaveError } from "@/lib/unit-assignment";
+import { normalizeRotaPlatoon, normalizeRotaSection, type RotaPlatoon, type RotaSection } from "@/lib/rota-unit";
 import { DutyLocation, Position, SessionUser, UserPermissions, UserRecord, UnitAssignment } from "@/lib/types";
 
 type UserRow = {
@@ -921,6 +922,8 @@ export async function registerUser(payload: {
   position: Position;
   inviteCode: string;
   unitAssignment: UnitAssignment;
+  rotaPlatoon?: RotaPlatoon | null;
+  rotaSection?: RotaSection | null;
 }) {
   const inviteCodeRaw = payload.inviteCode.trim();
   if (!isSupabaseConfigured) {
@@ -946,6 +949,13 @@ export async function registerUser(payload: {
   }
   if (!payload.unitAssignment || !UNIT_ASSIGNMENT_OPTIONS.includes(payload.unitAssignment)) {
     return { ok: false as const, error: "Выберите подразделение." };
+  }
+  const rotaPlatoon =
+    payload.unitAssignment === "company_4" ? normalizeRotaPlatoon(payload.rotaPlatoon) : null;
+  const rotaSection =
+    payload.unitAssignment === "company_4" ? normalizeRotaSection(payload.rotaSection) : null;
+  if (payload.unitAssignment === "company_4" && (!rotaPlatoon || !rotaSection)) {
+    return { ok: false as const, error: "Для 4 роты укажите взвод и отделение." };
   }
 
   // Параллельно: занятость email/логина + валидация кода — быстрее, чем строго по очереди.
@@ -1019,6 +1029,12 @@ export async function registerUser(payload: {
             position: payload.position,
             invite_code: inviteCode,
             unit_assignment: payload.unitAssignment,
+            ...(payload.unitAssignment === "company_4"
+              ? {
+                  rota_platoon: rotaPlatoon,
+                  rota_section: rotaSection,
+                }
+              : {}),
           },
         },
       }),

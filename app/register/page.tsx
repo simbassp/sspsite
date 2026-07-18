@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { AuthPasswordInput } from "@/components/AuthPasswordInput";
 import { getPositions } from "@/lib/storage";
+import { ROTA_PLATOON_OPTIONS, ROTA_SECTION_OPTIONS } from "@/lib/personnel-catalog";
 import { UNIT_ASSIGNMENT_OPTIONS, unitAssignmentLabel } from "@/lib/unit-assignment";
 import type { UnitAssignment } from "@/lib/types";
+import { normalizeRotaPlatoon, normalizeRotaSection, type RotaPlatoon, type RotaSection } from "@/lib/rota-unit";
 import { registerUser } from "@/lib/users-repository";
 
 /** Один signUp + при сбое сети — перепроверка входом; на мобильном цепочка дольше, чем 15–20 с. */
@@ -40,6 +42,8 @@ export default function RegisterPage() {
     repeatPassword: "",
     position: positions[0],
     unitAssignment: "" as "" | UnitAssignment,
+    rotaPlatoon: "" as "" | `${RotaPlatoon}`,
+    rotaSection: "" as "" | `${RotaSection}`,
   });
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -142,6 +146,10 @@ export default function RegisterPage() {
       setError("Выберите подразделение.");
       return;
     }
+    if (form.unitAssignment === "company_4" && (!form.rotaPlatoon || !form.rotaSection)) {
+      setError("Для 4 роты укажите взвод и отделение.");
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -155,6 +163,8 @@ export default function RegisterPage() {
           position: form.position,
           inviteCode: form.inviteCode,
           unitAssignment: form.unitAssignment,
+          rotaPlatoon: form.unitAssignment === "company_4" ? normalizeRotaPlatoon(form.rotaPlatoon) : null,
+          rotaSection: form.unitAssignment === "company_4" ? normalizeRotaSection(form.rotaSection) : null,
         }),
         REGISTER_REQUEST_TIMEOUT_MS,
         "request_timeout",
@@ -306,9 +316,15 @@ export default function RegisterPage() {
             <select
               className="select"
               value={form.unitAssignment}
-              onChange={(e) =>
-                setForm((p) => ({ ...p, unitAssignment: e.target.value as typeof p.unitAssignment }))
-              }
+              onChange={(e) => {
+                const unitAssignment = e.target.value as typeof form.unitAssignment;
+                setForm((p) => ({
+                  ...p,
+                  unitAssignment,
+                  rotaPlatoon: unitAssignment === "company_4" ? p.rotaPlatoon : "",
+                  rotaSection: unitAssignment === "company_4" ? p.rotaSection : "",
+                }));
+              }}
               required
             >
               <option value="">Выберите подразделение</option>
@@ -318,6 +334,40 @@ export default function RegisterPage() {
                 </option>
               ))}
             </select>
+
+            {form.unitAssignment === "company_4" && (
+              <>
+                <label className="label">Взвод</label>
+                <select
+                  className="select"
+                  value={form.rotaPlatoon}
+                  onChange={(e) => setForm((p) => ({ ...p, rotaPlatoon: e.target.value as typeof p.rotaPlatoon }))}
+                  required
+                >
+                  <option value="">Выберите взвод</option>
+                  {ROTA_PLATOON_OPTIONS.map((value) => (
+                    <option key={value} value={value}>
+                      {value} взвод
+                    </option>
+                  ))}
+                </select>
+
+                <label className="label">Отделение</label>
+                <select
+                  className="select"
+                  value={form.rotaSection}
+                  onChange={(e) => setForm((p) => ({ ...p, rotaSection: e.target.value as typeof p.rotaSection }))}
+                  required
+                >
+                  <option value="">Выберите отделение</option>
+                  {ROTA_SECTION_OPTIONS.map((value) => (
+                    <option key={value} value={value}>
+                      {value} отделение
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
 
             <label className="label">Должность</label>
             <select
