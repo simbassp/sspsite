@@ -1,35 +1,53 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { readClientSession } from "@/lib/client-auth";
-import { formatDate } from "@/lib/format";
 import { canManageNews } from "@/lib/permissions";
-import { applyMarkupToSelection, isUpdateNews, NewsBody } from "@/lib/news-text";
-import { deleteNews, fetchNews, normalizeNewsTextStyle, updateNews } from "@/lib/news-repository";
-import { AuthorInfo } from "@/components/news/AuthorInfo";
-import { NewsItem } from "@/lib/types";
+import { applyMarkupToSelection } from "@/lib/news-text";
+import {
+  createNews,
+  deleteNews,
+  fetchNews,
+  normalizeNewsTextStyle,
+  updateNews,
+} from "@/lib/news-repository";
+import { countNewsByFilter, matchesNewsFilter, type NewsFilter } from "@/lib/news-ui";
+import { NewsEditorForm } from "@/components/news/NewsEditorForm";
+import { NewsFiltersBar } from "@/components/news/NewsFiltersBar";
+import { NewsMessageCard } from "@/components/news/NewsMessageCard";
+import type { NewsItem } from "@/lib/types";
+
+type EditDraft = {
+  title: string;
+  body: string;
+  priority: "normal" | "high" | "update";
+};
+
+const EMPTY_DRAFT: EditDraft = { title: "", body: "", priority: "normal" };
 
 export default function NewsPage() {
   const [news, setNews] = useState<NewsItem[]>([]);
-  const [filter, setFilter] = useState<"all" | "high" | "update">("all");
+  const [filter, setFilter] = useState<NewsFilter>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const session = readClientSession();
   const canEditNews = canManageNews(session);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editDraft, setEditDraft] = useState<{ title: string; body: string; priority: "normal" | "high" | "update" }>({
-    title: "",
-    body: "",
-    priority: "normal",
-  });
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editDraft, setEditDraft] = useState<EditDraft>(EMPTY_DRAFT);
+  const [createDraft, setCreateDraft] = useState<EditDraft>(EMPTY_DRAFT);
+  const [pageSize, setPageSize] = useState(10);
+  const [page, setPage] = useState(1);
   const editBodyRef = useRef<HTMLTextAreaElement | null>(null);
+  const createBodyRef = useRef<HTMLTextAreaElement | null>(null);
 
   const load = async (forceRefresh = false) => {
     setLoading(true);
     setError("");
     try {
-      const rows = await fetchNews(40, forceRefresh);
+      const rows = await fetchNews(200, forceRefresh);
       setNews(rows);
     } catch {
       setError("Не удалось загрузить новости. Проверьте интернет и попробуйте снова.");
@@ -43,26 +61,76 @@ export default function NewsPage() {
     void load();
   }, []);
 
-  const visible = news
-    .filter((item) => {
-      if (filter === "high") return item.priority === "high";
-      if (filter === "update") return isUpdateNews(item);
-      return true;
-    })
-    .sort((a, b) => {
-      const left = new Date(a.createdAt).getTime();
-      const right = new Date(b.createdAt).getTime();
-      return (Number.isNaN(right) ? 0 : right) - (Number.isNaN(left) ? 0 : left);
+  const counts = useMemo(() => countNewsByFilter(news), [news]);
+
+  const visible = useMemo(
+    () =>
+      news
+        .filter((item) => matchesNewsFilter(item, filter))
+        .sort((a, b) => {
+          const left = new Date(a.createdAt).getTime();
+          const right = new Date(b.createdAt).getTime();
+          return (Number.isNaN(right) ? 0 : right) - (Number.isNaN(left) ? 0 : left);
+        }),
+    [filter, news],
+  );
+
+  const pages = Math.max(1, Math.ceil(visible.length / pageSize));
+  const currentPage = Math.min(page, pages);
+  const pagedNews = visible.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  useEffect(() => {
+    setPage(1);
+  }, [filter, pageSize]);
+
+  const toggleExpanded = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
     });
+  };
 
   const startEdit = (item: NewsItem) => {
+    setCreateOpen(false);
     setEditingId(item.id);
     setEditDraft({
       title: item.title,
       body: item.body,
-      priority: item.kind === "update" ? "update" : item.priority,
+      priority: item.kind === "update" ? "update" : item.priority === "high" ? "high" : "normal",
     });
   };
+
+  const applySelectionTag = (
+    ref: RefObject<HTMLTextAreaElement | null>,
+    setter: (updater: (prev: EditDraft) => EditDraft) => void,
+    tag: "b" | "i" | "u",
+  ) => {
+    const textarea = ref.current;
+    if (!textarea) return;
+    const { selectionStart, selectionEnd, value } = textarea;
+    const next = applyMarkupToSelection({ value, start: selectionStart, end: selectionEnd, tag });
+    setter((prev) => ({ ...prev, body: next.nextValue }));
+    window.requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(next.caretStart, next.caretEnd);
+    });
+  };
+
+  const markupToolbar = (ref: RefObject<HTMLTextAreaElement | null>, setter: (updater: (prev: EditDraft) => EditDraft) => void) => (
+    <div className="news-editor-form__toolbar">
+      <button className="btn" type="button" onClick={() => applySelectionTag(ref, setter, "b")}>
+        Жирный
+      </button>
+      <button className="btn" type="button" onClick={() => applySelectionTag(ref, setter, "i")}>
+        Курсив
+      </button>
+      <button className="btn" type="button" onClick={() => applySelectionTag(ref, setter, "u")}>
+        Подчеркнутый
+      </button>
+    </div>
+  );
 
   const saveEdit = async (item: NewsItem) => {
     const nextTitle = editDraft.title.trim();
@@ -99,16 +167,26 @@ export default function NewsPage() {
     await load(true);
   };
 
-  const applyEditSelectionTag = (tag: "b" | "i" | "u") => {
-    const textarea = editBodyRef.current;
-    if (!textarea) return;
-    const { selectionStart, selectionEnd, value } = textarea;
-    const next = applyMarkupToSelection({ value, start: selectionStart, end: selectionEnd, tag });
-    setEditDraft((prev) => ({ ...prev, body: next.nextValue }));
-    window.requestAnimationFrame(() => {
-      textarea.focus();
-      textarea.setSelectionRange(next.caretStart, next.caretEnd);
+  const saveCreate = async () => {
+    const nextTitle = createDraft.title.trim();
+    const nextBody = createDraft.body.trim();
+    if (!nextTitle || !nextBody) {
+      setInfo("Заполните заголовок и текст.");
+      return;
+    }
+    const result = await createNews({
+      title: nextTitle,
+      body: nextBody,
+      priority: createDraft.priority,
+      authorSnapshot: [session?.name?.trim(), session?.callsign?.trim()].filter(Boolean).join(" ").trim(),
+      authorPositionSnapshot: session?.position ?? null,
     });
+    setInfo(result.ok ? "Сообщение опубликовано." : `Ошибка публикации: ${result.error}`);
+    if (result.ok) {
+      setCreateOpen(false);
+      setCreateDraft(EMPTY_DRAFT);
+      await load(true);
+    }
   };
 
   const onDelete = async (item: NewsItem) => {
@@ -124,33 +202,55 @@ export default function NewsPage() {
   };
 
   return (
-    <section>
+    <section className="news-page">
       <h1 className="page-title">Новости</h1>
-      <p className="page-subtitle">Карточки сообщений с быстрым фильтром по важности.</p>
+      <p className="page-subtitle">Сообщения и обновления платформы.</p>
 
-      <div className="chips">
-        <button className={`chip ${filter === "all" ? "active" : ""}`} onClick={() => setFilter("all")} type="button">
-          Все
-        </button>
-        <button className={`chip ${filter === "high" ? "active" : ""}`} onClick={() => setFilter("high")} type="button">
-          Важные
-        </button>
-        <button className={`chip ${filter === "update" ? "active" : ""}`} onClick={() => setFilter("update")} type="button">
-          Update
-        </button>
-      </div>
-      {info && (
-        <p className="page-subtitle" style={{ marginTop: 10 }}>
-          {info}
-        </p>
-      )}
+      <NewsFiltersBar
+        filter={filter}
+        counts={counts}
+        canCreate={canEditNews}
+        onFilterChange={setFilter}
+        onCreate={() => {
+          setEditingId(null);
+          setCreateOpen(true);
+          setCreateDraft(EMPTY_DRAFT);
+        }}
+      />
 
-      <div className="list" style={{ marginTop: 12 }}>
+      {info ? <p className="page-subtitle news-page__info">{info}</p> : null}
+
+      {createOpen && canEditNews ? (
+        <article className="card news-page__composer">
+          <div className="card-body">
+            <h3 className="news-page__composer-title">Новое сообщение</h3>
+            <NewsEditorForm
+              title={createDraft.title}
+              body={createDraft.body}
+              priority={createDraft.priority}
+              bodyRef={createBodyRef}
+              submitLabel="Опубликовать"
+              onTitleChange={(value) => setCreateDraft((prev) => ({ ...prev, title: value }))}
+              onBodyChange={(value) => setCreateDraft((prev) => ({ ...prev, body: value }))}
+              onPriorityChange={(value) => setCreateDraft((prev) => ({ ...prev, priority: value }))}
+              onSubmit={() => void saveCreate()}
+              onCancel={() => {
+                setCreateOpen(false);
+                setCreateDraft(EMPTY_DRAFT);
+              }}
+              toolbar={markupToolbar(createBodyRef, setCreateDraft)}
+            />
+          </div>
+        </article>
+      ) : null}
+
+      <div className="news-page__list">
         {loading && (
           <>
             <p className="page-subtitle">Загрузка новостей...</p>
             {[1, 2].map((i) => (
-              <article className="card" key={`news-skeleton-${i}`}>
+              <article className="card news-message-card is-news" key={`news-skeleton-${i}`}>
+                <div className="news-message-card__accent" aria-hidden />
                 <div className="card-body">
                   <p className="label">Загружаем карточку...</p>
                 </div>
@@ -158,6 +258,7 @@ export default function NewsPage() {
             ))}
           </>
         )}
+
         {!loading && !!error && (
           <article className="card">
             <div className="card-body form">
@@ -168,102 +269,71 @@ export default function NewsPage() {
             </div>
           </article>
         )}
+
         {!loading && !error && !visible.length && <p className="page-subtitle">Новости пока отсутствуют.</p>}
-        {visible.map((item) => (
-          <article className="card" key={item.id}>
-            <div className="card-body">
-              {editingId === item.id ? (
-                <div className="form" style={{ marginBottom: 4 }}>
-                  <input
-                    className="input"
-                    value={editDraft.title}
-                    onChange={(e) => setEditDraft((prev) => ({ ...prev, title: e.target.value }))}
-                    placeholder="Заголовок"
-                  />
-                  <textarea
-                    ref={editBodyRef}
-                    className="input"
-                    value={editDraft.body}
-                    onChange={(e) => setEditDraft((prev) => ({ ...prev, body: e.target.value }))}
-                    placeholder="Текст новости"
-                    style={{ minHeight: 100 }}
-                  />
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <button className="btn" type="button" onClick={() => applyEditSelectionTag("b")}>
-                      Жирный
-                    </button>
-                    <button className="btn" type="button" onClick={() => applyEditSelectionTag("i")}>
-                      Курсив
-                    </button>
-                    <button className="btn" type="button" onClick={() => applyEditSelectionTag("u")}>
-                      Подчеркнутый
-                    </button>
-                  </div>
-                  <select
-                    className="select"
-                    value={editDraft.priority}
-                    onChange={(e) => setEditDraft((prev) => ({ ...prev, priority: e.target.value as typeof prev.priority }))}
-                  >
-                    <option value="normal">Обычная</option>
-                    <option value="high">Важная</option>
-                    <option value="update">Update</option>
-                  </select>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button className="btn btn-primary" type="button" onClick={() => void saveEdit(item)}>
-                      Сохранить
-                    </button>
-                    <button className="btn" type="button" onClick={() => setEditingId(null)}>
-                      Отмена
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-              <div className="news-card-header" style={{ marginTop: editingId === item.id ? 8 : 0 }}>
-                <span className={`pill ${item.priority === "high" ? "pill-red" : ""}`}>
-                  {formatDate(item.createdAt)} · {item.priority === "high" ? "Важно" : isUpdateNews(item) ? "Update" : "Новость"}
-                </span>
-                <AuthorInfo author={item.authorProfile ?? item.authorInfo ?? null} fallbackName={item.author} />
-              </div>
-              {editingId !== item.id ? <h3 style={{ marginTop: 10 }}>{item.title}</h3> : null}
-              <NewsBody
-                className="page-subtitle"
-                style={{
-                  marginTop: 10,
-                  marginBottom: 0,
-                  fontWeight: normalizeNewsTextStyle(item.textStyle).bold ? 700 : 400,
-                  fontStyle: normalizeNewsTextStyle(item.textStyle).italic ? "italic" : "normal",
-                  textDecoration: normalizeNewsTextStyle(item.textStyle).underline ? "underline" : "none",
-                }}
-                body={item.body}
-              />
-              {canEditNews && editingId !== item.id && (
-                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                  <button
-                    className="btn"
-                    style={{ width: 38, height: 34, padding: 0, fontSize: 16, lineHeight: 1 }}
-                    type="button"
-                    title="Редактировать"
-                    aria-label={`Редактировать ${item.title}`}
-                    onClick={() => startEdit(item)}
-                  >
-                    ✏
-                  </button>
-                  <button
-                    className="btn btn-danger"
-                    style={{ width: 38, height: 34, padding: 0, fontSize: 16, lineHeight: 1 }}
-                    type="button"
-                    title="Удалить"
-                    aria-label={`Удалить ${item.title}`}
-                    onClick={() => void onDelete(item)}
-                  >
-                    🗑
-                  </button>
-                </div>
-              )}
-            </div>
-          </article>
-        ))}
+
+        {!loading &&
+          !error &&
+          pagedNews.map((item) => (
+            <NewsMessageCard
+              key={item.id}
+              item={item}
+              expanded={expandedIds.has(item.id)}
+              canEdit={canEditNews}
+              editing={editingId === item.id}
+              onToggleView={() => toggleExpanded(item.id)}
+              onEdit={() => startEdit(item)}
+              onDelete={() => void onDelete(item)}
+              editForm={
+                <NewsEditorForm
+                  title={editDraft.title}
+                  body={editDraft.body}
+                  priority={editDraft.priority}
+                  bodyRef={editBodyRef}
+                  submitLabel="Сохранить"
+                  onTitleChange={(value) => setEditDraft((prev) => ({ ...prev, title: value }))}
+                  onBodyChange={(value) => setEditDraft((prev) => ({ ...prev, body: value }))}
+                  onPriorityChange={(value) => setEditDraft((prev) => ({ ...prev, priority: value }))}
+                  onSubmit={() => void saveEdit(item)}
+                  onCancel={() => setEditingId(null)}
+                  toolbar={markupToolbar(editBodyRef, setEditDraft)}
+                />
+              }
+            />
+          ))}
       </div>
+
+      {!loading && !error && visible.length > 0 ? (
+        <div className="news-page__footer">
+          <span className="news-page__footer-total">Всего: {visible.length}</span>
+          <div className="news-page__pagination">
+            <button className="btn" type="button" disabled={currentPage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+              ‹
+            </button>
+            <span className="news-page__page-indicator">{currentPage}</span>
+            <button
+              className="btn"
+              type="button"
+              disabled={currentPage >= pages}
+              onClick={() => setPage((p) => Math.min(pages, p + 1))}
+            >
+              ›
+            </button>
+          </div>
+          <select
+            className="select news-page__page-size"
+            value={pageSize}
+            onChange={(e) => {
+              setPageSize(Number(e.target.value));
+              setPage(1);
+            }}
+          >
+            <option value={10}>10 на странице</option>
+            <option value={20}>20 на странице</option>
+            <option value={30}>30 на странице</option>
+          </select>
+        </div>
+      ) : null}
     </section>
   );
 }
