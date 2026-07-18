@@ -257,9 +257,11 @@ async function loginViaServer(login: string, password: string): Promise<ServerLo
       };
     }
     if (!payload || !("ok" in payload) || payload.ok !== true) {
+      const serverMessage =
+        payload && "error" in payload && typeof payload.error === "string" ? payload.error.trim() : "";
       return {
         ok: false,
-        error: "Некорректный ответ сервера авторизации. Повторите попытку.",
+        error: serverMessage || "Некорректный ответ сервера авторизации. Повторите попытку.",
       };
     }
     return payload;

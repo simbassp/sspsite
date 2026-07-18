@@ -1,4 +1,7 @@
 import { NextResponse } from "next/server";
+import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
+
+export const runtime = "nodejs";
 
 type SupabaseTokenResponse = {
   access_token: string;
@@ -12,6 +15,7 @@ type SupabaseTokenResponse = {
 
 type ProfileRow = {
   id: string;
+  auth_user_id?: string | null;
   role: "employee" | "admin";
   name: string;
   callsign: string;
@@ -108,12 +112,64 @@ async function signInWithEmail(baseUrl: string, anonKey: string, email: string, 
   }
 }
 
-async function fetchProfile(baseUrl: string, anonKey: string, accessToken: string, authUserId: string) {
-  const url = new URL(`${baseUrl}/rest/v1/app_users`);
-  url.searchParams.set("select", "*");
-  url.searchParams.set("auth_user_id", `eq.${authUserId}`);
-  url.searchParams.set("limit", "1");
+function canLinkProfileToAuthUser(profile: ProfileRow, authUserId: string) {
+  if (profile.auth_user_id && profile.auth_user_id !== authUserId) return false;
+  return profile.id === authUserId || !profile.auth_user_id;
+}
+
+async function fetchProfileViaServiceRole(authUserId: string, loginHint: string) {
   try {
+    const supabase = getServerSupabaseServiceClient();
+    const select = "*";
+
+    const byAuth = await supabase.from("app_users").select(select).eq("auth_user_id", authUserId).maybeSingle();
+    if (byAuth.error) return null;
+    if (byAuth.data) return byAuth.data as ProfileRow;
+
+    const byId = await supabase.from("app_users").select(select).eq("id", authUserId).maybeSingle();
+    if (byId.error) return null;
+    if (byId.data) {
+      const profile = byId.data as ProfileRow;
+      if (canLinkProfileToAuthUser(profile, authUserId) && profile.auth_user_id !== authUserId) {
+        await supabase.from("app_users").update({ auth_user_id: authUserId }).eq("id", profile.id);
+        profile.auth_user_id = authUserId;
+      }
+      return profile;
+    }
+
+    const login = loginHint.trim();
+    if (login && !login.includes("@")) {
+      const byLogin = await supabase.from("app_users").select(select).ilike("login", login).maybeSingle();
+      if (byLogin.error) return null;
+      if (byLogin.data) {
+        const profile = byLogin.data as ProfileRow;
+        if (canLinkProfileToAuthUser(profile, authUserId)) {
+          if (profile.auth_user_id !== authUserId) {
+            await supabase.from("app_users").update({ auth_user_id: authUserId }).eq("id", profile.id);
+            profile.auth_user_id = authUserId;
+          }
+          return profile;
+        }
+      }
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchProfileViaUserToken(
+  baseUrl: string,
+  anonKey: string,
+  accessToken: string,
+  authUserId: string,
+) {
+  async function query(filter: "auth_user_id" | "id") {
+    const url = new URL(`${baseUrl}/rest/v1/app_users`);
+    url.searchParams.set("select", "*");
+    url.searchParams.set(filter, `eq.${authUserId}`);
+    url.searchParams.set("limit", "1");
     const response = await fetchWithTimeout(url.toString(), {
       method: "GET",
       headers: {
@@ -125,6 +181,10 @@ async function fetchProfile(baseUrl: string, anonKey: string, accessToken: strin
     if (!response.ok) return null;
     const rows = (await response.json()) as ProfileRow[];
     return Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  }
+
+  try {
+    return (await query("auth_user_id")) ?? (await query("id"));
   } catch {
     return null;
   }
@@ -193,15 +253,23 @@ export async function POST(request: Request) {
   }
 
   if (!authUserId || !accessToken || !refreshToken) {
-    return NextResponse.json({ ok: false, error: lastError });
+    return NextResponse.json({ ok: false, error: lastError }, { status: 401 });
   }
 
-  const profile = await fetchProfile(baseUrl, supabaseAnonKey, accessToken, authUserId);
+  const profile =
+    (await fetchProfileViaServiceRole(authUserId, login)) ??
+    (await fetchProfileViaUserToken(baseUrl, supabaseAnonKey, accessToken, authUserId));
   if (!profile) {
-    return NextResponse.json({ ok: false, error: "Профиль пользователя не найден в app_users." });
+    return NextResponse.json(
+      { ok: false, error: "Профиль пользователя не найден в app_users." },
+      { status: 404 },
+    );
   }
   if (profile.status !== "active") {
-    return NextResponse.json({ ok: false, error: "Пользователь деактивирован администратором." });
+    return NextResponse.json(
+      { ok: false, error: "Пользователь деактивирован администратором." },
+      { status: 403 },
+    );
   }
 
   const hasGranularContentPermissions = [

@@ -26,8 +26,8 @@ import { readClientSession } from "@/lib/client-auth";
 import { canManageUsers, canResetTestResults } from "@/lib/permissions";
 import { dutyLocationLabel } from "@/lib/duty-location";
 import { resolvePersonnelProfilePath } from "@/lib/personnel-profile-path";
-import { PERSONNEL_EXAM_TYPES, PERSONNEL_LICENSE_CATEGORIES, personnelExamLabel, rotaUnitLabel, rotaUnitLabelCompact } from "@/lib/personnel-catalog";
-import type { PersonnelExamType, PersonnelLicenseCategory } from "@/lib/personnel-catalog";
+import { PERSONNEL_EXAM_TYPES, PERSONNEL_LICENSE_CATEGORIES, computePersonnelActivityScore, personnelExamLabel, rotaUnitLabel, rotaUnitLabelCompact } from "@/lib/personnel-catalog";
+import type { PersonnelExamType, PersonnelLicenseCategory, PersonnelRosterTops } from "@/lib/personnel-catalog";
 import type { Position } from "@/lib/types";
 
 type ExamFilterStatus = "all" | "passed" | "failed";
@@ -128,6 +128,7 @@ type UserRow = {
   deploymentDays: number;
   uavHitsTotal: number;
   premiumsTotal: number;
+  medalsCount: number;
   licenseCategories: string[];
   testStats: PersonnelTestRosterStats;
 };
@@ -143,11 +144,13 @@ export default function PersonnelListPage() {
   const [search, setSearch] = useState("");
   const [users, setUsers] = useState<UserRow[]>([]);
   const [stats, setStats] = useState({ totalEmployees: 0, deployedNow: 0, avgDays: 0, totalHits: 0, totalPremiums: 0 });
-  const [tops, setTops] = useState<{
-    hits: UserRow[];
-    premiums: UserRow[];
-    days: UserRow[];
-  }>({ hits: [], premiums: [], days: [] });
+  const [tops, setTops] = useState<PersonnelRosterTops<UserRow>>({
+    hits: [],
+    trialTests: [],
+    finalTests: [],
+    deployments: [],
+    activity: [],
+  });
   const [isPreview, setIsPreview] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -662,12 +665,22 @@ export default function PersonnelListPage() {
         <div className="personnel-top-grid">
           {(
             [
-              ["Топ по сбитиям", tops.hits, (u: UserRow) => u.uavHitsTotal],
-              ["Топ по премиям", tops.premiums, (u: UserRow) => `${u.premiumsTotal.toLocaleString("ru-RU")} ₽`],
-              ["Топ по дням в командировке", tops.days, (u: UserRow) => `${u.deploymentDays} дн.`],
+              ["Топ по сбитиям", tops.hits, (u: UserRow) => String(u.uavHitsTotal)],
+              ["Топ по пробным тестам", tops.trialTests, (u: UserRow) => `${u.testStats.trialPassed} сдано`],
+              ["Топ по итоговым тестам", tops.finalTests, (u: UserRow) => `${u.testStats.finalPassed} сдано`],
+              ["Топ по командировкам", tops.deployments, (u: UserRow) => `${u.deploymentsCount} шт.`],
+              ["Самые активные", tops.activity, (u: UserRow) => `${computePersonnelActivityScore(u)} очк.`],
             ] as const
           ).map(([title, list, fmt]) => (
-            <article key={title} className="card personnel-top-card">
+            <article
+              key={title}
+              className="card personnel-top-card"
+              title={
+                title === "Самые активные"
+                  ? "Сбития + командировки + медали + сданные тесты и зачёты"
+                  : undefined
+              }
+            >
               <div className="card-body">
                 <h3 style={{ margin: 0 }}>{title}</h3>
                 <ol>

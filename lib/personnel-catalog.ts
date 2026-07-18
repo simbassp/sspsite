@@ -219,3 +219,53 @@ export function rotaUnitLabelCompact(platoon: number | null | undefined, section
   if (platoon) return `${platoon}В`;
   return `${section}О`;
 }
+
+export type PersonnelRosterTopUser = {
+  id: string;
+  name: string;
+  uavHitsTotal: number;
+  deploymentsCount: number;
+  medalsCount: number;
+  testStats: {
+    trialPassed: number;
+    trialFailed: number;
+    finalPassed: number;
+    finalFailed: number;
+  };
+  exams: Array<{ examType: string; status: string }>;
+};
+
+/** Суммарный балл активности по ключевым показателям (без премий). */
+export function computePersonnelActivityScore(user: PersonnelRosterTopUser) {
+  const passedExams = user.exams.filter((exam) => exam.status === "passed").length;
+  return (
+    user.uavHitsTotal +
+    user.deploymentsCount +
+    user.medalsCount +
+    user.testStats.trialPassed +
+    user.testStats.finalPassed +
+    passedExams
+  );
+}
+
+const ROSTER_TOP_LIMIT = 5;
+
+export type PersonnelRosterTops<T extends PersonnelRosterTopUser> = {
+  hits: T[];
+  trialTests: T[];
+  finalTests: T[];
+  deployments: T[];
+  activity: T[];
+};
+
+export function buildPersonnelRosterTops<T extends PersonnelRosterTopUser>(users: T[]): PersonnelRosterTops<T> {
+  return {
+    hits: [...users].sort((a, b) => b.uavHitsTotal - a.uavHitsTotal).slice(0, ROSTER_TOP_LIMIT),
+    trialTests: [...users].sort((a, b) => b.testStats.trialPassed - a.testStats.trialPassed).slice(0, ROSTER_TOP_LIMIT),
+    finalTests: [...users].sort((a, b) => b.testStats.finalPassed - a.testStats.finalPassed).slice(0, ROSTER_TOP_LIMIT),
+    deployments: [...users].sort((a, b) => b.deploymentsCount - a.deploymentsCount).slice(0, ROSTER_TOP_LIMIT),
+    activity: [...users]
+      .sort((a, b) => computePersonnelActivityScore(b) - computePersonnelActivityScore(a))
+      .slice(0, ROSTER_TOP_LIMIT),
+  };
+}

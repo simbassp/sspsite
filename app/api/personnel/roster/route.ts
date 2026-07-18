@@ -1,4 +1,5 @@
 import { getPersonnelContext } from "@/lib/personnel-api-guard";
+import { buildPersonnelRosterTops } from "@/lib/personnel-catalog";
 import { loadPersonnelRoster } from "@/lib/personnel-server";
 
 export const runtime = "nodejs";
@@ -36,15 +37,11 @@ export async function GET(req: Request) {
   );
   const avgDays = totals.totalEmployees ? Math.round(totals.totalDays / totals.totalEmployees) : 0;
 
-  const topHits = [...users].sort((a, b) => b.uavHitsTotal - a.uavHitsTotal).slice(0, 5);
-  const topPremiums = [...users].sort((a, b) => b.premiumsTotal - a.premiumsTotal).slice(0, 5);
-  const topDays = [...users].sort((a, b) => b.deploymentDays - a.deploymentDays).slice(0, 5);
-
   return Response.json({
     ok: true,
     isPreview: ctx.access.isPreview,
     users,
     stats: { ...totals, avgDays },
-    tops: { hits: topHits, premiums: topPremiums, days: topDays },
+    tops: buildPersonnelRosterTops(users),
   });
 }
