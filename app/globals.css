@@ -1166,19 +1166,23 @@ html[data-theme="dark"] .chip:not(.active):hover {
   border-left-color: var(--warn);
 }
 
-/* Нейтральный фон: без красного radial-gradient body в колонке контента */
-.admin-results-shell {
+/* Results page: neutral canvas without red body gradient on sides */
+body:has(.admin-results-shell) {
   background: var(--bg);
-  margin: -16px;
-  padding: 16px;
-  min-height: 100%;
 }
 
 @media (min-width: 820px) {
-  .admin-results-shell {
-    margin: -24px;
-    padding: 24px;
+  body:has(.admin-results-shell) .desktop-sidebar {
+    background: var(--bg);
   }
+
+  body:has(.admin-results-shell) .app-shell > main {
+    background: var(--bg);
+  }
+}
+
+.admin-results-shell {
+  min-height: 100%;
 }
 
 .list {
