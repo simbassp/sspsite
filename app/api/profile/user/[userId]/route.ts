@@ -118,7 +118,10 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
     const rotaPlatoon = userRow.rota_platoon != null ? Number(userRow.rota_platoon) : null;
     const rotaSection = userRow.rota_section != null ? Number(userRow.rota_section) : null;
     const employmentDate = userRow.employment_date ? String(userRow.employment_date).slice(0, 10) : null;
-    const personnelMeta = await loadProfilePersonnelMeta(userId);
+    const personnelMeta =
+      unitAssignment === "company_4"
+        ? await loadProfilePersonnelMeta(userId)
+        : { licenseCategories: [], bloodGroup: null };
 
     return Response.json({
       ok: true,

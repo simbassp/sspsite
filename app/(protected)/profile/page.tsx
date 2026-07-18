@@ -922,7 +922,7 @@ export default function ProfilePage() {
                   <span className="profile-rota-badge">{rotaUnitCompactLabel(rotaPlatoon, rotaSection)}</span>
                 ) : null}
               </div>
-              {session?.id ? (
+              {session?.id && unitAssignment === "company_4" ? (
                 <ProfilePersonnelMetaFields
                   userId={session.id}
                   canEdit

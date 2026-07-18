@@ -4,6 +4,7 @@ import {
   type PersonnelBloodGroup,
   type PersonnelLicenseCategory,
 } from "@/lib/personnel-catalog";
+import { normalizeUnitAssignment } from "@/lib/unit-assignment";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 
 export type ProfilePersonnelMeta = {
@@ -14,6 +15,18 @@ export type ProfilePersonnelMeta = {
 function isMissingColumnError(message: string | undefined) {
   const m = (message || "").toLowerCase();
   return m.includes("column") && m.includes("does not exist");
+}
+
+export async function assertProfilePersonnelMetaTarget(userId: string) {
+  const supabase = getServerSupabaseServiceClient();
+  const res = await supabase.from("app_users").select("unit_assignment").eq("id", userId).maybeSingle();
+  if (res.error || !res.data) {
+    return { ok: false as const, error: "not_found" };
+  }
+  if (normalizeUnitAssignment(res.data.unit_assignment) !== "company_4") {
+    return { ok: false as const, error: "company_4_only" };
+  }
+  return { ok: true as const };
 }
 
 export async function loadProfilePersonnelMeta(userId: string): Promise<ProfilePersonnelMeta> {
@@ -37,6 +50,9 @@ export async function loadProfilePersonnelMeta(userId: string): Promise<ProfileP
 }
 
 export async function saveProfileLicenseCategories(userId: string, categories: unknown) {
+  const target = await assertProfilePersonnelMetaTarget(userId);
+  if (!target.ok) return target;
+
   const normalized = normalizePersonnelLicenseCategories(categories);
   const supabase = getServerSupabaseServiceClient();
   const res = await supabase.from("personnel_licenses").upsert(
@@ -52,6 +68,9 @@ export async function saveProfileLicenseCategories(userId: string, categories: u
 }
 
 export async function saveProfileBloodGroup(userId: string, bloodGroup: unknown) {
+  const target = await assertProfilePersonnelMetaTarget(userId);
+  if (!target.ok) return target;
+
   const normalized = normalizePersonnelBloodGroup(bloodGroup);
   const supabase = getServerSupabaseServiceClient();
   const res = await supabase

@@ -87,7 +87,8 @@ export async function GET() {
       if (!invitesQ.error) inviteCodes = invitesQ.data || [];
     }
 
-    const personnelMeta = await loadProfilePersonnelMeta(session.id);
+    const personnelMeta =
+      unitAssignment === "company_4" ? await loadProfilePersonnelMeta(session.id) : { licenseCategories: [], bloodGroup: null };
 
     return Response.json({
       ok: true,

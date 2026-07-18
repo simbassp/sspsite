@@ -41,7 +41,7 @@ export async function PATCH(request: Request) {
   try {
     const result = await saveProfileBloodGroup(targetUserId, raw.bloodGroup ?? null);
     if (!result.ok) {
-      const status = result.error.includes("миграции") ? 503 : 500;
+      const status = result.error.includes("миграции") ? 503 : result.error === "company_4_only" ? 400 : 500;
       return Response.json({ ok: false, error: result.error }, { status });
     }
     return Response.json({ ok: true, bloodGroup: result.bloodGroup });

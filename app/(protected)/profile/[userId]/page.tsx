@@ -708,12 +708,14 @@ export default function ProfileUserInspectPage() {
                       <span className="profile-rota-badge">{rotaUnitCompactLabel(rotaPlatoon, rotaSection)}</span>
                     ) : null}
                   </div>
-                  <ProfilePersonnelMetaFields
-                    userId={inspectUser.id}
-                    canEdit={canEditPersonnelMeta}
-                    licenseCategories={licenseCategories}
-                    bloodGroup={bloodGroup}
-                  />
+                  {inspectUser.unit_assignment === "company_4" ? (
+                    <ProfilePersonnelMetaFields
+                      userId={inspectUser.id}
+                      canEdit={canEditPersonnelMeta}
+                      licenseCategories={licenseCategories}
+                      bloodGroup={bloodGroup}
+                    />
+                  ) : null}
                   <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
                     @{inspectUser.login}
                     {inspectUser.status === "inactive" ? (

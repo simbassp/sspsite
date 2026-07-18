@@ -41,7 +41,8 @@ export async function PATCH(request: Request) {
   try {
     const result = await saveProfileLicenseCategories(targetUserId, raw.categories);
     if (!result.ok) {
-      return Response.json({ ok: false, error: result.error }, { status: 500 });
+      const status = result.error === "company_4_only" ? 400 : 500;
+      return Response.json({ ok: false, error: result.error }, { status });
     }
     return Response.json({ ok: true, licenseCategories: result.licenseCategories });
   } catch (error) {
