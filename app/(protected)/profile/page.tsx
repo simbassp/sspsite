@@ -110,7 +110,6 @@ export default function ProfilePage() {
   const [passwordInput, setPasswordInput] = useState("");
   const [passwordRepeat, setPasswordRepeat] = useState("");
   const [settingsMessage, setSettingsMessage] = useState("");
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [initialLoadError, setInitialLoadError] = useState("");
   const [isInviteLoading, setIsInviteLoading] = useState(false);
   const [isSavingInvite, setIsSavingInvite] = useState(false);
@@ -157,10 +156,9 @@ export default function ProfilePage() {
   }, [session?.avatarUrl, session?.id]);
 
   useEffect(() => {
-    if (!session) return;
+    if (!session?.id) return;
     let cancelled = false;
     (async () => {
-      setIsInitialLoading(true);
       setInitialLoadError("");
       try {
         const response = await fetch("/api/profile/bootstrap", { cache: "no-store" });
@@ -235,11 +233,6 @@ export default function ProfilePage() {
         const nextAvatarUrl =
           typeof payload.avatarUrl === "string" && payload.avatarUrl.trim() ? payload.avatarUrl.trim() : null;
         setAvatarUrl(nextAvatarUrl);
-        if (session) {
-          const nextSession = { ...session, avatarUrl: nextAvatarUrl };
-          persistSession(nextSession);
-          setSession(nextSession);
-        }
         if (typeof payload.email === "string" && payload.email) {
           setEmailInput(payload.email);
         } else {
@@ -260,14 +253,12 @@ export default function ProfilePage() {
         }
       } catch {
         if (!cancelled) setInitialLoadError("Не удалось загрузить часть данных профиля. Попробуйте обновить страницу.");
-      } finally {
-        if (!cancelled) setIsInitialLoading(false);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [session, canManageInvites]);
+  }, [session?.id, canManageInvites]);
 
   useEffect(() => {
     const sync = () => setIsOnline(typeof navigator !== "undefined" ? navigator.onLine : true);
@@ -947,7 +938,6 @@ export default function ProfilePage() {
   return (
     <section className="profile-page">
       <h1 className="page-title">Профиль</h1>
-      {isInitialLoading && <p className="page-subtitle">Загружаем профиль...</p>}
       {!!initialLoadError && <p className="page-subtitle">{initialLoadError}</p>}
 
       <article className="card profile-hero-card">
