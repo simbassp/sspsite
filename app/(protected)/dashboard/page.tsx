@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { HomeStatsBar } from "@/components/HomeStatsBar";
 
 type HomePayload = {
   ok?: boolean;
@@ -214,6 +215,7 @@ export default function DashboardPage() {
     <section className="dashboard-page">
       <h1 className="page-title">Главная</h1>
       <p className="page-subtitle">Быстрый доступ к разделам системы.</p>
+      <HomeStatsBar />
       <div className="dashboard-page__stack">
         <article className="card">
           <div className="card-body">

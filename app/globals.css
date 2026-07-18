@@ -1955,6 +1955,126 @@ html[data-theme="dark"] .chip:not(.active):hover {
   gap: 12px;
 }
 
+.home-stats-bar {
+  margin-bottom: 12px;
+}
+
+.home-stats-bar .card-body {
+  padding: 14px 16px;
+}
+
+.home-stats-bar__body {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  overflow-x: auto;
+}
+
+.home-stats-bar__item {
+  flex: 1 1 0;
+  min-width: 120px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+}
+
+.home-stats-bar__item--wide {
+  flex: 1.35 1 180px;
+  min-width: 180px;
+}
+
+.home-stats-bar__item:not(:first-child) {
+  border-left: 1px solid var(--line);
+}
+
+.home-stats-bar__item:first-child {
+  padding-left: 0;
+}
+
+.home-stats-bar__item:last-child {
+  padding-right: 0;
+}
+
+.home-stats-bar__icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  color: color-mix(in srgb, var(--text) 72%, var(--muted));
+}
+
+.home-stats-bar__icon .home-icon-svg {
+  width: 22px;
+  height: 22px;
+}
+
+.home-stats-bar__online-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 0 3px rgba(35, 147, 92, 0.18);
+}
+
+.home-stats-bar__content {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.home-stats-bar__label {
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.home-stats-bar__value {
+  font-size: 18px;
+  line-height: 1.25;
+  font-weight: 800;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.home-stats-bar__value--names {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+@media (max-width: 900px) {
+  .home-stats-bar__body {
+    flex-wrap: wrap;
+    row-gap: 12px;
+  }
+
+  .home-stats-bar__item {
+    flex: 1 1 calc(50% - 8px);
+    min-width: 0;
+    border-left: none !important;
+    padding: 0 !important;
+  }
+
+  .home-stats-bar__item--wide {
+    flex: 1 1 100%;
+  }
+}
+
+@media (max-width: 560px) {
+  .home-stats-bar__item {
+    flex: 1 1 100%;
+  }
+
+  .home-stats-bar__value {
+    font-size: 16px;
+  }
+}
+
 /* Сводные карточки — сетка 2×2. На широком экране строка по высоте контента; на телефоне карточки в строке тянутся к одной высоте. */
 .dashboard-home-summary {
   display: grid;
