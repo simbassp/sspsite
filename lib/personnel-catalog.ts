@@ -18,7 +18,8 @@ export function isPersonnelLicenseCategory(value: unknown): value is PersonnelLi
 
 export function normalizePersonnelLicenseCategories(values: unknown): PersonnelLicenseCategory[] {
   if (!Array.isArray(values)) return [];
-  return values.filter(isPersonnelLicenseCategory);
+  const picked = new Set(values.filter(isPersonnelLicenseCategory));
+  return PERSONNEL_LICENSE_CATEGORIES.filter((category) => picked.has(category));
 }
 
 export const PERSONNEL_BLOOD_GROUPS = [

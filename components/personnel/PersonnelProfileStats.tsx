@@ -18,10 +18,8 @@ import {
   ExamTypeIcon,
   examTypeIconTone,
   IconCalendarRange,
-  IconCar,
   IconDays,
   IconDeployment,
-  IconLicense,
   IconMedal,
   IconPremium,
   IconUavHit,
@@ -38,7 +36,6 @@ import {
 import { formatDate } from "@/lib/format";
 import {
   PERSONNEL_EXAM_TYPES,
-  PERSONNEL_LICENSE_CATEGORIES,
   PERSONNEL_MEDAL_PRESETS,
   PERSONNEL_MEDAL_SVO_TYPE,
   getMedalDisplayTitle,
@@ -179,8 +176,6 @@ export function PersonnelProfileStats({
   const [requestType, setRequestType] = useState<RequestType>("deployment");
   const [requestMsg, setRequestMsg] = useState("");
   const [requestSaving, setRequestSaving] = useState(false);
-  const [licenseDraft, setLicenseDraft] = useState<string[]>([]);
-  const [licenseSaving, setLicenseSaving] = useState(false);
   const [editModal, setEditModal] = useState<EditModal | null>(null);
   const [editSaving, setEditSaving] = useState(false);
   const [manageMsg, setManageMsg] = useState("");
@@ -210,7 +205,6 @@ export function PersonnelProfileStats({
         return;
       }
       setProfile(payload.profile);
-      setLicenseDraft(payload.profile.licenseCategories);
       setIsPreview(payload.isPreview === true);
       setCanEditOwn(payload.canEditOwn === true);
       setCanModerate(payload.canModerate === true);
@@ -331,25 +325,6 @@ export function PersonnelProfileStats({
       void load();
     } catch (err) {
       setManageMsg(err instanceof Error ? err.message : "Ошибка удаления.");
-    }
-  };
-
-  const onSaveLicenses = async () => {
-    if (!canModerate || licenseSaving) return;
-    setLicenseSaving(true);
-    setManageMsg("");
-    try {
-      await postPersonnelManage({
-        action: "update",
-        entity: "licenses",
-        userId,
-        data: { categories: licenseDraft },
-      });
-      void load();
-    } catch (err) {
-      setManageMsg(err instanceof Error ? err.message : "Ошибка сохранения.");
-    } finally {
-      setLicenseSaving(false);
     }
   };
 
@@ -758,69 +733,24 @@ export function PersonnelProfileStats({
       )}
 
       {tab === "overview" && (
-        <div className="grid-two" style={{ marginTop: 12 }}>
-          <article className="card">
-            <div className="card-body">
-              <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}>
-                <IconMedal size={20} /> Медали
-              </h3>
-              <div className="personnel-medals-row">
-                {profile.medals.slice(0, 3).map((m) => (
-                  <PersonnelMedalBadge key={m.id} medalType={m.medalType} title={m.title} awardedAt={m.awardedAt} size={40} />
-                ))}
-                {profile.medals.length === 0 && <p className="page-subtitle">Нет медалей</p>}
-              </div>
-              {profile.medals.length > 0 && (
-                <button type="button" className="personnel-link-btn" onClick={() => setTab("medals")}>
-                  Все медали
-                </button>
-              )}
+        <article className="card" style={{ marginTop: 12 }}>
+          <div className="card-body">
+            <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}>
+              <IconMedal size={20} /> Медали
+            </h3>
+            <div className="personnel-medals-row">
+              {profile.medals.slice(0, 3).map((m) => (
+                <PersonnelMedalBadge key={m.id} medalType={m.medalType} title={m.title} awardedAt={m.awardedAt} size={40} />
+              ))}
+              {profile.medals.length === 0 && <p className="page-subtitle">Нет медалей</p>}
             </div>
-          </article>
-          <article className="card">
-            <div className="card-body">
-              <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}>
-                <IconCar size={20} /> Категории прав
-              </h3>
-              <div className="personnel-license-row">
-                {!canModerate && profile.licenseCategories.length ? (
-                  profile.licenseCategories.map((c) => <IconLicense key={c} label={c} />)
-                ) : !canModerate ? (
-                  <p className="page-subtitle">Не указаны</p>
-                ) : null}
-              </div>
-              {canModerate && (
-                <>
-                  <div className="personnel-license-edit">
-                    {PERSONNEL_LICENSE_CATEGORIES.map((c) => (
-                      <label key={c}>
-                        <input
-                          type="checkbox"
-                          checked={licenseDraft.includes(c)}
-                          onChange={(e) => {
-                            setLicenseDraft((prev) =>
-                              e.target.checked ? [...prev, c] : prev.filter((x) => x !== c),
-                            );
-                          }}
-                        />
-                        {c}
-                      </label>
-                    ))}
-                  </div>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    style={{ marginTop: 10 }}
-                    disabled={licenseSaving}
-                    onClick={() => void onSaveLicenses()}
-                  >
-                    {licenseSaving ? "Сохранение…" : "Сохранить категории"}
-                  </button>
-                </>
-              )}
-            </div>
-          </article>
-        </div>
+            {profile.medals.length > 0 && (
+              <button type="button" className="personnel-link-btn" onClick={() => setTab("medals")}>
+                Все медали
+              </button>
+            )}
+          </div>
+        </article>
       )}
 
       {tab === "overview" && (
