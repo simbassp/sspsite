@@ -1499,7 +1499,11 @@ html[data-theme="dark"] .chip:not(.active):hover {
     position: sticky;
     top: 0;
     height: 100vh;
-    padding: 24px 18px;
+    max-height: 100vh;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 24px 18px 32px;
     border-right: 1px solid var(--line);
     background: color-mix(in srgb, var(--bg) 86%, transparent);
     backdrop-filter: blur(14px);
