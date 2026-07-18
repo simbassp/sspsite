@@ -4003,6 +4003,132 @@ html[data-theme="dark"] .final-review-answer--correct {
   background: color-mix(in srgb, var(--panel2) 60%, var(--panel));
 }
 
+.personnel-deploy-summary--mobile {
+  display: none;
+}
+
+.personnel-deploy-table-wrap {
+  overflow-x: visible;
+}
+
+.personnel-table--deployments {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.personnel-deploy-col-num {
+  width: 72px;
+}
+
+.personnel-deploy-col-money {
+  width: 112px;
+}
+
+.personnel-deploy-col-actions {
+  width: 76px;
+}
+
+.personnel-table--deployments th,
+.personnel-table--deployments td {
+  padding: 8px 10px;
+}
+
+.personnel-table--deployments th:first-child,
+.personnel-table--deployments td:first-child {
+  padding-left: 0;
+}
+
+.personnel-table--deployments th:last-child,
+.personnel-table--deployments td:last-child {
+  padding-right: 0;
+}
+
+.personnel-deploy-totals th {
+  background: color-mix(in srgb, var(--panel2) 60%, var(--panel));
+  border-bottom: 1px solid var(--line);
+  font-weight: 400;
+  vertical-align: top;
+  text-align: left;
+}
+
+.personnel-deploy-totals th .label {
+  display: block;
+  margin: 0 0 4px;
+}
+
+.personnel-deploy-totals th strong {
+  display: block;
+  margin-top: 0;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.personnel-deploy-totals th.personnel-table__num {
+  text-align: center;
+}
+
+.personnel-deploy-totals th.personnel-table__num .label,
+.personnel-deploy-totals th.personnel-table__num strong {
+  text-align: center;
+}
+
+.personnel-deploy-totals th.personnel-table__money {
+  text-align: right;
+}
+
+.personnel-deploy-totals th.personnel-table__money .label,
+.personnel-deploy-totals th.personnel-table__money .personnel-deploy-summary__value,
+.personnel-deploy-totals th.personnel-table__money strong {
+  text-align: right;
+}
+
+.personnel-deploy-totals th.personnel-table__money .personnel-deploy-summary__value {
+  justify-content: flex-end;
+}
+
+.personnel-deploy-columns th {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 13px;
+  padding-top: 10px;
+  padding-bottom: 8px;
+}
+
+.personnel-table--deployments .personnel-table__num {
+  white-space: nowrap;
+  text-align: center;
+}
+
+.personnel-table--deployments .personnel-table__money {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.personnel-table--deployments .personnel-table__actions {
+  white-space: nowrap;
+  padding-left: 6px;
+}
+
+.personnel-table--deployments .personnel-table__actions .personnel-mod-actions {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  margin: 0;
+  justify-content: flex-end;
+}
+
+.personnel-table--deployments .personnel-table__actions .catalog-card-actions .btn {
+  width: 32px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+}
+
+.personnel-table--deployments .personnel-table__actions .catalog-card-actions .btn svg {
+  width: 16px;
+  height: 16px;
+}
+
 .personnel-deploy-summary strong {
   display: block;
   margin-top: 4px;
@@ -4175,6 +4301,11 @@ html[data-theme="dark"] .final-review-answer--correct {
   .personnel-table-wrap,
   .personnel-table-scroll-hint {
     display: none;
+  }
+
+  .personnel-deploy-summary--mobile {
+    display: grid;
+    margin-bottom: 12px;
   }
 
   .personnel-mobile-cards {

@@ -562,7 +562,7 @@ export function PersonnelProfileStats({
               <h3 style={{ margin: 0 }}>Командировки</h3>
             </div>
 
-            <div className="personnel-deploy-summary">
+            <div className="personnel-deploy-summary personnel-deploy-summary--mobile">
               <div>
                 <span className="label">Всего командировок</span>
                 <strong>{profile.deploymentsCount}</strong>
@@ -594,15 +594,60 @@ export function PersonnelProfileStats({
               </div>
             </div>
 
-            <div className="personnel-table-wrap personnel-table-wrap--fit" style={{ marginTop: 12 }}>
-              <table className="personnel-table personnel-table--compact">
+            <div className="personnel-table-wrap personnel-deploy-table-wrap" style={{ marginTop: 12 }}>
+              <table className="personnel-table personnel-table--deployments">
+                <colgroup>
+                  <col />
+                  <col className="personnel-deploy-col-num" />
+                  <col className="personnel-deploy-col-num" />
+                  <col className="personnel-deploy-col-money" />
+                  {canModerate && <col className="personnel-deploy-col-actions" />}
+                </colgroup>
                 <thead>
-                  <tr>
-                    <th>Период</th>
-                    <th className="personnel-table__num">Дней</th>
-                    <th className="personnel-table__num">Сбитий</th>
-                    <th className="personnel-table__money">Премия</th>
-                    {canModerate && <th className="personnel-table__actions" />}
+                  <tr className="personnel-deploy-totals">
+                    <th scope="col">
+                      <span className="label">Всего командировок</span>
+                      <strong>{profile.deploymentsCount}</strong>
+                    </th>
+                    <th scope="col" className="personnel-table__num">
+                      <span className="label">Общее количество дней</span>
+                      <strong>{profile.deploymentDays}</strong>
+                    </th>
+                    <th scope="col" className="personnel-table__num">
+                      <span className="label">Сбитий БПЛА</span>
+                      <strong>{profile.uavHitsTotal}</strong>
+                    </th>
+                    <th scope="col" className="personnel-table__money">
+                      <span className="label">Премии</span>
+                      <div className="personnel-deploy-summary__value">
+                        <strong>{profile.premiumsTotal.toLocaleString("ru-RU")} ₽</strong>
+                        {canModerate && (
+                          <button
+                            type="button"
+                            className="btn personnel-deploy-summary__edit"
+                            title="Редактировать итоговую премию"
+                            aria-label="Редактировать итоговую премию"
+                            onClick={() => setEditModal({ kind: "deploySummaryPremium" })}
+                          >
+                            <Pencil width={16} height={16} strokeWidth={2} aria-hidden />
+                          </button>
+                        )}
+                      </div>
+                    </th>
+                    {canModerate && <th scope="col" className="personnel-table__actions" />}
+                  </tr>
+                  <tr className="personnel-deploy-columns">
+                    <th scope="col">Период</th>
+                    <th scope="col" className="personnel-table__num">
+                      Дней
+                    </th>
+                    <th scope="col" className="personnel-table__num">
+                      Сбитий
+                    </th>
+                    <th scope="col" className="personnel-table__money">
+                      Премия
+                    </th>
+                    {canModerate && <th scope="col" className="personnel-table__actions" />}
                   </tr>
                 </thead>
                 <tbody>
