@@ -5284,6 +5284,8 @@ html[data-theme="dark"] .final-review-answer--correct {
   margin-top: 4px;
   font-size: 13px;
   color: var(--muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .personnel-notify-compose {
