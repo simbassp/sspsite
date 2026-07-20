@@ -1,10 +1,13 @@
 import { normalizeProfileNameColor, type ProfileNameColorId } from "@/lib/profile-name-color";
+import { normalizeAvatarStoragePath } from "@/lib/avatar-display";
 import {
+  ACHIEVEMENT_COSMETIC_USER_COLUMNS,
   IDENTITY_COSMETIC_USER_COLUMNS,
   mapIdentityCosmeticsFromRow,
+  mergeIdentityCosmetics,
   type UserIdentityCosmetics,
 } from "@/lib/user-identity-cosmetics";
-import { buildTopRankBadgeMapFromUsers } from "@/lib/user-identity-cosmetics-server";
+import { buildTopRankBadgeMapFromUsers, loadIdentityCosmeticsMap } from "@/lib/user-identity-cosmetics-server";
 import { normalizeUnitAssignment } from "@/lib/unit-assignment";
 import type { DutyLocation, Position, UnitAssignment } from "@/lib/types";
 import {
@@ -61,6 +64,7 @@ export type PersonnelUserCard = {
   id: string;
   name: string;
   callsign: string;
+  avatarUrl?: string | null;
   nameColor?: ProfileNameColorId | null;
   cosmetics?: UserIdentityCosmetics | null;
   position: Position;
@@ -115,20 +119,25 @@ export type PersonnelProfilePayload = PersonnelUserCard & {
 };
 
 const ROSTER_USER_SELECT =
-  `id,name,callsign,position,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,created_at,status,${IDENTITY_COSMETIC_USER_COLUMNS}`;
+  `id,name,callsign,position,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,created_at,status,avatar_url,${IDENTITY_COSMETIC_USER_COLUMNS}`;
 const ROSTER_USER_SELECT_FALLBACK =
-  "id,name,callsign,position,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,created_at,status";
+  `id,name,callsign,position,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,created_at,status,avatar_url,profile_name_color,${ACHIEVEMENT_COSMETIC_USER_COLUMNS}`;
 
 function mapPersonnelUserCardRow(
   u: Record<string, unknown>,
-  extras: Omit<PersonnelUserCard, keyof Pick<PersonnelUserCard, "id" | "name" | "callsign" | "nameColor" | "cosmetics" | "position" | "dutyLocation" | "unitAssignment" | "rotaPlatoon" | "rotaSection" | "rotaModule" | "createdAt" | "employmentDate">>,
+  extras: Omit<PersonnelUserCard, keyof Pick<PersonnelUserCard, "id" | "name" | "callsign" | "avatarUrl" | "nameColor" | "cosmetics" | "position" | "dutyLocation" | "unitAssignment" | "rotaPlatoon" | "rotaSection" | "rotaModule" | "createdAt" | "employmentDate">>,
   topRankBadge: import("@/lib/achievements-catalog").TopRankBadgeId | null = null,
+  cosmeticsOverride?: UserIdentityCosmetics | null,
 ): PersonnelUserCard {
-  const cosmetics = mapIdentityCosmeticsFromRow(u, topRankBadge);
+  const cosmetics = mergeIdentityCosmetics(
+    mapIdentityCosmeticsFromRow(u, topRankBadge),
+    cosmeticsOverride ?? {},
+  );
   return {
     id: String(u.id),
     name: String(u.name ?? ""),
     callsign: String(u.callsign ?? ""),
+    avatarUrl: normalizeAvatarStoragePath(typeof u.avatar_url === "string" ? u.avatar_url : null),
     nameColor: cosmetics.adminNameColor ?? null,
     cosmetics,
     position: String(u.position ?? "Специалист") as Position,
@@ -869,6 +878,7 @@ export async function loadPersonnelRoster(filters?: {
   }
 
   const userIds = rows.map((r) => String(r.id));
+  const cosmeticsMap = userIds.length ? await loadIdentityCosmeticsMap(userIds) : new Map<string, UserIdentityCosmetics>();
   const testDate =
     typeof filters?.testDate === "string" && isValidDateIso(filters.testDate.trim())
       ? filters.testDate.trim()
@@ -902,6 +912,7 @@ export async function loadPersonnelRoster(filters?: {
       testStatsOnDate: testDate ? testStatsOnDateMap.get(id) ?? emptyTestRosterStats() : null,
       },
       null,
+      cosmeticsMap.get(id) ?? null,
     );
   });
 

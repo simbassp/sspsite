@@ -3,7 +3,8 @@ import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 import { readSiteSettingNumber } from "@/lib/site-analytics";
 import { effectiveOnlineStrict, onlineStaleBeforeIso } from "@/lib/presence-online";
 import { normalizeProfileNameColor, type ProfileNameColorId } from "@/lib/profile-name-color";
-import { IDENTITY_COSMETIC_USER_COLUMNS, mapIdentityCosmeticsFromRow, type UserIdentityCosmetics } from "@/lib/user-identity-cosmetics";
+import { mapIdentityCosmeticsFromRow, type UserIdentityCosmetics } from "@/lib/user-identity-cosmetics";
+import { loadIdentityCosmeticsMap } from "@/lib/user-identity-cosmetics-server";
 import { UNIT_COMMANDERS, unitAssignmentLabel } from "@/lib/unit-assignment";
 
 export const runtime = "nodejs";
@@ -134,11 +135,15 @@ export async function GET() {
         const rows = Array.isArray(fallbackQ.data) ? fallbackQ.data : [];
         const activeRows = rows.filter((row) => String(row.status || "active") === "active");
         const onlineRows = activeRows.filter((row) => row.is_online === true);
+        const onlineIds = onlineRows.map((row) => String(row.id || "")).filter(Boolean);
+        const cosmeticsById = onlineIds.length ? await loadIdentityCosmeticsMap(onlineIds) : new Map<string, UserIdentityCosmetics>();
         usersSummary = {
           totalUsers: activeRows.length,
           onlineUsers: onlineRows.map((row) => {
             const record = row as Record<string, unknown>;
-            return mapOnlineUser(record, cosmeticsFromRow(record));
+            const id = String(record.id || "");
+            const cosmetics = cosmeticsById.get(id) ?? cosmeticsFromRow(record);
+            return mapOnlineUser(record, cosmetics);
           }),
         };
       }
@@ -148,23 +153,8 @@ export async function GET() {
         .filter((row) => effectiveOnlineStrict(row.is_online, row.last_seen_at))
         .sort((a, b) => toSafeString(a.name).localeCompare(toSafeString(b.name), "ru"));
 
-      const cosmeticsById = new Map<string, UserIdentityCosmetics>();
-      if (onlineRows.length) {
-        const cosmeticsRes = await supabase
-          .from("app_users")
-          .select(`id,${IDENTITY_COSMETIC_USER_COLUMNS}`)
-          .in(
-            "id",
-            onlineRows.map((row) => String(row.id || "")).filter(Boolean),
-          );
-        if (!cosmeticsRes.error) {
-          for (const row of cosmeticsRes.data ?? []) {
-            const record = row as Record<string, unknown>;
-            const id = String(record.id || "");
-            if (id) cosmeticsById.set(id, cosmeticsFromRow(record));
-          }
-        }
-      }
+      const onlineIds = onlineRows.map((row) => String(row.id || "")).filter(Boolean);
+      const cosmeticsById = onlineIds.length ? await loadIdentityCosmeticsMap(onlineIds) : new Map<string, UserIdentityCosmetics>();
 
       usersSummary = {
         totalUsers: rows.length,
@@ -177,30 +167,14 @@ export async function GET() {
       };
     }
 
-    const eventCosmeticsById = new Map<string, UserIdentityCosmetics>();
-    if (newest && typeof newest.id === "string") {
-      eventCosmeticsById.set(newest.id, cosmeticsFromRow(newest));
-    }
-    if (leftUserId) {
-      const leftUserQ = await supabase
-        .from("app_users")
-        .select(`id,${IDENTITY_COSMETIC_USER_COLUMNS}`)
-        .eq("id", leftUserId)
-        .maybeSingle();
-      if (leftUserQ.data) {
-        eventCosmeticsById.set(leftUserId, cosmeticsFromRow(leftUserQ.data as Record<string, unknown>));
-      }
-    }
-    if (promotedUserId) {
-      const promotedUserQ = await supabase
-        .from("app_users")
-        .select(`id,${IDENTITY_COSMETIC_USER_COLUMNS}`)
-        .eq("id", promotedUserId)
-        .maybeSingle();
-      if (promotedUserQ.data) {
-        eventCosmeticsById.set(promotedUserId, cosmeticsFromRow(promotedUserQ.data as Record<string, unknown>));
-      }
-    }
+    const eventUserIds = [
+      newest && typeof newest.id === "string" ? newest.id : "",
+      leftUserId,
+      promotedUserId,
+    ].filter(Boolean);
+    const eventCosmeticsById = eventUserIds.length
+      ? await loadIdentityCosmeticsMap(eventUserIds)
+      : new Map<string, UserIdentityCosmetics>();
 
     if (!analyticsRes.error) {
       const map = new Map((analyticsRes.data ?? []).map((row) => [String(row.key), row.value]));

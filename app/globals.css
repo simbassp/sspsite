@@ -5154,14 +5154,42 @@ html[data-theme="dark"] .final-review-answer--correct {
 
 .personnel-top-list__person {
   min-width: 0;
-  display: grid;
-  gap: 1px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   color: inherit;
   text-decoration: none;
 }
 
 .personnel-roster-person {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.personnel-roster-person__identity {
+  min-width: 0;
+}
+
+.personnel-roster-person__avatar {
+  flex: 0 0 auto;
+}
+
+.personnel-top-list__avatar {
+  flex: 0 0 auto;
+}
+
+.personnel-mobile-card__person {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.personnel-mobile-card__avatar-link {
+  flex: 0 0 auto;
   color: inherit;
   text-decoration: none;
 }
@@ -5185,7 +5213,9 @@ html[data-theme="dark"] .final-review-answer--correct {
 }
 
 .personnel-top-list__person-identity {
-  display: contents;
+  min-width: 0;
+  display: grid;
+  gap: 1px;
 }
 
 .personnel-top-list__person:hover .personnel-top-list__name {

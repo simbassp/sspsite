@@ -269,6 +269,7 @@ export type PersonnelRosterTopUser = {
   id: string;
   name: string;
   callsign: string;
+  avatarUrl?: string | null;
   nameColor?: import("@/lib/profile-name-color").ProfileNameColorId | null;
   cosmetics?: import("@/lib/user-identity-cosmetics").UserIdentityCosmetics | null;
   uavHitsTotal: number;

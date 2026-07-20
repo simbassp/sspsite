@@ -1,6 +1,11 @@
 import { normalizeAvatarStoragePath } from "@/lib/avatar-display";
-import { IDENTITY_COSMETIC_USER_COLUMNS } from "@/lib/user-identity-cosmetics";
-import { mapIdentityCosmeticsFromRow } from "@/lib/user-identity-cosmetics";
+import {
+  ACHIEVEMENT_COSMETIC_USER_COLUMNS,
+  IDENTITY_COSMETIC_USER_COLUMNS,
+  mapIdentityCosmeticsFromRow,
+  mergeIdentityCosmetics,
+} from "@/lib/user-identity-cosmetics";
+import { loadIdentityCosmeticsMap, loadTopRankBadgeMap } from "@/lib/user-identity-cosmetics-server";
 import { normalizeProfileNameColor } from "@/lib/profile-name-color";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
@@ -108,6 +113,11 @@ function fallbackSeedRows(limit: number) {
   }));
 }
 
+function isMissingColumnError(message: string | undefined) {
+  const m = (message || "").toLowerCase();
+  return m.includes("column") && m.includes("does not exist");
+}
+
 function isMissingColumn(message: string, column: string) {
   const lower = message.toLowerCase();
   return (
@@ -170,6 +180,20 @@ async function resolveNewsAuthorForInsert(
   };
 }
 
+function authorHasIdentityExtras(user: {
+  avatarUrl: string | null;
+  nameColor: ReturnType<typeof normalizeProfileNameColor>;
+  cosmetics: ReturnType<typeof mapIdentityCosmeticsFromRow>;
+}) {
+  return Boolean(
+    user.avatarUrl ||
+      user.nameColor ||
+      user.cosmetics?.achievementNameColor ||
+      user.cosmetics?.avatarFrame ||
+      user.cosmetics?.bankOverlay,
+  );
+}
+
 export async function GET(request: Request) {
   const session = await getServerSession();
   if (!session) return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
@@ -223,33 +247,43 @@ export async function GET(request: Request) {
       return false;
     });
 
-    const userSelect = `id,auth_user_id,name,callsign,position,avatar_url,${IDENTITY_COSMETIC_USER_COLUMNS}`;
-    const userSelectFallback = "id,auth_user_id,name,callsign,position,avatar_url,profile_name_color";
+    const userSelectBase = "id,auth_user_id,name,callsign,position,avatar_url";
+    const userSelect = `${userSelectBase},${IDENTITY_COSMETIC_USER_COLUMNS}`;
+    const userSelectResilient = `${userSelectBase},profile_name_color,${ACHIEVEMENT_COSMETIC_USER_COLUMNS}`;
+    const userSelectFallback = `${userSelectBase},profile_name_color`;
     let usersRows: Array<Record<string, unknown>> | null = null;
 
-    const loadAllUsers = async () => {
-      const usersQ = await supabase.from("app_users").select(userSelect);
-      if (usersQ.error && isMissingColumn(usersQ.error.message || "", "avatar_url")) {
-        const fallbackUsersQ = await supabase.from("app_users").select("id,auth_user_id,name,callsign,position");
-        if (fallbackUsersQ.error || !Array.isArray(fallbackUsersQ.data)) return null;
-        return fallbackUsersQ.data as Array<Record<string, unknown>>;
+    const queryUsers = async (select: string, filter?: { column: "id" | "auth_user_id"; ids: string[] }) => {
+      if (filter?.ids.length) {
+        return supabase.from("app_users").select(select).in(filter.column, filter.ids);
       }
-      if (usersQ.error && isMissingColumn(usersQ.error.message || "", "profile_name_color")) {
-        const fallbackUsersQ = await supabase.from("app_users").select(userSelectFallback);
-        if (fallbackUsersQ.error || !Array.isArray(fallbackUsersQ.data)) return null;
-        return fallbackUsersQ.data as Array<Record<string, unknown>>;
-      }
-      if (usersQ.error || !Array.isArray(usersQ.data)) return null;
-      return usersQ.data as Array<Record<string, unknown>>;
+      return supabase.from("app_users").select(select);
     };
 
+    const loadUsersSelect = async (filter?: { column: "id" | "auth_user_id"; ids: string[] }) => {
+      const attempts = [userSelect, userSelectResilient, userSelectFallback, userSelectBase];
+      for (const select of attempts) {
+        const usersQ = await queryUsers(select, filter);
+        if (!usersQ.error && Array.isArray(usersQ.data)) {
+          return usersQ.data as unknown as Array<Record<string, unknown>>;
+        }
+        if (usersQ.error && !isMissingColumnError(usersQ.error.message)) {
+          return null;
+        }
+      }
+      return null;
+    };
+
+    const loadAllUsers = async () => loadUsersSelect();
+
     const loadUsersByCreatorIds = async (ids: string[]) => {
-      const [byIdQ, byAuthQ] = await Promise.all([
-        supabase.from("app_users").select(userSelect).in("id", ids),
-        supabase.from("app_users").select(userSelect).in("auth_user_id", ids),
+      const [byIdRows, byAuthRows] = await Promise.all([
+        loadUsersSelect({ column: "id", ids }),
+        loadUsersSelect({ column: "auth_user_id", ids }),
       ]);
+      if (!byIdRows && !byAuthRows) return null;
       const merged = new Map<string, Record<string, unknown>>();
-      for (const row of [...(byIdQ.data ?? []), ...(byAuthQ.data ?? [])]) {
+      for (const row of [...(byIdRows ?? []), ...(byAuthRows ?? [])]) {
         if (!row || typeof row !== "object") continue;
         const id = typeof row.id === "string" ? row.id : "";
         if (id) merged.set(id, row as Record<string, unknown>);
@@ -270,6 +304,8 @@ export async function GET(request: Request) {
     const userIds = usersRows
       .map((user) => (typeof user.id === "string" ? user.id : ""))
       .filter(Boolean);
+    const cosmeticsMap = userIds.length ? await loadIdentityCosmeticsMap(userIds) : new Map();
+    const topRankMap = await loadTopRankBadgeMap().catch(() => new Map<string, import("@/lib/achievements-catalog").TopRankBadgeId>());
 
     const usersMap = new Map<
       string,
@@ -296,7 +332,9 @@ export async function GET(request: Request) {
     for (const user of usersRows) {
       const id = typeof user.id === "string" ? user.id : "";
       const authUserId = typeof user.auth_user_id === "string" ? user.auth_user_id : "";
-      const cosmetics = mapIdentityCosmeticsFromRow(user);
+      const cosmetics = mergeIdentityCosmetics(cosmeticsMap.get(id) ?? mapIdentityCosmeticsFromRow(user), {
+        topRankBadge: id ? topRankMap.get(id) ?? null : null,
+      });
       const person = {
         name: typeof user.name === "string" ? user.name.trim() : "",
         callsign: typeof user.callsign === "string" ? user.callsign.trim() : "",
@@ -348,7 +386,7 @@ export async function GET(request: Request) {
       const nextAvatar = user.avatarUrl || existingAvatar;
 
       if (!fullReplace && hasStoredAuthorPosition(item)) {
-        if (!user.avatarUrl && !user.nameColor && !user.cosmetics?.achievementNameColor && !user.cosmetics?.avatarFrame) {
+        if (!authorHasIdentityExtras(user)) {
           return item;
         }
         return {
@@ -367,7 +405,7 @@ export async function GET(request: Request) {
         };
       }
 
-      if (!fullReplace && !user.position && !user.avatarUrl) return item;
+      if (!fullReplace && !user.position && !authorHasIdentityExtras(user)) return item;
 
       return {
         ...item,

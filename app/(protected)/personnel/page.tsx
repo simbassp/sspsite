@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { UserIdentityDisplay } from "@/components/profile/UserIdentityDisplay";
+import { UserAvatar } from "@/components/profile/UserAvatar";
 import type { UserIdentityCosmetics } from "@/lib/user-identity-cosmetics";
 import type { ProfileNameColorId } from "@/lib/profile-name-color";
 import { withTimeout } from "@/lib/async-utils";
@@ -183,6 +184,7 @@ type UserRow = {
   id: string;
   name: string;
   callsign: string;
+  avatarUrl?: string | null;
   nameColor?: ProfileNameColorId | null;
   cosmetics?: UserIdentityCosmetics | null;
   position: Position;
@@ -728,8 +730,19 @@ export default function PersonnelListPage() {
                     <tr key={u.id}>
                       <td className="personnel-table__sticky">
                         <Link href={profilePath(u.id)} className="personnel-roster-person">
+                          <UserAvatar
+                            name={u.name}
+                            callsign={u.callsign}
+                            avatarUrl={u.avatarUrl ?? null}
+                            size={34}
+                            className="personnel-roster-person__avatar"
+                            avatarFrame={u.cosmetics?.avatarFrame ?? null}
+                            bankOverlay={u.cosmetics?.bankOverlay ?? null}
+                            topRankBadge={u.cosmetics?.topRankBadge ?? null}
+                          />
                           <UserIdentityDisplay
                             as="div"
+                            className="personnel-roster-person__identity"
                             name={u.name}
                             callsign={u.callsign}
                             cosmetics={
@@ -808,28 +821,41 @@ export default function PersonnelListPage() {
               {paginatedUsers.map((u) => (
                 <article key={u.id} className="personnel-mobile-card">
                   <div className="personnel-mobile-card__head">
-                    <div>
-                      <Link href={profilePath(u.id)} className="personnel-mobile-card__name">
-                        <UserIdentityDisplay
+                    <div className="personnel-mobile-card__person">
+                      <Link href={profilePath(u.id)} className="personnel-mobile-card__avatar-link">
+                        <UserAvatar
                           name={u.name}
-                          cosmetics={
-                            u.cosmetics ??
-                            (u.nameColor ? { adminNameColor: u.nameColor } : null)
-                          }
-                          nameClassName="personnel-mobile-card__name-text"
+                          callsign={u.callsign}
+                          avatarUrl={u.avatarUrl ?? null}
+                          size={40}
+                          avatarFrame={u.cosmetics?.avatarFrame ?? null}
+                          bankOverlay={u.cosmetics?.bankOverlay ?? null}
+                          topRankBadge={u.cosmetics?.topRankBadge ?? null}
                         />
                       </Link>
-                      {u.callsign ? (
-                        <p className="personnel-mobile-card__callsign">
+                      <div>
+                        <Link href={profilePath(u.id)} className="personnel-mobile-card__name">
                           <UserIdentityDisplay
-                            callsign={u.callsign}
+                            name={u.name}
                             cosmetics={
                               u.cosmetics ??
                               (u.nameColor ? { adminNameColor: u.nameColor } : null)
                             }
+                            nameClassName="personnel-mobile-card__name-text"
                           />
-                        </p>
-                      ) : null}
+                        </Link>
+                        {u.callsign ? (
+                          <p className="personnel-mobile-card__callsign">
+                            <UserIdentityDisplay
+                              callsign={u.callsign}
+                              cosmetics={
+                                u.cosmetics ??
+                                (u.nameColor ? { adminNameColor: u.nameColor } : null)
+                              }
+                            />
+                          </p>
+                        ) : null}
+                      </div>
                     </div>
                     <span className={`pill ${u.dutyLocation === "base" ? "pill-green" : "pill-red"}`}>
                       {dutyLocationLabel[u.dutyLocation]}

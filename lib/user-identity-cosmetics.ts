@@ -63,6 +63,10 @@ export const IDENTITY_COSMETIC_USER_COLUMNS =
 export const ACHIEVEMENT_COSMETIC_USER_COLUMNS =
   "profile_cosmetic_avatar_frame,profile_cosmetic_name_color";
 
+/** Админ-цвет + достижения без bank_overlay — безопасный select при частичных миграциях. */
+export const RESILIENT_IDENTITY_COSMETIC_USER_COLUMNS =
+  `profile_name_color,${ACHIEVEMENT_COSMETIC_USER_COLUMNS}`;
+
 export const IDENTITY_COSMETICS_UPDATED_EVENT = "ssp:identity-cosmetics-updated";
 
 export function dispatchIdentityCosmeticsUpdated(cosmetics: Partial<UserIdentityCosmetics>) {
