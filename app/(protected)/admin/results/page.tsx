@@ -17,6 +17,7 @@ import {
 } from "@/lib/unit-assignment";
 import type { UnitAssignment } from "@/lib/types";
 import { ROTA_PLATOON_OPTIONS, ROTA_SECTION_OPTIONS } from "@/lib/personnel-catalog";
+import { FINAL_AUTO_RESET_DAY_UTC } from "@/lib/final-effective-counting";
 
 type PeriodMode = "all" | "today" | "custom";
 type TestTypeFilter = "all" | "trial" | "final";
@@ -236,7 +237,9 @@ export default function AdminResultsPage() {
     }
   };
 
-  const autoResetText = nextAutoResetAt ? formatDateTime(nextAutoResetAt) : "25-го числа следующего месяца";
+  const autoResetText = nextAutoResetAt
+    ? formatDateTime(nextAutoResetAt)
+    : `${FINAL_AUTO_RESET_DAY_UTC}-го числа следующего месяца`;
   const showNotStartedFilter = typeFilter !== "trial";
 
   return (
@@ -254,8 +257,8 @@ export default function AdminResultsPage() {
         Пробные и итоговые попытки. Фильтры по периоду, подразделению, типу теста и результату.
       </p>
       <div className="selfcheck-hint" style={{ marginBottom: 10 }}>
-        Сброс попыток доступен вручную (администратором или пользователем с правом сброса) и автоматически 25-го числа
-        каждого месяца. Следующий автосброс: {autoResetText}.
+        Сброс попыток доступен вручную (администратором или пользователем с правом сброса) и автоматически{" "}
+        {FINAL_AUTO_RESET_DAY_UTC}-го числа каждого месяца. Следующий автосброс: {autoResetText}.
       </div>
       {isLoading && <p className="page-subtitle">Загружаем результаты…</p>}
       {loadError && <p className="page-subtitle">{loadError}</p>}

@@ -1,4 +1,4 @@
-export const FINAL_AUTO_RESET_DAY_UTC = 25;
+export const FINAL_AUTO_RESET_DAY_UTC = 28;
 
 /** Последняя автоматическая дата сброса окна попыток (UTC, 00:00). */
 export function currentAutoResetStartUtcIso(now: Date = new Date()): string {
@@ -21,7 +21,7 @@ export function nextAutoResetUtcIso(now: Date = new Date()): string {
 }
 
 /**
- * Нижняя граница окна учёта итоговых попыток: позже из (ручной сброс в БД | автосброс 25-го UTC).
+ * Нижняя граница окна учёта итоговых попыток: позже из (ручной сброс в БД | автосброс 28-го UTC).
  * Раз в месяц окно обновляется само; ручной сброс админом задаёт более позднюю границу внутри окна.
  */
 export function effectiveFinalCountingFromUtc(rawAdminReset: string | null | undefined): string {

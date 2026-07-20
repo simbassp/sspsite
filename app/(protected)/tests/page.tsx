@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { readClientSession } from "@/lib/client-auth";
 import { FINAL_TEST_MAX_ATTEMPTS } from "@/lib/final-test-constants";
+import { FINAL_AUTO_RESET_DAY_UTC } from "@/lib/final-effective-counting";
 import { formatDateTime } from "@/lib/format";
 import {
   beginFinalAttempt,
@@ -194,7 +195,7 @@ export default function TestsPage() {
     setMessage((prev) =>
       prev.trim()
         ? prev
-        : "Попытки итогового теста израсходованы. Сброс выполняет администратор или автосброс 25-го числа.",
+        : `Попытки итогового теста израсходованы. Сброс выполняет администратор или автосброс ${FINAL_AUTO_RESET_DAY_UTC}-го числа.`,
     );
   }, [finalTest]);
 
@@ -732,7 +733,7 @@ export default function TestsPage() {
     }
     if (finalTest && !finalTest.canStartFinal) {
       setMessage(
-        "Итоговый тест недоступен: попытки израсходованы. Сброс выполняет администратор или автосброс 25-го числа.",
+        `Итоговый тест недоступен: попытки израсходованы. Сброс выполняет администратор или автосброс ${FINAL_AUTO_RESET_DAY_UTC}-го числа.`,
       );
       return;
     }
@@ -790,7 +791,9 @@ export default function TestsPage() {
   const timerHue = Math.round(120 * timerRatio);
   const timerColor = `hsl(${timerHue}, 70%, 45%)`;
   const nextAutoResetText =
-    finalTest?.nextAutoResetAt ? formatDateTime(finalTest.nextAutoResetAt) : "25 числа следующего месяца";
+    finalTest?.nextAutoResetAt
+      ? formatDateTime(finalTest.nextAutoResetAt)
+      : `${FINAL_AUTO_RESET_DAY_UTC} числа следующего месяца`;
   const finalStatusText =
     finalTest == null
       ? "—"
@@ -906,7 +909,7 @@ export default function TestsPage() {
                   }
                   title={
                     finalTest != null && finalTest.attemptsExhausted
-                      ? "Попытки итогового теста израсходованы. Нужен ручной или автоматический сброс (25-е число)."
+                      ? `Попытки итогового теста израсходованы. Нужен ручной или автоматический сброс (${FINAL_AUTO_RESET_DAY_UTC}-е число).`
                       : finalTest != null && !finalTest.canStartFinal
                         ? "Сейчас нельзя начать итоговый тест."
                         : undefined
