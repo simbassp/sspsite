@@ -8,6 +8,12 @@ import { normalizeProfileNameColor } from "@/lib/profile-name-color";
 import type { UserIdentityCosmetics } from "@/lib/user-identity-cosmetics";
 import { NewsItem, NewsTextStyle, Position } from "@/lib/types";
 import { POSITION_OPTIONS } from "@/lib/position-ui";
+import {
+  buildNewsFormatPayload,
+  normalizeNewsKindValue,
+  readNewsKindFromRow,
+  readNewsPriorityFromRow,
+} from "@/lib/news-format";
 
 const AUTHOR_POSITIONS: readonly Position[] = POSITION_OPTIONS;
 
@@ -26,6 +32,7 @@ type NewsRow = {
   text?: string;
   content?: string;
   priority: "high" | "normal";
+  kind?: "news" | "update";
   author: string;
   author_id?: string | null;
   author_name?: string | null;
@@ -45,7 +52,7 @@ type NewsRow = {
 };
 
 const NEWS_CACHE_TTL_MS = 60_000;
-const NEWS_CACHE_KEY = "ssp_news_cache_v3";
+const NEWS_CACHE_KEY = "ssp_news_cache_v4";
 let newsMemoryCache: { ts: number; rows: NewsItem[] } | null = null;
 const DEFAULT_NEWS_TEXT_STYLE: NewsTextStyle = {
   fontSize: 16,
@@ -67,9 +74,9 @@ function normalizeNewsTextStyle(input: unknown): NewsTextStyle {
 }
 
 function normalizeNewsKind(input: unknown): "news" | "update" {
+  if (typeof input === "string") return normalizeNewsKindValue(input);
   if (!input || typeof input !== "object") return "news";
-  const candidate = input as { kind?: unknown };
-  return candidate.kind === "update" ? "update" : "news";
+  return normalizeNewsKindValue((input as { kind?: unknown }).kind);
 }
 
 function isUuidLike(value: string) {
@@ -90,8 +97,8 @@ function mapNewsRow(row: NewsRow): NewsItem {
     id: row.id,
     title: row.title,
     body,
-    priority: row.priority === "high" ? "high" : "normal",
-    kind: normalizeNewsKind(row.format),
+    priority: readNewsPriorityFromRow(row),
+    kind: readNewsKindFromRow(row),
     authorId: row.author_id ?? null,
     author: row.author,
     authorPosition: normalizeAuthorPosition(row.author_position),
@@ -200,7 +207,7 @@ export async function createNews(payload: {
   const normalizedStyle = normalizeNewsTextStyle(payload.textStyle);
   const normalizedKind = payload.priority === "update" ? "update" : "news";
   const normalizedPriority = payload.priority === "high" ? "high" : "normal";
-  const formatPayload = { ...normalizedStyle, kind: normalizedKind } as const;
+  const formatPayload = buildNewsFormatPayload(normalizedStyle, normalizedKind, normalizedPriority);
   if (!isSupabaseConfigured) {
     addNews({
       ...payload,
@@ -261,7 +268,7 @@ export async function updateNews(input: {
   const normalizedStyle = normalizeNewsTextStyle(input.textStyle);
   const normalizedKind = input.priority === "update" ? "update" : "news";
   const normalizedPriority = input.priority === "high" ? "high" : "normal";
-  const formatPayload = { ...normalizedStyle, kind: normalizedKind } as const;
+  const formatPayload = buildNewsFormatPayload(normalizedStyle, normalizedKind, normalizedPriority);
   if (!isSupabaseConfigured || !isUuidLike(input.id)) {
     updateNewsItem(input.id, {
       title: input.title,

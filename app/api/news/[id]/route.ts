@@ -2,6 +2,7 @@ import { canManageNews } from "@/lib/permissions";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 import { NewsTextStyle } from "@/lib/types";
+import { buildNewsFormatPayload } from "@/lib/news-format";
 
 export const runtime = "nodejs";
 
@@ -63,7 +64,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const priority = body.priority === "high" ? "high" : "normal";
     const kind = normalizeNewsKind(body.kind);
     const textStyle = normalizeNewsTextStyle(body.textStyle);
-    const formatPayload = { ...textStyle, kind } as const;
+    const formatPayload = buildNewsFormatPayload(textStyle, kind, priority);
     if (!title || !text) {
       return Response.json({ ok: false, error: "title_and_body_required" }, { status: 400 });
     }

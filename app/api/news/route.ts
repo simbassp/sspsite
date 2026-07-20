@@ -8,6 +8,11 @@ import { canManageNews } from "@/lib/permissions";
 import { isPlaceholderNewsAuthor } from "@/lib/news-author";
 import { seedData } from "@/lib/seed";
 import { NewsTextStyle, SessionUser } from "@/lib/types";
+import {
+  buildNewsFormatPayload,
+  readNewsKindFromRow,
+  readNewsPriorityFromRow,
+} from "@/lib/news-format";
 
 export const runtime = "nodejs";
 
@@ -30,12 +35,6 @@ function normalizeNewsTextStyle(input: unknown): NewsTextStyle {
   };
 }
 
-function normalizeNewsKind(input: unknown): "news" | "update" {
-  if (!input || typeof input !== "object") return "news";
-  const candidate = input as { kind?: unknown };
-  return candidate.kind === "update" ? "update" : "news";
-}
-
 function normalizeNewsRows(rows: Array<Record<string, unknown>>) {
   const resolveAuthorParts = (row: Record<string, unknown>) => {
     const name =
@@ -55,8 +54,8 @@ function normalizeNewsRows(rows: Array<Record<string, unknown>>) {
       body: row.body ?? row.text ?? row.content ?? "",
       text: row.text ?? row.body ?? row.content ?? "",
       content: row.content ?? row.body ?? row.text ?? "",
-      priority: row.priority === "high" ? "high" : "normal",
-      kind: normalizeNewsKind(row.format),
+      priority: readNewsPriorityFromRow(row),
+      kind: readNewsKindFromRow(row),
       author:
         resolvedAuthor.text ||
         ((typeof row.author_name === "string" && row.author_name.trim()) || "") ||
@@ -415,7 +414,7 @@ export async function POST(request: Request) {
     const priority = body.priority === "high" ? "high" : "normal";
     const kind = body.kind === "update" ? "update" : "news";
     const textStyle = normalizeNewsTextStyle(body.textStyle);
-    const formatPayload = { ...textStyle, kind } as const;
+    const formatPayload = buildNewsFormatPayload(textStyle, kind, priority);
 
     if (!title || !text) {
       return Response.json({ ok: false, error: "title_and_body_required" }, { status: 400 });

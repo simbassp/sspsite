@@ -12,6 +12,7 @@ import {
   updateNews,
 } from "@/lib/news-repository";
 import { applyMarkupToSelection, isUpdateNews, NewsBody } from "@/lib/news-text";
+import { getNewsCategory } from "@/lib/news-ui";
 import { isPlaceholderNewsAuthor } from "@/lib/news-author";
 import { getPositionBadgeClass } from "@/lib/position-ui";
 import { NewsItem } from "@/lib/types";
@@ -83,7 +84,7 @@ export default function AdminNewsPage() {
     setEditingId(item.id);
     setTitle(item.title);
     setBody(item.body);
-    setPriority(item.kind === "update" ? "update" : item.priority);
+    setPriority(item.kind === "update" ? "update" : item.priority === "high" ? "high" : "normal");
     setTextStyle(normalizeNewsTextStyle(item.textStyle));
     setInfo("");
   };
@@ -225,8 +226,8 @@ export default function AdminNewsPage() {
             <div className="card-body">
               <h3>{item.title}</h3>
               <div className="meta" style={{ marginTop: 8 }}>
-                <span className={`pill ${item.priority === "high" ? "pill-red" : ""}`}>
-                  {item.priority === "high" ? "Важно" : isUpdateNews(item) ? "Update" : "Новость"}
+                <span className={`pill ${getNewsCategory(item) === "high" ? "pill-orange" : getNewsCategory(item) === "update" ? "pill-green" : "pill-blue"}`}>
+                  {getNewsCategory(item) === "high" ? "Важно" : getNewsCategory(item) === "update" ? "Update" : "Новость"}
                 </span>
                 <span>{formatDate(item.createdAt)}</span>
                 {item.author && !isPlaceholderNewsAuthor(item.author) ? <span>{item.author}</span> : null}

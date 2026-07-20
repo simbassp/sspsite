@@ -23,11 +23,7 @@ const FILTER_ITEMS: Array<{
 
 function FilterIcon({ type }: { type: "all" | "star" | "update" | "news" }) {
   if (type === "star") {
-    return (
-      <svg viewBox="0 0 24 24" className="news-page-filter__icon" aria-hidden>
-        <path d="M12 2.5 14.6 9H22l-6 4.5 2.3 7L12 17.8 5.7 20.5 8 13.5 2 9h7.4z" />
-      </svg>
-    );
+    return <span className="news-page-filter__dot is-orange" aria-hidden />;
   }
   if (type === "update") {
     return <span className="news-page-filter__dot is-green" aria-hidden />;
