@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from "react";
 import {
+  FINAL_ACHIEVEMENTS,
+  TRIAL_ACHIEVEMENTS,
   finalNameColorClass,
   finalNameColorLabel,
   trialAvatarFrameClass,
   trialFrameLabel,
-  unlockedFinalNameColors,
-  unlockedTrialFrames,
   type FinalNameColorId,
   type TrialAvatarFrameId,
 } from "@/lib/achievements-catalog";
@@ -43,12 +43,41 @@ export function ProfileCosmeticsModal({
 
   useEffect(() => {
     if (!open) return;
-    setDraftFrame(avatarFrame);
-    setDraftColor(nameColor);
-  }, [open, avatarFrame, nameColor]);
+    const unlocked = new Set(unlockedIds);
+    const frameOk =
+      avatarFrame === null ||
+      TRIAL_ACHIEVEMENTS.some((item) => item.trialFrame === avatarFrame && unlocked.has(item.id));
+    const colorOk =
+      nameColor === null ||
+      FINAL_ACHIEVEMENTS.some((item) => item.finalNameColor === nameColor && unlocked.has(item.id));
+    setDraftFrame(frameOk ? avatarFrame : null);
+    setDraftColor(colorOk ? nameColor : null);
+  }, [open, avatarFrame, nameColor, unlockedIds]);
 
-  const frames = unlockedTrialFrames(unlockedIds);
-  const colors = unlockedFinalNameColors(unlockedIds);
+  const unlockedSet = new Set(unlockedIds);
+
+  const selectFrame = (frame: TrialAvatarFrameId | null, unlocked: boolean) => {
+    if (!unlocked) return;
+    setDraftFrame(frame);
+  };
+
+  const selectColor = (color: FinalNameColorId | null, unlocked: boolean) => {
+    if (!unlocked) return;
+    setDraftColor(color);
+  };
+
+  const saveSelection = () => {
+    const frameUnlocked =
+      draftFrame === null ||
+      TRIAL_ACHIEVEMENTS.some((item) => item.trialFrame === draftFrame && unlockedSet.has(item.id));
+    const colorUnlocked =
+      draftColor === null ||
+      FINAL_ACHIEVEMENTS.some((item) => item.finalNameColor === draftColor && unlockedSet.has(item.id));
+    onSave({
+      avatarFrame: frameUnlocked ? draftFrame : null,
+      nameColor: colorUnlocked ? draftColor : null,
+    });
+  };
 
   if (!open) return null;
 
@@ -81,60 +110,72 @@ export function ProfileCosmeticsModal({
 
           <section className="profile-cosmetics-section">
             <h4>Подсветка аватара (пробные тесты)</h4>
-            {!frames.length ? (
-              <p className="page-subtitle">Пока нет доступных рамок.</p>
-            ) : (
-              <div className="profile-cosmetics-grid">
-                <button
-                  type="button"
-                  className={`profile-cosmetics-option${draftFrame === null ? " is-selected" : ""}`}
-                  onClick={() => setDraftFrame(null)}
-                >
-                  Без рамки
-                </button>
-                {frames.map((frame) => (
+            <div className="profile-cosmetics-grid">
+              <button
+                type="button"
+                className={`profile-cosmetics-option${draftFrame === null ? " is-selected" : ""}`}
+                onClick={() => selectFrame(null, true)}
+              >
+                Без рамки
+              </button>
+              {TRIAL_ACHIEVEMENTS.map((item) => {
+                const frame = item.trialFrame;
+                if (!frame) return null;
+                const unlocked = unlockedSet.has(item.id);
+                return (
                   <button
-                    key={frame}
+                    key={item.id}
                     type="button"
+                    disabled={!unlocked}
+                    title={unlocked ? item.description : `${item.description} — не открыто`}
+                    aria-disabled={!unlocked}
                     className={`profile-cosmetics-option profile-cosmetics-option--frame ${trialAvatarFrameClass(frame)}${
-                      draftFrame === frame ? " is-selected" : ""
-                    }`}
-                    onClick={() => setDraftFrame(frame)}
+                      draftFrame === frame && unlocked ? " is-selected" : ""
+                    }${unlocked ? "" : " is-locked"}`}
+                    onClick={() => selectFrame(frame, unlocked)}
                   >
                     <span className="profile-cosmetics-option__swatch" />
-                    {trialFrameLabel(frame)}
+                    <span className="profile-cosmetics-option__label">{trialFrameLabel(frame)}</span>
+                    {!unlocked ? <span className="profile-cosmetics-option__hint">{item.title}</span> : null}
                   </button>
-                ))}
-              </div>
-            )}
+                );
+              })}
+            </div>
           </section>
 
           <section className="profile-cosmetics-section">
             <h4>Цвет имени и позывного (итоговые тесты)</h4>
-            {!colors.length ? (
-              <p className="page-subtitle">Пока нет доступных цветов.</p>
-            ) : (
-              <div className="profile-cosmetics-grid">
-                <button
-                  type="button"
-                  className={`profile-cosmetics-option${draftColor === null ? " is-selected" : ""}`}
-                  onClick={() => setDraftColor(null)}
-                >
-                  Обычный
-                </button>
-                {colors.map((color) => (
+            <div className="profile-cosmetics-grid">
+              <button
+                type="button"
+                className={`profile-cosmetics-option${draftColor === null ? " is-selected" : ""}`}
+                onClick={() => selectColor(null, true)}
+              >
+                Обычный
+              </button>
+              {FINAL_ACHIEVEMENTS.map((item) => {
+                const color = item.finalNameColor;
+                if (!color) return null;
+                const unlocked = unlockedSet.has(item.id);
+                return (
                   <button
-                    key={color}
+                    key={item.id}
                     type="button"
-                    className={`profile-cosmetics-option${draftColor === color ? " is-selected" : ""}`}
-                    onClick={() => setDraftColor(color)}
+                    disabled={!unlocked}
+                    title={unlocked ? item.description : `${item.description} — не открыто`}
+                    aria-disabled={!unlocked}
+                    className={`profile-cosmetics-option${draftColor === color && unlocked ? " is-selected" : ""}${
+                      unlocked ? "" : " is-locked"
+                    }`}
+                    onClick={() => selectColor(color, unlocked)}
                   >
                     <span className={`profile-cosmetics-option__sample ${finalNameColorClass(color)}`}>Аа</span>
-                    {finalNameColorLabel(color)}
+                    <span className="profile-cosmetics-option__label">{finalNameColorLabel(color)}</span>
+                    {!unlocked ? <span className="profile-cosmetics-option__hint">{item.title}</span> : null}
                   </button>
-                ))}
-              </div>
-            )}
+                );
+              })}
+            </div>
           </section>
 
           <div className="profile-cosmetics-modal__actions">
@@ -145,7 +186,7 @@ export function ProfileCosmeticsModal({
               type="button"
               className="btn btn-primary"
               disabled={saving}
-              onClick={() => onSave({ avatarFrame: draftFrame, nameColor: draftColor })}
+              onClick={saveSelection}
             >
               {saving ? "Сохранение…" : "Сохранить"}
             </button>

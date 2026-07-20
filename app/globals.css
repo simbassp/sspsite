@@ -6423,6 +6423,34 @@ html[data-theme="dark"] .final-review-answer--correct {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
+.profile-cosmetics-option.is-locked {
+  opacity: 0.42;
+  cursor: not-allowed;
+  filter: saturate(0.45);
+}
+
+.profile-cosmetics-option.is-locked.is-selected {
+  border-color: var(--line);
+  box-shadow: none;
+}
+
+.profile-cosmetics-option.is-locked .profile-cosmetics-option__sample,
+.profile-cosmetics-option.is-locked .profile-cosmetics-option__swatch {
+  opacity: 0.75;
+}
+
+.profile-cosmetics-option__label {
+  text-align: center;
+  line-height: 1.25;
+}
+
+.profile-cosmetics-option__hint {
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--muted);
+  text-align: center;
+}
+
 .profile-cosmetics-option__sample {
   font-weight: 700;
   font-size: 16px;
