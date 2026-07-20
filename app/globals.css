@@ -5241,7 +5241,21 @@ html[data-theme="dark"] .final-review-answer--correct {
 }
 
 .personnel-notify-wrap--compact .personnel-notify-panel {
-  right: -4px;
+  right: 0;
+  width: min(360px, calc(100vw - 24px));
+}
+
+@media (max-width: 819px) {
+  .personnel-notify-wrap--compact .personnel-notify-panel {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    top: calc(70px + env(safe-area-inset-top, 0px));
+    width: auto;
+    max-width: none;
+    z-index: 50;
+    transform: none;
+  }
 }
 
 .personnel-notify-wrap--compact .personnel-notify-btn {

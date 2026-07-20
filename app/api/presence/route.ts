@@ -23,7 +23,10 @@ export async function POST(request: Request) {
     const patch = online
       ? { is_online: true, last_seen_at: new Date().toISOString() }
       : { is_online: false };
-    const q = await supabase.from("app_users").update(patch).eq("id", session.id);
+    let q = await supabase.from("app_users").update(patch).eq("id", session.id);
+    if (q.error && online && q.error.message.toLowerCase().includes("last_seen_at")) {
+      q = await supabase.from("app_users").update({ is_online: true }).eq("id", session.id);
+    }
     if (q.error) return Response.json({ ok: false, error: q.error.message || "presence_update_failed" }, { status: 500 });
 
     if (newSession || elapsedSeconds > 0) {
@@ -34,8 +37,13 @@ export async function POST(request: Request) {
       });
       if (analytics.error) {
         const msg = analytics.error.message.toLowerCase();
-        if (!msg.includes("record_site_analytics") && !msg.includes("does not exist")) {
-          return Response.json({ ok: false, error: analytics.error.message || "analytics_update_failed" }, { status: 500 });
+        const skippable =
+          msg.includes("record_site_analytics") ||
+          msg.includes("does not exist") ||
+          msg.includes("could not find") ||
+          msg.includes("permission denied");
+        if (!skippable) {
+          console.warn("[presence] analytics skipped:", analytics.error.message);
         }
       }
     }

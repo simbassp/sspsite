@@ -48,15 +48,24 @@ export function SendUserNotificationModal({ open, onClose, userId, userLabel }: 
           href: href.trim() || null,
         }),
       });
-      const payload = (await res.json()) as { ok?: boolean; error?: string };
+      let payload: { ok?: boolean; error?: string } = {};
+      try {
+        payload = (await res.json()) as { ok?: boolean; error?: string };
+      } catch {
+        payload = {};
+      }
       if (!res.ok || !payload.ok) {
-        setMessage(payload.error || "Не удалось отправить уведомление.");
+        setMessage(
+          res.status === 504
+            ? "Сервер не успел обработать запрос. Попробуйте снова."
+            : payload.error || "Не удалось отправить уведомление.",
+        );
         setError(true);
         return;
       }
       onClose();
     } catch {
-      setMessage("Ошибка сети.");
+      setMessage("Ошибка сети или таймаут.");
       setError(true);
     } finally {
       setSaving(false);

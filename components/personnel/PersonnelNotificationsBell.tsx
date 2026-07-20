@@ -83,10 +83,19 @@ export function PersonnelNotificationsBell({ compact = false }: PersonnelNotific
           href: broadcastHref.trim() || null,
         }),
       });
-      const payload = (await res.json()) as { ok?: boolean; error?: string; sent?: number };
+      let payload: { ok?: boolean; error?: string; sent?: number } = {};
+      try {
+        payload = (await res.json()) as { ok?: boolean; error?: string; sent?: number };
+      } catch {
+        payload = {};
+      }
       if (!res.ok || !payload.ok) {
         setSendState("error");
-        setSendMessage(payload.error || "Не удалось отправить.");
+        setSendMessage(
+          res.status === 504
+            ? "Сервер не успел обработать запрос. Примените миграцию broadcast_app_notification и попробуйте снова."
+            : payload.error || "Не удалось отправить.",
+        );
         return;
       }
       setSendState("done");
@@ -97,7 +106,9 @@ export function PersonnelNotificationsBell({ compact = false }: PersonnelNotific
       setComposeOpen(false);
     } catch {
       setSendState("error");
-      setSendMessage("Ошибка сети.");
+      setSendMessage("Ошибка сети или таймаут.");
+    } finally {
+      setSendState((state) => (state === "sending" ? "idle" : state));
     }
   };
 

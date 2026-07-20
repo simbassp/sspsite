@@ -1261,18 +1261,22 @@ export async function sendAdminMessage(
   return { ok: true as const };
 }
 
-export async function sendAdminBroadcast(
-  title: string,
-  body: string,
-  href?: string | null,
+function isMissingBroadcastRpcError(message: string | undefined) {
+  const lower = (message || "").toLowerCase();
+  return (
+    lower.includes("broadcast_app_notification") &&
+    (lower.includes("does not exist") || lower.includes("could not find"))
+  );
+}
+
+async function sendAdminBroadcastLegacy(
+  normalizedTitle: string,
+  normalizedBody: string,
+  href: string | null,
   sender?: NotificationSender | null,
 ) {
-  const normalizedTitle = title.trim();
-  const normalizedBody = formatNotificationBody(body.trim());
-  if (!normalizedTitle) return { ok: false as const, error: "title_required" };
-
   const supabase = getServerSupabaseServiceClient();
-  const usersRes = await supabase.from("app_users").select("id").eq("status", "active").limit(2000);
+  const usersRes = await supabase.from("app_users").select("id").eq("status", "active").limit(5000);
   if (usersRes.error) return { ok: false as const, error: usersRes.error.message };
 
   const rows = (usersRes.data ?? [])
@@ -1283,20 +1287,57 @@ export async function sendAdminBroadcast(
       kind: "admin_broadcast",
       title: normalizedTitle,
       body: normalizedBody,
-      href: href?.trim() || null,
+      href,
       sender_id: sender?.id ?? null,
       sender_label: sender?.label ?? null,
     }));
 
   if (!rows.length) return { ok: true as const, sent: 0 };
 
-  for (let offset = 0; offset < rows.length; offset += 200) {
-    const chunk = rows.slice(offset, offset + 200);
+  const batchSize = 500;
+  for (let offset = 0; offset < rows.length; offset += batchSize) {
+    const chunk = rows.slice(offset, offset + batchSize);
     const ins = await insertNotificationRows(chunk);
     if (ins.error) return { ok: false as const, error: ins.error.message };
   }
 
   return { ok: true as const, sent: rows.length };
+}
+
+export async function sendAdminBroadcast(
+  title: string,
+  body: string,
+  href?: string | null,
+  sender?: NotificationSender | null,
+) {
+  const normalizedTitle = title.trim();
+  const normalizedBody = formatNotificationBody(body.trim());
+  if (!normalizedTitle) return { ok: false as const, error: "title_required" };
+
+  const normalizedHref = href?.trim() || null;
+  const supabase = getServerSupabaseServiceClient();
+  const rpc = await supabase.rpc("broadcast_app_notification", {
+    p_title: normalizedTitle,
+    p_body: normalizedBody,
+    p_href: normalizedHref,
+    p_sender_id: sender?.id ?? null,
+    p_sender_label: sender?.label ?? null,
+  });
+
+  if (!rpc.error && typeof rpc.data === "number") {
+    return { ok: true as const, sent: rpc.data };
+  }
+
+  if (
+    rpc.error &&
+    !isMissingBroadcastRpcError(rpc.error.message) &&
+    !isMissingNotificationColumn(rpc.error.message, "sender_id") &&
+    !isMissingNotificationColumn(rpc.error.message, "sender_label")
+  ) {
+    return { ok: false as const, error: rpc.error.message };
+  }
+
+  return sendAdminBroadcastLegacy(normalizedTitle, normalizedBody, normalizedHref, sender);
 }
 
 export async function loadNotifications(userId: string, limit = 30) {
