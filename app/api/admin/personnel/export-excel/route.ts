@@ -16,6 +16,9 @@ import {
   type PersonnelRosterFilterExportRow,
 } from "@/lib/personnel-profile-excel";
 import {
+  exportIncludesFinalStats,
+  exportIncludesTestStats,
+  exportIncludesTrialStats,
   hasRosterFocusFilters,
   parseRosterExportFilterConfig,
   resolveRosterExportColumns,
@@ -29,7 +32,7 @@ export const maxDuration = 120;
 function buildExportSummaryLines(rows: PersonnelRosterFilterExportRow[], config: RosterExportFilterConfig) {
   const lines: Array<[string, string | number]> = [["Сотрудников", rows.length]];
 
-  if (config.testDate) {
+  if (config.testDate && exportIncludesTestStats(config)) {
     lines.push(["Дата тестов", config.testDate]);
   }
 
@@ -51,15 +54,12 @@ function buildExportSummaryLines(rows: PersonnelRosterFilterExportRow[], config:
     lines.push(["Сумма премий, ₽", rows.reduce((sum, row) => sum + (row.premiumsTotal ?? 0), 0)]);
   }
 
-  const includeTrial = config.trialTest !== "all" || config.testDate !== null;
-  const includeFinal = config.finalTest !== "all" || config.testDate !== null;
-
-  if (includeTrial) {
+  if (exportIncludesTrialStats(config)) {
     lines.push(["Пробных сдано (попыток)", rows.reduce((sum, row) => sum + (row.trialPassed ?? 0), 0)]);
     lines.push(["Пробных не сдано (попыток)", rows.reduce((sum, row) => sum + (row.trialFailed ?? 0), 0)]);
   }
 
-  if (includeFinal) {
+  if (exportIncludesFinalStats(config)) {
     lines.push(["Итоговых сдано (попыток)", rows.reduce((sum, row) => sum + (row.finalPassed ?? 0), 0)]);
     lines.push(["Итоговых не сдано (попыток)", rows.reduce((sum, row) => sum + (row.finalFailed ?? 0), 0)]);
   }
@@ -77,11 +77,12 @@ function buildExportRows(
   cards: Awaited<ReturnType<typeof loadPersonnelRosterCardsByIds>>,
   config: RosterExportFilterConfig,
 ): PersonnelRosterFilterExportRow[] {
-  const includeTrial = config.trialTest !== "all" || config.testDate !== null;
-  const includeFinal = config.finalTest !== "all" || config.testDate !== null;
+  const includeTrial = exportIncludesTrialStats(config);
+  const includeFinal = exportIncludesFinalStats(config);
+  const useDateScopedStats = exportIncludesTestStats(config) && config.testDate !== null;
 
   return cards.map((user) => {
-    const stats = config.testDate ? (user.testStatsOnDate ?? user.testStats) : user.testStats;
+    const stats = useDateScopedStats ? (user.testStatsOnDate ?? user.testStats) : user.testStats;
     const exam = user.exams.find((item) => item.examType === config.examType);
     const examResult =
       exam?.status === "passed" ? "Сдан" : exam?.status === "failed" ? "Не сдан" : "—";
@@ -114,7 +115,7 @@ function buildExportRows(
       row.examResult = examResult;
     }
 
-    if (config.testDate) {
+    if (config.testDate && exportIncludesTestStats(config)) {
       row.testDate = config.testDate;
     }
 
@@ -231,7 +232,10 @@ export async function POST(request: Request) {
     }
 
     if (useRosterFilterExport) {
-      const cards = await loadPersonnelRosterCardsByIds(userIds, exportConfig.testDate);
+      const cards = await loadPersonnelRosterCardsByIds(
+        userIds,
+        exportIncludesTestStats(exportConfig) ? exportConfig.testDate : null,
+      );
       if (!cards.length) {
         return Response.json({ ok: false, error: "no_data" }, { status: 404 });
       }

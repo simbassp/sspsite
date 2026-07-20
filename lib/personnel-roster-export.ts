@@ -43,7 +43,6 @@ export type RosterExportColumn = {
 
 export function hasRosterFocusFilters(config: RosterExportFilterConfig) {
   return (
-    config.testDate !== null ||
     config.examType !== "all" ||
     config.examStatus !== "all" ||
     config.license !== "all" ||
@@ -53,6 +52,18 @@ export function hasRosterFocusFilters(config: RosterExportFilterConfig) {
     config.premiums !== "all" ||
     config.dutyStatus !== "all"
   );
+}
+
+export function exportIncludesTrialStats(config: RosterExportFilterConfig) {
+  return config.trialTest !== "all";
+}
+
+export function exportIncludesFinalStats(config: RosterExportFilterConfig) {
+  return config.finalTest !== "all";
+}
+
+export function exportIncludesTestStats(config: RosterExportFilterConfig) {
+  return exportIncludesTrialStats(config) || exportIncludesFinalStats(config);
 }
 
 export function resolveRosterExportColumns(config: RosterExportFilterConfig): RosterExportColumn[] {
@@ -90,10 +101,10 @@ export function resolveRosterExportColumns(config: RosterExportFilterConfig): Ro
     });
   }
 
-  const includeTrial = config.trialTest !== "all" || config.testDate !== null;
-  const includeFinal = config.finalTest !== "all" || config.testDate !== null;
+  const includeTrial = exportIncludesTrialStats(config);
+  const includeFinal = exportIncludesFinalStats(config);
 
-  if (config.testDate) {
+  if (config.testDate && exportIncludesTestStats(config)) {
     columns.push({ key: "testDate", header: "Дата", width: 12 });
   }
 
