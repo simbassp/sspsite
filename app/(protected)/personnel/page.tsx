@@ -205,6 +205,7 @@ type Tab = "all" | "top";
 
 const ROSTER_FETCH_TIMEOUT_MS = 45000;
 const SEARCH_DEBOUNCE_MS = 350;
+const ROSTER_PAGE_SIZE = 10;
 
 export default function PersonnelListPage() {
   const [isHydrated, setIsHydrated] = useState(false);
@@ -237,6 +238,7 @@ export default function PersonnelListPage() {
   const [exportExcelLoading, setExportExcelLoading] = useState(false);
   const [exportExcelMsg, setExportExcelMsg] = useState("");
   const [rosterFilters, setRosterFilters] = useState<RosterFilters>(EMPTY_ROSTER_FILTERS);
+  const [rosterPage, setRosterPage] = useState(1);
   const loadSeqRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -304,6 +306,13 @@ export default function PersonnelListPage() {
     [users, rosterFilters, examMap, testDateFilter],
   );
 
+  const rosterPageCount = Math.max(1, Math.ceil(filteredUsers.length / ROSTER_PAGE_SIZE));
+
+  const paginatedUsers = useMemo(() => {
+    const from = (rosterPage - 1) * ROSTER_PAGE_SIZE;
+    return filteredUsers.slice(from, from + ROSTER_PAGE_SIZE);
+  }, [filteredUsers, rosterPage]);
+
   const tableStats = useMemo(() => calcFilteredStats(filteredUsers), [filteredUsers]);
   const displayStats = users.length === 0 && isLoading ? stats : tableStats;
   const rosterFiltersActive = hasActiveRosterFilters(rosterFilters, testDateFilter);
@@ -312,6 +321,14 @@ export default function PersonnelListPage() {
   const setRosterFilter = <K extends keyof RosterFilters>(key: K, value: RosterFilters[K]) => {
     setRosterFilters((prev) => ({ ...prev, [key]: value }));
   };
+
+  useEffect(() => {
+    setRosterPage(1);
+  }, [platoon, section, module, debouncedSearch, testDateFilter, rosterFilters]);
+
+  useEffect(() => {
+    setRosterPage((page) => Math.min(page, rosterPageCount));
+  }, [rosterPageCount]);
 
   useEffect(() => {
     setIsHydrated(true);
@@ -655,7 +672,7 @@ export default function PersonnelListPage() {
 
           {rosterFiltersActive && !isLoading && (
             <p className="page-subtitle personnel-table-filter-meta">
-              Показано {filteredUsers.length} из {users.length}
+              Найдено {filteredUsers.length} из {users.length}
               {" · "}
               <button
                 type="button"
@@ -667,6 +684,13 @@ export default function PersonnelListPage() {
               >
                 Сбросить фильтры
               </button>
+            </p>
+          )}
+
+          {!isLoading && filteredUsers.length > 0 && (
+            <p className="page-subtitle personnel-table-filter-meta">
+              Показано {(rosterPage - 1) * ROSTER_PAGE_SIZE + 1}–
+              {Math.min(rosterPage * ROSTER_PAGE_SIZE, filteredUsers.length)} из {filteredUsers.length}
             </p>
           )}
 
@@ -700,7 +724,7 @@ export default function PersonnelListPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredUsers.map((u) => (
+                  {paginatedUsers.map((u) => (
                     <tr key={u.id}>
                       <td className="personnel-table__sticky">
                         <Link href={profilePath(u.id)} className="personnel-roster-person">
@@ -781,7 +805,7 @@ export default function PersonnelListPage() {
                   {users.length === 0 ? "Сотрудники не найдены" : "Нет сотрудников по выбранным фильтрам"}
                 </p>
               )}
-              {filteredUsers.map((u) => (
+              {paginatedUsers.map((u) => (
                 <article key={u.id} className="personnel-mobile-card">
                   <div className="personnel-mobile-card__head">
                     <div>
@@ -844,6 +868,32 @@ export default function PersonnelListPage() {
                 </article>
               ))}
             </div>
+            {!isLoading && filteredUsers.length > 0 && (
+              <div className="personnel-roster-footer">
+                <span className="personnel-roster-footer__total">Всего: {filteredUsers.length}</span>
+                <div className="admin-users-pagination">
+                  <button
+                    className="btn"
+                    type="button"
+                    disabled={rosterPage <= 1}
+                    onClick={() => setRosterPage((page) => Math.max(1, page - 1))}
+                  >
+                    ‹
+                  </button>
+                  <span className="admin-users-page-indicator">
+                    {rosterPage} / {rosterPageCount}
+                  </span>
+                  <button
+                    className="btn"
+                    type="button"
+                    disabled={rosterPage >= rosterPageCount}
+                    onClick={() => setRosterPage((page) => Math.min(rosterPageCount, page + 1))}
+                  >
+                    ›
+                  </button>
+                </div>
+              </div>
+            )}
           </article>
         </>
       )}

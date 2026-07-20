@@ -385,6 +385,26 @@ html[data-theme="dark"] .selfcheck-hint__text svg {
   font-weight: 600;
 }
 
+.brand__callsign .profile-name-color[class*="profile-name-color--gradient-"] {
+  color: transparent;
+}
+
+.personnel-roster-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.personnel-roster-footer__total {
+  font-size: 13px;
+  color: var(--muted);
+}
+
 .header-actions {
   display: flex;
   align-items: center;
@@ -976,6 +996,10 @@ html[data-theme="dark"] .profile-name-color--gradient-obsidian {
 .profile-page .profile-hero-callsign strong {
   font-weight: 700;
   color: var(--text);
+}
+
+.profile-page .profile-hero-callsign strong .profile-name-color[class*="profile-name-color--gradient-"] {
+  color: transparent;
 }
 
 .profile-export-excel {

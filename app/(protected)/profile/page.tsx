@@ -302,6 +302,7 @@ export default function ProfilePage() {
         }
         if ("nameColor" in payload) {
           setDisplayNameColor(payload.nameColor ?? null);
+          dispatchIdentityCosmeticsUpdated({ adminNameColor: payload.nameColor ?? null });
         }
         if (typeof payload.position === "string" && payload.position.trim()) {
           const nextPosition = payload.position.trim() as Position;

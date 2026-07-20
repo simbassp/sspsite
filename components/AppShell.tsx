@@ -27,6 +27,8 @@ import {
   PRESENCE_HIDDEN_OFFLINE_DELAY_MS,
 } from "@/lib/presence-constants";
 import { SessionUser } from "@/lib/types";
+import { readClientSession, writeClientSession } from "@/lib/client-auth";
+import type { ProfileNameColorId } from "@/lib/profile-name-color";
 import {
   IDENTITY_COSMETICS_UPDATED_EVENT,
   type UserIdentityCosmetics,
@@ -143,10 +145,40 @@ export function AppShell({ session, children }: AppShellProps) {
   useEffect(() => {
     setHeaderCosmetics((prev) => ({
       ...prev,
-      adminNameColor: session.nameColor ?? null,
       achievementNameColor: session.cosmetics?.achievementNameColor ?? prev.achievementNameColor ?? null,
     }));
-  }, [session.nameColor, session.cosmetics?.achievementNameColor]);
+  }, [session.cosmetics?.achievementNameColor]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/profile/identity", { cache: "no-store" })
+      .then((r) => r.json())
+      .then(
+        (payload: {
+          ok?: boolean;
+          nameColor?: ProfileNameColorId | null;
+          cosmetics?: Partial<UserIdentityCosmetics>;
+        }) => {
+          if (!payload.ok || cancelled) return;
+          const adminNameColor = payload.nameColor ?? payload.cosmetics?.adminNameColor ?? null;
+          setHeaderCosmetics((prev) => ({
+            ...prev,
+            adminNameColor,
+            achievementNameColor:
+              payload.cosmetics?.achievementNameColor ?? prev.achievementNameColor ?? null,
+            avatarFrame: payload.cosmetics?.avatarFrame ?? prev.avatarFrame ?? null,
+          }));
+          const current = readClientSession();
+          if (current && current.nameColor !== adminNameColor) {
+            writeClientSession({ ...current, nameColor: adminNameColor });
+          }
+        },
+      )
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [session.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -170,6 +202,12 @@ export function AppShell({ session, children }: AppShellProps) {
       const detail = (event as CustomEvent<Partial<UserIdentityCosmetics>>).detail;
       if (!detail) return;
       setHeaderCosmetics((prev) => ({ ...prev, ...detail }));
+      if (detail.adminNameColor !== undefined) {
+        const current = readClientSession();
+        if (current && current.nameColor !== detail.adminNameColor) {
+          writeClientSession({ ...current, nameColor: detail.adminNameColor });
+        }
+      }
     };
     window.addEventListener(IDENTITY_COSMETICS_UPDATED_EVENT, onCosmeticsUpdated);
     return () => window.removeEventListener(IDENTITY_COSMETICS_UPDATED_EVENT, onCosmeticsUpdated);
