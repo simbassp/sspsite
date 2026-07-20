@@ -8,6 +8,7 @@ import { ProfileExportExcelButton } from "@/components/profile/ProfileExportExce
 import { ProfileHeroLoginBlock } from "@/components/profile/ProfileHeroLoginBlock";
 import { ProfileNameEditModal } from "@/components/profile/ProfileNameEditModal";
 import { UserAvatar } from "@/components/profile/UserAvatar";
+import { AdminAvatarFlames } from "@/components/profile/AdminAvatarFlames";
 import { ProfileEmploymentDateField } from "@/components/profile/ProfileEmploymentDateField";
 import { ProfilePersonnelMetaFields } from "@/components/profile/ProfilePersonnelMetaFields";
 import { ProfileRotaUnitFields } from "@/components/profile/ProfileRotaUnitFields";
@@ -1037,15 +1038,17 @@ export default function ProfilePage() {
             <div className="profile-hero-sidebar">
               <div className="profile-hero-identity">
                 <div className="profile-hero-avatar">
-                  <UserAvatar
-                    name={session.name}
-                    callsign={session.callsign}
-                    avatarUrl={avatarUrl}
-                    size={64}
-                    avatarFrame={achievementAvatarFrame}
-                    topRankBadge={achievementTopBadge}
-                    title={`${session.name || ""} ${session.callsign || ""}`.trim()}
-                  />
+                  <AdminAvatarFlames active={session?.role === "admin"}>
+                    <UserAvatar
+                      name={session.name}
+                      callsign={session.callsign}
+                      avatarUrl={avatarUrl}
+                      size={64}
+                      avatarFrame={achievementAvatarFrame}
+                      topRankBadge={achievementTopBadge}
+                      title={`${session.name || ""} ${session.callsign || ""}`.trim()}
+                    />
+                  </AdminAvatarFlames>
                 </div>
                 <div className="profile-hero-identity-text">
                   <p className="profile-hero-kicker">Пользовательский профиль</p>
