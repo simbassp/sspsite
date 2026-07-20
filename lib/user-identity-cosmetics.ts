@@ -1,10 +1,11 @@
-import { finalNameColorClass, normalizeFinalNameColor, normalizeTrialAvatarFrame, type FinalNameColorId, type TopRankBadgeId, type TrialAvatarFrameId } from "@/lib/achievements-catalog";
+import { finalNameColorClass, normalizeBankAvatarOverlay, normalizeFinalNameColor, normalizeTrialAvatarFrame, type BankAvatarOverlayId, type FinalNameColorId, type TopRankBadgeId, type TrialAvatarFrameId } from "@/lib/achievements-catalog";
 import { normalizeProfileNameColor, profileNameColorClass, type ProfileNameColorId } from "@/lib/profile-name-color";
 
 export type UserIdentityCosmetics = {
   adminNameColor?: ProfileNameColorId | null;
   achievementNameColor?: FinalNameColorId | null;
   avatarFrame?: TrialAvatarFrameId | null;
+  bankOverlay?: BankAvatarOverlayId | null;
   topRankBadge?: TopRankBadgeId | null;
 };
 
@@ -31,6 +32,7 @@ export function mapIdentityCosmeticsFromRow(
     adminNameColor: normalizeProfileNameColor(row.profile_name_color),
     achievementNameColor: normalizeFinalNameColor(row.profile_cosmetic_name_color),
     avatarFrame: normalizeTrialAvatarFrame(row.profile_cosmetic_avatar_frame),
+    bankOverlay: normalizeBankAvatarOverlay(row.profile_cosmetic_bank_overlay),
     topRankBadge,
   };
 }
@@ -43,12 +45,13 @@ export function mergeIdentityCosmetics(
     adminNameColor: extra.adminNameColor ?? base.adminNameColor ?? null,
     achievementNameColor: extra.achievementNameColor ?? base.achievementNameColor ?? null,
     avatarFrame: extra.avatarFrame ?? base.avatarFrame ?? null,
+    bankOverlay: extra.bankOverlay ?? base.bankOverlay ?? null,
     topRankBadge: extra.topRankBadge ?? base.topRankBadge ?? null,
   };
 }
 
 export const IDENTITY_COSMETIC_USER_COLUMNS =
-  "profile_name_color,profile_cosmetic_name_color,profile_cosmetic_avatar_frame";
+  "profile_name_color,profile_cosmetic_name_color,profile_cosmetic_avatar_frame,profile_cosmetic_bank_overlay";
 
 export const IDENTITY_COSMETICS_UPDATED_EVENT = "ssp:identity-cosmetics-updated";
 

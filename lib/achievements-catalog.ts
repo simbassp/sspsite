@@ -23,9 +23,16 @@ export type FinalNameColorId =
   | "ach-final-30"
   | "ach-final-40";
 
+export type BankAvatarOverlayId =
+  | "bank-overlay-flame"
+  | "bank-overlay-crown"
+  | "bank-overlay-diamond"
+  | "bank-overlay-aurora-flame"
+  | "bank-overlay-geran";
+
 export type TopRankBadgeId = "top-1" | "top-2" | "top-3";
 
-export type AchievementCategory = "tenure" | "trial" | "final" | "top";
+export type AchievementCategory = "tenure" | "trial" | "final" | "bank" | "top";
 
 export type AchievementDefinition = {
   id: string;
@@ -36,6 +43,7 @@ export type AchievementDefinition = {
   tenureMedal?: TenureMedalMaterial;
   trialFrame?: TrialAvatarFrameId;
   finalNameColor?: FinalNameColorId;
+  bankOverlay?: BankAvatarOverlayId;
   topBadge?: TopRankBadgeId;
   threshold?: number;
   thresholdMonths?: number;
@@ -68,10 +76,59 @@ export const FINAL_ACHIEVEMENTS: AchievementDefinition[] = [
   { id: "final-40", category: "final", title: "40 итоговых", description: "40 сданных итоговых тестов", tierLabel: "Алмазный", finalNameColor: "ach-final-40", threshold: 40 },
 ];
 
+export const BANK_ACHIEVEMENTS: AchievementDefinition[] = [
+  {
+    id: "bank-5",
+    category: "bank",
+    title: "5 прохождений банка",
+    description: "5 полных прохождений теста «Весь банк»",
+    tierLabel: "Пламя",
+    bankOverlay: "bank-overlay-flame",
+    threshold: 5,
+  },
+  {
+    id: "bank-10",
+    category: "bank",
+    title: "10 прохождений банка",
+    description: "10 полных прохождений теста «Весь банк»",
+    tierLabel: "Корона",
+    bankOverlay: "bank-overlay-crown",
+    threshold: 10,
+  },
+  {
+    id: "bank-20",
+    category: "bank",
+    title: "20 прохождений банка",
+    description: "20 полных прохождений теста «Весь банк»",
+    tierLabel: "Алмаз",
+    bankOverlay: "bank-overlay-diamond",
+    threshold: 20,
+  },
+  {
+    id: "bank-30",
+    category: "bank",
+    title: "30 прохождений банка",
+    description: "30 полных прохождений теста «Весь банк»",
+    tierLabel: "Сине-фиолетовое пламя",
+    bankOverlay: "bank-overlay-aurora-flame",
+    threshold: 30,
+  },
+  {
+    id: "bank-50",
+    category: "bank",
+    title: "50 прохождений банка",
+    description: "50 полных прохождений теста «Весь банк»",
+    tierLabel: "Герань БПЛА",
+    bankOverlay: "bank-overlay-geran",
+    threshold: 50,
+  },
+];
+
 export const ALL_ACHIEVEMENTS: AchievementDefinition[] = [
   ...TENURE_ACHIEVEMENTS,
   ...TRIAL_ACHIEVEMENTS,
   ...FINAL_ACHIEVEMENTS,
+  ...BANK_ACHIEVEMENTS,
 ];
 
 const ACHIEVEMENT_MAP = new Map(ALL_ACHIEVEMENTS.map((item) => [item.id, item]));
@@ -84,6 +141,7 @@ export type AchievementProgress = {
   employmentMonths: number | null;
   trialPassed: number;
   finalPassed: number;
+  bankCompletions: number;
 };
 
 export function computeUnlockedAchievementIds(progress: AchievementProgress): string[] {
@@ -98,6 +156,9 @@ export function computeUnlockedAchievementIds(progress: AchievementProgress): st
   }
   for (const item of FINAL_ACHIEVEMENTS) {
     if (progress.finalPassed >= (item.threshold ?? 0)) unlocked.push(item.id);
+  }
+  for (const item of BANK_ACHIEVEMENTS) {
+    if (progress.bankCompletions >= (item.threshold ?? 0)) unlocked.push(item.id);
   }
   return unlocked;
 }
@@ -118,6 +179,27 @@ export function unlockedFinalNameColors(unlockedIds: string[]): FinalNameColorId
   return FINAL_ACHIEVEMENTS.filter((item) => unlockedIds.includes(item.id))
     .map((item) => item.finalNameColor)
     .filter((item): item is FinalNameColorId => Boolean(item));
+}
+
+export function unlockedBankOverlays(unlockedIds: string[]): BankAvatarOverlayId[] {
+  return BANK_ACHIEVEMENTS.filter((item) => unlockedIds.includes(item.id))
+    .map((item) => item.bankOverlay)
+    .filter((item): item is BankAvatarOverlayId => Boolean(item));
+}
+
+export function normalizeBankAvatarOverlay(raw: unknown): BankAvatarOverlayId | null {
+  const value = String(raw ?? "").trim();
+  return BANK_ACHIEVEMENTS.some((item) => item.bankOverlay === value) ? (value as BankAvatarOverlayId) : null;
+}
+
+export function bankAvatarOverlayClass(overlay: BankAvatarOverlayId | null | undefined): string {
+  if (!overlay) return "";
+  return `avatar-bank-overlay avatar-bank-overlay--${overlay.replace("bank-overlay-", "")}`;
+}
+
+export function bankOverlayLabel(overlay: BankAvatarOverlayId): string {
+  const item = BANK_ACHIEVEMENTS.find((entry) => entry.bankOverlay === overlay);
+  return item?.tierLabel ?? overlay;
 }
 
 const LEGACY_TRIAL_FRAMES: Record<string, TrialAvatarFrameId> = {

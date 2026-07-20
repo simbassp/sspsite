@@ -1,9 +1,11 @@
 import {
   computeUnlockedAchievementIds,
   getAchievementDefinition,
+  normalizeBankAvatarOverlay,
   normalizeFinalNameColor,
   normalizeTrialAvatarFrame,
   type AchievementProgress,
+  type BankAvatarOverlayId,
   type FinalNameColorId,
   type TopRankBadgeId,
   type TrialAvatarFrameId,
@@ -11,7 +13,7 @@ import {
 import { loadTopRankBadgeMap } from "@/lib/user-identity-cosmetics-server";
 import { employmentCalendarMonthsSince } from "@/lib/employment-date";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
-import { countPassedTestsForUser } from "@/lib/test-result-stats";
+import { countBankCompletionsForUser, countPassedTestsForUser } from "@/lib/test-result-stats";
 
 function isMissingColumnError(message: string | undefined) {
   const m = (message || "").toLowerCase();
@@ -38,20 +40,23 @@ export type UserAchievementsPayload = {
   cosmetics: {
     avatarFrame: TrialAvatarFrameId | null;
     nameColor: FinalNameColorId | null;
+    bankOverlay: BankAvatarOverlayId | null;
   };
   topRankBadge: TopRankBadgeId | null;
 };
 
 export async function loadUserAchievementProgress(userId: string, employmentDate: string | null) {
   const supabase = getServerSupabaseServiceClient();
-  const [trialPassed, finalPassed] = await Promise.all([
+  const [trialPassed, finalPassed, bankCompletions] = await Promise.all([
     countPassedTestsForUser(supabase, userId, "trial"),
     countPassedTestsForUser(supabase, userId, "final"),
+    countBankCompletionsForUser(supabase, userId),
   ]);
   const progress: AchievementProgress = {
     employmentMonths: employmentCalendarMonthsSince(employmentDate),
     trialPassed,
     finalPassed,
+    bankCompletions,
   };
   return progress;
 }
@@ -63,25 +68,30 @@ function allowedCosmeticsFromUnlocks(unlockedIds: string[]) {
   const allowedColors = new Set(
     unlockedIds.map((id) => getAchievementDefinition(id)?.finalNameColor).filter(Boolean) as FinalNameColorId[],
   );
-  return { allowedFrames, allowedColors };
+  const allowedOverlays = new Set(
+    unlockedIds.map((id) => getAchievementDefinition(id)?.bankOverlay).filter(Boolean) as BankAvatarOverlayId[],
+  );
+  return { allowedFrames, allowedColors, allowedOverlays };
 }
 
 async function reconcileAchievementCosmetics(userId: string, unlockedIds: string[]) {
   const supabase = getServerSupabaseServiceClient();
   const userQ = await supabase
     .from("app_users")
-    .select("profile_cosmetic_avatar_frame,profile_cosmetic_name_color")
+    .select("profile_cosmetic_avatar_frame,profile_cosmetic_name_color,profile_cosmetic_bank_overlay")
     .eq("id", userId)
     .maybeSingle();
   if (userQ.error || !userQ.data) return;
 
   const avatarFrame = normalizeTrialAvatarFrame(userQ.data.profile_cosmetic_avatar_frame);
   const nameColor = normalizeFinalNameColor(userQ.data.profile_cosmetic_name_color);
-  const { allowedFrames, allowedColors } = allowedCosmeticsFromUnlocks(unlockedIds);
+  const bankOverlay = normalizeBankAvatarOverlay(userQ.data.profile_cosmetic_bank_overlay);
+  const { allowedFrames, allowedColors, allowedOverlays } = allowedCosmeticsFromUnlocks(unlockedIds);
 
   const payload: Record<string, null> = {};
   if (avatarFrame && !allowedFrames.has(avatarFrame)) payload.profile_cosmetic_avatar_frame = null;
   if (nameColor && !allowedColors.has(nameColor)) payload.profile_cosmetic_name_color = null;
+  if (bankOverlay && !allowedOverlays.has(bankOverlay)) payload.profile_cosmetic_bank_overlay = null;
   if (!Object.keys(payload).length) return;
 
   const upd = await supabase.from("app_users").update(payload).eq("id", userId);
@@ -143,6 +153,7 @@ export async function syncUserAchievements(userId: string, employmentDate: strin
         let body = "Откройте настройки профиля, чтобы выбрать награду.";
         if (def.category === "final") body = "Вы можете выбрать цвет имени и позывного в профиле.";
         if (def.category === "trial") body = "Вы можете выбрать подсветку аватара в профиле.";
+        if (def.category === "bank") body = "Вы можете выбрать эффект над аватаром в профиле.";
         await supabase.from("app_notifications").insert({
           user_id: userId,
           kind: "achievement",
@@ -190,7 +201,7 @@ export async function loadUserAchievementsState(
       .limit(5),
     supabase
       .from("app_users")
-      .select("profile_cosmetic_avatar_frame,profile_cosmetic_name_color")
+      .select("profile_cosmetic_avatar_frame,profile_cosmetic_name_color,profile_cosmetic_bank_overlay")
       .eq("id", userId)
       .maybeSingle(),
     loadTopRankBadgeMap().catch(() => new Map<string, TopRankBadgeId>()),
@@ -199,10 +210,12 @@ export async function loadUserAchievementsState(
   const userRow = userQ.error ? null : userQ.data;
   let avatarFrame = normalizeTrialAvatarFrame(userRow?.profile_cosmetic_avatar_frame);
   let nameColor = normalizeFinalNameColor(userRow?.profile_cosmetic_name_color);
+  let bankOverlay = normalizeBankAvatarOverlay(userRow?.profile_cosmetic_bank_overlay);
 
-  const { allowedFrames, allowedColors } = allowedCosmeticsFromUnlocks(unlockedIds);
+  const { allowedFrames, allowedColors, allowedOverlays } = allowedCosmeticsFromUnlocks(unlockedIds);
   if (avatarFrame && !allowedFrames.has(avatarFrame)) avatarFrame = null;
   if (nameColor && !allowedColors.has(nameColor)) nameColor = null;
+  if (bankOverlay && !allowedOverlays.has(bankOverlay)) bankOverlay = null;
 
   const pendingNotifications = (notifyQ.data ?? []).map((row) => ({
     id: String(row.id),
@@ -221,7 +234,7 @@ export async function loadUserAchievementsState(
       unlockedAt: String(row.unlocked_at),
     })),
     pendingNotifications,
-    cosmetics: { avatarFrame, nameColor },
+    cosmetics: { avatarFrame, nameColor, bankOverlay },
     topRankBadge: topRankMap.get(userId) ?? null,
   };
 }
@@ -229,7 +242,7 @@ export async function loadUserAchievementsState(
 export async function updateUserAchievementCosmetics(
   userId: string,
   unlockedIds: string[],
-  input: { avatarFrame?: string | null; nameColor?: string | null },
+  input: { avatarFrame?: string | null; nameColor?: string | null; bankOverlay?: string | null },
 ) {
   const supabase = getServerSupabaseServiceClient();
   const payload: Record<string, string | null> = {};
@@ -250,6 +263,15 @@ export async function updateUserAchievementCosmetics(
       if (!allowed) return { ok: false as const, error: "color_not_unlocked" };
     }
     payload.profile_cosmetic_name_color = color;
+  }
+
+  if (input.bankOverlay !== undefined) {
+    const overlay = input.bankOverlay ? normalizeBankAvatarOverlay(input.bankOverlay) : null;
+    if (overlay) {
+      const allowed = unlockedIds.some((id) => getAchievementDefinition(id)?.bankOverlay === overlay);
+      if (!allowed) return { ok: false as const, error: "bank_overlay_not_unlocked" };
+    }
+    payload.profile_cosmetic_bank_overlay = overlay;
   }
 
   if (!Object.keys(payload).length) return { ok: true as const };

@@ -36,3 +36,14 @@ export async function countPassedTestsForUser(
   }
   return 0;
 }
+
+/** Полные прохождения теста «Весь банк». */
+export async function countBankCompletionsForUser(supabase: SupabaseClient, userId: string): Promise<number> {
+  const primary = await supabase
+    .from("bank_test_completions")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId);
+  if (!primary.error) return primary.count ?? 0;
+  if (isMissingColumnError(primary.error.message)) return 0;
+  return 0;
+}

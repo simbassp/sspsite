@@ -760,6 +760,7 @@ export default function ProfileUserInspectPage() {
                         avatarUrl={inspectUser.avatarUrl ?? null}
                         size={64}
                         avatarFrame={inspectUser.cosmetics?.avatarFrame ?? null}
+                        bankOverlay={inspectUser.cosmetics?.bankOverlay ?? null}
                         topRankBadge={inspectUser.cosmetics?.topRankBadge ?? null}
                         title={`${inspectUser.name || ""} ${inspectUser.callsign || ""}`.trim()}
                       />

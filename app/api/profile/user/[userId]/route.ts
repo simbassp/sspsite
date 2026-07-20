@@ -48,7 +48,7 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
     const userPrimary = await supabase
       .from("app_users")
       .select(
-        "id,name,callsign,position,role,status,login,is_online,last_seen_at,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,employment_date,avatar_url,profile_name_color,profile_cosmetic_avatar_frame,profile_cosmetic_name_color",
+        "id,name,callsign,position,role,status,login,is_online,last_seen_at,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,employment_date,avatar_url,profile_name_color,profile_cosmetic_avatar_frame,profile_cosmetic_name_color,profile_cosmetic_bank_overlay",
       )
       .eq("id", userId)
       .maybeSingle();

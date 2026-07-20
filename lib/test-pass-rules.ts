@@ -7,6 +7,21 @@ export const MAX_TRIAL_ERRORS = 2;
 /** Допустимое число ошибок в итоговом тесте. */
 export const MAX_FINAL_ERRORS = 3;
 
+/** Минимальный процент правильных ответов для зачёта «Весь банк». */
+export const BANK_PASS_PERCENT = 80;
+
+/** Минимум правильных ответов для зачёта «Весь банк» при заданном размере банка. */
+export function bankPassCorrectThreshold(total: number): number {
+  const safeTotal = Math.max(1, total);
+  return Math.ceil((safeTotal * BANK_PASS_PERCENT) / 100);
+}
+
+export function isBankPassed(correct: number, total: number): boolean {
+  const safeTotal = Math.max(1, total);
+  const safeCorrect = Math.max(0, Math.min(correct, safeTotal));
+  return safeCorrect >= bankPassCorrectThreshold(safeTotal);
+}
+
 export function countTestErrors(correct: number, total: number): number {
   const safeTotal = Math.max(1, total);
   const safeCorrect = Math.max(0, Math.min(correct, safeTotal));

@@ -321,6 +321,27 @@ export async function createTrialResult(
   }
 }
 
+export async function recordBankCompletion(
+  userId: string,
+  score: number,
+  meta?: {
+    questionsTotal: number;
+    questionsCorrect: number;
+    durationSeconds?: number;
+  },
+) {
+  if (!isSupabaseConfigured) return;
+  try {
+    await fetch("/api/tests/bank-completion", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ score, meta }),
+    });
+  } catch {
+    /* ignore offline */
+  }
+}
+
 export async function beginFinalAttempt(userId: string) {
   if (!isSupabaseConfigured) {
     return startFinalAttempt(userId);

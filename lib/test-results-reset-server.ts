@@ -46,6 +46,16 @@ export async function deleteTestResultAttempt(supabase: SupabaseClient, attemptI
   }
 }
 
+async function deleteBankCompletions(supabase: SupabaseClient, linkedUserIds: string[]) {
+  const del = await supabase.from("bank_test_completions").delete().in("user_id", linkedUserIds);
+  if (del.error && !isMissingColumnError(del.error.message)) {
+    const msg = del.error.message.toLowerCase();
+    if (!msg.includes("does not exist") && !msg.includes("schema cache")) {
+      throw new Error(del.error.message);
+    }
+  }
+}
+
 export async function resetTestResultsForUser(
   supabase: SupabaseClient,
   targetUserId: string,
@@ -61,5 +71,9 @@ export async function resetTestResultsForUser(
   if (scope === "final" || scope === "all") {
     await deleteTestResultsByType(supabase, linkedUserIds, "final");
     await resetFinalAttemptWindow(supabase, targetUserId, adminUserId);
+  }
+
+  if (scope === "all") {
+    await deleteBankCompletions(supabase, linkedUserIds);
   }
 }

@@ -15,11 +15,18 @@ import {
   forceFailFinalAttempt,
   loadFinalAttempt,
   persistFinalAttempt,
+  recordBankCompletion,
   seedDefaultQuestionsIfEmpty,
 } from "@/lib/tests-repository";
 import { filterDbPoolByManualTopicSettings } from "@/lib/manual-topic";
 import { DEFAULT_TEST_CONFIG } from "@/lib/test-config";
-import { formatTestResultDisplay, isFinalPassed } from "@/lib/test-pass-rules";
+import {
+  BANK_PASS_PERCENT,
+  bankPassCorrectThreshold,
+  formatTestResultDisplay,
+  isBankPassed,
+  isFinalPassed,
+} from "@/lib/test-pass-rules";
 import { loadRecentQuestionIds, pickTestQuestions, rememberQuestionIds, shuffleQuestions } from "@/lib/test-question-selection";
 import { generateUavTtxQuestionBank } from "@/lib/uav-test-generator";
 import { fetchUavItems } from "@/lib/uav-repository";
@@ -629,13 +636,19 @@ export default function TestsPage() {
     const correct = questions.reduce((acc, q) => acc + (finalAnswers[q.id] === q.correctIndex ? 1 : 0), 0);
     const qTotal = questions.length;
     const score = Math.round((correct / Math.max(qTotal, 1)) * 100);
-    const passed = type === "final" ? isFinalPassed(correct, qTotal) : false;
+    const passed =
+      type === "final" ? isFinalPassed(correct, qTotal) : type === "bank" ? isBankPassed(correct, qTotal) : false;
     const reviewSnapshot = type === "final" ? buildFinalReview(questions, finalAnswers) : null;
+    const bankMinCorrect = type === "bank" ? bankPassCorrectThreshold(qTotal) : 0;
     const messageText =
       type === "trial"
         ? `Пробный тест завершен: ${formatTestResultDisplay({ questionsCorrect: correct, questionsTotal: qTotal, scorePercent: score })}.`
         : type === "bank"
-          ? `Тест по всему банку завершён: ${formatTestResultDisplay({ questionsCorrect: correct, questionsTotal: qTotal, scorePercent: score })}. Результат не сохраняется.`
+          ? `Тест по всему банку завершён: ${formatTestResultDisplay({ questionsCorrect: correct, questionsTotal: qTotal, scorePercent: score })}. ${
+              passed
+                ? "Прохождение засчитано."
+                : `Для зачёта нужно не менее ${bankMinCorrect} из ${qTotal} (${BANK_PASS_PERCENT}%).`
+            }`
           : `Итоговый тест завершен: ${formatTestResultDisplay({ questionsCorrect: correct, questionsTotal: qTotal, scorePercent: score })}. Статус: ${
               passed ? "СДАЛ" : "НЕ СДАЛ"
             }.`;
@@ -680,6 +693,10 @@ export default function TestsPage() {
     try {
       if (type === "trial") {
         await createTrialResult(session.id, score, meta);
+      } else if (type === "bank") {
+        if (passed) {
+          await recordBankCompletion(session.id, score, meta);
+        }
       } else if (type === "final") {
         await finishFinalAttempt(session.id, score, passed, meta);
       }

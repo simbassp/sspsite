@@ -132,6 +132,7 @@ export function NewsMessageCard({
               className="news-message-card__author-avatar"
               title={authorLine}
               avatarFrame={authorParts?.cosmetics?.avatarFrame ?? null}
+              bankOverlay={authorParts?.cosmetics?.bankOverlay ?? null}
               topRankBadge={authorParts?.cosmetics?.topRankBadge ?? null}
             />
             <span className="news-message-card__author-copy">

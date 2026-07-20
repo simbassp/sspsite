@@ -2,12 +2,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  BANK_ACHIEVEMENTS,
   FINAL_ACHIEVEMENTS,
   TRIAL_ACHIEVEMENTS,
+  bankAvatarOverlayClass,
+  bankOverlayLabel,
   finalNameColorClass,
   finalNameColorLabel,
   trialAvatarFrameClass,
   trialFrameLabel,
+  type BankAvatarOverlayId,
   type FinalNameColorId,
   type TrialAvatarFrameId,
 } from "@/lib/achievements-catalog";
@@ -26,8 +30,13 @@ type ProfileCosmeticsModalProps = {
   callsign: string;
   avatarUrl: string | null;
   avatarFrame: TrialAvatarFrameId | null;
+  bankOverlay: BankAvatarOverlayId | null;
   nameColor: FinalNameColorId | null;
-  onSave: (next: { avatarFrame: TrialAvatarFrameId | null; nameColor: FinalNameColorId | null }) => void;
+  onSave: (next: {
+    avatarFrame: TrialAvatarFrameId | null;
+    bankOverlay: BankAvatarOverlayId | null;
+    nameColor: FinalNameColorId | null;
+  }) => void;
   saving?: boolean;
 };
 
@@ -39,13 +48,16 @@ export function ProfileCosmeticsModal({
   callsign,
   avatarUrl,
   avatarFrame,
+  bankOverlay,
   nameColor,
   onSave,
   saving = false,
 }: ProfileCosmeticsModalProps) {
   const [draftFrame, setDraftFrame] = useState<TrialAvatarFrameId | null>(avatarFrame);
+  const [draftBankOverlay, setDraftBankOverlay] = useState<BankAvatarOverlayId | null>(bankOverlay);
   const [draftColor, setDraftColor] = useState<FinalNameColorId | null>(nameColor);
   const [previewFrame, setPreviewFrame] = useState<TrialAvatarFrameId | null>(avatarFrame);
+  const [previewBankOverlay, setPreviewBankOverlay] = useState<BankAvatarOverlayId | null>(bankOverlay);
   const [previewColor, setPreviewColor] = useState<FinalNameColorId | null>(nameColor);
   const [lockedTip, setLockedTip] = useState<LockedTip | null>(null);
 
@@ -56,25 +68,34 @@ export function ProfileCosmeticsModal({
     const frameOk =
       avatarFrame === null ||
       TRIAL_ACHIEVEMENTS.some((item) => item.trialFrame === avatarFrame && unlockedSet.has(item.id));
+    const bankOk =
+      bankOverlay === null ||
+      BANK_ACHIEVEMENTS.some((item) => item.bankOverlay === bankOverlay && unlockedSet.has(item.id));
     const colorOk =
       nameColor === null ||
       FINAL_ACHIEVEMENTS.some((item) => item.finalNameColor === nameColor && unlockedSet.has(item.id));
     const nextFrame = frameOk ? avatarFrame : null;
+    const nextBankOverlay = bankOk ? bankOverlay : null;
     const nextColor = colorOk ? nameColor : null;
     setDraftFrame(nextFrame);
+    setDraftBankOverlay(nextBankOverlay);
     setDraftColor(nextColor);
     setPreviewFrame(nextFrame);
+    setPreviewBankOverlay(nextBankOverlay);
     setPreviewColor(nextColor);
     setLockedTip(null);
-  }, [open, avatarFrame, nameColor, unlockedIds, unlockedSet]);
+  }, [open, avatarFrame, bankOverlay, nameColor, unlockedIds, unlockedSet]);
 
   const previewFrameLocked =
     previewFrame != null &&
     !TRIAL_ACHIEVEMENTS.some((item) => item.trialFrame === previewFrame && unlockedSet.has(item.id));
+  const previewBankOverlayLocked =
+    previewBankOverlay != null &&
+    !BANK_ACHIEVEMENTS.some((item) => item.bankOverlay === previewBankOverlay && unlockedSet.has(item.id));
   const previewColorLocked =
     previewColor != null &&
     !FINAL_ACHIEVEMENTS.some((item) => item.finalNameColor === previewColor && unlockedSet.has(item.id));
-  const isLockedPreview = previewFrameLocked || previewColorLocked;
+  const isLockedPreview = previewFrameLocked || previewBankOverlayLocked || previewColorLocked;
 
   const selectFrame = (frame: TrialAvatarFrameId | null, unlocked: boolean, tip?: LockedTip) => {
     setPreviewFrame(frame);
@@ -84,6 +105,16 @@ export function ProfileCosmeticsModal({
     }
     setLockedTip(null);
     setDraftFrame(frame);
+  };
+
+  const selectBankOverlay = (overlay: BankAvatarOverlayId | null, unlocked: boolean, tip?: LockedTip) => {
+    setPreviewBankOverlay(overlay);
+    if (!unlocked) {
+      if (tip) setLockedTip(tip);
+      return;
+    }
+    setLockedTip(null);
+    setDraftBankOverlay(overlay);
   };
 
   const selectColor = (color: FinalNameColorId | null, unlocked: boolean, tip?: LockedTip) => {
@@ -99,6 +130,7 @@ export function ProfileCosmeticsModal({
   const saveSelection = () => {
     onSave({
       avatarFrame: draftFrame,
+      bankOverlay: draftBankOverlay,
       nameColor: draftColor,
     });
   };
@@ -128,6 +160,7 @@ export function ProfileCosmeticsModal({
               avatarUrl={avatarUrl}
               size={72}
               avatarFrame={previewFrame}
+              bankOverlay={previewBankOverlay}
             />
             <div className="profile-cosmetics-modal__preview-text">
               <p className={`profile-cosmetics-modal__preview-name ${finalNameColorClass(previewColor)}`.trim()}>
@@ -145,6 +178,45 @@ export function ProfileCosmeticsModal({
               <span>{lockedTip.body}</span>
             </p>
           ) : null}
+
+          <section className="profile-cosmetics-section">
+            <h4>Эффект над аватаром (тест «Весь банк»)</h4>
+            <div className="profile-cosmetics-grid">
+              <button
+                type="button"
+                className={`profile-cosmetics-option${
+                  previewBankOverlay === null && !previewBankOverlayLocked ? " is-selected" : ""
+                }${previewBankOverlay === null && previewBankOverlayLocked ? " is-preview" : ""}`}
+                onClick={() => selectBankOverlay(null, true)}
+              >
+                Без эффекта
+              </button>
+              {BANK_ACHIEVEMENTS.map((item) => {
+                const overlay = item.bankOverlay;
+                if (!overlay) return null;
+                const unlocked = unlockedSet.has(item.id);
+                const tip = { title: item.title, body: item.description };
+                const isPreview = previewBankOverlay === overlay;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    aria-disabled={!unlocked}
+                    className={`profile-cosmetics-option profile-cosmetics-option--bank ${bankAvatarOverlayClass(overlay)}${
+                      unlocked && draftBankOverlay === overlay ? " is-selected" : ""
+                    }${!unlocked && isPreview ? " is-preview" : ""}${unlocked ? "" : " is-locked"}`}
+                    onClick={() => selectBankOverlay(overlay, unlocked, tip)}
+                  >
+                    <span className="profile-cosmetics-option__bank-preview">
+                      <span className="profile-cosmetics-option__bank-dot" />
+                    </span>
+                    <span className="profile-cosmetics-option__label">{bankOverlayLabel(overlay)}</span>
+                    {!unlocked ? <span className="profile-cosmetics-option__hint">{item.title}</span> : null}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
 
           <section className="profile-cosmetics-section">
             <h4>Подсветка аватара (пробные тесты)</h4>

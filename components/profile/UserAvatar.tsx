@@ -1,7 +1,8 @@
 "use client";
 
 import { resolveAvatarDisplayUrl, getAvatarInitials } from "@/lib/avatar-display";
-import { trialAvatarFrameClass, type TopRankBadgeId, type TrialAvatarFrameId } from "@/lib/achievements-catalog";
+import { trialAvatarFrameClass, type BankAvatarOverlayId, type TopRankBadgeId, type TrialAvatarFrameId } from "@/lib/achievements-catalog";
+import { AvatarBankOverlay } from "@/components/achievements/AvatarBankOverlay";
 import { TopRankBadge } from "@/components/achievements/TopRankBadge";
 
 type UserAvatarProps = {
@@ -12,6 +13,7 @@ type UserAvatarProps = {
   className?: string;
   title?: string;
   avatarFrame?: TrialAvatarFrameId | null;
+  bankOverlay?: BankAvatarOverlayId | null;
   topRankBadge?: TopRankBadgeId | null;
 };
 
@@ -23,6 +25,7 @@ export function UserAvatar({
   className = "",
   title,
   avatarFrame = null,
+  bankOverlay = null,
   topRankBadge = null,
 }: UserAvatarProps) {
   const src = resolveAvatarDisplayUrl(avatarUrl);
@@ -57,6 +60,7 @@ export function UserAvatar({
       style={{ width: size, height: size, ["--avatar-size" as string]: `${size}px` }}
     >
       {avatarNode}
+      {bankOverlay ? <AvatarBankOverlay overlay={bankOverlay} size={size} /> : null}
       {topRankBadge ? <TopRankBadge rank={topRankBadge} className="user-avatar-wrap__top-badge" /> : null}
     </span>
   );

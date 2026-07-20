@@ -245,6 +245,7 @@ export default function AdminUsersPage() {
       className="admin-users-avatar"
       title={`${user.name || "Без имени"}${user.callsign ? ` ${user.callsign}` : ""}`}
       avatarFrame={user.cosmetics?.avatarFrame ?? null}
+      bankOverlay={user.cosmetics?.bankOverlay ?? null}
       topRankBadge={user.cosmetics?.topRankBadge ?? null}
     />
   );

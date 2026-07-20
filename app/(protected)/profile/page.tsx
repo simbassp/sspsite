@@ -19,7 +19,7 @@ import {
   ProfileCosmeticsModal,
 } from "@/components/achievements/ProfileCosmeticsModal";
 import { readClientSession } from "@/lib/client-auth";
-import { type FinalNameColorId, type TrialAvatarFrameId, type TopRankBadgeId } from "@/lib/achievements-catalog";
+import { type BankAvatarOverlayId, type FinalNameColorId, type TrialAvatarFrameId, type TopRankBadgeId } from "@/lib/achievements-catalog";
 import type { ProfileNameColorId } from "@/lib/profile-name-color";
 import type { UserIdentityCosmetics } from "@/lib/user-identity-cosmetics";
 import { dispatchIdentityCosmeticsUpdated } from "@/lib/user-identity-cosmetics";
@@ -160,6 +160,7 @@ export default function ProfilePage() {
     Array<{ id: string; title: string; body: string }>
   >([]);
   const [achievementAvatarFrame, setAchievementAvatarFrame] = useState<TrialAvatarFrameId | null>(null);
+  const [achievementBankOverlay, setAchievementBankOverlay] = useState<BankAvatarOverlayId | null>(null);
   const [achievementNameColor, setAchievementNameColor] = useState<FinalNameColorId | null>(null);
   const [achievementTopBadge, setAchievementTopBadge] = useState<TopRankBadgeId | null>(null);
   const [cosmeticsModalOpen, setCosmeticsModalOpen] = useState(false);
@@ -172,8 +173,9 @@ export default function ProfilePage() {
     adminNameColor: displayNameColor ?? session?.nameColor ?? null,
     achievementNameColor: achievementNameColor,
     avatarFrame: achievementAvatarFrame,
+    bankOverlay: achievementBankOverlay,
     topRankBadge: achievementTopBadge,
-  }), [displayNameColor, session?.nameColor, achievementNameColor, achievementAvatarFrame, achievementTopBadge]);
+  }), [displayNameColor, session?.nameColor, achievementNameColor, achievementAvatarFrame, achievementBankOverlay, achievementTopBadge]);
 
   useEffect(() => {
     if (!session?.id) return;
@@ -185,13 +187,18 @@ export default function ProfilePage() {
           ok?: boolean;
           unlockedIds?: string[];
           pendingNotifications?: Array<{ id: string; title: string; body: string }>;
-          cosmetics?: { avatarFrame?: TrialAvatarFrameId | null; nameColor?: FinalNameColorId | null };
+          cosmetics?: {
+            avatarFrame?: TrialAvatarFrameId | null;
+            bankOverlay?: BankAvatarOverlayId | null;
+            nameColor?: FinalNameColorId | null;
+          };
           topRankBadge?: TopRankBadgeId | null;
         };
         if (!response.ok || !payload.ok || cancelled) return;
         setAchievementUnlockedIds(Array.isArray(payload.unlockedIds) ? payload.unlockedIds : []);
         setAchievementNotifications(Array.isArray(payload.pendingNotifications) ? payload.pendingNotifications : []);
         setAchievementAvatarFrame(payload.cosmetics?.avatarFrame ?? null);
+        setAchievementBankOverlay(payload.cosmetics?.bankOverlay ?? null);
         setAchievementNameColor(payload.cosmetics?.nameColor ?? null);
         setAchievementTopBadge(payload.topRankBadge ?? null);
       } catch {
@@ -1043,6 +1050,7 @@ export default function ProfilePage() {
                     avatarUrl={avatarUrl}
                     size={64}
                     avatarFrame={achievementAvatarFrame}
+                    bankOverlay={achievementBankOverlay}
                     topRankBadge={achievementTopBadge}
                     title={`${session.name || ""} ${session.callsign || ""}`.trim()}
                   />
@@ -1217,6 +1225,7 @@ export default function ProfilePage() {
         callsign={session.callsign ?? ""}
         avatarUrl={avatarUrl}
         avatarFrame={achievementAvatarFrame}
+        bankOverlay={achievementBankOverlay}
         nameColor={achievementNameColor}
         saving={cosmeticsSaving}
         onSave={(next) => {
@@ -1230,14 +1239,20 @@ export default function ProfilePage() {
                 });
                 const payload = (await response.json()) as {
                   ok?: boolean;
-                  cosmetics?: { avatarFrame?: TrialAvatarFrameId | null; nameColor?: FinalNameColorId | null };
+                  cosmetics?: {
+                    avatarFrame?: TrialAvatarFrameId | null;
+                    bankOverlay?: BankAvatarOverlayId | null;
+                    nameColor?: FinalNameColorId | null;
+                  };
                 };
                 if (!response.ok || !payload.ok) return;
                 setAchievementAvatarFrame(payload.cosmetics?.avatarFrame ?? null);
+                setAchievementBankOverlay(payload.cosmetics?.bankOverlay ?? null);
                 setAchievementNameColor(payload.cosmetics?.nameColor ?? null);
                 dispatchIdentityCosmeticsUpdated({
                   achievementNameColor: payload.cosmetics?.nameColor ?? null,
                   avatarFrame: payload.cosmetics?.avatarFrame ?? null,
+                  bankOverlay: payload.cosmetics?.bankOverlay ?? null,
                 });
                 setCosmeticsModalOpen(false);
               } finally {

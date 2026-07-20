@@ -18,7 +18,7 @@ export async function GET() {
     const supabase = getServerSupabaseServiceClient();
     const primary = await supabase
       .from("app_users")
-      .select("profile_name_color,profile_cosmetic_name_color,profile_cosmetic_avatar_frame")
+      .select("profile_name_color,profile_cosmetic_name_color,profile_cosmetic_avatar_frame,profile_cosmetic_bank_overlay")
       .eq("id", session.id)
       .maybeSingle();
 
@@ -42,6 +42,7 @@ export async function GET() {
         adminNameColor: cosmetics.adminNameColor ?? null,
         achievementNameColor: cosmetics.achievementNameColor ?? null,
         avatarFrame: cosmetics.avatarFrame ?? null,
+        bankOverlay: cosmetics.bankOverlay ?? null,
       },
     });
   } catch (error) {

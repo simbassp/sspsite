@@ -37,7 +37,12 @@ export async function PATCH(request: Request) {
   const session = await getServerSession();
   if (!session) return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
 
-  let body: { avatarFrame?: string | null; nameColor?: string | null; dismissNotificationIds?: string[] };
+  let body: {
+    avatarFrame?: string | null;
+    bankOverlay?: string | null;
+    nameColor?: string | null;
+    dismissNotificationIds?: string[];
+  };
   try {
     body = (await request.json()) as typeof body;
   } catch {
@@ -50,6 +55,7 @@ export async function PATCH(request: Request) {
 
   const result = await updateUserAchievementCosmetics(session.id, unlockedIds, {
     avatarFrame: body.avatarFrame,
+    bankOverlay: body.bankOverlay,
     nameColor: body.nameColor,
   });
   if (!result.ok) return Response.json({ ok: false, error: result.error }, { status: 400 });
