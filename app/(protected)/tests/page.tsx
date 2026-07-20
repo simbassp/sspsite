@@ -1084,7 +1084,11 @@ export default function TestsPage() {
                 <div className="form" style={{ marginTop: 10 }}>
                   {currentQuestion.options.map((option, index) => (
                     <button
-                      className={`btn test-option-btn ${activeTest === "trial" && trialFeedback ? "test-option-btn--trial-reveal" : ""}`}
+                      className={`btn test-option-btn${
+                        activeTest === "trial" && trialFeedback ? " test-option-btn--trial-reveal" : ""
+                      }${
+                        activeTest === "final" && finalTransition?.chosen === index ? " test-option-btn--final-selected" : ""
+                      }`}
                       type="button"
                       key={`${currentQuestion.id}-${index}-${option}`}
                       disabled={
@@ -1096,7 +1100,7 @@ export default function TestsPage() {
                         else void submitFinalAnswer(index);
                       }}
                     >
-                      <span className={`test-option-letter test-option-letter--${getTrialOptionState(index)}`}>{optionLetter(index)}</span>
+                      <span className={`test-option-letter test-option-letter--${getOptionLetterState(index)}`}>{optionLetter(index)}</span>
                       <span>{option}</span>
                     </button>
                   ))}
