@@ -1,4 +1,4 @@
-import { bankAvatarOverlayClass, bankOverlayGemClass, type BankAvatarOverlayId } from "@/lib/achievements-catalog";
+import { bankAvatarOverlayClass, bankOverlayGemClass, bankOverlayOrbitClass, type BankAvatarOverlayId } from "@/lib/achievements-catalog";
 
 type AvatarBankOverlayProps = {
   overlay: BankAvatarOverlayId;
@@ -14,6 +14,7 @@ export function AvatarBankOverlay({ overlay, size = 64, className = "" }: Avatar
       aria-hidden="true"
       style={{ ["--bank-overlay-scale" as string]: scale }}
     >
+      <span className={bankOverlayOrbitClass(overlay)} />
       <span className={bankOverlayGemClass(overlay)}>
         <span className="avatar-bank-overlay__gem-glow" />
         <span className="avatar-bank-overlay__gem-body" />

@@ -1,7 +1,7 @@
 import { normalizeProfileNameColor } from "@/lib/profile-name-color";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
-import { mapIdentityCosmeticsFromRow } from "@/lib/user-identity-cosmetics";
+import { ACHIEVEMENT_COSMETIC_USER_COLUMNS, mapIdentityCosmeticsFromRow } from "@/lib/user-identity-cosmetics";
 
 export const runtime = "nodejs";
 
@@ -26,7 +26,7 @@ export async function GET() {
     if (primary.error && isMissingColumnError(primary.error.message)) {
       const fallback = await supabase
         .from("app_users")
-        .select("profile_name_color")
+        .select(`profile_name_color,${ACHIEVEMENT_COSMETIC_USER_COLUMNS}`)
         .eq("id", session.id)
         .maybeSingle();
       row = fallback.data as Record<string, unknown> | null;

@@ -3,6 +3,7 @@ import { buildPersonnelRosterTops, type PersonnelRosterTopUser } from "@/lib/per
 import { loadPersonnelRoster } from "@/lib/personnel-server";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 import {
+  ACHIEVEMENT_COSMETIC_USER_COLUMNS,
   IDENTITY_COSMETIC_USER_COLUMNS,
   mapIdentityCosmeticsFromRow,
   type UserIdentityCosmetics,
@@ -11,6 +12,29 @@ import {
 function isMissingColumnError(message: string | undefined) {
   const m = (message || "").toLowerCase();
   return m.includes("column") && m.includes("does not exist");
+}
+
+export async function fetchUserCosmeticRow(
+  supabase: ReturnType<typeof getServerSupabaseServiceClient>,
+  userId: string,
+): Promise<Record<string, unknown>> {
+  const withBank = await supabase
+    .from("app_users")
+    .select(`${ACHIEVEMENT_COSMETIC_USER_COLUMNS},profile_cosmetic_bank_overlay`)
+    .eq("id", userId)
+    .maybeSingle();
+  if (!withBank.error) return (withBank.data ?? {}) as Record<string, unknown>;
+
+  if (isMissingColumnError(withBank.error.message)) {
+    const core = await supabase
+      .from("app_users")
+      .select(ACHIEVEMENT_COSMETIC_USER_COLUMNS)
+      .eq("id", userId)
+      .maybeSingle();
+    if (!core.error) return (core.data ?? {}) as Record<string, unknown>;
+  }
+
+  return {};
 }
 
 let topRankCache: { ts: number; map: Map<string, TopRankBadgeId> } | null = null;
@@ -78,7 +102,10 @@ export async function loadIdentityCosmeticsMap(
 
   let rows = (usersQ.data ?? []) as Array<Record<string, unknown>>;
   if (usersQ.error && isMissingColumnError(usersQ.error.message)) {
-    const fallback = await supabase.from("app_users").select("id,profile_name_color").in("id", uniqueIds);
+    const fallback = await supabase
+      .from("app_users")
+      .select(`id,profile_name_color,${ACHIEVEMENT_COSMETIC_USER_COLUMNS}`)
+      .in("id", uniqueIds);
     rows = (fallback.data ?? []) as Array<Record<string, unknown>>;
   }
 

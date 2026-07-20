@@ -6,6 +6,43 @@
   overflow: visible;
 }
 
+.avatar-bank-overlay__orbit {
+  position: absolute;
+  inset: calc(-7px * var(--bank-overlay-scale, 1));
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0.9;
+  mask: radial-gradient(circle, transparent 52%, #000 56%, #000 74%, transparent 78%);
+  -webkit-mask: radial-gradient(circle, transparent 52%, #000 56%, #000 74%, transparent 78%);
+  filter: blur(calc(1.5px * var(--bank-overlay-scale, 1)));
+  animation: bank-gem-orbit 2.4s ease-in-out infinite alternate;
+}
+
+.avatar-bank-overlay__orbit--ach-final-5 {
+  background: conic-gradient(from 210deg, transparent 0deg, rgba(56, 189, 248, 0.15) 40deg, rgba(56, 189, 248, 0.65) 95deg, rgba(14, 165, 233, 0.45) 140deg, rgba(56, 189, 248, 0.12) 190deg, transparent 240deg);
+  box-shadow: 0 0 calc(12px * var(--bank-overlay-scale, 1)) rgba(56, 189, 248, 0.35);
+}
+
+.avatar-bank-overlay__orbit--ach-final-10 {
+  background: conic-gradient(from 210deg, transparent 0deg, rgba(34, 197, 94, 0.15) 40deg, rgba(34, 197, 94, 0.62) 95deg, rgba(21, 128, 61, 0.42) 140deg, rgba(34, 197, 94, 0.12) 190deg, transparent 240deg);
+  box-shadow: 0 0 calc(12px * var(--bank-overlay-scale, 1)) rgba(34, 197, 94, 0.32);
+}
+
+.avatar-bank-overlay__orbit--ach-final-20 {
+  background: conic-gradient(from 210deg, transparent 0deg, rgba(245, 158, 11, 0.15) 40deg, rgba(245, 158, 11, 0.62) 95deg, rgba(217, 119, 6, 0.42) 140deg, rgba(245, 158, 11, 0.12) 190deg, transparent 240deg);
+  box-shadow: 0 0 calc(12px * var(--bank-overlay-scale, 1)) rgba(245, 158, 11, 0.32);
+}
+
+.avatar-bank-overlay__orbit--ach-final-30 {
+  background: conic-gradient(from 210deg, transparent 0deg, rgba(6, 182, 212, 0.18) 35deg, rgba(139, 92, 246, 0.62) 90deg, rgba(34, 211, 238, 0.42) 135deg, rgba(139, 92, 246, 0.15) 185deg, transparent 235deg);
+  box-shadow: 0 0 calc(14px * var(--bank-overlay-scale, 1)) rgba(139, 92, 246, 0.28);
+}
+
+.avatar-bank-overlay__orbit--ach-final-40 {
+  background: conic-gradient(from 210deg, transparent 0deg, rgba(103, 232, 249, 0.2) 35deg, rgba(196, 181, 253, 0.58) 88deg, rgba(167, 139, 250, 0.42) 132deg, rgba(103, 232, 249, 0.18) 182deg, transparent 232deg);
+  box-shadow: 0 0 calc(14px * var(--bank-overlay-scale, 1)) rgba(103, 232, 249, 0.32);
+}
+
 .avatar-bank-overlay__gem {
   position: absolute;
   left: 50%;
@@ -92,6 +129,11 @@
   filter: drop-shadow(0 0 calc(12px * var(--bank-overlay-scale, 1)) rgba(103, 232, 249, 0.82));
 }
 
+@keyframes bank-gem-orbit {
+  from { opacity: 0.72; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1.03); }
+}
+
 @keyframes bank-gem-float {
   0%, 100% { transform: translateX(-50%) translateY(0); }
   50% { transform: translateX(-50%) translateY(calc(-2px * var(--bank-overlay-scale, 1))); }
@@ -127,6 +169,36 @@
   inset: 8px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--muted) 35%, var(--panel));
+}
+
+.profile-cosmetics-option--bank[class*="profile-cosmetics-bank-preview--"] .profile-cosmetics-option__bank-preview::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: 50%;
+  opacity: 0.85;
+  mask: radial-gradient(circle, transparent 52%, #000 56%, #000 72%, transparent 76%);
+  -webkit-mask: radial-gradient(circle, transparent 52%, #000 56%, #000 72%, transparent 76%);
+}
+
+.profile-cosmetics-option--bank.profile-cosmetics-bank-preview--flame .profile-cosmetics-option__bank-preview::before {
+  background: conic-gradient(from 210deg, transparent, rgba(56, 189, 248, 0.55), transparent);
+}
+
+.profile-cosmetics-option--bank.profile-cosmetics-bank-preview--crown .profile-cosmetics-option__bank-preview::before {
+  background: conic-gradient(from 210deg, transparent, rgba(34, 197, 94, 0.55), transparent);
+}
+
+.profile-cosmetics-option--bank.profile-cosmetics-bank-preview--diamond .profile-cosmetics-option__bank-preview::before {
+  background: conic-gradient(from 210deg, transparent, rgba(245, 158, 11, 0.55), transparent);
+}
+
+.profile-cosmetics-option--bank.profile-cosmetics-bank-preview--aurora-flame .profile-cosmetics-option__bank-preview::before {
+  background: conic-gradient(from 210deg, transparent, rgba(139, 92, 246, 0.55), rgba(6, 182, 212, 0.35), transparent);
+}
+
+.profile-cosmetics-option--bank.profile-cosmetics-bank-preview--geran .profile-cosmetics-option__bank-preview::before {
+  background: conic-gradient(from 210deg, transparent, rgba(103, 232, 249, 0.5), rgba(196, 181, 253, 0.4), transparent);
 }
 
 .profile-cosmetics-option--bank[class*="profile-cosmetics-bank-preview--"] .profile-cosmetics-option__bank-preview::after {

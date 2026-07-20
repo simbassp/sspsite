@@ -59,6 +59,10 @@ export function mergeIdentityCosmetics(
 export const IDENTITY_COSMETIC_USER_COLUMNS =
   "profile_name_color,profile_cosmetic_name_color,profile_cosmetic_avatar_frame,profile_cosmetic_bank_overlay";
 
+/** Колонки косметики достижений без опционального bank_overlay (для fallback). */
+export const ACHIEVEMENT_COSMETIC_USER_COLUMNS =
+  "profile_cosmetic_avatar_frame,profile_cosmetic_name_color";
+
 export const IDENTITY_COSMETICS_UPDATED_EVENT = "ssp:identity-cosmetics-updated";
 
 export function dispatchIdentityCosmeticsUpdated(cosmetics: Partial<UserIdentityCosmetics>) {

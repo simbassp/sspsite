@@ -225,6 +225,11 @@ export function bankOverlayGemClass(overlay: BankAvatarOverlayId | null | undefi
   return `avatar-bank-overlay__gem avatar-bank-overlay__gem--${bankOverlayGemColorId(overlay)}`;
 }
 
+export function bankOverlayOrbitClass(overlay: BankAvatarOverlayId | null | undefined): string {
+  if (!overlay) return "";
+  return `avatar-bank-overlay__orbit avatar-bank-overlay__orbit--${bankOverlayGemColorId(overlay)}`;
+}
+
 const LEGACY_TRIAL_FRAMES: Record<string, TrialAvatarFrameId> = {
   "trial-frame-5000": "trial-frame-1500",
   "trial-frame-10000": "trial-frame-2000",

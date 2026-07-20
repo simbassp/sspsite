@@ -10,7 +10,7 @@ import {
   type TopRankBadgeId,
   type TrialAvatarFrameId,
 } from "@/lib/achievements-catalog";
-import { loadTopRankBadgeMap } from "@/lib/user-identity-cosmetics-server";
+import { loadTopRankBadgeMap, fetchUserCosmeticRow } from "@/lib/user-identity-cosmetics-server";
 import { employmentCalendarMonthsSince } from "@/lib/employment-date";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 import { countBankCompletionsForUser, countPassedTestsForUser } from "@/lib/test-result-stats";
@@ -76,27 +76,25 @@ function allowedCosmeticsFromUnlocks(unlockedIds: string[]) {
 
 async function reconcileAchievementCosmetics(userId: string, unlockedIds: string[]) {
   const supabase = getServerSupabaseServiceClient();
-  const userQ = await supabase
-    .from("app_users")
-    .select("profile_cosmetic_avatar_frame,profile_cosmetic_name_color,profile_cosmetic_bank_overlay")
-    .eq("id", userId)
-    .maybeSingle();
-  if (userQ.error || !userQ.data) return;
+  const userRow = await fetchUserCosmeticRow(supabase, userId);
+  if (!Object.keys(userRow).length) return;
 
-  const avatarFrame = normalizeTrialAvatarFrame(userQ.data.profile_cosmetic_avatar_frame);
-  const nameColor = normalizeFinalNameColor(userQ.data.profile_cosmetic_name_color);
-  const bankOverlay = normalizeBankAvatarOverlay(userQ.data.profile_cosmetic_bank_overlay);
+  const avatarFrame = normalizeTrialAvatarFrame(userRow.profile_cosmetic_avatar_frame);
+  const nameColor = normalizeFinalNameColor(userRow.profile_cosmetic_name_color);
+  const bankOverlay = normalizeBankAvatarOverlay(userRow.profile_cosmetic_bank_overlay);
   const { allowedFrames, allowedColors, allowedOverlays } = allowedCosmeticsFromUnlocks(unlockedIds);
 
-  const payload: Record<string, null> = {};
-  if (avatarFrame && !allowedFrames.has(avatarFrame)) payload.profile_cosmetic_avatar_frame = null;
-  if (nameColor && !allowedColors.has(nameColor)) payload.profile_cosmetic_name_color = null;
-  if (bankOverlay && !allowedOverlays.has(bankOverlay)) payload.profile_cosmetic_bank_overlay = null;
-  if (!Object.keys(payload).length) return;
+  const updates: Array<{ column: string; value: null }> = [];
+  if (avatarFrame && !allowedFrames.has(avatarFrame)) updates.push({ column: "profile_cosmetic_avatar_frame", value: null });
+  if (nameColor && !allowedColors.has(nameColor)) updates.push({ column: "profile_cosmetic_name_color", value: null });
+  if (bankOverlay && !allowedOverlays.has(bankOverlay)) updates.push({ column: "profile_cosmetic_bank_overlay", value: null });
+  if (!updates.length) return;
 
-  const upd = await supabase.from("app_users").update(payload).eq("id", userId);
-  if (upd.error && !isMissingColumnError(upd.error.message)) {
-    throw new Error(upd.error.message);
+  for (const entry of updates) {
+    const upd = await supabase.from("app_users").update({ [entry.column]: entry.value }).eq("id", userId);
+    if (upd.error && !isMissingColumnError(upd.error.message)) {
+      throw new Error(upd.error.message);
+    }
   }
 }
 
@@ -189,7 +187,7 @@ export async function loadUserAchievementsState(
   const progress = await loadUserAchievementProgress(userId, employmentDate);
   const unlockedIds = computeUnlockedAchievementIds(progress);
 
-  const [storedQ, notifyQ, userQ, topRankMap] = await Promise.all([
+  const [storedQ, notifyQ, userRow, topRankMap] = await Promise.all([
     supabase.from("user_achievements").select("id,achievement_id,unlocked_at").eq("user_id", userId),
     supabase
       .from("app_notifications")
@@ -199,18 +197,13 @@ export async function loadUserAchievementsState(
       .eq("is_read", false)
       .order("created_at", { ascending: false })
       .limit(5),
-    supabase
-      .from("app_users")
-      .select("profile_cosmetic_avatar_frame,profile_cosmetic_name_color,profile_cosmetic_bank_overlay")
-      .eq("id", userId)
-      .maybeSingle(),
+    fetchUserCosmeticRow(supabase, userId),
     loadTopRankBadgeMap().catch(() => new Map<string, TopRankBadgeId>()),
   ]);
 
-  const userRow = userQ.error ? null : userQ.data;
-  let avatarFrame = normalizeTrialAvatarFrame(userRow?.profile_cosmetic_avatar_frame);
-  let nameColor = normalizeFinalNameColor(userRow?.profile_cosmetic_name_color);
-  let bankOverlay = normalizeBankAvatarOverlay(userRow?.profile_cosmetic_bank_overlay);
+  let avatarFrame = normalizeTrialAvatarFrame(userRow.profile_cosmetic_avatar_frame);
+  let nameColor = normalizeFinalNameColor(userRow.profile_cosmetic_name_color);
+  let bankOverlay = normalizeBankAvatarOverlay(userRow.profile_cosmetic_bank_overlay);
 
   const { allowedFrames, allowedColors, allowedOverlays } = allowedCosmeticsFromUnlocks(unlockedIds);
   if (avatarFrame && !allowedFrames.has(avatarFrame)) avatarFrame = null;
