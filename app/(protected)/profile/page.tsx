@@ -178,7 +178,7 @@ export default function ProfilePage() {
     let cancelled = false;
     (async () => {
       try {
-        const response = await fetch("/api/profile/achievements", { cache: "no-store" });
+        const response = await fetch("/api/profile/achievements?sync=1", { cache: "no-store" });
         const payload = (await response.json()) as {
           ok?: boolean;
           unlockedIds?: string[];

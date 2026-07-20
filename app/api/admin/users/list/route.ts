@@ -1,5 +1,5 @@
 import { ONLINE_LAST_SEEN_MAX_MS } from "@/lib/presence-constants";
-import { loadIdentityCosmeticsMap } from "@/lib/user-identity-cosmetics-server";
+import { IDENTITY_COSMETIC_USER_COLUMNS, mapIdentityCosmeticsFromRow } from "@/lib/user-identity-cosmetics";
 import { normalizeUnitAssignment } from "@/lib/unit-assignment";
 import { normalizeAvatarStoragePath } from "@/lib/avatar-display";
 import { normalizeProfileNameColor } from "@/lib/profile-name-color";
@@ -34,7 +34,7 @@ export async function GET() {
     const primaryQ = await supabase
       .from("app_users")
       .select(
-        "id,auth_user_id,login,name,callsign,position,avatar_url,profile_name_color,can_manage_content,can_manage_news,can_manage_tests,can_manage_results,can_manage_uav,can_manage_counteraction,can_manage_users,can_view_user_list,can_reset_test_results,can_view_online,can_moderate_personnel,is_online,last_seen_at,role,status,duty_location,unit_assignment",
+        "id,auth_user_id,login,name,callsign,position,avatar_url,profile_name_color,profile_cosmetic_name_color,profile_cosmetic_avatar_frame,can_manage_content,can_manage_news,can_manage_tests,can_manage_results,can_manage_uav,can_manage_counteraction,can_manage_users,can_view_user_list,can_reset_test_results,can_view_online,can_moderate_personnel,is_online,last_seen_at,role,status,duty_location,unit_assignment",
       )
       .order("created_at", { ascending: false })
       .limit(1000);
@@ -52,7 +52,6 @@ export async function GET() {
       onlineFromFlagOnly = !rows.some((row) => Object.prototype.hasOwnProperty.call(row, "last_seen_at"));
     }
     if (queryError) return Response.json({ ok: false, error: queryError }, { status: 500 });
-    const cosmeticsMap = await loadIdentityCosmeticsMap(rows.map((r) => String(r.id || "")));
     const normalized = rows.map((r) => ({
       id: r.id,
       auth_user_id: r.auth_user_id ?? null,
@@ -62,7 +61,7 @@ export async function GET() {
       position: r.position,
       avatar_url: normalizeAvatarStoragePath(typeof r.avatar_url === "string" ? r.avatar_url : null),
       profile_name_color: typeof r.profile_name_color === "string" ? r.profile_name_color : null,
-      cosmetics: cosmeticsMap.get(String(r.id || "")) ?? {},
+      cosmetics: mapIdentityCosmeticsFromRow(r),
       can_manage_content: r.can_manage_content ?? false,
       can_manage_news: r.can_manage_news ?? undefined,
       can_manage_tests: r.can_manage_tests ?? undefined,

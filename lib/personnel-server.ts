@@ -4,7 +4,7 @@ import {
   mapIdentityCosmeticsFromRow,
   type UserIdentityCosmetics,
 } from "@/lib/user-identity-cosmetics";
-import { loadTopRankBadgeMap } from "@/lib/user-identity-cosmetics-server";
+import { buildTopRankBadgeMapFromUsers } from "@/lib/user-identity-cosmetics-server";
 import { normalizeUnitAssignment } from "@/lib/unit-assignment";
 import type { DutyLocation, Position, UnitAssignment } from "@/lib/types";
 import {
@@ -873,7 +873,7 @@ export async function loadPersonnelRoster(filters?: {
     typeof filters?.testDate === "string" && isValidDateIso(filters.testDate.trim())
       ? filters.testDate.trim()
       : null;
-  const [examsMap, depMap, medalsMap, licensesMap, premiumMap, testStatsMap, testStatsOnDateMap, topRankMap] =
+  const [examsMap, depMap, medalsMap, licensesMap, premiumMap, testStatsMap, testStatsOnDateMap] =
     await Promise.all([
     loadExamsForUsers(userIds),
     loadDeploymentStats(userIds),
@@ -882,7 +882,6 @@ export async function loadPersonnelRoster(filters?: {
     loadPremiumTotals(userIds),
     loadTestStatsForUsers(userIds),
     testDate ? loadTestStatsForUsersOnDate(userIds, testDate) : Promise.resolve(new Map<string, PersonnelTestRosterStats>()),
-    loadTopRankBadgeMap(),
   ]);
 
   const users: PersonnelUserCard[] = rows.map((u) => {
@@ -902,9 +901,17 @@ export async function loadPersonnelRoster(filters?: {
       testStats: testStatsMap.get(id) ?? emptyTestRosterStats(),
       testStatsOnDate: testDate ? testStatsOnDateMap.get(id) ?? emptyTestRosterStats() : null,
       },
-      topRankMap.get(id) ?? null,
+      null,
     );
   });
+
+  const topRankMap = buildTopRankBadgeMapFromUsers(users);
+  for (const user of users) {
+    const badge = topRankMap.get(user.id) ?? null;
+    if (badge) {
+      user.cosmetics = { ...(user.cosmetics ?? {}), topRankBadge: badge };
+    }
+  }
 
   return { ok: true as const, users };
 }
@@ -937,14 +944,13 @@ export async function loadPersonnelRosterCardsByIds(userIds: string[], testDate?
   const dateIso =
     typeof testDate === "string" && isValidDateIso(testDate.trim()) ? testDate.trim() : null;
 
-  const [testStatsMap, testStatsOnDateMap, examsMap, depMap, licensesMap, premiumMap, topRankMap] = await Promise.all([
+  const [testStatsMap, testStatsOnDateMap, examsMap, depMap, licensesMap, premiumMap] = await Promise.all([
     loadTestStatsForUsers(ids),
     dateIso ? loadTestStatsForUsersOnDate(ids, dateIso) : Promise.resolve(new Map<string, PersonnelTestRosterStats>()),
     loadExamsForUsers(ids),
     loadDeploymentStats(ids),
     loadLicenses(ids),
     loadPremiumTotals(ids),
-    loadTopRankBadgeMap(),
   ]);
 
   const order = new Map(uniqueIds.map((id, index) => [id, index]));
@@ -965,7 +971,7 @@ export async function loadPersonnelRosterCardsByIds(userIds: string[], testDate?
       testStats: testStatsMap.get(id) ?? emptyTestRosterStats(),
       testStatsOnDate: dateIso ? testStatsOnDateMap.get(id) ?? emptyTestRosterStats() : null,
       },
-      topRankMap.get(id) ?? null,
+      null,
     );
   });
 

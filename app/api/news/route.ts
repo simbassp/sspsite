@@ -1,6 +1,6 @@
 import { normalizeAvatarStoragePath } from "@/lib/avatar-display";
 import { IDENTITY_COSMETIC_USER_COLUMNS } from "@/lib/user-identity-cosmetics";
-import { loadIdentityCosmeticsMap } from "@/lib/user-identity-cosmetics-server";
+import { mapIdentityCosmeticsFromRow } from "@/lib/user-identity-cosmetics";
 import { normalizeProfileNameColor } from "@/lib/profile-name-color";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
@@ -271,7 +271,6 @@ export async function GET(request: Request) {
     const userIds = usersRows
       .map((user) => (typeof user.id === "string" ? user.id : ""))
       .filter(Boolean);
-    const cosmeticsMap = await loadIdentityCosmeticsMap(userIds);
 
     const usersMap = new Map<
       string,
@@ -281,7 +280,7 @@ export async function GET(request: Request) {
         position: string;
         avatarUrl: string | null;
         nameColor: ReturnType<typeof normalizeProfileNameColor>;
-        cosmetics: NonNullable<ReturnType<typeof cosmeticsMap.get>>;
+        cosmetics: NonNullable<ReturnType<typeof mapIdentityCosmeticsFromRow>>;
       }
     >();
     const usersByLabel = new Map<
@@ -292,18 +291,13 @@ export async function GET(request: Request) {
         position: string;
         avatarUrl: string | null;
         nameColor: ReturnType<typeof normalizeProfileNameColor>;
-        cosmetics: NonNullable<ReturnType<typeof cosmeticsMap.get>>;
+        cosmetics: NonNullable<ReturnType<typeof mapIdentityCosmeticsFromRow>>;
       }
     >();
     for (const user of usersRows) {
       const id = typeof user.id === "string" ? user.id : "";
       const authUserId = typeof user.auth_user_id === "string" ? user.auth_user_id : "";
-      const cosmetics = cosmeticsMap.get(id) ?? {
-        adminNameColor: normalizeProfileNameColor(user.profile_name_color),
-        achievementNameColor: null,
-        avatarFrame: null,
-        topRankBadge: null,
-      };
+      const cosmetics = mapIdentityCosmeticsFromRow(user);
       const person = {
         name: typeof user.name === "string" ? user.name.trim() : "",
         callsign: typeof user.callsign === "string" ? user.callsign.trim() : "",

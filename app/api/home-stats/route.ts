@@ -3,8 +3,7 @@ import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 import { readSiteSettingNumber } from "@/lib/site-analytics";
 import { ONLINE_LAST_SEEN_MAX_MS } from "@/lib/presence-constants";
 import { normalizeProfileNameColor, type ProfileNameColorId } from "@/lib/profile-name-color";
-import { mapIdentityCosmeticsFromRow, type UserIdentityCosmetics } from "@/lib/user-identity-cosmetics";
-import { loadIdentityCosmeticsMap } from "@/lib/user-identity-cosmetics-server";
+import { IDENTITY_COSMETIC_USER_COLUMNS, mapIdentityCosmeticsFromRow, type UserIdentityCosmetics } from "@/lib/user-identity-cosmetics";
 import { UNIT_COMMANDERS, unitAssignmentLabel } from "@/lib/unit-assignment";
 
 export const runtime = "nodejs";
@@ -58,6 +57,10 @@ function buildPerson(
   };
 }
 
+function cosmeticsFromRow(row: Record<string, unknown>): UserIdentityCosmetics {
+  return mapIdentityCosmeticsFromRow(row);
+}
+
 export async function GET() {
   const session = await getServerSession();
   if (!session) return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
@@ -101,12 +104,8 @@ export async function GET() {
     const promoted = Array.isArray(promotedQ.data) ? promotedQ.data[0] : null;
     const leftPayload = (left?.payload || {}) as Record<string, unknown>;
     const promotedPayload = (promoted?.payload || {}) as Record<string, unknown>;
-
-    const colorLookupIds = [
-      typeof newest?.id === "string" ? newest.id : "",
-      typeof leftPayload.user_id === "string" ? leftPayload.user_id : "",
-      typeof promotedPayload.user_id === "string" ? promotedPayload.user_id : "",
-    ].filter(Boolean);
+    const leftUserId = typeof leftPayload.user_id === "string" ? leftPayload.user_id : "";
+    const promotedUserId = typeof promotedPayload.user_id === "string" ? promotedPayload.user_id : "";
 
     let usersSummary: {
       totalUsers: number;
@@ -122,7 +121,7 @@ export async function GET() {
 
     const onlineStrictQ = supabase
       .from("app_users")
-      .select("id,name,callsign,is_online,last_seen_at,status,profile_name_color")
+      .select(`id,name,callsign,is_online,last_seen_at,status,${IDENTITY_COSMETIC_USER_COLUMNS}`)
       .eq("status", "active");
     const analyticsQ = supabase
       .from("site_settings")
@@ -137,13 +136,11 @@ export async function GET() {
         const rows = Array.isArray(fallbackQ.data) ? fallbackQ.data : [];
         const activeRows = rows.filter((row) => String(row.status || "active") === "active");
         const onlineRows = activeRows.filter((row) => row.is_online === true);
-        const fallbackCosmeticsMap = await loadIdentityCosmeticsMap(onlineRows.map((row) => String(row.id || "")));
         usersSummary = {
           totalUsers: activeRows.length,
           onlineUsers: onlineRows.map((row) => {
-            const id = String(row.id || "");
-            const cosmetics = fallbackCosmeticsMap.get(id) ?? mapIdentityCosmeticsFromRow({});
-            return mapOnlineUser(row as Record<string, unknown>, cosmetics);
+            const record = row as Record<string, unknown>;
+            return mapOnlineUser(record, cosmeticsFromRow(record));
           }),
         };
       }
@@ -152,18 +149,39 @@ export async function GET() {
       const onlineRows = rows
         .filter((row) => effectiveOnlineStrict(row.is_online, row.last_seen_at))
         .sort((a, b) => toSafeString(a.name).localeCompare(toSafeString(b.name), "ru"));
-      const cosmeticsMap = await loadIdentityCosmeticsMap(onlineRows.map((row) => String(row.id || "")));
       usersSummary = {
         totalUsers: rows.length,
         onlineUsers: onlineRows.map((row) => {
-          const id = String(row.id || "");
-          const cosmetics = cosmeticsMap.get(id) ?? mapIdentityCosmeticsFromRow(row as Record<string, unknown>);
-          return mapOnlineUser(row as Record<string, unknown>, cosmetics);
+          const record = row as Record<string, unknown>;
+          return mapOnlineUser(record, cosmeticsFromRow(record));
         }),
       };
     }
 
-    const cosmeticsMap = await loadIdentityCosmeticsMap(colorLookupIds);
+    const eventCosmeticsById = new Map<string, UserIdentityCosmetics>();
+    if (newest && typeof newest.id === "string") {
+      eventCosmeticsById.set(newest.id, cosmeticsFromRow(newest));
+    }
+    if (leftUserId) {
+      const leftUserQ = await supabase
+        .from("app_users")
+        .select(`id,${IDENTITY_COSMETIC_USER_COLUMNS}`)
+        .eq("id", leftUserId)
+        .maybeSingle();
+      if (leftUserQ.data) {
+        eventCosmeticsById.set(leftUserId, cosmeticsFromRow(leftUserQ.data as Record<string, unknown>));
+      }
+    }
+    if (promotedUserId) {
+      const promotedUserQ = await supabase
+        .from("app_users")
+        .select(`id,${IDENTITY_COSMETIC_USER_COLUMNS}`)
+        .eq("id", promotedUserId)
+        .maybeSingle();
+      if (promotedUserQ.data) {
+        eventCosmeticsById.set(promotedUserId, cosmeticsFromRow(promotedUserQ.data as Record<string, unknown>));
+      }
+    }
 
     if (!analyticsRes.error) {
       const map = new Map((analyticsRes.data ?? []).map((row) => [String(row.key), row.value]));
@@ -182,9 +200,6 @@ export async function GET() {
       }
     }
 
-    const leftUserId = typeof leftPayload.user_id === "string" ? leftPayload.user_id : "";
-    const promotedUserId = typeof promotedPayload.user_id === "string" ? promotedPayload.user_id : "";
-
     const events = [
       newest
         ? {
@@ -195,7 +210,7 @@ export async function GET() {
             person: buildPerson(
               newest.name,
               newest.callsign,
-              cosmeticsMap.get(String(newest.id || "")) ?? mapIdentityCosmeticsFromRow(newest),
+              eventCosmeticsById.get(String(newest.id || "")) ?? cosmeticsFromRow(newest),
             ),
             created_at: newest.created_at ? String(newest.created_at) : null,
           }
@@ -210,7 +225,7 @@ export async function GET() {
               leftPayload.name,
               leftPayload.callsign,
               leftUserId
-                ? cosmeticsMap.get(leftUserId) ?? mapIdentityCosmeticsFromRow({})
+                ? eventCosmeticsById.get(leftUserId) ?? mapIdentityCosmeticsFromRow({})
                 : mapIdentityCosmeticsFromRow({}),
             ),
             created_at: left.created_at ? String(left.created_at) : null,
@@ -228,7 +243,7 @@ export async function GET() {
               promotedPayload.name,
               promotedPayload.callsign,
               promotedUserId
-                ? cosmeticsMap.get(promotedUserId) ?? mapIdentityCosmeticsFromRow({})
+                ? eventCosmeticsById.get(promotedUserId) ?? mapIdentityCosmeticsFromRow({})
                 : mapIdentityCosmeticsFromRow({}),
               ` — новая должность: ${toSafeString(promotedPayload.position) || "Не указана"}`,
             ),

@@ -28,7 +28,6 @@ import {
 } from "@/lib/presence-constants";
 import { SessionUser } from "@/lib/types";
 import type { UserIdentityCosmetics } from "@/lib/user-identity-cosmetics";
-import type { FinalNameColorId, TrialAvatarFrameId, TopRankBadgeId } from "@/lib/achievements-catalog";
 
 const mobileHeaderIconSvg = {
   viewBox: "0 0 24 24" as const,
@@ -138,27 +137,8 @@ export function AppShell({ session, children }: AppShellProps) {
   }, [session.id]);
 
   useEffect(() => {
-    let cancelled = false;
-    void fetch("/api/profile/achievements", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((payload: {
-        ok?: boolean;
-        cosmetics?: { avatarFrame?: TrialAvatarFrameId | null; nameColor?: FinalNameColorId | null };
-        topRankBadge?: TopRankBadgeId | null;
-      }) => {
-        if (!payload.ok || cancelled) return;
-        setHeaderCosmetics({
-          adminNameColor: session.nameColor ?? null,
-          achievementNameColor: payload.cosmetics?.nameColor ?? null,
-          avatarFrame: payload.cosmetics?.avatarFrame ?? null,
-          topRankBadge: payload.topRankBadge ?? null,
-        });
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [session.id, session.nameColor]);
+    setHeaderCosmetics({ adminNameColor: session.nameColor ?? null });
+  }, [session.nameColor]);
 
   const navLinks = showPersonnelNav
     ? (() => {

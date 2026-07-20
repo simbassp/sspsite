@@ -28,7 +28,8 @@ export async function GET(request: Request) {
   }
 
   const employmentDate = await readEmploymentDate(session.id);
-  const state = await loadUserAchievementsState(session.id, employmentDate);
+  const sync = url.searchParams.get("sync") === "1";
+  const state = await loadUserAchievementsState(session.id, employmentDate, { sync });
   return Response.json({ ok: true, ...state });
 }
 
@@ -57,6 +58,6 @@ export async function PATCH(request: Request) {
     await markAchievementNotificationsRead(session.id, body.dismissNotificationIds);
   }
 
-  const state = await loadUserAchievementsState(session.id, employmentDate);
+  const state = await loadUserAchievementsState(session.id, employmentDate, { sync: true });
   return Response.json({ ok: true, ...state });
 }

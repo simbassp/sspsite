@@ -125,9 +125,21 @@ export async function syncUserAchievements(userId: string, employmentDate: strin
 export async function loadUserAchievementsState(
   userId: string,
   employmentDate: string | null,
+  options: { sync?: boolean } = {},
 ): Promise<UserAchievementsPayload> {
   const supabase = getServerSupabaseServiceClient();
-  const { progress, unlockedIds } = await syncUserAchievements(userId, employmentDate);
+  const progress = await loadUserAchievementProgress(userId, employmentDate);
+  let unlockedIds = computeUnlockedAchievementIds(progress);
+
+  if (options.sync === true) {
+    const synced = await syncUserAchievements(userId, employmentDate);
+    unlockedIds = synced.unlockedIds;
+  } else {
+    const storedIdsQ = await supabase.from("user_achievements").select("achievement_id").eq("user_id", userId);
+    if (!storedIdsQ.error && storedIdsQ.data?.length) {
+      unlockedIds = storedIdsQ.data.map((row) => String(row.achievement_id));
+    }
+  }
 
   const [storedQ, notifyQ, userQ, topRankMap] = await Promise.all([
     supabase.from("user_achievements").select("id,achievement_id,unlocked_at").eq("user_id", userId),
@@ -144,7 +156,7 @@ export async function loadUserAchievementsState(
       .select("profile_cosmetic_avatar_frame,profile_cosmetic_name_color")
       .eq("id", userId)
       .maybeSingle(),
-    loadTopRankBadgeMap(),
+    loadTopRankBadgeMap().catch(() => new Map<string, TopRankBadgeId>()),
   ]);
 
   const userRow = userQ.error ? null : userQ.data;

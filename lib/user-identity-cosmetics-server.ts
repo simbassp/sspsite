@@ -1,5 +1,5 @@
 import type { TopRankBadgeId } from "@/lib/achievements-catalog";
-import { buildPersonnelRosterTops } from "@/lib/personnel-catalog";
+import { buildPersonnelRosterTops, type PersonnelRosterTopUser } from "@/lib/personnel-catalog";
 import { loadPersonnelRoster } from "@/lib/personnel-server";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 import {
@@ -14,37 +14,66 @@ function isMissingColumnError(message: string | undefined) {
 }
 
 let topRankCache: { ts: number; map: Map<string, TopRankBadgeId> } | null = null;
-const TOP_RANK_CACHE_MS = 60_000;
+let topRankInflight: Promise<Map<string, TopRankBadgeId>> | null = null;
+const TOP_RANK_CACHE_MS = 5 * 60_000;
 
+export function buildTopRankBadgeMapFromUsers<T extends PersonnelRosterTopUser>(users: T[]): Map<string, TopRankBadgeId> {
+  const map = new Map<string, TopRankBadgeId>();
+  if (!users.length) return map;
+  const tops = buildPersonnelRosterTops(users);
+  tops.activity.slice(0, 3).forEach((user, index) => {
+    const badge: TopRankBadgeId = index === 0 ? "top-1" : index === 1 ? "top-2" : "top-3";
+    map.set(user.id, badge);
+  });
+  return map;
+}
+
+/** Топ-бейджи по активности роты; кэш 5 мин, без повторной загрузки roster параллельно. */
 export async function loadTopRankBadgeMap(): Promise<Map<string, TopRankBadgeId>> {
   const now = Date.now();
   if (topRankCache && now - topRankCache.ts < TOP_RANK_CACHE_MS) {
     return topRankCache.map;
   }
+  if (topRankInflight) return topRankInflight;
 
-  const map = new Map<string, TopRankBadgeId>();
-  const roster = await loadPersonnelRoster({ platoon: "all", section: "all", module: "all" });
-  if (roster.ok && roster.users.length) {
-    const tops = buildPersonnelRosterTops(roster.users);
-    tops.activity.slice(0, 3).forEach((user, index) => {
-      const badge: TopRankBadgeId = index === 0 ? "top-1" : index === 1 ? "top-2" : "top-3";
-      map.set(user.id, badge);
-    });
-  }
+  topRankInflight = (async () => {
+    const map = new Map<string, TopRankBadgeId>();
+    try {
+      const roster = await loadPersonnelRoster({ platoon: "all", section: "all", module: "all" });
+      if (roster.ok && roster.users.length) {
+        for (const [id, badge] of buildTopRankBadgeMapFromUsers(roster.users)) {
+          map.set(id, badge);
+        }
+      }
+    } finally {
+      topRankInflight = null;
+    }
+    topRankCache = { ts: Date.now(), map };
+    return map;
+  })();
 
-  topRankCache = { ts: now, map };
-  return map;
+  return topRankInflight;
 }
 
-export async function loadIdentityCosmeticsMap(userIds: string[]): Promise<Map<string, UserIdentityCosmetics>> {
+export type LoadIdentityCosmeticsOptions = {
+  /** Тяжёлая операция — только для одиночных профилей. По умолчанию false. */
+  includeTopRank?: boolean;
+};
+
+export async function loadIdentityCosmeticsMap(
+  userIds: string[],
+  options: LoadIdentityCosmeticsOptions = {},
+): Promise<Map<string, UserIdentityCosmetics>> {
   const uniqueIds = [...new Set(userIds.filter(Boolean))];
   const result = new Map<string, UserIdentityCosmetics>();
   if (!uniqueIds.length) return result;
 
+  const includeTopRank = options.includeTopRank === true && uniqueIds.length <= 3;
   const supabase = getServerSupabaseServiceClient();
+
   const [usersQ, topRankMap] = await Promise.all([
     supabase.from("app_users").select(`id,${IDENTITY_COSMETIC_USER_COLUMNS}`).in("id", uniqueIds),
-    loadTopRankBadgeMap(),
+    includeTopRank ? loadTopRankBadgeMap() : Promise.resolve(new Map<string, TopRankBadgeId>()),
   ]);
 
   let rows = (usersQ.data ?? []) as Array<Record<string, unknown>>;
@@ -57,20 +86,33 @@ export async function loadIdentityCosmeticsMap(userIds: string[]): Promise<Map<s
     if (!row || typeof row !== "object") continue;
     const id = typeof row.id === "string" ? row.id : "";
     if (!id) continue;
-    result.set(id, mapIdentityCosmeticsFromRow(row as Record<string, unknown>, topRankMap.get(id) ?? null));
+    result.set(id, mapIdentityCosmeticsFromRow(row, includeTopRank ? topRankMap.get(id) ?? null : null));
   }
 
   for (const id of uniqueIds) {
     if (!result.has(id)) {
-      result.set(id, mapIdentityCosmeticsFromRow({}, topRankMap.get(id) ?? null));
+      result.set(
+        id,
+        mapIdentityCosmeticsFromRow({}, includeTopRank ? topRankMap.get(id) ?? null : null),
+      );
     }
   }
 
   return result;
 }
 
-export async function loadIdentityCosmeticsForUser(userId: string): Promise<UserIdentityCosmetics> {
-  const map = await loadIdentityCosmeticsMap([userId]);
+export function mapIdentityCosmeticsFromUserRow(
+  row: Record<string, unknown>,
+  topRankBadge: TopRankBadgeId | null = null,
+): UserIdentityCosmetics {
+  return mapIdentityCosmeticsFromRow(row, topRankBadge);
+}
+
+export async function loadIdentityCosmeticsForUser(
+  userId: string,
+  options: LoadIdentityCosmeticsOptions = { includeTopRank: true },
+): Promise<UserIdentityCosmetics> {
+  const map = await loadIdentityCosmeticsMap([userId], options);
   return map.get(userId) ?? {};
 }
 
