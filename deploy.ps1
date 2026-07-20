@@ -15,7 +15,7 @@ if ($LASTEXITCODE -ne 0) {
   throw "git push failed."
 }
 
-$remoteCommand = "set -e; cd $RemoteDir; git pull origin $Branch; npm ci; rm -rf .next; npm run build; pm2 restart all"
+$remoteCommand = "set -e; cd $RemoteDir; git pull origin $Branch; chmod +x deploy-remote.sh; bash deploy-remote.sh $Branch"
 
 Write-Host "==> Deploying on $Server..." -ForegroundColor Cyan
 ssh $Server $remoteCommand

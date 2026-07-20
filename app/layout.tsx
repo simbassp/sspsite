@@ -38,7 +38,7 @@ export default function RootLayout({
                   }
                   if (!target) return false;
                   var src = target.src || target.href || '';
-                  return /\\/_next\\/static\\/chunks\\//.test(src);
+                  return /\\/_next\\/static\\/(chunks|css)\\//.test(src);
                 }
                 function reloadOnce() {
                   if (sessionStorage.getItem(reloadKey)) return false;
@@ -47,10 +47,18 @@ export default function RootLayout({
                   return true;
                 }
                 window.addEventListener('error', function (event) {
-                  if (isChunkFailure(event.message || (event.error && event.error.message), event.target)) {
+                  var target = event.target;
+                  if (target && target.tagName === 'LINK') {
+                    var href = target.href || '';
+                    if (href.indexOf('/_next/static/css/') !== -1) {
+                      reloadOnce();
+                      return;
+                    }
+                  }
+                  if (isChunkFailure(event.message || (event.error && event.error.message), target)) {
                     reloadOnce();
                   }
-                });
+                }, true);
                 window.addEventListener('unhandledrejection', function (event) {
                   var reason = event.reason;
                   var message = reason && (reason.message || String(reason));
