@@ -82,7 +82,7 @@ export const BANK_ACHIEVEMENTS: AchievementDefinition[] = [
     category: "bank",
     title: "5 прохождений банка",
     description: "5 полных прохождений теста «Весь банк»",
-    tierLabel: "Пламя",
+    tierLabel: "Голубой алмаз",
     bankOverlay: "bank-overlay-flame",
     threshold: 5,
   },
@@ -91,7 +91,7 @@ export const BANK_ACHIEVEMENTS: AchievementDefinition[] = [
     category: "bank",
     title: "10 прохождений банка",
     description: "10 полных прохождений теста «Весь банк»",
-    tierLabel: "Слизь",
+    tierLabel: "Зелёный алмаз",
     bankOverlay: "bank-overlay-crown",
     threshold: 10,
   },
@@ -100,7 +100,7 @@ export const BANK_ACHIEVEMENTS: AchievementDefinition[] = [
     category: "bank",
     title: "20 прохождений банка",
     description: "20 полных прохождений теста «Весь банк»",
-    tierLabel: "Алмаз",
+    tierLabel: "Золотой алмаз",
     bankOverlay: "bank-overlay-diamond",
     threshold: 20,
   },
@@ -109,7 +109,7 @@ export const BANK_ACHIEVEMENTS: AchievementDefinition[] = [
     category: "bank",
     title: "30 прохождений банка",
     description: "30 полных прохождений теста «Весь банк»",
-    tierLabel: "Сине-фиолетовое пламя",
+    tierLabel: "Бирюзово-фиолетовый алмаз",
     bankOverlay: "bank-overlay-aurora-flame",
     threshold: 30,
   },
@@ -118,7 +118,7 @@ export const BANK_ACHIEVEMENTS: AchievementDefinition[] = [
     category: "bank",
     title: "50 прохождений банка",
     description: "50 полных прохождений теста «Весь банк»",
-    tierLabel: "Большая корона",
+    tierLabel: "Алмазный перелив",
     bankOverlay: "bank-overlay-geran",
     threshold: 50,
   },
@@ -206,6 +206,23 @@ export function bankCosmeticsPreviewClass(overlay: BankAvatarOverlayId | null | 
 export function bankOverlayLabel(overlay: BankAvatarOverlayId): string {
   const item = BANK_ACHIEVEMENTS.find((entry) => entry.bankOverlay === overlay);
   return item?.tierLabel ?? overlay;
+}
+
+const BANK_OVERLAY_GEM_COLORS: Record<BankAvatarOverlayId, FinalNameColorId> = {
+  "bank-overlay-flame": "ach-final-5",
+  "bank-overlay-crown": "ach-final-10",
+  "bank-overlay-diamond": "ach-final-20",
+  "bank-overlay-aurora-flame": "ach-final-30",
+  "bank-overlay-geran": "ach-final-40",
+};
+
+export function bankOverlayGemColorId(overlay: BankAvatarOverlayId): FinalNameColorId {
+  return BANK_OVERLAY_GEM_COLORS[overlay];
+}
+
+export function bankOverlayGemClass(overlay: BankAvatarOverlayId | null | undefined): string {
+  if (!overlay) return "";
+  return `avatar-bank-overlay__gem avatar-bank-overlay__gem--${bankOverlayGemColorId(overlay)}`;
 }
 
 const LEGACY_TRIAL_FRAMES: Record<string, TrialAvatarFrameId> = {

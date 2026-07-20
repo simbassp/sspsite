@@ -10,18 +10,24 @@ export type UserIdentityCosmetics = {
 };
 
 export function resolveIdentityColorClass(c: Partial<UserIdentityCosmetics>): string {
+  const achievement = c.achievementNameColor ?? null;
+  if (achievement) return finalNameColorClass(achievement);
   const admin = c.adminNameColor ?? null;
   if (admin) return profileNameColorClass(admin);
-  return finalNameColorClass(c.achievementNameColor ?? null);
+  return "";
 }
 
 export function userIdentityTextColorProps(c: Partial<UserIdentityCosmetics>) {
+  const achievement = c.achievementNameColor ?? null;
+  if (achievement) {
+    const colorClass = finalNameColorClass(achievement);
+    return { nameColor: null as ProfileNameColorId | null, colorClassOverride: colorClass || undefined };
+  }
   const admin = c.adminNameColor ?? null;
   if (admin) {
     return { nameColor: admin, colorClassOverride: undefined as string | undefined };
   }
-  const colorClass = finalNameColorClass(c.achievementNameColor ?? null);
-  return { nameColor: null as ProfileNameColorId | null, colorClassOverride: colorClass || undefined };
+  return { nameColor: null as ProfileNameColorId | null, colorClassOverride: undefined as string | undefined };
 }
 
 export function mapIdentityCosmeticsFromRow(

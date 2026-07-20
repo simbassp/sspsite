@@ -180,7 +180,7 @@ export function ProfileCosmeticsModal({
           ) : null}
 
           <section className="profile-cosmetics-section">
-            <h4>Эффект над аватаром (тест «Весь банк»)</h4>
+            <h4>Алмаз под аватаром (тест «Весь банк»)</h4>
             <div className="profile-cosmetics-grid">
               <button
                 type="button"

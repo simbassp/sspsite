@@ -787,6 +787,19 @@ html[data-theme="dark"] .select option {
   word-break: break-word;
 }
 
+.profile-page .profile-hero-name .profile-name-color[class*="profile-name-color--gradient-"] {
+  color: transparent;
+}
+
+.profile-page .profile-hero-callsign strong {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.profile-page .profile-hero-callsign strong .profile-name-color[class*="profile-name-color--gradient-"] {
+  color: transparent;
+}
+
 .profile-page .profile-hero-name-row {
   display: flex;
   align-items: center;
@@ -993,15 +1006,6 @@ html[data-theme="dark"] .profile-name-color--gradient-obsidian {
   font-size: 13px;
   line-height: 1.35;
   color: var(--muted);
-}
-
-.profile-page .profile-hero-callsign strong {
-  font-weight: 700;
-  color: var(--text);
-}
-
-.profile-page .profile-hero-callsign strong .profile-name-color[class*="profile-name-color--gradient-"] {
-  color: transparent;
 }
 
 .profile-export-excel {
