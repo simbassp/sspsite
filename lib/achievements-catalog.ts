@@ -91,7 +91,7 @@ export const BANK_ACHIEVEMENTS: AchievementDefinition[] = [
     category: "bank",
     title: "10 прохождений банка",
     description: "10 полных прохождений теста «Весь банк»",
-    tierLabel: "Корона",
+    tierLabel: "Слизь",
     bankOverlay: "bank-overlay-crown",
     threshold: 10,
   },

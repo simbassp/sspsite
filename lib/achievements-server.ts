@@ -245,44 +245,64 @@ export async function updateUserAchievementCosmetics(
   input: { avatarFrame?: string | null; nameColor?: string | null; bankOverlay?: string | null },
 ) {
   const supabase = getServerSupabaseServiceClient();
-  const payload: Record<string, string | null> = {};
+  const updates: Array<{ column: string; value: string | null }> = [];
 
   if (input.avatarFrame !== undefined) {
     const frame = input.avatarFrame ? normalizeTrialAvatarFrame(input.avatarFrame) : null;
+    if (input.avatarFrame && !frame) return { ok: false as const, error: "invalid_frame" };
     if (frame) {
       const allowed = unlockedIds.some((id) => getAchievementDefinition(id)?.trialFrame === frame);
       if (!allowed) return { ok: false as const, error: "frame_not_unlocked" };
     }
-    payload.profile_cosmetic_avatar_frame = frame;
+    updates.push({ column: "profile_cosmetic_avatar_frame", value: frame });
   }
 
   if (input.nameColor !== undefined) {
     const color = input.nameColor ? normalizeFinalNameColor(input.nameColor) : null;
+    if (input.nameColor && !color) return { ok: false as const, error: "invalid_color" };
     if (color) {
       const allowed = unlockedIds.some((id) => getAchievementDefinition(id)?.finalNameColor === color);
       if (!allowed) return { ok: false as const, error: "color_not_unlocked" };
     }
-    payload.profile_cosmetic_name_color = color;
+    updates.push({ column: "profile_cosmetic_name_color", value: color });
   }
 
   if (input.bankOverlay !== undefined) {
     const overlay = input.bankOverlay ? normalizeBankAvatarOverlay(input.bankOverlay) : null;
+    if (input.bankOverlay && !overlay) return { ok: false as const, error: "invalid_bank_overlay" };
     if (overlay) {
       const allowed = unlockedIds.some((id) => getAchievementDefinition(id)?.bankOverlay === overlay);
       if (!allowed) return { ok: false as const, error: "bank_overlay_not_unlocked" };
     }
-    payload.profile_cosmetic_bank_overlay = overlay;
+    updates.push({ column: "profile_cosmetic_bank_overlay", value: overlay });
   }
 
-  if (!Object.keys(payload).length) return { ok: true as const };
+  if (!updates.length) return { ok: true as const };
 
-  const upd = await supabase.from("app_users").update(payload).eq("id", userId);
-  if (upd.error) {
-    if (isMissingColumnError(upd.error.message)) {
+  let savedAny = false;
+  let lastError: string | undefined;
+  const skippedColumns: string[] = [];
+
+  for (const entry of updates) {
+    const upd = await supabase.from("app_users").update({ [entry.column]: entry.value }).eq("id", userId);
+    if (upd.error) {
+      if (isMissingColumnError(upd.error.message)) {
+        skippedColumns.push(entry.column);
+        continue;
+      }
+      lastError = upd.error.message;
+      continue;
+    }
+    savedAny = true;
+  }
+
+  if (!savedAny) {
+    if (skippedColumns.length === updates.length) {
       return { ok: false as const, error: "cosmetics_columns_missing" };
     }
-    return { ok: false as const, error: upd.error.message };
+    return { ok: false as const, error: lastError || "cosmetics_update_failed" };
   }
+
   return { ok: true as const };
 }
 

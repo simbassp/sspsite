@@ -6,51 +6,64 @@ type AvatarBankOverlayProps = {
   className?: string;
 };
 
-function FlameLayers({ variant }: { variant: "fire" | "aurora" }) {
-  const rootClass =
-    variant === "fire" ? "avatar-bank-overlay__flame" : "avatar-bank-overlay__aurora-flame";
+function Ember({ className }: { className: string }) {
+  return <span className={`avatar-bank-overlay__ember ${className}`.trim()} />;
+}
+
+function WrapFire({ variant }: { variant: "fire" | "aurora" }) {
+  const root = variant === "fire" ? "avatar-bank-overlay__wrap-fire" : "avatar-bank-overlay__wrap-aurora";
   return (
-    <span className={rootClass}>
-      <span className={`${rootClass}-layer ${rootClass}-layer--back`} />
-      <span className={`${rootClass}-layer ${rootClass}-layer--mid`} />
-      <span className={`${rootClass}-layer ${rootClass}-layer--core`} />
-      <span className={`${rootClass}-tongue ${rootClass}-tongue--left`} />
-      <span className={`${rootClass}-tongue ${rootClass}-tongue--right`} />
-      <span className={`${rootClass}-tongue ${rootClass}-tongue--center`} />
+    <span className={root}>
+      <span className={`${root}__ring`} />
+      <span className={`${root}__sheet ${root}__sheet--left`} />
+      <span className={`${root}__sheet ${root}__sheet--right`} />
+      <span className={`${root}__crest`} />
+      <Ember className={`${root}__ember ${root}__ember--1`} />
+      <Ember className={`${root}__ember ${root}__ember--2`} />
+      <Ember className={`${root}__ember ${root}__ember--3`} />
+      <Ember className={`${root}__ember ${root}__ember--4`} />
     </span>
   );
 }
 
-function CrownLayers({ variant }: { variant: "royal" | "mega" }) {
-  const rootClass = variant === "mega" ? "avatar-bank-overlay__mega-crown" : "avatar-bank-overlay__crown";
+function SlimeLayers() {
   return (
-    <span className={rootClass}>
-      <span className={`${rootClass}__band`} />
-      <span className={`${rootClass}__peak ${rootClass}__peak--1`} />
-      <span className={`${rootClass}__peak ${rootClass}__peak--2`} />
-      <span className={`${rootClass}__peak ${rootClass}__peak--3`} />
-      <span className={`${rootClass}__peak ${rootClass}__peak--4`} />
-      <span className={`${rootClass}__peak ${rootClass}__peak--5`} />
-      {variant === "mega" ? (
-        <>
-          <span className={`${rootClass}__peak ${rootClass}__peak--6`} />
-          <span className={`${rootClass}__peak ${rootClass}__peak--7`} />
-        </>
-      ) : null}
-      <span className={`${rootClass}__shine`} />
+    <span className="avatar-bank-overlay__slime">
+      <span className="avatar-bank-overlay__slime-side avatar-bank-overlay__slime-side--left" />
+      <span className="avatar-bank-overlay__slime-side avatar-bank-overlay__slime-side--right" />
+      <span className="avatar-bank-overlay__slime-pool" />
+      <span className="avatar-bank-overlay__slime-drip avatar-bank-overlay__slime-drip--1" />
+      <span className="avatar-bank-overlay__slime-drip avatar-bank-overlay__slime-drip--2" />
+      <span className="avatar-bank-overlay__slime-drip avatar-bank-overlay__slime-drip--3" />
     </span>
   );
 }
 
 function DiamondLayers() {
   return (
-    <span className="avatar-bank-overlay__diamond">
-      <span className="avatar-bank-overlay__diamond-glow" />
-      <span className="avatar-bank-overlay__diamond-body" />
-      <span className="avatar-bank-overlay__diamond-facet avatar-bank-overlay__diamond-facet--left" />
-      <span className="avatar-bank-overlay__diamond-facet avatar-bank-overlay__diamond-facet--right" />
-      <span className="avatar-bank-overlay__diamond-spark avatar-bank-overlay__diamond-spark--1" />
-      <span className="avatar-bank-overlay__diamond-spark avatar-bank-overlay__diamond-spark--2" />
+    <span className="avatar-bank-overlay__diamond-wrap">
+      <span className="avatar-bank-overlay__diamond-ring" />
+      <span className="avatar-bank-overlay__diamond-prism" />
+      <span className="avatar-bank-overlay__diamond-gem" />
+      <span className="avatar-bank-overlay__diamond-shimmer avatar-bank-overlay__diamond-shimmer--1" />
+      <span className="avatar-bank-overlay__diamond-shimmer avatar-bank-overlay__diamond-shimmer--2" />
+    </span>
+  );
+}
+
+function MegaCrownLayers() {
+  return (
+    <span className="avatar-bank-overlay__mega-crown">
+      <span className="avatar-bank-overlay__mega-crown__aura" />
+      <span className="avatar-bank-overlay__mega-crown__band" />
+      <span className="avatar-bank-overlay__mega-crown__peak avatar-bank-overlay__mega-crown__peak--1" />
+      <span className="avatar-bank-overlay__mega-crown__peak avatar-bank-overlay__mega-crown__peak--2" />
+      <span className="avatar-bank-overlay__mega-crown__peak avatar-bank-overlay__mega-crown__peak--3" />
+      <span className="avatar-bank-overlay__mega-crown__peak avatar-bank-overlay__mega-crown__peak--4" />
+      <span className="avatar-bank-overlay__mega-crown__peak avatar-bank-overlay__mega-crown__peak--5" />
+      <span className="avatar-bank-overlay__mega-crown__peak avatar-bank-overlay__mega-crown__peak--6" />
+      <span className="avatar-bank-overlay__mega-crown__peak avatar-bank-overlay__mega-crown__peak--7" />
+      <span className="avatar-bank-overlay__mega-crown__shine" />
     </span>
   );
 }
@@ -63,11 +76,11 @@ export function AvatarBankOverlay({ overlay, size = 64, className = "" }: Avatar
       aria-hidden="true"
       style={{ ["--bank-overlay-scale" as string]: scale }}
     >
-      {overlay === "bank-overlay-flame" ? <FlameLayers variant="fire" /> : null}
-      {overlay === "bank-overlay-crown" ? <CrownLayers variant="royal" /> : null}
+      {overlay === "bank-overlay-flame" ? <WrapFire variant="fire" /> : null}
+      {overlay === "bank-overlay-crown" ? <SlimeLayers /> : null}
       {overlay === "bank-overlay-diamond" ? <DiamondLayers /> : null}
-      {overlay === "bank-overlay-aurora-flame" ? <FlameLayers variant="aurora" /> : null}
-      {overlay === "bank-overlay-geran" ? <CrownLayers variant="mega" /> : null}
+      {overlay === "bank-overlay-aurora-flame" ? <WrapFire variant="aurora" /> : null}
+      {overlay === "bank-overlay-geran" ? <MegaCrownLayers /> : null}
     </span>
   );
 }
