@@ -1,4 +1,5 @@
 import { ONLINE_LAST_SEEN_MAX_MS } from "@/lib/presence-constants";
+import { loadIdentityCosmeticsMap } from "@/lib/user-identity-cosmetics-server";
 import { normalizeUnitAssignment } from "@/lib/unit-assignment";
 import { normalizeAvatarStoragePath } from "@/lib/avatar-display";
 import { normalizeProfileNameColor } from "@/lib/profile-name-color";
@@ -51,6 +52,7 @@ export async function GET() {
       onlineFromFlagOnly = !rows.some((row) => Object.prototype.hasOwnProperty.call(row, "last_seen_at"));
     }
     if (queryError) return Response.json({ ok: false, error: queryError }, { status: 500 });
+    const cosmeticsMap = await loadIdentityCosmeticsMap(rows.map((r) => String(r.id || "")));
     const normalized = rows.map((r) => ({
       id: r.id,
       auth_user_id: r.auth_user_id ?? null,
@@ -60,6 +62,7 @@ export async function GET() {
       position: r.position,
       avatar_url: normalizeAvatarStoragePath(typeof r.avatar_url === "string" ? r.avatar_url : null),
       profile_name_color: typeof r.profile_name_color === "string" ? r.profile_name_color : null,
+      cosmetics: cosmeticsMap.get(String(r.id || "")) ?? {},
       can_manage_content: r.can_manage_content ?? false,
       can_manage_news: r.can_manage_news ?? undefined,
       can_manage_tests: r.can_manage_tests ?? undefined,

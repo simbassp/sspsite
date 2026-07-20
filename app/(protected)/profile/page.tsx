@@ -11,7 +11,7 @@ import { UserAvatar } from "@/components/profile/UserAvatar";
 import { ProfileEmploymentDateField } from "@/components/profile/ProfileEmploymentDateField";
 import { ProfilePersonnelMetaFields } from "@/components/profile/ProfilePersonnelMetaFields";
 import { ProfileRotaUnitFields } from "@/components/profile/ProfileRotaUnitFields";
-import { UserIdentityText } from "@/components/profile/UserIdentityText";
+import { UserIdentityDisplay } from "@/components/profile/UserIdentityDisplay";
 import { AchievementUnlockBanner } from "@/components/achievements/AchievementUnlockBanner";
 import { AchievementMedalsRow } from "@/components/achievements/AchievementMedalsRow";
 import {
@@ -19,8 +19,9 @@ import {
   ProfileCosmeticsModal,
 } from "@/components/achievements/ProfileCosmeticsModal";
 import { readClientSession } from "@/lib/client-auth";
-import { finalNameColorClass, type FinalNameColorId, type TrialAvatarFrameId, type TopRankBadgeId } from "@/lib/achievements-catalog";
+import { type FinalNameColorId, type TrialAvatarFrameId, type TopRankBadgeId } from "@/lib/achievements-catalog";
 import type { ProfileNameColorId } from "@/lib/profile-name-color";
+import type { UserIdentityCosmetics } from "@/lib/user-identity-cosmetics";
 import { formatDate, formatDateTime, formatTotalTestDuration } from "@/lib/format";
 import { formatTestResultForType } from "@/lib/test-pass-rules";
 import { isSupabaseConfigured } from "@/lib/supabase";
@@ -163,16 +164,17 @@ export default function ProfilePage() {
   const [cosmeticsSaving, setCosmeticsSaving] = useState(false);
   const resetStatsModal = useResetTestStatsModal("all");
   const canManageInvites = session?.role === "admin";
-  const showAchievementsPreview = session?.role === "admin";
   const canResetStats = useMemo(() => (session ? canResetTestResults(session) : false), [session]);
   const canExportExcel = useMemo(() => (session ? canManageUsers(session) : false), [session]);
-  const effectiveIdentityColorClass = useMemo(() => {
-    if (achievementNameColor) return finalNameColorClass(achievementNameColor);
-    return "";
-  }, [achievementNameColor]);
+  const profileIdentityCosmetics = useMemo<UserIdentityCosmetics>(() => ({
+    adminNameColor: displayNameColor ?? session?.nameColor ?? null,
+    achievementNameColor: achievementNameColor,
+    avatarFrame: achievementAvatarFrame,
+    topRankBadge: achievementTopBadge,
+  }), [displayNameColor, session?.nameColor, achievementNameColor, achievementAvatarFrame, achievementTopBadge]);
 
   useEffect(() => {
-    if (!session?.id || !showAchievementsPreview) return;
+    if (!session?.id) return;
     let cancelled = false;
     (async () => {
       try {
@@ -197,7 +199,7 @@ export default function ProfilePage() {
     return () => {
       cancelled = true;
     };
-  }, [session?.id, showAchievementsPreview]);
+  }, [session?.id]);
 
   useEffect(() => {
     setSession(readClientSession());
@@ -1004,18 +1006,16 @@ export default function ProfilePage() {
     <section className="profile-page">
       <h1 className="page-title">Профиль</h1>
       {!!initialLoadError && <p className="page-subtitle">{initialLoadError}</p>}
-      {showAchievementsPreview ? (
-        <AchievementUnlockBanner
-          notifications={achievementNotifications}
-          onDismiss={(ids) => {
-            void fetch("/api/profile/achievements", {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ dismissNotificationIds: ids }),
-            }).then(() => setAchievementNotifications([]));
-          }}
-        />
-      ) : null}
+      <AchievementUnlockBanner
+        notifications={achievementNotifications}
+        onDismiss={(ids) => {
+          void fetch("/api/profile/achievements", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ dismissNotificationIds: ids }),
+          }).then(() => setAchievementNotifications([]));
+        }}
+      />
 
       <article className="card profile-hero-card">
         <div className="card-body">
@@ -1028,8 +1028,8 @@ export default function ProfilePage() {
                     callsign={session.callsign}
                     avatarUrl={avatarUrl}
                     size={64}
-                    avatarFrame={showAchievementsPreview ? achievementAvatarFrame : null}
-                    topRankBadge={showAchievementsPreview ? achievementTopBadge : null}
+                    avatarFrame={achievementAvatarFrame}
+                    topRankBadge={achievementTopBadge}
                     title={`${session.name || ""} ${session.callsign || ""}`.trim()}
                   />
                 </div>
@@ -1037,14 +1037,13 @@ export default function ProfilePage() {
                   <p className="profile-hero-kicker">Пользовательский профиль</p>
                   <div className="profile-hero-name-row">
                     <p className="profile-hero-name">
-                      <UserIdentityText
+                      <UserIdentityDisplay
                         name={session.name}
-                        nameColor={achievementNameColor ? null : displayNameColor ?? session.nameColor ?? null}
-                        colorClassOverride={effectiveIdentityColorClass || undefined}
+                        cosmetics={profileIdentityCosmetics}
                         emptyName="—"
                       />
                     </p>
-                    {showAchievementsPreview ? <ProfileCosmeticsButton onClick={() => setCosmeticsModalOpen(true)} /> : null}
+                    <ProfileCosmeticsButton onClick={() => setCosmeticsModalOpen(true)} />
                     <button
                       type="button"
                       className="btn profile-hero-edit-btn"
@@ -1062,10 +1061,9 @@ export default function ProfilePage() {
                   <p className="profile-hero-callsign">
                     Позывной:{" "}
                     <strong>
-                      <UserIdentityText
+                      <UserIdentityDisplay
                         callsign={session.callsign}
-                        nameColor={achievementNameColor ? null : displayNameColor ?? session.nameColor ?? null}
-                        colorClassOverride={effectiveIdentityColorClass || undefined}
+                        cosmetics={profileIdentityCosmetics}
                         emptyName="—"
                       />
                     </strong>
@@ -1073,9 +1071,7 @@ export default function ProfilePage() {
                   {canExportExcel && session?.id ? <ProfileExportExcelButton userId={session.id} /> : null}
                 </div>
               </div>
-              {showAchievementsPreview ? (
-                <AchievementMedalsRow unlockedIds={achievementUnlockedIds} />
-              ) : null}
+              <AchievementMedalsRow unlockedIds={achievementUnlockedIds} />
               <div className="profile-hero-status-block">
                 <div className="profile-hero-status-inline">
                   <span className="profile-hero-status-value">
@@ -1196,22 +1192,20 @@ export default function ProfilePage() {
         />
       ) : null}
 
-      {showAchievementsPreview ? (
-        <ProfileCosmeticsModal
-          open={cosmeticsModalOpen}
-          onClose={() => {
-            if (cosmeticsSaving) return;
-            setCosmeticsModalOpen(false);
-          }}
-          unlockedIds={achievementUnlockedIds}
-          adminPreviewAll
-          name={session.name ?? ""}
-          callsign={session.callsign ?? ""}
-          avatarUrl={avatarUrl}
-          avatarFrame={achievementAvatarFrame}
-          nameColor={achievementNameColor}
-          saving={cosmeticsSaving}
-          onSave={(next) => {
+      <ProfileCosmeticsModal
+        open={cosmeticsModalOpen}
+        onClose={() => {
+          if (cosmeticsSaving) return;
+          setCosmeticsModalOpen(false);
+        }}
+        unlockedIds={achievementUnlockedIds}
+        name={session.name ?? ""}
+        callsign={session.callsign ?? ""}
+        avatarUrl={avatarUrl}
+        avatarFrame={achievementAvatarFrame}
+        nameColor={achievementNameColor}
+        saving={cosmeticsSaving}
+        onSave={(next) => {
             void (async () => {
               setCosmeticsSaving(true);
               try {
@@ -1234,7 +1228,6 @@ export default function ProfilePage() {
             })();
           }}
         />
-      ) : null}
 
       <ProfileNameEditModal
         open={profileEditModalOpen}

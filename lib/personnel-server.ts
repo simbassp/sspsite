@@ -1,4 +1,10 @@
 import { normalizeProfileNameColor, type ProfileNameColorId } from "@/lib/profile-name-color";
+import {
+  IDENTITY_COSMETIC_USER_COLUMNS,
+  mapIdentityCosmeticsFromRow,
+  type UserIdentityCosmetics,
+} from "@/lib/user-identity-cosmetics";
+import { loadTopRankBadgeMap } from "@/lib/user-identity-cosmetics-server";
 import { normalizeUnitAssignment } from "@/lib/unit-assignment";
 import type { DutyLocation, Position, UnitAssignment } from "@/lib/types";
 import {
@@ -56,6 +62,7 @@ export type PersonnelUserCard = {
   name: string;
   callsign: string;
   nameColor?: ProfileNameColorId | null;
+  cosmetics?: UserIdentityCosmetics | null;
   position: Position;
   dutyLocation: DutyLocation;
   unitAssignment: UnitAssignment | null;
@@ -108,19 +115,22 @@ export type PersonnelProfilePayload = PersonnelUserCard & {
 };
 
 const ROSTER_USER_SELECT =
-  "id,name,callsign,position,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,created_at,status,profile_name_color";
+  `id,name,callsign,position,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,created_at,status,${IDENTITY_COSMETIC_USER_COLUMNS}`;
 const ROSTER_USER_SELECT_FALLBACK =
   "id,name,callsign,position,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,created_at,status";
 
 function mapPersonnelUserCardRow(
   u: Record<string, unknown>,
-  extras: Omit<PersonnelUserCard, keyof Pick<PersonnelUserCard, "id" | "name" | "callsign" | "nameColor" | "position" | "dutyLocation" | "unitAssignment" | "rotaPlatoon" | "rotaSection" | "rotaModule" | "createdAt" | "employmentDate">>,
+  extras: Omit<PersonnelUserCard, keyof Pick<PersonnelUserCard, "id" | "name" | "callsign" | "nameColor" | "cosmetics" | "position" | "dutyLocation" | "unitAssignment" | "rotaPlatoon" | "rotaSection" | "rotaModule" | "createdAt" | "employmentDate">>,
+  topRankBadge: import("@/lib/achievements-catalog").TopRankBadgeId | null = null,
 ): PersonnelUserCard {
+  const cosmetics = mapIdentityCosmeticsFromRow(u, topRankBadge);
   return {
     id: String(u.id),
     name: String(u.name ?? ""),
     callsign: String(u.callsign ?? ""),
-    nameColor: normalizeProfileNameColor(u.profile_name_color),
+    nameColor: cosmetics.adminNameColor ?? null,
+    cosmetics,
     position: String(u.position ?? "Специалист") as Position,
     dutyLocation: (u.duty_location === "deployment" ? "deployment" : "base") as DutyLocation,
     unitAssignment: normalizeUnitAssignment(u.unit_assignment),
@@ -863,7 +873,7 @@ export async function loadPersonnelRoster(filters?: {
     typeof filters?.testDate === "string" && isValidDateIso(filters.testDate.trim())
       ? filters.testDate.trim()
       : null;
-  const [examsMap, depMap, medalsMap, licensesMap, premiumMap, testStatsMap, testStatsOnDateMap] =
+  const [examsMap, depMap, medalsMap, licensesMap, premiumMap, testStatsMap, testStatsOnDateMap, topRankMap] =
     await Promise.all([
     loadExamsForUsers(userIds),
     loadDeploymentStats(userIds),
@@ -872,13 +882,16 @@ export async function loadPersonnelRoster(filters?: {
     loadPremiumTotals(userIds),
     loadTestStatsForUsers(userIds),
     testDate ? loadTestStatsForUsersOnDate(userIds, testDate) : Promise.resolve(new Map<string, PersonnelTestRosterStats>()),
+    loadTopRankBadgeMap(),
   ]);
 
   const users: PersonnelUserCard[] = rows.map((u) => {
     const id = String(u.id);
     const dep = depMap.get(id) ?? { count: 0, days: 0, hits: 0, premiums: 0 };
     const standalonePremiums = premiumMap.get(id) ?? 0;
-    return mapPersonnelUserCardRow(u, {
+    return mapPersonnelUserCardRow(
+      u,
+      {
       exams: examsMap.get(id) ?? [],
       deploymentsCount: dep.count,
       deploymentDays: dep.days,
@@ -888,7 +901,9 @@ export async function loadPersonnelRoster(filters?: {
       licenseCategories: licensesMap.get(id) ?? [],
       testStats: testStatsMap.get(id) ?? emptyTestRosterStats(),
       testStatsOnDate: testDate ? testStatsOnDateMap.get(id) ?? emptyTestRosterStats() : null,
-    });
+      },
+      topRankMap.get(id) ?? null,
+    );
   });
 
   return { ok: true as const, users };
@@ -922,13 +937,14 @@ export async function loadPersonnelRosterCardsByIds(userIds: string[], testDate?
   const dateIso =
     typeof testDate === "string" && isValidDateIso(testDate.trim()) ? testDate.trim() : null;
 
-  const [testStatsMap, testStatsOnDateMap, examsMap, depMap, licensesMap, premiumMap] = await Promise.all([
+  const [testStatsMap, testStatsOnDateMap, examsMap, depMap, licensesMap, premiumMap, topRankMap] = await Promise.all([
     loadTestStatsForUsers(ids),
     dateIso ? loadTestStatsForUsersOnDate(ids, dateIso) : Promise.resolve(new Map<string, PersonnelTestRosterStats>()),
     loadExamsForUsers(ids),
     loadDeploymentStats(ids),
     loadLicenses(ids),
     loadPremiumTotals(ids),
+    loadTopRankBadgeMap(),
   ]);
 
   const order = new Map(uniqueIds.map((id, index) => [id, index]));
@@ -936,7 +952,9 @@ export async function loadPersonnelRosterCardsByIds(userIds: string[], testDate?
     const id = String(u.id);
     const dep = depMap.get(id) ?? { count: 0, days: 0, hits: 0, premiums: 0 };
     const standalonePremiums = premiumMap.get(id) ?? 0;
-    return mapPersonnelUserCardRow(u, {
+    return mapPersonnelUserCardRow(
+      u,
+      {
       exams: examsMap.get(id) ?? [],
       deploymentsCount: dep.count,
       deploymentDays: dep.days,
@@ -946,7 +964,9 @@ export async function loadPersonnelRosterCardsByIds(userIds: string[], testDate?
       licenseCategories: licensesMap.get(id) ?? [],
       testStats: testStatsMap.get(id) ?? emptyTestRosterStats(),
       testStatsOnDate: dateIso ? testStatsOnDateMap.get(id) ?? emptyTestRosterStats() : null,
-    });
+      },
+      topRankMap.get(id) ?? null,
+    );
   });
 
   users.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));

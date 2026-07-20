@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AdminPermissionPicker } from "@/components/admin/AdminPermissionPicker";
 import { ProfileNameColorPicker } from "@/components/admin/ProfileNameColorPicker";
-import { UserIdentityText } from "@/components/profile/UserIdentityText";
+import { UserIdentityDisplay } from "@/components/profile/UserIdentityDisplay";
 import { UserAvatar } from "@/components/profile/UserAvatar";
 import { readClientSession, writeClientSession } from "@/lib/client-auth";
 import { ADMIN_PERMISSION_OPTIONS } from "@/lib/admin-permission-ui";
@@ -202,10 +202,13 @@ export default function AdminUsersPage() {
   };
 
   const renderUserNameLine = (user: UserRecord) => (
-    <UserIdentityText
+    <UserIdentityDisplay
       name={user.name || "Без имени"}
       callsign={user.callsign}
-      nameColor={user.nameColor}
+      cosmetics={
+        user.cosmetics ??
+        (user.nameColor ? { adminNameColor: user.nameColor } : null)
+      }
       emptyName="Без имени"
     />
   );
@@ -236,6 +239,8 @@ export default function AdminUsersPage() {
       size={38}
       className="admin-users-avatar"
       title={`${user.name || "Без имени"}${user.callsign ? ` ${user.callsign}` : ""}`}
+      avatarFrame={user.cosmetics?.avatarFrame ?? null}
+      topRankBadge={user.cosmetics?.topRankBadge ?? null}
     />
   );
 

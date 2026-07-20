@@ -2,11 +2,13 @@
 
 import { useEffect, useSyncExternalStore } from "react";
 import type { ProfileNameColorId } from "@/lib/profile-name-color";
+import type { UserIdentityCosmetics } from "@/lib/user-identity-cosmetics";
 
 export type HomeStatsEventPerson = {
   name: string;
   callsign: string;
   nameColor?: ProfileNameColorId | null;
+  cosmetics?: UserIdentityCosmetics | null;
   tail?: string;
 };
 
@@ -21,7 +23,13 @@ export type HomeStatsEvent = {
 
 export type HomeStatsUsersSummary = {
   totalUsers: number;
-  onlineUsers: Array<{ id: string; name: string; callsign: string; nameColor?: ProfileNameColorId | null }>;
+  onlineUsers: Array<{
+    id: string;
+    name: string;
+    callsign: string;
+    nameColor?: ProfileNameColorId | null;
+    cosmetics?: UserIdentityCosmetics | null;
+  }>;
 };
 
 export type HomeStatsSiteAnalytics = {

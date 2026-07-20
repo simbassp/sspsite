@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
-import { UserIdentityText } from "@/components/profile/UserIdentityText";
+import { UserIdentityDisplay } from "@/components/profile/UserIdentityDisplay";
 import { useHomeStats, type HomeStatsEvent } from "@/hooks/useHomeStats";
 
 type HomePayload = {
@@ -49,10 +49,13 @@ function HomeEventDescription({ item }: { item: HomeEvent }) {
     return <>{item.description}</>;
   }
   return (
-    <UserIdentityText
+    <UserIdentityDisplay
       name={item.person.name}
       callsign={item.person.callsign}
-      nameColor={item.person.nameColor ?? null}
+      cosmetics={
+        item.person.cosmetics ??
+        (item.person.nameColor ? { adminNameColor: item.person.nameColor } : null)
+      }
       emptyName={item.description}
     />
   );

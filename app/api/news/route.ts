@@ -1,4 +1,6 @@
 import { normalizeAvatarStoragePath } from "@/lib/avatar-display";
+import { IDENTITY_COSMETIC_USER_COLUMNS } from "@/lib/user-identity-cosmetics";
+import { loadIdentityCosmeticsMap } from "@/lib/user-identity-cosmetics-server";
 import { normalizeProfileNameColor } from "@/lib/profile-name-color";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
@@ -222,8 +224,8 @@ export async function GET(request: Request) {
       return false;
     });
 
-    const userSelect = "id,auth_user_id,name,callsign,position,avatar_url,profile_name_color";
-    const userSelectFallback = "id,auth_user_id,name,callsign,position,avatar_url";
+    const userSelect = `id,auth_user_id,name,callsign,position,avatar_url,${IDENTITY_COSMETIC_USER_COLUMNS}`;
+    const userSelectFallback = "id,auth_user_id,name,callsign,position,avatar_url,profile_name_color";
     let usersRows: Array<Record<string, unknown>> | null = null;
 
     const loadAllUsers = async () => {
@@ -266,23 +268,49 @@ export async function GET(request: Request) {
       return Response.json({ ok: true, rows: mapped });
     }
 
+    const userIds = usersRows
+      .map((user) => (typeof user.id === "string" ? user.id : ""))
+      .filter(Boolean);
+    const cosmeticsMap = await loadIdentityCosmeticsMap(userIds);
+
     const usersMap = new Map<
       string,
-      { name: string; callsign: string; position: string; avatarUrl: string | null; nameColor: ReturnType<typeof normalizeProfileNameColor> }
+      {
+        name: string;
+        callsign: string;
+        position: string;
+        avatarUrl: string | null;
+        nameColor: ReturnType<typeof normalizeProfileNameColor>;
+        cosmetics: NonNullable<ReturnType<typeof cosmeticsMap.get>>;
+      }
     >();
     const usersByLabel = new Map<
       string,
-      { name: string; callsign: string; position: string; avatarUrl: string | null; nameColor: ReturnType<typeof normalizeProfileNameColor> }
+      {
+        name: string;
+        callsign: string;
+        position: string;
+        avatarUrl: string | null;
+        nameColor: ReturnType<typeof normalizeProfileNameColor>;
+        cosmetics: NonNullable<ReturnType<typeof cosmeticsMap.get>>;
+      }
     >();
     for (const user of usersRows) {
       const id = typeof user.id === "string" ? user.id : "";
       const authUserId = typeof user.auth_user_id === "string" ? user.auth_user_id : "";
+      const cosmetics = cosmeticsMap.get(id) ?? {
+        adminNameColor: normalizeProfileNameColor(user.profile_name_color),
+        achievementNameColor: null,
+        avatarFrame: null,
+        topRankBadge: null,
+      };
       const person = {
         name: typeof user.name === "string" ? user.name.trim() : "",
         callsign: typeof user.callsign === "string" ? user.callsign.trim() : "",
         position: typeof user.position === "string" ? user.position.trim() : "",
         avatarUrl: normalizeAvatarStoragePath(typeof user.avatar_url === "string" ? user.avatar_url : null),
-        nameColor: normalizeProfileNameColor(user.profile_name_color),
+        nameColor: cosmetics.adminNameColor ?? null,
+        cosmetics,
       };
       const label = [person.name, person.callsign].filter(Boolean).join(" ").trim().toLowerCase();
       if (label) usersByLabel.set(label, person);
@@ -327,7 +355,9 @@ export async function GET(request: Request) {
       const nextAvatar = user.avatarUrl || existingAvatar;
 
       if (!fullReplace && hasStoredAuthorPosition(item)) {
-        if (!user.avatarUrl && !user.nameColor) return item;
+        if (!user.avatarUrl && !user.nameColor && !user.cosmetics?.achievementNameColor && !user.cosmetics?.avatarFrame) {
+          return item;
+        }
         return {
           ...item,
           author_profile: {
@@ -339,6 +369,7 @@ export async function GET(request: Request) {
             }),
             avatar_url: user.avatarUrl || existingAvatar,
             nameColor: user.nameColor,
+            cosmetics: user.cosmetics,
           },
         };
       }
@@ -359,6 +390,7 @@ export async function GET(request: Request) {
               position: nextPosition,
               avatar_url: nextAvatar,
               nameColor: user.nameColor,
+              cosmetics: user.cosmetics,
             },
       };
     });

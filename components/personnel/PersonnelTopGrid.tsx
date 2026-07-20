@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { UserIdentityText } from "@/components/profile/UserIdentityText";
+import { UserIdentityDisplay } from "@/components/profile/UserIdentityDisplay";
+import type { UserIdentityCosmetics } from "@/lib/user-identity-cosmetics";
 import {
   IconActivity,
   IconCar,
@@ -124,12 +125,15 @@ export function PersonnelTopGrid<T extends PersonnelRosterTopUser>({
                   <li key={user.id} className={`personnel-top-list__item${idx === 0 ? " is-leader" : ""}`}>
                     <span className={`personnel-top-list__rank${idx < 3 ? ` is-${idx + 1}` : ""}`}>{idx + 1}</span>
                     <Link href={profilePath(user.id)} className="personnel-top-list__person">
-                      <UserIdentityText
+                      <UserIdentityDisplay
                         as="div"
                         className="personnel-top-list__person-identity"
                         name={user.name}
                         callsign={user.callsign.trim() ? user.callsign.trim() : undefined}
-                        nameColor={user.nameColor ?? null}
+                        cosmetics={
+                          user.cosmetics ??
+                          (user.nameColor ? { adminNameColor: user.nameColor } : null)
+                        }
                         nameClassName="personnel-top-list__name"
                         callsignClassName="personnel-top-list__callsign"
                         separator=""

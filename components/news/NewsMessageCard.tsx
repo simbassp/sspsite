@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { UserAvatar } from "@/components/profile/UserAvatar";
-import { UserIdentityText } from "@/components/profile/UserIdentityText";
+import { UserIdentityDisplay } from "@/components/profile/UserIdentityDisplay";
 import { getPositionBadgeClass } from "@/lib/position-ui";
 import {
   formatNewsDateParts,
@@ -131,13 +131,18 @@ export function NewsMessageCard({
               size={34}
               className="news-message-card__author-avatar"
               title={authorLine}
+              avatarFrame={authorParts?.cosmetics?.avatarFrame ?? null}
+              topRankBadge={authorParts?.cosmetics?.topRankBadge ?? null}
             />
             <span className="news-message-card__author-copy">
               <strong className="news-message-card__author-name">
-                <UserIdentityText
+                <UserIdentityDisplay
                   name={authorParts?.name}
                   callsign={authorParts?.callsign}
-                  nameColor={authorParts?.nameColor ?? null}
+                  cosmetics={
+                    authorParts?.cosmetics ??
+                    (authorParts?.nameColor ? { adminNameColor: authorParts.nameColor } : null)
+                  }
                   emptyName={authorLine}
                 />
               </strong>

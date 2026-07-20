@@ -1,4 +1,5 @@
 import { resolvePersonnelProfileViewAccess } from "@/lib/personnel-profile-access";
+import { syncUserAchievementsByUserId } from "@/lib/achievements-server";
 import { loadProfilePersonnelMeta } from "@/lib/profile-personnel-meta";
 import { loadPersonnelProfile } from "@/lib/personnel-server";
 import { getServerSession } from "@/lib/server-auth";
@@ -20,6 +21,7 @@ export async function GET() {
 
   try {
     const supabase = getServerSupabaseServiceClient();
+    void syncUserAchievementsByUserId(session.id).catch(() => undefined);
 
     const resultsPrimaryPromise = supabase
       .from("test_results")

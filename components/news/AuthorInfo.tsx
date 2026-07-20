@@ -1,7 +1,8 @@
 "use client";
 
 import { getPositionBadgeClass } from "@/lib/position-ui";
-import { UserIdentityText } from "@/components/profile/UserIdentityText";
+import { UserIdentityDisplay } from "@/components/profile/UserIdentityDisplay";
+import type { UserIdentityCosmetics } from "@/lib/user-identity-cosmetics";
 
 type AuthorInfoProps = {
   author?:
@@ -11,6 +12,7 @@ type AuthorInfoProps = {
         callsign?: string | null;
         position?: string | null;
         nameColor?: import("@/lib/profile-name-color").ProfileNameColorId | null;
+        cosmetics?: UserIdentityCosmetics | null;
       }
     | null;
   fallbackName?: string | null;
@@ -26,10 +28,13 @@ export function AuthorInfo({ author, fallbackName }: AuthorInfoProps) {
     <div className="news-author-info">
       <div className="news-author-row">
         <div className="news-author-name">
-          <UserIdentityText
+          <UserIdentityDisplay
             name={name || fallback}
             callsign={name ? callsign : callsign || undefined}
-            nameColor={author?.nameColor ?? null}
+            cosmetics={
+              author?.cosmetics ??
+              (author?.nameColor ? { adminNameColor: author.nameColor } : null)
+            }
             emptyName={fallback}
           />
         </div>

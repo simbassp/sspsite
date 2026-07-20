@@ -10,9 +10,12 @@ import { ProfileNameEditModal } from "@/components/profile/ProfileNameEditModal"
 import { ProfileEmploymentDateField } from "@/components/profile/ProfileEmploymentDateField";
 import { ProfilePersonnelMetaFields } from "@/components/profile/ProfilePersonnelMetaFields";
 import { ProfileRotaUnitFields } from "@/components/profile/ProfileRotaUnitFields";
-import { UserIdentityText } from "@/components/profile/UserIdentityText";
+import { UserIdentityDisplay } from "@/components/profile/UserIdentityDisplay";
+import { UserAvatar } from "@/components/profile/UserAvatar";
+import { AchievementMedalsRow } from "@/components/achievements/AchievementMedalsRow";
 import { readClientSession } from "@/lib/client-auth";
 import type { ProfileNameColorId } from "@/lib/profile-name-color";
+import type { UserIdentityCosmetics } from "@/lib/user-identity-cosmetics";
 import { formatDate, formatDateTime, formatTotalTestDuration } from "@/lib/format";
 import { formatTestResultForType } from "@/lib/test-pass-rules";
 import { dutyLocationLabel } from "@/lib/duty-location";
@@ -60,6 +63,9 @@ type InspectUser = {
   licenseCategories?: PersonnelLicenseCategory[];
   bloodGroup?: PersonnelBloodGroup | null;
   nameColor?: ProfileNameColorId | null;
+  avatarUrl?: string | null;
+  cosmetics?: UserIdentityCosmetics | null;
+  unlockedAchievementIds?: string[];
 };
 
 function mapRows(payload: { results?: Array<Record<string, unknown>> }): TestResult[] {
@@ -578,13 +584,6 @@ export default function ProfileUserInspectPage() {
     </svg>
   );
 
-  const UserIcon = ({ color, size = 14 }: { color: string; size?: number }) => (
-    <svg viewBox="0 0 24 24" aria-hidden="true" style={{ ...iconStroke(color), width: size, height: size }}>
-      <circle cx="12" cy="8" r="4" />
-      <path d="M4 20c1.8-3.6 4.2-5 8-5s6.2 1.4 8 5" />
-    </svg>
-  );
-
   const StatusDotIcon = ({ online }: { online: boolean }) => (
     <svg viewBox="0 0 16 16" width={10} height={10} aria-hidden="true" style={{ display: "block", flexShrink: 0 }}>
       <circle cx="8" cy="8" r="5" fill={online ? "var(--ok)" : "var(--muted)"} />
@@ -751,16 +750,27 @@ export default function ProfileUserInspectPage() {
               <div className="profile-hero">
                 <div className="profile-hero-sidebar">
                   <div className="profile-hero-identity">
-                    <div className="profile-hero-avatar" aria-hidden="true">
-                      <UserIcon color="#c42b2b" size={30} />
+                    <div className="profile-hero-avatar">
+                      <UserAvatar
+                        name={inspectUser.name}
+                        callsign={inspectUser.callsign}
+                        avatarUrl={inspectUser.avatarUrl ?? null}
+                        size={64}
+                        avatarFrame={inspectUser.cosmetics?.avatarFrame ?? null}
+                        topRankBadge={inspectUser.cosmetics?.topRankBadge ?? null}
+                        title={`${inspectUser.name || ""} ${inspectUser.callsign || ""}`.trim()}
+                      />
                     </div>
                     <div className="profile-hero-identity-text">
                       <p className="profile-hero-kicker">Пользовательский профиль</p>
                       <div className="profile-hero-name-row">
                         <p className="profile-hero-name">
-                          <UserIdentityText
+                          <UserIdentityDisplay
                             name={inspectUser.name}
-                            nameColor={inspectUser.nameColor ?? null}
+                            cosmetics={
+                              inspectUser.cosmetics ??
+                              (inspectUser.nameColor ? { adminNameColor: inspectUser.nameColor } : null)
+                            }
                             emptyName="—"
                           />
                         </p>
@@ -783,9 +793,12 @@ export default function ProfileUserInspectPage() {
                       <p className="profile-hero-callsign">
                         Позывной:{" "}
                         <strong>
-                          <UserIdentityText
+                          <UserIdentityDisplay
                             callsign={inspectUser.callsign}
-                            nameColor={inspectUser.nameColor ?? null}
+                            cosmetics={
+                              inspectUser.cosmetics ??
+                              (inspectUser.nameColor ? { adminNameColor: inspectUser.nameColor } : null)
+                            }
                             emptyName="—"
                           />
                         </strong>
@@ -793,6 +806,9 @@ export default function ProfileUserInspectPage() {
                       {canExportExcel ? <ProfileExportExcelButton userId={inspectUser.id} /> : null}
                     </div>
                   </div>
+                  {inspectUser.unlockedAchievementIds?.length ? (
+                    <AchievementMedalsRow unlockedIds={inspectUser.unlockedAchievementIds} />
+                  ) : null}
                   <div className="profile-hero-status-block">
                     <div className="profile-hero-status-inline">
                       <span className="profile-hero-status-value">

@@ -17,7 +17,8 @@ import {
   canViewUserList,
 } from "@/lib/permissions";
 import { PersonnelNotificationsBell } from "@/components/personnel/PersonnelNotificationsBell";
-import { UserIdentityText } from "@/components/profile/UserIdentityText";
+import { AchievementUnlockBanner } from "@/components/achievements/AchievementUnlockBanner";
+import { UserIdentityDisplay } from "@/components/profile/UserIdentityDisplay";
 import { canAccessGameSection } from "@/lib/game-feature";
 import { HomeStatsBar } from "@/components/HomeStatsBar";
 import { SiteFooterStats } from "@/components/SiteFooterStats";
@@ -26,6 +27,8 @@ import {
   PRESENCE_HIDDEN_OFFLINE_DELAY_MS,
 } from "@/lib/presence-constants";
 import { SessionUser } from "@/lib/types";
+import type { UserIdentityCosmetics } from "@/lib/user-identity-cosmetics";
+import type { FinalNameColorId, TrialAvatarFrameId, TopRankBadgeId } from "@/lib/achievements-catalog";
 
 const mobileHeaderIconSvg = {
   viewBox: "0 0 24 24" as const,
@@ -98,6 +101,12 @@ export function AppShell({ session, children }: AppShellProps) {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const [showPersonnelNav, setShowPersonnelNav] = useState(false);
+  const [achievementNotifications, setAchievementNotifications] = useState<
+    Array<{ id: string; title: string; body: string }>
+  >([]);
+  const [headerCosmetics, setHeaderCosmetics] = useState<UserIdentityCosmetics>({
+    adminNameColor: session.nameColor ?? null,
+  });
   const isLoggingOutRef = useRef(false);
   const sessionCountedRef = useRef(false);
   const lastAnalyticsPingRef = useRef(Date.now());
@@ -108,6 +117,48 @@ export function AppShell({ session, children }: AppShellProps) {
       .then((p: { showPersonnel?: boolean }) => setShowPersonnelNav(p.showPersonnel === true))
       .catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadAchievements = () => {
+      void fetch("/api/profile/achievements?notificationsOnly=1", { cache: "no-store" })
+        .then((r) => r.json())
+        .then((payload: { ok?: boolean; pendingNotifications?: Array<{ id: string; title: string; body: string }> }) => {
+          if (!payload.ok || cancelled) return;
+          setAchievementNotifications(Array.isArray(payload.pendingNotifications) ? payload.pendingNotifications : []);
+        })
+        .catch(() => undefined);
+    };
+    loadAchievements();
+    const timer = setInterval(loadAchievements, 120_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [session.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/profile/achievements", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((payload: {
+        ok?: boolean;
+        cosmetics?: { avatarFrame?: TrialAvatarFrameId | null; nameColor?: FinalNameColorId | null };
+        topRankBadge?: TopRankBadgeId | null;
+      }) => {
+        if (!payload.ok || cancelled) return;
+        setHeaderCosmetics({
+          adminNameColor: session.nameColor ?? null,
+          achievementNameColor: payload.cosmetics?.nameColor ?? null,
+          avatarFrame: payload.cosmetics?.avatarFrame ?? null,
+          topRankBadge: payload.topRankBadge ?? null,
+        });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [session.id, session.nameColor]);
 
   const navLinks = showPersonnelNav
     ? (() => {
@@ -466,7 +517,7 @@ export function AppShell({ session, children }: AppShellProps) {
             <div>
               <h1>ПВО</h1>
               <p>
-                <UserIdentityText callsign={session.callsign} nameColor={session.nameColor ?? null} emptyName="—" />
+                <UserIdentityDisplay callsign={session.callsign} cosmetics={headerCosmetics} emptyName="—" />
               </p>
             </div>
           </div>
@@ -496,6 +547,19 @@ export function AppShell({ session, children }: AppShellProps) {
             Wi‑Fi или мобильный интернет и обновите вкладку.
           </div>
         )}
+
+        {achievementNotifications.length > 0 && pathname !== "/profile" ? (
+          <AchievementUnlockBanner
+            notifications={achievementNotifications}
+            onDismiss={(ids) => {
+              void fetch("/api/profile/achievements", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ dismissNotificationIds: ids }),
+              }).then(() => setAchievementNotifications([]));
+            }}
+          />
+        ) : null}
 
         <div className="screen">{children}</div>
         <footer className="app-site-footer" aria-label="Информация о платформе">

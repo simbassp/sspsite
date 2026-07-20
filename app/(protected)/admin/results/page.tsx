@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { UserIdentityText } from "@/components/profile/UserIdentityText";
+import { UserIdentityDisplay } from "@/components/profile/UserIdentityDisplay";
+import type { UserIdentityCosmetics } from "@/lib/user-identity-cosmetics";
 import type { ProfileNameColorId } from "@/lib/profile-name-color";
 import { readClientSession } from "@/lib/client-auth";
 import { canResetTestResults } from "@/lib/permissions";
@@ -30,6 +31,7 @@ type UserSummary = {
   name: string;
   callsign: string;
   nameColor?: ProfileNameColorId | null;
+  cosmetics?: UserIdentityCosmetics | null;
   position?: string;
   unitAssignment?: UnitAssignment | null;
   rotaPlatoon?: number | null;
@@ -50,6 +52,7 @@ type AttemptRow = {
   name: string;
   callsign: string;
   nameColor?: ProfileNameColorId | null;
+  cosmetics?: UserIdentityCosmetics | null;
   position?: string;
   unitAssignment?: UnitAssignment | null;
   rotaPlatoon?: number | null;
@@ -64,7 +67,13 @@ type AttemptRow = {
   showResetAttempts: boolean;
 };
 
-type LastPersonAt = { name: string; callsign: string; nameColor?: ProfileNameColorId | null; at: string };
+type LastPersonAt = {
+  name: string;
+  callsign: string;
+  nameColor?: ProfileNameColorId | null;
+  cosmetics?: UserIdentityCosmetics | null;
+  at: string;
+};
 
 type BannerStats = {
   passedCount: number;
@@ -108,16 +117,18 @@ function ResultsUserName({
   name,
   callsign,
   nameColor,
+  cosmetics,
 }: {
   name: string;
   callsign: string;
   nameColor?: ProfileNameColorId | null;
+  cosmetics?: UserIdentityCosmetics | null;
 }) {
   return (
-    <UserIdentityText
+    <UserIdentityDisplay
       name={name}
       callsign={callsign ? `(${callsign})` : undefined}
-      nameColor={nameColor ?? null}
+      cosmetics={cosmetics ?? (nameColor ? { adminNameColor: nameColor } : null)}
       separator=" "
       emptyName="—"
     />
@@ -128,8 +139,14 @@ function formatLastPersonLine(row: LastPersonAt | null) {
   if (!row) return <>Последний: —</>;
   return (
     <>
-      Последний: <ResultsUserName name={row.name} callsign={row.callsign} nameColor={row.nameColor} /> ·{" "}
-      {formatDateTime(row.at)}
+      Последний:{" "}
+      <ResultsUserName
+        name={row.name}
+        callsign={row.callsign}
+        nameColor={row.nameColor}
+        cosmetics={row.cosmetics}
+      />{" "}
+      · {formatDateTime(row.at)}
     </>
   );
 }
@@ -516,7 +533,12 @@ export default function AdminResultsPage() {
                 <div className="admin-results-row__head">
                   <h3 className="admin-results-row__name">
                     <Link href={`/profile/${row.userId}`} prefetch={false} className="admin-users-profile-link">
-                      <ResultsUserName name={row.name} callsign={row.callsign} nameColor={row.nameColor} />
+                      <ResultsUserName
+                        name={row.name}
+                        callsign={row.callsign}
+                        nameColor={row.nameColor}
+                        cosmetics={row.cosmetics}
+                      />
                     </Link>
                   </h3>
                   <span className={`admin-users-position-badge ${getPositionBadgeClass(row.position || "")}`}>
@@ -562,7 +584,12 @@ export default function AdminResultsPage() {
                 <div className="admin-results-row__head">
                   <h3 className="admin-results-row__name">
                     <Link href={`/profile/${row.userId}`} prefetch={false} className="admin-users-profile-link">
-                      <ResultsUserName name={row.name} callsign={row.callsign} nameColor={row.nameColor} />
+                      <ResultsUserName
+                        name={row.name}
+                        callsign={row.callsign}
+                        nameColor={row.nameColor}
+                        cosmetics={row.cosmetics}
+                      />
                     </Link>
                   </h3>
                   <span className={`admin-users-position-badge ${getPositionBadgeClass(row.position || "")}`}>

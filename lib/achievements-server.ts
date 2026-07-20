@@ -1,5 +1,4 @@
 import {
-  ALL_ACHIEVEMENTS,
   computeUnlockedAchievementIds,
   getAchievementDefinition,
   normalizeFinalNameColor,
@@ -9,9 +8,8 @@ import {
   type TopRankBadgeId,
   type TrialAvatarFrameId,
 } from "@/lib/achievements-catalog";
-import { buildPersonnelRosterTops } from "@/lib/personnel-catalog";
+import { loadTopRankBadgeMap } from "@/lib/user-identity-cosmetics-server";
 import { employmentDaysSince } from "@/lib/employment-date";
-import { loadPersonnelRoster } from "@/lib/personnel-server";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 
 function isMissingColumnError(message: string | undefined) {
@@ -47,17 +45,6 @@ async function countPassedTests(userId: string, type: "trial" | "final") {
   return 0;
 }
 
-async function resolveTopRankBadge(userId: string): Promise<TopRankBadgeId | null> {
-  const roster = await loadPersonnelRoster({ platoon: "all", section: "all", module: "all" });
-  if (!roster.ok || !roster.users.length) return null;
-  const tops = buildPersonnelRosterTops(roster.users);
-  const idx = tops.activity.findIndex((user) => user.id === userId);
-  if (idx === 0) return "top-1";
-  if (idx === 1) return "top-2";
-  if (idx === 2) return "top-3";
-  return null;
-}
-
 export type AchievementUnlockRow = {
   id: string;
   achievementId: string;
@@ -80,7 +67,6 @@ export type UserAchievementsPayload = {
     nameColor: FinalNameColorId | null;
   };
   topRankBadge: TopRankBadgeId | null;
-  adminPreviewAll: boolean;
 };
 
 export async function loadUserAchievementProgress(userId: string, employmentDate: string | null) {
@@ -133,18 +119,17 @@ export async function syncUserAchievements(userId: string, employmentDate: strin
     }
   }
 
-  return { progress, unlockedIds, storedUnlocks: [] as AchievementUnlockRow[] };
+  return { progress, unlockedIds };
 }
 
 export async function loadUserAchievementsState(
   userId: string,
   employmentDate: string | null,
-  options?: { adminPreviewAll?: boolean },
 ): Promise<UserAchievementsPayload> {
   const supabase = getServerSupabaseServiceClient();
   const { progress, unlockedIds } = await syncUserAchievements(userId, employmentDate);
 
-  const [storedQ, notifyQ, userQ, topRankBadge] = await Promise.all([
+  const [storedQ, notifyQ, userQ, topRankMap] = await Promise.all([
     supabase.from("user_achievements").select("id,achievement_id,unlocked_at").eq("user_id", userId),
     supabase
       .from("app_notifications")
@@ -159,25 +144,18 @@ export async function loadUserAchievementsState(
       .select("profile_cosmetic_avatar_frame,profile_cosmetic_name_color")
       .eq("id", userId)
       .maybeSingle(),
-    resolveTopRankBadge(userId),
+    loadTopRankBadgeMap(),
   ]);
-
-  const adminPreviewAll = options?.adminPreviewAll === true;
-  const effectiveUnlocked = adminPreviewAll ? ALL_ACHIEVEMENTS.map((item) => item.id) : unlockedIds;
 
   const userRow = userQ.error ? null : userQ.data;
   let avatarFrame = normalizeTrialAvatarFrame(userRow?.profile_cosmetic_avatar_frame);
   let nameColor = normalizeFinalNameColor(userRow?.profile_cosmetic_name_color);
 
   const allowedFrames = new Set(
-    effectiveUnlocked
-      .map((id) => getAchievementDefinition(id)?.trialFrame)
-      .filter(Boolean) as TrialAvatarFrameId[],
+    unlockedIds.map((id) => getAchievementDefinition(id)?.trialFrame).filter(Boolean) as TrialAvatarFrameId[],
   );
   const allowedColors = new Set(
-    effectiveUnlocked
-      .map((id) => getAchievementDefinition(id)?.finalNameColor)
-      .filter(Boolean) as FinalNameColorId[],
+    unlockedIds.map((id) => getAchievementDefinition(id)?.finalNameColor).filter(Boolean) as FinalNameColorId[],
   );
   if (avatarFrame && !allowedFrames.has(avatarFrame)) avatarFrame = null;
   if (nameColor && !allowedColors.has(nameColor)) nameColor = null;
@@ -192,7 +170,7 @@ export async function loadUserAchievementsState(
 
   return {
     progress,
-    unlockedIds: effectiveUnlocked,
+    unlockedIds,
     storedUnlocks: (storedQ.data ?? []).map((row) => ({
       id: String(row.id),
       achievementId: String(row.achievement_id),
@@ -200,8 +178,7 @@ export async function loadUserAchievementsState(
     })),
     pendingNotifications,
     cosmetics: { avatarFrame, nameColor },
-    topRankBadge,
-    adminPreviewAll,
+    topRankBadge: topRankMap.get(userId) ?? null,
   };
 }
 
@@ -251,4 +228,18 @@ export async function markAchievementNotificationsRead(userId: string, notificat
     .update({ is_read: true })
     .eq("user_id", userId)
     .in("id", notificationIds);
+}
+
+export async function syncUserAchievementsByUserId(userId: string) {
+  const supabase = getServerSupabaseServiceClient();
+  const userQ = await supabase.from("app_users").select("employment_date").eq("id", userId).maybeSingle();
+  const employmentDate = userQ.data?.employment_date ? String(userQ.data.employment_date).slice(0, 10) : null;
+  return syncUserAchievements(userId, employmentDate);
+}
+
+export async function loadUserUnlockedAchievementIds(userId: string): Promise<string[]> {
+  const supabase = getServerSupabaseServiceClient();
+  const storedQ = await supabase.from("user_achievements").select("achievement_id").eq("user_id", userId);
+  if (storedQ.error) return [];
+  return (storedQ.data ?? []).map((row) => String(row.achievement_id));
 }

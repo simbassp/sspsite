@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { UserIdentityText } from "@/components/profile/UserIdentityText";
+import { UserIdentityDisplay } from "@/components/profile/UserIdentityDisplay";
+import type { UserIdentityCosmetics } from "@/lib/user-identity-cosmetics";
 import type { ProfileNameColorId } from "@/lib/profile-name-color";
 import { withTimeout } from "@/lib/async-utils";
 import { PersonnelPreviewBanner } from "@/components/personnel/PersonnelPreviewBanner";
@@ -183,6 +184,7 @@ type UserRow = {
   name: string;
   callsign: string;
   nameColor?: ProfileNameColorId | null;
+  cosmetics?: UserIdentityCosmetics | null;
   position: Position;
   dutyLocation: "base" | "deployment";
   rotaPlatoon: number | null;
@@ -702,11 +704,14 @@ export default function PersonnelListPage() {
                     <tr key={u.id}>
                       <td className="personnel-table__sticky">
                         <Link href={profilePath(u.id)} className="personnel-roster-person">
-                          <UserIdentityText
+                          <UserIdentityDisplay
                             as="div"
                             name={u.name}
                             callsign={u.callsign}
-                            nameColor={u.nameColor ?? null}
+                            cosmetics={
+                              u.cosmetics ??
+                              (u.nameColor ? { adminNameColor: u.nameColor } : null)
+                            }
                             nameClassName="personnel-roster-person__name"
                             callsignClassName="personnel-roster-person__callsign"
                             separator=""
@@ -781,15 +786,24 @@ export default function PersonnelListPage() {
                   <div className="personnel-mobile-card__head">
                     <div>
                       <Link href={profilePath(u.id)} className="personnel-mobile-card__name">
-                        <UserIdentityText
+                        <UserIdentityDisplay
                           name={u.name}
-                          nameColor={u.nameColor ?? null}
+                          cosmetics={
+                            u.cosmetics ??
+                            (u.nameColor ? { adminNameColor: u.nameColor } : null)
+                          }
                           nameClassName="personnel-mobile-card__name-text"
                         />
                       </Link>
                       {u.callsign ? (
                         <p className="personnel-mobile-card__callsign">
-                          <UserIdentityText callsign={u.callsign} nameColor={u.nameColor ?? null} />
+                          <UserIdentityDisplay
+                            callsign={u.callsign}
+                            cosmetics={
+                              u.cosmetics ??
+                              (u.nameColor ? { adminNameColor: u.nameColor } : null)
+                            }
+                          />
                         </p>
                       ) : null}
                     </div>

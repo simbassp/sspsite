@@ -1,7 +1,9 @@
 import { ONLINE_LAST_SEEN_MAX_MS } from "@/lib/presence-constants";
+import { loadUserUnlockedAchievementIds } from "@/lib/achievements-server";
 import { loadProfilePersonnelMeta } from "@/lib/profile-personnel-meta";
+import { normalizeAvatarStoragePath } from "@/lib/avatar-display";
+import { loadIdentityCosmeticsForUser } from "@/lib/user-identity-cosmetics-server";
 import { normalizeUnitAssignment } from "@/lib/unit-assignment";
-import { normalizeProfileNameColor } from "@/lib/profile-name-color";
 import { canInspectOtherUserProfile, canManageUsers } from "@/lib/permissions";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
@@ -46,7 +48,7 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
     const userPrimary = await supabase
       .from("app_users")
       .select(
-        "id,name,callsign,position,role,status,login,is_online,last_seen_at,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,employment_date,profile_name_color",
+        "id,name,callsign,position,role,status,login,is_online,last_seen_at,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,employment_date,avatar_url,profile_name_color,profile_cosmetic_avatar_frame,profile_cosmetic_name_color",
       )
       .eq("id", userId)
       .maybeSingle();
@@ -125,6 +127,14 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
         ? await loadProfilePersonnelMeta(userId)
         : { licenseCategories: [], bloodGroup: null };
 
+    const [cosmetics, unlockedAchievementIds] = await Promise.all([
+      loadIdentityCosmeticsForUser(userId),
+      loadUserUnlockedAchievementIds(userId),
+    ]);
+    const avatarUrl = normalizeAvatarStoragePath(
+      typeof userRow.avatar_url === "string" ? userRow.avatar_url : null,
+    );
+
     return Response.json({
       ok: true,
       user: {
@@ -142,7 +152,10 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
         rota_section: rotaSection,
         rota_module: rotaModule,
         employment_date: employmentDate,
-        nameColor: normalizeProfileNameColor(userRow.profile_name_color),
+        avatarUrl,
+        nameColor: cosmetics.adminNameColor ?? null,
+        cosmetics,
+        unlockedAchievementIds,
         licenseCategories: personnelMeta.licenseCategories,
         bloodGroup: personnelMeta.bloodGroup,
       },

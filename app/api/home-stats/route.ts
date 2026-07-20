@@ -3,6 +3,8 @@ import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 import { readSiteSettingNumber } from "@/lib/site-analytics";
 import { ONLINE_LAST_SEEN_MAX_MS } from "@/lib/presence-constants";
 import { normalizeProfileNameColor, type ProfileNameColorId } from "@/lib/profile-name-color";
+import { mapIdentityCosmeticsFromRow, type UserIdentityCosmetics } from "@/lib/user-identity-cosmetics";
+import { loadIdentityCosmeticsMap } from "@/lib/user-identity-cosmetics-server";
 import { UNIT_COMMANDERS, unitAssignmentLabel } from "@/lib/unit-assignment";
 
 export const runtime = "nodejs";
@@ -31,20 +33,27 @@ function formatPerson(name: unknown, callsign: unknown) {
   return n || c || "Пользователь";
 }
 
-function mapOnlineUser(row: Record<string, unknown>) {
+function mapOnlineUser(row: Record<string, unknown>, cosmetics: UserIdentityCosmetics) {
   return {
     id: String(row.id || ""),
     name: toSafeString(row.name),
     callsign: toSafeString(row.callsign),
-    nameColor: normalizeProfileNameColor(row.profile_name_color),
+    nameColor: cosmetics.adminNameColor ?? null,
+    cosmetics,
   };
 }
 
-function buildPerson(name: unknown, callsign: unknown, nameColor: ProfileNameColorId | null, tail?: string) {
+function buildPerson(
+  name: unknown,
+  callsign: unknown,
+  cosmetics: UserIdentityCosmetics,
+  tail?: string,
+) {
   return {
     name: toSafeString(name),
     callsign: toSafeString(callsign),
-    nameColor,
+    nameColor: cosmetics.adminNameColor ?? null,
+    cosmetics,
     ...(tail ? { tail } : {}),
   };
 }
@@ -94,25 +103,20 @@ export async function GET() {
     const promotedPayload = (promoted?.payload || {}) as Record<string, unknown>;
 
     const colorLookupIds = [
+      typeof newest?.id === "string" ? newest.id : "",
       typeof leftPayload.user_id === "string" ? leftPayload.user_id : "",
       typeof promotedPayload.user_id === "string" ? promotedPayload.user_id : "",
     ].filter(Boolean);
 
-    const colorMap = new Map<string, ProfileNameColorId | null>();
-    if (colorLookupIds.length) {
-      const colorsQ = await supabase.from("app_users").select("id,profile_name_color").in("id", colorLookupIds);
-      if (!colorsQ.error) {
-        for (const row of colorsQ.data ?? []) {
-          if (typeof row.id === "string") {
-            colorMap.set(row.id, normalizeProfileNameColor(row.profile_name_color));
-          }
-        }
-      }
-    }
-
     let usersSummary: {
       totalUsers: number;
-      onlineUsers: Array<{ id: string; name: string; callsign: string; nameColor: ProfileNameColorId | null }>;
+      onlineUsers: Array<{
+        id: string;
+        name: string;
+        callsign: string;
+        nameColor: ProfileNameColorId | null;
+        cosmetics: UserIdentityCosmetics;
+      }>;
     } | null = null;
     let siteAnalytics: { totalVisits: number; totalActiveSeconds: number } | null = null;
 
@@ -133,9 +137,14 @@ export async function GET() {
         const rows = Array.isArray(fallbackQ.data) ? fallbackQ.data : [];
         const activeRows = rows.filter((row) => String(row.status || "active") === "active");
         const onlineRows = activeRows.filter((row) => row.is_online === true);
+        const fallbackCosmeticsMap = await loadIdentityCosmeticsMap(onlineRows.map((row) => String(row.id || "")));
         usersSummary = {
           totalUsers: activeRows.length,
-          onlineUsers: onlineRows.map((row) => mapOnlineUser(row as Record<string, unknown>)),
+          onlineUsers: onlineRows.map((row) => {
+            const id = String(row.id || "");
+            const cosmetics = fallbackCosmeticsMap.get(id) ?? mapIdentityCosmeticsFromRow({});
+            return mapOnlineUser(row as Record<string, unknown>, cosmetics);
+          }),
         };
       }
     } else if (!onlineStrictRes.error) {
@@ -143,11 +152,18 @@ export async function GET() {
       const onlineRows = rows
         .filter((row) => effectiveOnlineStrict(row.is_online, row.last_seen_at))
         .sort((a, b) => toSafeString(a.name).localeCompare(toSafeString(b.name), "ru"));
+      const cosmeticsMap = await loadIdentityCosmeticsMap(onlineRows.map((row) => String(row.id || "")));
       usersSummary = {
         totalUsers: rows.length,
-        onlineUsers: onlineRows.map((row) => mapOnlineUser(row as Record<string, unknown>)),
+        onlineUsers: onlineRows.map((row) => {
+          const id = String(row.id || "");
+          const cosmetics = cosmeticsMap.get(id) ?? mapIdentityCosmeticsFromRow(row as Record<string, unknown>);
+          return mapOnlineUser(row as Record<string, unknown>, cosmetics);
+        }),
       };
     }
+
+    const cosmeticsMap = await loadIdentityCosmeticsMap(colorLookupIds);
 
     if (!analyticsRes.error) {
       const map = new Map((analyticsRes.data ?? []).map((row) => [String(row.key), row.value]));
@@ -179,7 +195,7 @@ export async function GET() {
             person: buildPerson(
               newest.name,
               newest.callsign,
-              normalizeProfileNameColor(newest.profile_name_color),
+              cosmeticsMap.get(String(newest.id || "")) ?? mapIdentityCosmeticsFromRow(newest),
             ),
             created_at: newest.created_at ? String(newest.created_at) : null,
           }
@@ -193,7 +209,9 @@ export async function GET() {
             person: buildPerson(
               leftPayload.name,
               leftPayload.callsign,
-              leftUserId ? colorMap.get(leftUserId) ?? null : null,
+              leftUserId
+                ? cosmeticsMap.get(leftUserId) ?? mapIdentityCosmeticsFromRow({})
+                : mapIdentityCosmeticsFromRow({}),
             ),
             created_at: left.created_at ? String(left.created_at) : null,
           }
@@ -209,7 +227,9 @@ export async function GET() {
             person: buildPerson(
               promotedPayload.name,
               promotedPayload.callsign,
-              promotedUserId ? colorMap.get(promotedUserId) ?? null : null,
+              promotedUserId
+                ? cosmeticsMap.get(promotedUserId) ?? mapIdentityCosmeticsFromRow({})
+                : mapIdentityCosmeticsFromRow({}),
               ` — новая должность: ${toSafeString(promotedPayload.position) || "Не указана"}`,
             ),
             created_at: promoted.created_at ? String(promoted.created_at) : null,

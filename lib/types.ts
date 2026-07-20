@@ -1,4 +1,5 @@
 import type { ProfileNameColorId } from "@/lib/profile-name-color";
+import type { UserIdentityCosmetics } from "@/lib/user-identity-cosmetics";
 
 export type Role = "employee" | "admin";
 
@@ -58,6 +59,8 @@ export interface SessionUser {
   avatarUrl?: string | null;
   /** Preset id для цвета имени в профиле. */
   nameColor?: ProfileNameColorId | null;
+  /** Косметика профиля (цвета и рамки из достижений). */
+  cosmetics?: UserIdentityCosmetics | null;
 }
 
 export interface UserRecord extends SessionUser {
@@ -88,6 +91,7 @@ export interface NewsItem {
     position?: Position | null;
     avatarUrl?: string | null;
     nameColor?: ProfileNameColorId | null;
+    cosmetics?: UserIdentityCosmetics | null;
   };
   authorProfile?: {
     id?: string | null;
@@ -96,6 +100,7 @@ export interface NewsItem {
     position?: Position | null;
     avatarUrl?: string | null;
     nameColor?: ProfileNameColorId | null;
+    cosmetics?: UserIdentityCosmetics | null;
   } | null;
   textStyle?: NewsTextStyle;
 }

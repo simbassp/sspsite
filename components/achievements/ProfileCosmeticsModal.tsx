@@ -2,8 +2,6 @@
 
 import { useEffect, useState } from "react";
 import {
-  FINAL_ACHIEVEMENTS,
-  TRIAL_ACHIEVEMENTS,
   finalNameColorClass,
   finalNameColorLabel,
   trialAvatarFrameClass,
@@ -19,7 +17,6 @@ type ProfileCosmeticsModalProps = {
   open: boolean;
   onClose: () => void;
   unlockedIds: string[];
-  adminPreviewAll?: boolean;
   name: string;
   callsign: string;
   avatarUrl: string | null;
@@ -33,7 +30,6 @@ export function ProfileCosmeticsModal({
   open,
   onClose,
   unlockedIds,
-  adminPreviewAll = false,
   name,
   callsign,
   avatarUrl,
@@ -51,12 +47,8 @@ export function ProfileCosmeticsModal({
     setDraftColor(nameColor);
   }, [open, avatarFrame, nameColor]);
 
-  const frames = adminPreviewAll
-    ? TRIAL_ACHIEVEMENTS.map((item) => item.trialFrame!).filter(Boolean)
-    : unlockedTrialFrames(unlockedIds);
-  const colors = adminPreviewAll
-    ? FINAL_ACHIEVEMENTS.map((item) => item.finalNameColor!).filter(Boolean)
-    : unlockedFinalNameColors(unlockedIds);
+  const frames = unlockedTrialFrames(unlockedIds);
+  const colors = unlockedFinalNameColors(unlockedIds);
 
   if (!open) return null;
 
@@ -73,12 +65,6 @@ export function ProfileCosmeticsModal({
               Закрыть
             </button>
           </div>
-
-          {adminPreviewAll ? (
-            <p className="profile-cosmetics-modal__preview-note">
-              Режим предпросмотра администратора: показаны все награды для проверки интерфейса.
-            </p>
-          ) : null}
 
           <div className="profile-cosmetics-modal__preview">
             <UserAvatar

@@ -1,6 +1,7 @@
 import type { ElementType, ReactNode } from "react";
 import type { ProfileNameColorId } from "@/lib/profile-name-color";
 import { profileNameColorClass } from "@/lib/profile-name-color";
+import { userIdentityTextColorProps, type UserIdentityCosmetics } from "@/lib/user-identity-cosmetics";
 
 export type UserIdentityParts = {
   name?: string | null;
@@ -60,7 +61,10 @@ export function UserIdentityText({
   );
 }
 
-type OnlineUserIdentity = UserIdentityParts & { id?: string };
+type OnlineUserIdentity = UserIdentityParts & {
+  id?: string;
+  cosmetics?: Partial<UserIdentityCosmetics> | null;
+};
 
 type OnlineUsersInlineProps = {
   users: OnlineUserIdentity[];
@@ -73,18 +77,24 @@ export function OnlineUsersInline({ users, className, itemClassName }: OnlineUse
   if (!users.length) return null;
   return (
     <span className={className}>
-      {users.map((user, index) => (
+      {users.map((user, index) => {
+        const colorProps = userIdentityTextColorProps(
+          user.cosmetics ?? (user.nameColor ? { adminNameColor: user.nameColor } : {}),
+        );
+        return (
         <span key={user.id || `${user.name}-${user.callsign}-${index}`}>
           {index > 0 ? ", " : null}
           <UserIdentityText
             name={user.name || "Пользователь"}
             callsign={user.callsign}
-            nameColor={user.nameColor}
+            nameColor={colorProps.nameColor}
+            colorClassOverride={colorProps.colorClassOverride}
             className={itemClassName}
             emptyName="Пользователь"
           />
         </span>
-      ))}
+        );
+      })}
     </span>
   );
 }

@@ -2,6 +2,7 @@ import { effectiveFinalCountingFromUtc, nextAutoResetUtcIso } from "@/lib/final-
 import { FINAL_TEST_MAX_ATTEMPTS } from "@/lib/final-test-constants";
 import { canManageResults, canResetTestResults } from "@/lib/permissions";
 import { normalizeProfileNameColor, type ProfileNameColorId } from "@/lib/profile-name-color";
+import { loadIdentityCosmeticsMap } from "@/lib/user-identity-cosmetics-server";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 import { normalizeUnitAssignment } from "@/lib/unit-assignment";
@@ -151,6 +152,7 @@ export async function GET(req: Request) {
     }
 
     const users = usersRows;
+    const cosmeticsMap = await loadIdentityCosmeticsMap(users.map((u) => u.id));
 
     let resultsRows: Array<Record<string, unknown>> | null = resultsPrimary.data as Array<
       Record<string, unknown>
@@ -251,6 +253,7 @@ export async function GET(req: Request) {
           name: user.name,
           callsign: user.callsign,
           nameColor: normalizeProfileNameColor(user.profile_name_color),
+          cosmetics: cosmeticsMap.get(user.id) ?? {},
           position: String(user.position ?? ""),
           unitAssignment: unitFromDb ? normalizeUnitAssignment(user.unit_assignment) : null,
           rotaPlatoon: rotaFromDb && user.rota_platoon != null ? Number(user.rota_platoon) : null,
@@ -315,6 +318,7 @@ export async function GET(req: Request) {
         name: string;
         callsign: string;
         nameColor: ProfileNameColorId | null;
+        cosmetics: NonNullable<ReturnType<typeof cosmeticsMap.get>>;
         position: string;
         unitAssignment: UnitAssignment | null;
         rotaPlatoon: number | null;
@@ -327,6 +331,7 @@ export async function GET(req: Request) {
           name: u.name,
           callsign: u.callsign,
           nameColor: normalizeProfileNameColor(u.profile_name_color),
+          cosmetics: cosmeticsMap.get(u.id) ?? {},
           position: String(u.position ?? ""),
           unitAssignment: unitFromDb ? normalizeUnitAssignment(u.unit_assignment) : null,
           rotaPlatoon: rotaFromDb && u.rota_platoon != null ? Number(u.rota_platoon) : null,
@@ -348,6 +353,7 @@ export async function GET(req: Request) {
           name: user?.name ?? "—",
           callsign: user?.callsign ?? "",
           nameColor: user?.nameColor ?? null,
+          cosmetics: user?.cosmetics ?? {},
           position: user?.position ?? "",
           unitAssignment: (user?.unitAssignment ?? null) as UnitAssignment | null,
           rotaPlatoon: user?.rotaPlatoon ?? null,
@@ -379,18 +385,42 @@ export async function GET(req: Request) {
     const failedSummaries = summaries.filter((s) => s.status === "failed");
     const notStartedSummaries = summaries.filter((s) => s.status === "not_started");
 
-    const lastPassed = passedSummaries.reduce<{ name: string; callsign: string; nameColor: ProfileNameColorId | null; at: string } | null>((best, s) => {
+    const lastPassed = passedSummaries.reduce<{
+      name: string;
+      callsign: string;
+      nameColor: ProfileNameColorId | null;
+      cosmetics: NonNullable<ReturnType<typeof cosmeticsMap.get>>;
+      at: string;
+    } | null>((best, s) => {
       if (!s.latestFinalAt) return best;
       if (!best || new Date(s.latestFinalAt) > new Date(best.at)) {
-        return { name: s.name, callsign: s.callsign, nameColor: s.nameColor ?? null, at: s.latestFinalAt };
+        return {
+          name: s.name,
+          callsign: s.callsign,
+          nameColor: s.nameColor ?? null,
+          cosmetics: s.cosmetics ?? {},
+          at: s.latestFinalAt,
+        };
       }
       return best;
     }, null);
 
-    const lastFailed = failedSummaries.reduce<{ name: string; callsign: string; nameColor: ProfileNameColorId | null; at: string } | null>((best, s) => {
+    const lastFailed = failedSummaries.reduce<{
+      name: string;
+      callsign: string;
+      nameColor: ProfileNameColorId | null;
+      cosmetics: NonNullable<ReturnType<typeof cosmeticsMap.get>>;
+      at: string;
+    } | null>((best, s) => {
       if (!s.latestFinalAt) return best;
       if (!best || new Date(s.latestFinalAt) > new Date(best.at)) {
-        return { name: s.name, callsign: s.callsign, nameColor: s.nameColor ?? null, at: s.latestFinalAt };
+        return {
+          name: s.name,
+          callsign: s.callsign,
+          nameColor: s.nameColor ?? null,
+          cosmetics: s.cosmetics ?? {},
+          at: s.latestFinalAt,
+        };
       }
       return best;
     }, null);
@@ -468,16 +498,28 @@ export async function GET(req: Request) {
       trialAttemptsCount: trialCountRes.count ?? 0,
       lastTrial:
         trialRow?.created_at && trialUser
-          ? { name: trialUser.name, callsign: trialUser.callsign, nameColor: trialUser.nameColor, at: String(trialRow.created_at) }
+          ? {
+              name: trialUser.name,
+              callsign: trialUser.callsign,
+              nameColor: trialUser.nameColor,
+              cosmetics: trialUser.cosmetics ?? {},
+              at: String(trialRow.created_at),
+            }
           : trialRow?.created_at
-            ? { name: "—", callsign: "", nameColor: null, at: String(trialRow.created_at) }
+            ? { name: "—", callsign: "", nameColor: null, cosmetics: {}, at: String(trialRow.created_at) }
             : null,
       finalAttemptsCount: finalCountRes.count ?? 0,
       lastFinal:
         finalRow?.created_at && finalUser
-          ? { name: finalUser.name, callsign: finalUser.callsign, nameColor: finalUser.nameColor, at: String(finalRow.created_at) }
+          ? {
+              name: finalUser.name,
+              callsign: finalUser.callsign,
+              nameColor: finalUser.nameColor,
+              cosmetics: finalUser.cosmetics ?? {},
+              at: String(finalRow.created_at),
+            }
           : finalRow?.created_at
-            ? { name: "—", callsign: "", nameColor: null, at: String(finalRow.created_at) }
+            ? { name: "—", callsign: "", nameColor: null, cosmetics: {}, at: String(finalRow.created_at) }
             : null,
     };
 

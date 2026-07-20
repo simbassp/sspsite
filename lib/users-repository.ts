@@ -16,6 +16,7 @@ import {
 import { normalizeDutyLocation } from "@/lib/duty-location";
 import { normalizeAvatarStoragePath } from "@/lib/avatar-display";
 import { normalizeProfileNameColor } from "@/lib/profile-name-color";
+import type { UserIdentityCosmetics } from "@/lib/user-identity-cosmetics";
 import { normalizeUnitAssignment, UNIT_ASSIGNMENT_OPTIONS, formatUnitAssignmentSaveError } from "@/lib/unit-assignment";
 import { normalizeRotaPlatoon, normalizeRotaSection, type RotaPlatoon, type RotaSection } from "@/lib/rota-unit";
 import { DutyLocation, Position, SessionUser, UserPermissions, UserRecord, UnitAssignment } from "@/lib/types";
@@ -45,6 +46,7 @@ type UserRow = {
   status: "active" | "inactive";
   avatar_url?: string | null;
   profile_name_color?: string | null;
+  cosmetics?: UserIdentityCosmetics | null;
 };
 
 type InviteCodeRow = {
@@ -198,6 +200,7 @@ function toSessionUser(row: UserRow): SessionUser {
     unitAssignment: normalizeUnitAssignment(row.unit_assignment),
     avatarUrl: normalizeAvatarStoragePath(typeof row.avatar_url === "string" ? row.avatar_url : null),
     nameColor: normalizeProfileNameColor(row.profile_name_color),
+    cosmetics: row.cosmetics ?? null,
   };
 }
 

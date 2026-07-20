@@ -1,3 +1,4 @@
+import { syncUserAchievementsByUserId } from "@/lib/achievements-server";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 import { isFinalPassed, isTrialPassed } from "@/lib/test-pass-rules";
@@ -148,6 +149,9 @@ export async function POST(request: Request) {
       return Response.json({ ok: false, error: inserted.error }, { status: 500 });
     }
     await supabase.from("final_attempts").delete().eq("user_id", session.id);
+    if (passed) {
+      void syncUserAchievementsByUserId(session.id).catch(() => undefined);
+    }
     return Response.json({ ok: true });
   }
 
@@ -155,10 +159,11 @@ export async function POST(request: Request) {
   const meta = (body.meta || {}) as ResultMeta;
   const questionsTotal = Math.max(1, Number(meta.questionsTotal ?? 0) || 1);
   const questionsCorrect = Math.max(0, Math.min(Number(meta.questionsCorrect ?? 0), questionsTotal));
+  const trialPassed = isTrialPassed(questionsCorrect, questionsTotal);
   const inserted = await insertTestResultCompat(supabase, {
     user_id: session.id,
     type: "trial",
-    status: isTrialPassed(questionsCorrect, questionsTotal) ? "passed" : "failed",
+    status: trialPassed ? "passed" : "failed",
     score,
     started_at: meta.startedAt,
     finished_at: meta.finishedAt,
@@ -169,6 +174,9 @@ export async function POST(request: Request) {
   });
   if (inserted.error) {
     return Response.json({ ok: false, error: inserted.error }, { status: 500 });
+  }
+  if (trialPassed) {
+    void syncUserAchievementsByUserId(session.id).catch(() => undefined);
   }
   return Response.json({ ok: true });
 }
