@@ -28,6 +28,7 @@ function StatItem({ icon, label, value, wide = false }: StatItemProps) {
 
 export function HomeStatsBar() {
   const { loading, usersSummary, siteAnalytics } = useHomeStats();
+  const onlineNamesLimit = 10;
 
   const visits = siteAnalytics ? siteAnalytics.totalVisits.toLocaleString("ru-RU") : loading ? "…" : "—";
   const duration = siteAnalytics
@@ -37,10 +38,18 @@ export function HomeStatsBar() {
       : "—";
   const totalUsers = usersSummary ? usersSummary.totalUsers.toLocaleString("ru-RU") : loading ? "…" : "—";
   const onlineCount = usersSummary ? String(usersSummary.onlineUsers.length) : loading ? "…" : "0";
+  const onlineUsers = usersSummary?.onlineUsers ?? [];
+  const shownOnlineUsers = onlineUsers.slice(0, onlineNamesLimit);
+  const hiddenOnlineCount = Math.max(0, onlineUsers.length - shownOnlineUsers.length);
   const onlineNames = loading ? (
     "…"
-  ) : usersSummary?.onlineUsers.length ? (
-    <OnlineUsersInline users={usersSummary.onlineUsers} />
+  ) : onlineUsers.length ? (
+    <>
+      <OnlineUsersInline users={shownOnlineUsers} className="home-stats-bar__online-names" />
+      {hiddenOnlineCount > 0 ? (
+        <span className="home-stats-bar__online-more">{` +${hiddenOnlineCount}`}</span>
+      ) : null}
+    </>
   ) : (
     "—"
   );

@@ -2771,7 +2771,7 @@ html[data-theme="dark"] .chip:not(.active):hover {
 
 .home-stats-bar__body {
   display: flex;
-  align-items: stretch;
+  align-items: flex-start;
   gap: 0;
   overflow-x: auto;
 }
@@ -2780,7 +2780,7 @@ html[data-theme="dark"] .chip:not(.active):hover {
   flex: 1 1 0;
   min-width: 108px;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   padding: 0 10px;
 }
@@ -2809,6 +2809,7 @@ html[data-theme="dark"] .chip:not(.active):hover {
   justify-content: center;
   width: 22px;
   height: 22px;
+  margin-top: 1px;
   color: color-mix(in srgb, var(--text) 72%, var(--muted));
 }
 
@@ -2848,9 +2849,20 @@ html[data-theme="dark"] .chip:not(.active):hover {
 }
 
 .home-stats-bar__value--names {
+  display: block;
   font-size: 12px;
-  font-weight: 700;
-  line-height: 1.35;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.home-stats-bar__online-names {
+  display: inline;
+}
+
+.home-stats-bar__online-more {
+  color: var(--muted);
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 @media (max-width: 900px) {
