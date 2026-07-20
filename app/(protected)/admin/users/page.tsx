@@ -83,6 +83,9 @@ export default function AdminUsersPage() {
     setInfo("");
     try {
       await patchUser(positionEditUser.id, { position: positionDraft });
+      if (session?.id === positionEditUser.id) {
+        writeClientSession({ ...session, position: positionDraft });
+      }
       setInfo("Должность обновлена. На главной появится запись о смене должности.");
       await refresh();
       setPositionEditUser(null);

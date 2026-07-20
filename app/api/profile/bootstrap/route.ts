@@ -31,7 +31,7 @@ export async function GET() {
       .limit(20);
     const profilePrimaryPromise = supabase
       .from("app_users")
-      .select("auth_user_id,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,employment_date,avatar_url,profile_name_color")
+      .select("auth_user_id,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,employment_date,avatar_url,profile_name_color,position")
       .eq("id", session.id)
       .maybeSingle();
 
@@ -60,6 +60,7 @@ export async function GET() {
     let employmentDate: string | null = null;
     let avatarUrl: string | null = null;
     let nameColor = normalizeProfileNameColor(null);
+    let position: string | null = null;
 
     if (profilePrimaryQ.error && isMissingColumnError(profilePrimaryQ.error.message)) {
       const profileLegacyQ = await supabase.from("app_users").select("auth_user_id").eq("id", session.id).maybeSingle();
@@ -78,6 +79,9 @@ export async function GET() {
         avatarUrl = profileRow.avatar_url.trim();
       }
       nameColor = normalizeProfileNameColor(profileRow.profile_name_color);
+      if (typeof profileRow.position === "string" && profileRow.position.trim()) {
+        position = profileRow.position.trim();
+      }
     }
 
     if (resultsError || profileError) {
@@ -140,6 +144,7 @@ export async function GET() {
       employmentDate,
       avatarUrl,
       nameColor,
+      position,
       licenseCategories: personnelMeta.licenseCategories,
       bloodGroup: personnelMeta.bloodGroup,
       results: resultsRows.map((r) => ({

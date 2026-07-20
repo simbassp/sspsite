@@ -68,7 +68,7 @@ import {
   type PersonnelBloodGroup,
   type PersonnelLicenseCategory,
 } from "@/lib/personnel-catalog";
-import { DutyLocation, TestResult, TestResultsResetScope, UnitAssignment } from "@/lib/types";
+import { DutyLocation, Position, TestResult, TestResultsResetScope, UnitAssignment } from "@/lib/types";
 
 function mapBootstrapResults(raw: Array<Record<string, unknown>>): TestResult[] {
   return raw
@@ -145,6 +145,7 @@ export default function ProfilePage() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileModalMessage, setProfileModalMessage] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [profilePosition, setProfilePosition] = useState<Position | null>(null);
   const [isResettingStats, setIsResettingStats] = useState(false);
   const [showAllAttempts, setShowAllAttempts] = useState(false);
   const [attemptsPage, setAttemptsPage] = useState(1);
@@ -239,6 +240,7 @@ export default function ProfilePage() {
           inviteCodes?: Array<Record<string, unknown>>;
           personnelProfile?: PersonnelProfileInitialPayload | null;
           nameColor?: ProfileNameColorId | null;
+          position?: Position | null;
         };
         if (!response.ok || !payload.ok) {
           throw new Error(payload.error || "profile_bootstrap_failed");
@@ -300,6 +302,16 @@ export default function ProfilePage() {
         }
         if ("nameColor" in payload) {
           setDisplayNameColor(payload.nameColor ?? null);
+        }
+        if (typeof payload.position === "string" && payload.position.trim()) {
+          const nextPosition = payload.position.trim() as Position;
+          setProfilePosition(nextPosition);
+          setSession((current) => {
+            if (!current || current.position === nextPosition) return current;
+            const nextSession = { ...current, position: nextPosition };
+            persistSession(nextSession);
+            return nextSession;
+          });
         }
         if (typeof payload.email === "string" && payload.email) {
           setEmailInput(payload.email);
@@ -1100,11 +1112,11 @@ export default function ProfilePage() {
               ) : null}
               <div className="profile-hero-position">
                 <div
-                  className={`admin-users-position-badge ${getPositionBadgeClass(session.position)}`}
+                  className={`admin-users-position-badge ${getPositionBadgeClass(profilePosition ?? session?.position ?? "")}`}
                   title="Должность"
                 >
                   <PositionStarIcon />
-                  {session.position}
+                  {profilePosition ?? session?.position ?? "—"}
                 </div>
               </div>
             </div>

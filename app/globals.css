@@ -815,7 +815,8 @@ html[data-theme="dark"] .select option {
 
 .profile-name-color--gradient-aurora,
 .profile-name-color--gradient-gold,
-.profile-name-color--gradient-ocean {
+.profile-name-color--gradient-ocean,
+.profile-name-color--gradient-obsidian {
   background-size: 300% 100%;
   -webkit-background-clip: text;
   background-clip: text;
@@ -833,6 +834,37 @@ html[data-theme="dark"] .select option {
 
 .profile-name-color--gradient-ocean {
   background-image: linear-gradient(90deg, #06b6d4, #3b82f6, #14b8a6, #06b6d4);
+}
+
+.profile-name-color--gradient-obsidian {
+  background-image: linear-gradient(
+    90deg,
+    #0a0a0a,
+    #422006,
+    #ca8a04,
+    #fde68a,
+    #0a0a0a,
+    #525252,
+    #fafafa,
+    #d4d4d4,
+    #0a0a0a
+  );
+  animation-duration: 5s;
+}
+
+html[data-theme="dark"] .profile-name-color--gradient-obsidian {
+  background-image: linear-gradient(
+    90deg,
+    #171717,
+    #713f12,
+    #fbbf24,
+    #fef3c7,
+    #171717,
+    #737373,
+    #ffffff,
+    #e5e5e5,
+    #171717
+  );
 }
 
 .profile-name-color-picker__grid {

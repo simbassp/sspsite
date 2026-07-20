@@ -9,6 +9,7 @@ export const PROFILE_NAME_COLOR_PRESETS = [
   { id: "gradient-aurora", label: "Аврора", sample: "А" },
   { id: "gradient-gold", label: "Золотой перелив", sample: "А" },
   { id: "gradient-ocean", label: "Океан", sample: "А" },
+  { id: "gradient-obsidian", label: "Чёрно-золото-белый", sample: "А" },
 ] as const;
 
 export type ProfileNameColorId = (typeof PROFILE_NAME_COLOR_PRESETS)[number]["id"];
