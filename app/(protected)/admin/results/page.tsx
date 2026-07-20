@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { UserIdentityText } from "@/components/profile/UserIdentityText";
+import type { ProfileNameColorId } from "@/lib/profile-name-color";
 import { readClientSession } from "@/lib/client-auth";
 import { canResetTestResults } from "@/lib/permissions";
 import { getPositionBadgeClass } from "@/lib/position-ui";
@@ -27,6 +29,7 @@ type UserSummary = {
   userId: string;
   name: string;
   callsign: string;
+  nameColor?: ProfileNameColorId | null;
   position?: string;
   unitAssignment?: UnitAssignment | null;
   rotaPlatoon?: number | null;
@@ -46,6 +49,7 @@ type AttemptRow = {
   userId: string;
   name: string;
   callsign: string;
+  nameColor?: ProfileNameColorId | null;
   position?: string;
   unitAssignment?: UnitAssignment | null;
   rotaPlatoon?: number | null;
@@ -60,7 +64,7 @@ type AttemptRow = {
   showResetAttempts: boolean;
 };
 
-type LastPersonAt = { name: string; callsign: string; at: string };
+type LastPersonAt = { name: string; callsign: string; nameColor?: ProfileNameColorId | null; at: string };
 
 type BannerStats = {
   passedCount: number;
@@ -100,10 +104,34 @@ const emptyBannerStats: BannerStats = {
   lastFinal: null,
 };
 
+function ResultsUserName({
+  name,
+  callsign,
+  nameColor,
+}: {
+  name: string;
+  callsign: string;
+  nameColor?: ProfileNameColorId | null;
+}) {
+  return (
+    <UserIdentityText
+      name={name}
+      callsign={callsign ? `(${callsign})` : undefined}
+      nameColor={nameColor ?? null}
+      separator=" "
+      emptyName="—"
+    />
+  );
+}
+
 function formatLastPersonLine(row: LastPersonAt | null) {
-  if (!row) return "Последний: —";
-  const who = row.callsign ? `${row.name} (${row.callsign})` : row.name;
-  return `Последний: ${who} · ${formatDateTime(row.at)}`;
+  if (!row) return <>Последний: —</>;
+  return (
+    <>
+      Последний: <ResultsUserName name={row.name} callsign={row.callsign} nameColor={row.nameColor} /> ·{" "}
+      {formatDateTime(row.at)}
+    </>
+  );
 }
 
 function formatAttemptResult(row: {
@@ -488,8 +516,7 @@ export default function AdminResultsPage() {
                 <div className="admin-results-row__head">
                   <h3 className="admin-results-row__name">
                     <Link href={`/profile/${row.userId}`} prefetch={false} className="admin-users-profile-link">
-                      {row.name}
-                      {row.callsign ? ` (${row.callsign})` : ""}
+                      <ResultsUserName name={row.name} callsign={row.callsign} nameColor={row.nameColor} />
                     </Link>
                   </h3>
                   <span className={`admin-users-position-badge ${getPositionBadgeClass(row.position || "")}`}>
@@ -535,8 +562,7 @@ export default function AdminResultsPage() {
                 <div className="admin-results-row__head">
                   <h3 className="admin-results-row__name">
                     <Link href={`/profile/${row.userId}`} prefetch={false} className="admin-users-profile-link">
-                      {row.name}
-                      {row.callsign ? ` (${row.callsign})` : ""}
+                      <ResultsUserName name={row.name} callsign={row.callsign} nameColor={row.nameColor} />
                     </Link>
                   </h3>
                   <span className={`admin-users-position-badge ${getPositionBadgeClass(row.position || "")}`}>

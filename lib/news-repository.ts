@@ -4,6 +4,7 @@ import { addNews, listNews, removeNewsItem, updateNewsItem } from "@/lib/storage
 import { readClientSession } from "@/lib/client-auth";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { withTimeoutAndRetry } from "@/lib/async-utils";
+import { normalizeProfileNameColor } from "@/lib/profile-name-color";
 import { NewsItem, NewsTextStyle, Position } from "@/lib/types";
 import { POSITION_OPTIONS } from "@/lib/position-ui";
 
@@ -35,6 +36,7 @@ type NewsRow = {
     callsign?: string | null;
     position?: string | null;
     avatar_url?: string | null;
+    nameColor?: string | null;
   } | null;
   created_at: string;
   format?: unknown;
@@ -80,6 +82,7 @@ function mapAuthorAvatarUrl(profile?: NewsRow["author_profile"] | null) {
 function mapNewsRow(row: NewsRow): NewsItem {
   const body = row.body ?? row.text ?? row.content ?? "";
   const avatarUrl = mapAuthorAvatarUrl(row.author_profile);
+  const nameColor = normalizeProfileNameColor(row.author_profile?.nameColor);
   return {
     id: row.id,
     title: row.title,
@@ -95,6 +98,7 @@ function mapNewsRow(row: NewsRow): NewsItem {
       callsign: row.author_profile?.callsign?.trim() || row.author_callsign?.trim() || null,
       position: normalizeAuthorPosition(row.author_profile?.position ?? row.author_position),
       avatarUrl,
+      nameColor,
     },
     authorProfile: {
       id: row.author_profile?.id ?? row.author_id ?? null,
@@ -102,6 +106,7 @@ function mapNewsRow(row: NewsRow): NewsItem {
       callsign: row.author_profile?.callsign?.trim() || row.author_callsign?.trim() || null,
       position: normalizeAuthorPosition(row.author_profile?.position ?? row.author_position),
       avatarUrl,
+      nameColor,
     },
     createdAt: row.created_at,
     textStyle: normalizeNewsTextStyle(row.format),

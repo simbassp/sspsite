@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AdminPermissionPicker } from "@/components/admin/AdminPermissionPicker";
 import { ProfileNameColorPicker } from "@/components/admin/ProfileNameColorPicker";
-import { ProfileNameColorText } from "@/components/profile/ProfileNameColorText";
+import { UserIdentityText } from "@/components/profile/UserIdentityText";
 import { UserAvatar } from "@/components/profile/UserAvatar";
 import { readClientSession, writeClientSession } from "@/lib/client-auth";
 import { ADMIN_PERMISSION_OPTIONS } from "@/lib/admin-permission-ui";
@@ -38,6 +38,7 @@ export default function AdminUsersPage() {
   /** Только полные админы по пользователям видят сводку прав; режим «только список» — без этой колонки. */
   const showPermissionsColumn = canEditUsers;
   const canGrantAdminRole = session?.role === "admin";
+  const canPickNameColor = session?.role === "admin";
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [query, setQuery] = useState("");
   const [positionFilter, setPositionFilter] = useState<"all" | Position>("all");
@@ -201,10 +202,12 @@ export default function AdminUsersPage() {
   };
 
   const renderUserNameLine = (user: UserRecord) => (
-    <>
-      <ProfileNameColorText color={user.nameColor}>{user.name || "Без имени"}</ProfileNameColorText>
-      {user.callsign ? ` ${user.callsign}` : ""}
-    </>
+    <UserIdentityText
+      name={user.name || "Без имени"}
+      callsign={user.callsign}
+      nameColor={user.nameColor}
+      emptyName="Без имени"
+    />
   );
 
   const saveNameColor = async (user: UserRecord, next: ProfileNameColorId | null) => {
@@ -367,11 +370,13 @@ export default function AdminUsersPage() {
                 <small>{permissionsTargetUser.position}</small>
               </span>
             </div>
-            <ProfileNameColorPicker
-              value={permissionsTargetUser.nameColor ?? null}
-              disabled={savingNameColorId === permissionsTargetUser.id}
-              onChange={(next) => void saveNameColor(permissionsTargetUser, next)}
-            />
+            {canPickNameColor ? (
+              <ProfileNameColorPicker
+                value={permissionsTargetUser.nameColor ?? null}
+                disabled={savingNameColorId === permissionsTargetUser.id}
+                onChange={(next) => void saveNameColor(permissionsTargetUser, next)}
+              />
+            ) : null}
             {canGrantAdminRole && (
               <label className="admin-users-role-switch">
                 <span className="label">Роль администратора</span>

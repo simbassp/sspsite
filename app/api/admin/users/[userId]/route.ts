@@ -76,6 +76,11 @@ export async function PATCH(request: Request, context: { params: Promise<{ userI
   }
   const { userId } = await context.params;
   const body = (await request.json()) as PatchBody;
+
+  if (body.nameColor !== undefined && session.role !== "admin") {
+    return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+  }
+
   const supabase = getServerSupabaseServiceClient();
 
   const beforeQ = await supabase

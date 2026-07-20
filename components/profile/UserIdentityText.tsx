@@ -1,0 +1,74 @@
+import type { ElementType, ReactNode } from "react";
+import type { ProfileNameColorId } from "@/lib/profile-name-color";
+import { profileNameColorClass } from "@/lib/profile-name-color";
+
+export type UserIdentityParts = {
+  name?: string | null;
+  callsign?: string | null;
+  nameColor?: ProfileNameColorId | null;
+};
+
+type UserIdentityTextProps = UserIdentityParts & {
+  className?: string;
+  callsignClassName?: string;
+  separator?: ReactNode;
+  emptyName?: string;
+  as?: ElementType;
+};
+
+/** Имя и позывной с общим цветом; размер задаётся через className снаружи. */
+export function UserIdentityText({
+  name,
+  callsign,
+  nameColor,
+  className,
+  callsignClassName,
+  separator = " ",
+  emptyName = "—",
+  as: Tag = "span",
+}: UserIdentityTextProps) {
+  const colorClass = profileNameColorClass(nameColor ?? null);
+  const displayName = (name || "").trim();
+  const displayCallsign = (callsign || "").trim();
+
+  if (!displayName && !displayCallsign) {
+    return <Tag className={[className, colorClass].filter(Boolean).join(" ")}>{emptyName}</Tag>;
+  }
+
+  return (
+    <Tag className={[className, colorClass].filter(Boolean).join(" ")}>
+      {displayName || null}
+      {displayName && displayCallsign ? separator : null}
+      {displayCallsign ? <span className={callsignClassName}>{displayCallsign}</span> : null}
+    </Tag>
+  );
+}
+
+type OnlineUserIdentity = UserIdentityParts & { id?: string };
+
+type OnlineUsersInlineProps = {
+  users: OnlineUserIdentity[];
+  className?: string;
+  itemClassName?: string;
+};
+
+/** Список онлайн-пользователей с цветами имён (inline, без смены размера шрифта). */
+export function OnlineUsersInline({ users, className, itemClassName }: OnlineUsersInlineProps) {
+  if (!users.length) return null;
+  return (
+    <span className={className}>
+      {users.map((user, index) => (
+        <span key={user.id || `${user.name}-${user.callsign}-${index}`}>
+          {index > 0 ? ", " : null}
+          <UserIdentityText
+            name={user.name || "Пользователь"}
+            callsign={user.callsign}
+            nameColor={user.nameColor}
+            className={itemClassName}
+            emptyName="Пользователь"
+          />
+        </span>
+      ))}
+    </span>
+  );
+}

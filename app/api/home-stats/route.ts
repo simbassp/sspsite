@@ -2,6 +2,7 @@ import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 import { readSiteSettingNumber } from "@/lib/site-analytics";
 import { ONLINE_LAST_SEEN_MAX_MS } from "@/lib/presence-constants";
+import { normalizeProfileNameColor, type ProfileNameColorId } from "@/lib/profile-name-color";
 import { UNIT_COMMANDERS, unitAssignmentLabel } from "@/lib/unit-assignment";
 
 export const runtime = "nodejs";
@@ -30,6 +31,24 @@ function formatPerson(name: unknown, callsign: unknown) {
   return n || c || "Пользователь";
 }
 
+function mapOnlineUser(row: Record<string, unknown>) {
+  return {
+    id: String(row.id || ""),
+    name: toSafeString(row.name),
+    callsign: toSafeString(row.callsign),
+    nameColor: normalizeProfileNameColor(row.profile_name_color),
+  };
+}
+
+function buildPerson(name: unknown, callsign: unknown, nameColor: ProfileNameColorId | null, tail?: string) {
+  return {
+    name: toSafeString(name),
+    callsign: toSafeString(callsign),
+    nameColor,
+    ...(tail ? { tail } : {}),
+  };
+}
+
 export async function GET() {
   const session = await getServerSession();
   if (!session) return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
@@ -39,7 +58,7 @@ export async function GET() {
     const [newestQ, leftQ, promotedQ] = await Promise.all([
       supabase
         .from("app_users")
-        .select("id,name,callsign,created_at,status")
+        .select("id,name,callsign,created_at,status,profile_name_color")
         .order("created_at", { ascending: false })
         .limit(1),
       supabase
@@ -56,18 +75,50 @@ export async function GET() {
         .limit(1),
     ]);
 
-    const newest = Array.isArray(newestQ.data) ? newestQ.data[0] : null;
+    let newest: Record<string, unknown> | null = Array.isArray(newestQ.data)
+      ? (newestQ.data[0] as Record<string, unknown>)
+      : null;
+    if (newestQ.error && isMissingColumnError(newestQ.error.message)) {
+      const fallbackNewest = await supabase
+        .from("app_users")
+        .select("id,name,callsign,created_at,status")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      newest = (fallbackNewest.data as Record<string, unknown> | null) ?? null;
+    }
+
     const left = Array.isArray(leftQ.data) ? leftQ.data[0] : null;
     const promoted = Array.isArray(promotedQ.data) ? promotedQ.data[0] : null;
     const leftPayload = (left?.payload || {}) as Record<string, unknown>;
     const promotedPayload = (promoted?.payload || {}) as Record<string, unknown>;
-    let usersSummary: { totalUsers: number; onlineUsers: Array<{ id: string; name: string; callsign: string }> } | null =
-      null;
+
+    const colorLookupIds = [
+      typeof leftPayload.user_id === "string" ? leftPayload.user_id : "",
+      typeof promotedPayload.user_id === "string" ? promotedPayload.user_id : "",
+    ].filter(Boolean);
+
+    const colorMap = new Map<string, ProfileNameColorId | null>();
+    if (colorLookupIds.length) {
+      const colorsQ = await supabase.from("app_users").select("id,profile_name_color").in("id", colorLookupIds);
+      if (!colorsQ.error) {
+        for (const row of colorsQ.data ?? []) {
+          if (typeof row.id === "string") {
+            colorMap.set(row.id, normalizeProfileNameColor(row.profile_name_color));
+          }
+        }
+      }
+    }
+
+    let usersSummary: {
+      totalUsers: number;
+      onlineUsers: Array<{ id: string; name: string; callsign: string; nameColor: ProfileNameColorId | null }>;
+    } | null = null;
     let siteAnalytics: { totalVisits: number; totalActiveSeconds: number } | null = null;
 
     const onlineStrictQ = supabase
       .from("app_users")
-      .select("id,name,callsign,is_online,last_seen_at,status")
+      .select("id,name,callsign,is_online,last_seen_at,status,profile_name_color")
       .eq("status", "active");
     const analyticsQ = supabase
       .from("site_settings")
@@ -84,11 +135,7 @@ export async function GET() {
         const onlineRows = activeRows.filter((row) => row.is_online === true);
         usersSummary = {
           totalUsers: activeRows.length,
-          onlineUsers: onlineRows.map((row) => ({
-            id: String(row.id || ""),
-            name: toSafeString(row.name),
-            callsign: toSafeString(row.callsign),
-          })),
+          onlineUsers: onlineRows.map((row) => mapOnlineUser(row as Record<string, unknown>)),
         };
       }
     } else if (!onlineStrictRes.error) {
@@ -98,11 +145,7 @@ export async function GET() {
         .sort((a, b) => toSafeString(a.name).localeCompare(toSafeString(b.name), "ru"));
       usersSummary = {
         totalUsers: rows.length,
-        onlineUsers: onlineRows.map((row) => ({
-          id: String(row.id || ""),
-          name: toSafeString(row.name),
-          callsign: toSafeString(row.callsign),
-        })),
+        onlineUsers: onlineRows.map((row) => mapOnlineUser(row as Record<string, unknown>)),
       };
     }
 
@@ -123,6 +166,9 @@ export async function GET() {
       }
     }
 
+    const leftUserId = typeof leftPayload.user_id === "string" ? leftPayload.user_id : "";
+    const promotedUserId = typeof promotedPayload.user_id === "string" ? promotedPayload.user_id : "";
+
     const events = [
       newest
         ? {
@@ -130,6 +176,11 @@ export async function GET() {
             type: "user_added",
             title: "Наш новый товарищ:",
             description: formatPerson(newest.name, newest.callsign),
+            person: buildPerson(
+              newest.name,
+              newest.callsign,
+              normalizeProfileNameColor(newest.profile_name_color),
+            ),
             created_at: newest.created_at ? String(newest.created_at) : null,
           }
         : null,
@@ -139,6 +190,11 @@ export async function GET() {
             type: "user_removed",
             title: "Товарищ покинул нас:",
             description: formatPerson(leftPayload.name, leftPayload.callsign),
+            person: buildPerson(
+              leftPayload.name,
+              leftPayload.callsign,
+              leftUserId ? colorMap.get(leftUserId) ?? null : null,
+            ),
             created_at: left.created_at ? String(left.created_at) : null,
           }
         : null,
@@ -150,6 +206,12 @@ export async function GET() {
             description: `${formatPerson(promotedPayload.name, promotedPayload.callsign)} — новая должность: ${
               toSafeString(promotedPayload.position) || "Не указана"
             }`,
+            person: buildPerson(
+              promotedPayload.name,
+              promotedPayload.callsign,
+              promotedUserId ? colorMap.get(promotedUserId) ?? null : null,
+              ` — новая должность: ${toSafeString(promotedPayload.position) || "Не указана"}`,
+            ),
             created_at: promoted.created_at ? String(promoted.created_at) : null,
           }
         : null,

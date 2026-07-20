@@ -2,22 +2,13 @@
 
 import type { ReactNode } from "react";
 import { formatSiteDuration } from "@/lib/site-analytics";
+import { OnlineUsersInline } from "@/components/profile/UserIdentityText";
 import { useHomeStats } from "@/hooks/useHomeStats";
-
-function formatOnlineNames(online: Array<{ name: string; callsign: string }>) {
-  if (!online.length) return "—";
-  return online
-    .map((item) => {
-      const name = item.name || "Пользователь";
-      return item.callsign ? `${name} ${item.callsign}` : name;
-    })
-    .join(", ");
-}
 
 type StatItemProps = {
   icon: ReactNode;
   label: string;
-  value: string;
+  value: ReactNode;
   wide?: boolean;
 };
 
@@ -46,7 +37,13 @@ export function HomeStatsBar() {
       : "—";
   const totalUsers = usersSummary ? usersSummary.totalUsers.toLocaleString("ru-RU") : loading ? "…" : "—";
   const onlineCount = usersSummary ? String(usersSummary.onlineUsers.length) : loading ? "…" : "0";
-  const onlineNames = usersSummary ? formatOnlineNames(usersSummary.onlineUsers) : loading ? "…" : "—";
+  const onlineNames = loading ? (
+    "…"
+  ) : usersSummary?.onlineUsers.length ? (
+    <OnlineUsersInline users={usersSummary.onlineUsers} />
+  ) : (
+    "—"
+  );
 
   return (
     <article className="card home-stats-bar">

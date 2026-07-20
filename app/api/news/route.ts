@@ -1,4 +1,5 @@
 import { normalizeAvatarStoragePath } from "@/lib/avatar-display";
+import { normalizeProfileNameColor } from "@/lib/profile-name-color";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 import { canManageNews } from "@/lib/permissions";
@@ -221,13 +222,19 @@ export async function GET(request: Request) {
       return false;
     });
 
-    const userSelect = "id,auth_user_id,name,callsign,position,avatar_url";
+    const userSelect = "id,auth_user_id,name,callsign,position,avatar_url,profile_name_color";
+    const userSelectFallback = "id,auth_user_id,name,callsign,position,avatar_url";
     let usersRows: Array<Record<string, unknown>> | null = null;
 
     const loadAllUsers = async () => {
       const usersQ = await supabase.from("app_users").select(userSelect);
       if (usersQ.error && isMissingColumn(usersQ.error.message || "", "avatar_url")) {
         const fallbackUsersQ = await supabase.from("app_users").select("id,auth_user_id,name,callsign,position");
+        if (fallbackUsersQ.error || !Array.isArray(fallbackUsersQ.data)) return null;
+        return fallbackUsersQ.data as Array<Record<string, unknown>>;
+      }
+      if (usersQ.error && isMissingColumn(usersQ.error.message || "", "profile_name_color")) {
+        const fallbackUsersQ = await supabase.from("app_users").select(userSelectFallback);
         if (fallbackUsersQ.error || !Array.isArray(fallbackUsersQ.data)) return null;
         return fallbackUsersQ.data as Array<Record<string, unknown>>;
       }
@@ -259,8 +266,14 @@ export async function GET(request: Request) {
       return Response.json({ ok: true, rows: mapped });
     }
 
-    const usersMap = new Map<string, { name: string; callsign: string; position: string; avatarUrl: string | null }>();
-    const usersByLabel = new Map<string, { name: string; callsign: string; position: string; avatarUrl: string | null }>();
+    const usersMap = new Map<
+      string,
+      { name: string; callsign: string; position: string; avatarUrl: string | null; nameColor: ReturnType<typeof normalizeProfileNameColor> }
+    >();
+    const usersByLabel = new Map<
+      string,
+      { name: string; callsign: string; position: string; avatarUrl: string | null; nameColor: ReturnType<typeof normalizeProfileNameColor> }
+    >();
     for (const user of usersRows) {
       const id = typeof user.id === "string" ? user.id : "";
       const authUserId = typeof user.auth_user_id === "string" ? user.auth_user_id : "";
@@ -269,6 +282,7 @@ export async function GET(request: Request) {
         callsign: typeof user.callsign === "string" ? user.callsign.trim() : "",
         position: typeof user.position === "string" ? user.position.trim() : "",
         avatarUrl: normalizeAvatarStoragePath(typeof user.avatar_url === "string" ? user.avatar_url : null),
+        nameColor: normalizeProfileNameColor(user.profile_name_color),
       };
       const label = [person.name, person.callsign].filter(Boolean).join(" ").trim().toLowerCase();
       if (label) usersByLabel.set(label, person);
@@ -313,7 +327,7 @@ export async function GET(request: Request) {
       const nextAvatar = user.avatarUrl || existingAvatar;
 
       if (!fullReplace && hasStoredAuthorPosition(item)) {
-        if (!user.avatarUrl) return item;
+        if (!user.avatarUrl && !user.nameColor) return item;
         return {
           ...item,
           author_profile: {
@@ -323,7 +337,8 @@ export async function GET(request: Request) {
               callsign: item.author_callsign || "",
               position: item.author_position || null,
             }),
-            avatar_url: user.avatarUrl,
+            avatar_url: user.avatarUrl || existingAvatar,
+            nameColor: user.nameColor,
           },
         };
       }
@@ -337,13 +352,14 @@ export async function GET(request: Request) {
         author_name: user.name || item.author_name || null,
         author_callsign: user.callsign || item.author_callsign || null,
         author_position: nextPosition,
-        author_profile: {
-          id: candidateId || "",
-          name: user.name || item.author_name || "",
-          callsign: user.callsign || item.author_callsign || "",
-          position: nextPosition,
-          avatar_url: nextAvatar,
-        },
+            author_profile: {
+              id: candidateId || "",
+              name: user.name || item.author_name || "",
+              callsign: user.callsign || item.author_callsign || "",
+              position: nextPosition,
+              avatar_url: nextAvatar,
+              nameColor: user.nameColor,
+            },
       };
     });
 

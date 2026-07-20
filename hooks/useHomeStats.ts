@@ -1,6 +1,14 @@
 "use client";
 
 import { useEffect, useSyncExternalStore } from "react";
+import type { ProfileNameColorId } from "@/lib/profile-name-color";
+
+export type HomeStatsEventPerson = {
+  name: string;
+  callsign: string;
+  nameColor?: ProfileNameColorId | null;
+  tail?: string;
+};
 
 export type HomeStatsEvent = {
   id?: string;
@@ -8,11 +16,12 @@ export type HomeStatsEvent = {
   title?: string;
   description?: string;
   created_at?: string | null;
+  person?: HomeStatsEventPerson | null;
 };
 
 export type HomeStatsUsersSummary = {
   totalUsers: number;
-  onlineUsers: Array<{ id: string; name: string; callsign: string }>;
+  onlineUsers: Array<{ id: string; name: string; callsign: string; nameColor?: ProfileNameColorId | null }>;
 };
 
 export type HomeStatsSiteAnalytics = {

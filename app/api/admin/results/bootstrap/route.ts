@@ -1,6 +1,7 @@
 import { effectiveFinalCountingFromUtc, nextAutoResetUtcIso } from "@/lib/final-effective-counting";
 import { FINAL_TEST_MAX_ATTEMPTS } from "@/lib/final-test-constants";
 import { canManageResults, canResetTestResults } from "@/lib/permissions";
+import { normalizeProfileNameColor, type ProfileNameColorId } from "@/lib/profile-name-color";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 import { normalizeUnitAssignment } from "@/lib/unit-assignment";
@@ -25,6 +26,7 @@ type AppUserListRow = {
   unit_assignment?: string | null;
   rota_platoon?: number | null;
   rota_section?: number | null;
+  profile_name_color?: string | null;
 };
 
 function parseDateParam(raw: string | null): Date | null {
@@ -112,7 +114,7 @@ export async function GET(req: Request) {
     const [usersPrimary, resultsPrimary] = await Promise.all([
       supabase
         .from("app_users")
-        .select("id,name,callsign,position,role,status,final_test_counting_from,unit_assignment,rota_platoon,rota_section")
+        .select("id,name,callsign,position,role,status,final_test_counting_from,unit_assignment,rota_platoon,rota_section,profile_name_color")
         .limit(1000),
       supabase
         .from("test_results")
@@ -248,6 +250,7 @@ export async function GET(req: Request) {
           userId: user.id,
           name: user.name,
           callsign: user.callsign,
+          nameColor: normalizeProfileNameColor(user.profile_name_color),
           position: String(user.position ?? ""),
           unitAssignment: unitFromDb ? normalizeUnitAssignment(user.unit_assignment) : null,
           rotaPlatoon: rotaFromDb && user.rota_platoon != null ? Number(user.rota_platoon) : null,
@@ -306,12 +309,24 @@ export async function GET(req: Request) {
       }
     }
 
-    const userById = new Map(
+    const userById = new Map<
+      string,
+      {
+        name: string;
+        callsign: string;
+        nameColor: ProfileNameColorId | null;
+        position: string;
+        unitAssignment: UnitAssignment | null;
+        rotaPlatoon: number | null;
+        rotaSection: number | null;
+      }
+    >(
       users.map((u) => [
         u.id,
         {
           name: u.name,
           callsign: u.callsign,
+          nameColor: normalizeProfileNameColor(u.profile_name_color),
           position: String(u.position ?? ""),
           unitAssignment: unitFromDb ? normalizeUnitAssignment(u.unit_assignment) : null,
           rotaPlatoon: rotaFromDb && u.rota_platoon != null ? Number(u.rota_platoon) : null,
@@ -332,6 +347,7 @@ export async function GET(req: Request) {
           userId: row.user_id,
           name: user?.name ?? "—",
           callsign: user?.callsign ?? "",
+          nameColor: user?.nameColor ?? null,
           position: user?.position ?? "",
           unitAssignment: (user?.unitAssignment ?? null) as UnitAssignment | null,
           rotaPlatoon: user?.rotaPlatoon ?? null,
@@ -363,18 +379,18 @@ export async function GET(req: Request) {
     const failedSummaries = summaries.filter((s) => s.status === "failed");
     const notStartedSummaries = summaries.filter((s) => s.status === "not_started");
 
-    const lastPassed = passedSummaries.reduce<{ name: string; callsign: string; at: string } | null>((best, s) => {
+    const lastPassed = passedSummaries.reduce<{ name: string; callsign: string; nameColor: ProfileNameColorId | null; at: string } | null>((best, s) => {
       if (!s.latestFinalAt) return best;
       if (!best || new Date(s.latestFinalAt) > new Date(best.at)) {
-        return { name: s.name, callsign: s.callsign, at: s.latestFinalAt };
+        return { name: s.name, callsign: s.callsign, nameColor: s.nameColor ?? null, at: s.latestFinalAt };
       }
       return best;
     }, null);
 
-    const lastFailed = failedSummaries.reduce<{ name: string; callsign: string; at: string } | null>((best, s) => {
+    const lastFailed = failedSummaries.reduce<{ name: string; callsign: string; nameColor: ProfileNameColorId | null; at: string } | null>((best, s) => {
       if (!s.latestFinalAt) return best;
       if (!best || new Date(s.latestFinalAt) > new Date(best.at)) {
-        return { name: s.name, callsign: s.callsign, at: s.latestFinalAt };
+        return { name: s.name, callsign: s.callsign, nameColor: s.nameColor ?? null, at: s.latestFinalAt };
       }
       return best;
     }, null);
@@ -452,16 +468,16 @@ export async function GET(req: Request) {
       trialAttemptsCount: trialCountRes.count ?? 0,
       lastTrial:
         trialRow?.created_at && trialUser
-          ? { name: trialUser.name, callsign: trialUser.callsign, at: String(trialRow.created_at) }
+          ? { name: trialUser.name, callsign: trialUser.callsign, nameColor: trialUser.nameColor, at: String(trialRow.created_at) }
           : trialRow?.created_at
-            ? { name: "—", callsign: "", at: String(trialRow.created_at) }
+            ? { name: "—", callsign: "", nameColor: null, at: String(trialRow.created_at) }
             : null,
       finalAttemptsCount: finalCountRes.count ?? 0,
       lastFinal:
         finalRow?.created_at && finalUser
-          ? { name: finalUser.name, callsign: finalUser.callsign, at: String(finalRow.created_at) }
+          ? { name: finalUser.name, callsign: finalUser.callsign, nameColor: finalUser.nameColor, at: String(finalRow.created_at) }
           : finalRow?.created_at
-            ? { name: "—", callsign: "", at: String(finalRow.created_at) }
+            ? { name: "—", callsign: "", nameColor: null, at: String(finalRow.created_at) }
             : null,
     };
 

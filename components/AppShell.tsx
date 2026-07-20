@@ -17,6 +17,7 @@ import {
   canViewUserList,
 } from "@/lib/permissions";
 import { PersonnelNotificationsBell } from "@/components/personnel/PersonnelNotificationsBell";
+import { UserIdentityText } from "@/components/profile/UserIdentityText";
 import { canAccessGameSection } from "@/lib/game-feature";
 import { HomeStatsBar } from "@/components/HomeStatsBar";
 import { SiteFooterStats } from "@/components/SiteFooterStats";
@@ -464,7 +465,9 @@ export function AppShell({ session, children }: AppShellProps) {
             </Link>
             <div>
               <h1>ПВО</h1>
-              <p>{session.callsign}</p>
+              <p>
+                <UserIdentityText callsign={session.callsign} nameColor={session.nameColor ?? null} emptyName="—" />
+              </p>
             </div>
           </div>
           <div className="header-actions">

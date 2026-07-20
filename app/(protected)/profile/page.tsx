@@ -11,7 +11,7 @@ import { UserAvatar } from "@/components/profile/UserAvatar";
 import { ProfileEmploymentDateField } from "@/components/profile/ProfileEmploymentDateField";
 import { ProfilePersonnelMetaFields } from "@/components/profile/ProfilePersonnelMetaFields";
 import { ProfileRotaUnitFields } from "@/components/profile/ProfileRotaUnitFields";
-import { ProfileNameColorText } from "@/components/profile/ProfileNameColorText";
+import { UserIdentityText } from "@/components/profile/UserIdentityText";
 import { readClientSession } from "@/lib/client-auth";
 import type { ProfileNameColorId } from "@/lib/profile-name-color";
 import { formatDate, formatDateTime, formatTotalTestDuration } from "@/lib/format";
@@ -974,9 +974,11 @@ export default function ProfilePage() {
                   <p className="profile-hero-kicker">Пользовательский профиль</p>
                   <div className="profile-hero-name-row">
                     <p className="profile-hero-name">
-                      <ProfileNameColorText color={displayNameColor ?? session.nameColor ?? null}>
-                        {session.name || "—"}
-                      </ProfileNameColorText>
+                      <UserIdentityText
+                        name={session.name}
+                        nameColor={displayNameColor ?? session.nameColor ?? null}
+                        emptyName="—"
+                      />
                     </p>
                     <button
                       type="button"
@@ -994,7 +996,13 @@ export default function ProfilePage() {
                   </div>
                   <p className="profile-hero-callsign">
                     Позывной:{" "}
-                    <strong>{(session.callsign || "").trim() || "—"}</strong>
+                    <strong>
+                      <UserIdentityText
+                        callsign={session.callsign}
+                        nameColor={displayNameColor ?? session.nameColor ?? null}
+                        emptyName="—"
+                      />
+                    </strong>
                   </p>
                   {canExportExcel && session?.id ? <ProfileExportExcelButton userId={session.id} /> : null}
                 </div>

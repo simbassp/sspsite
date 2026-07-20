@@ -87,6 +87,7 @@ export interface NewsItem {
     callsign?: string | null;
     position?: Position | null;
     avatarUrl?: string | null;
+    nameColor?: ProfileNameColorId | null;
   };
   authorProfile?: {
     id?: string | null;
@@ -94,6 +95,7 @@ export interface NewsItem {
     callsign?: string | null;
     position?: Position | null;
     avatarUrl?: string | null;
+    nameColor?: ProfileNameColorId | null;
   } | null;
   textStyle?: NewsTextStyle;
 }

@@ -10,7 +10,7 @@ import { ProfileNameEditModal } from "@/components/profile/ProfileNameEditModal"
 import { ProfileEmploymentDateField } from "@/components/profile/ProfileEmploymentDateField";
 import { ProfilePersonnelMetaFields } from "@/components/profile/ProfilePersonnelMetaFields";
 import { ProfileRotaUnitFields } from "@/components/profile/ProfileRotaUnitFields";
-import { ProfileNameColorText } from "@/components/profile/ProfileNameColorText";
+import { UserIdentityText } from "@/components/profile/UserIdentityText";
 import { readClientSession } from "@/lib/client-auth";
 import type { ProfileNameColorId } from "@/lib/profile-name-color";
 import { formatDate, formatDateTime, formatTotalTestDuration } from "@/lib/format";
@@ -758,9 +758,11 @@ export default function ProfileUserInspectPage() {
                       <p className="profile-hero-kicker">Пользовательский профиль</p>
                       <div className="profile-hero-name-row">
                         <p className="profile-hero-name">
-                          <ProfileNameColorText color={inspectUser.nameColor ?? null}>
-                            {inspectUser.name || "—"}
-                          </ProfileNameColorText>
+                          <UserIdentityText
+                            name={inspectUser.name}
+                            nameColor={inspectUser.nameColor ?? null}
+                            emptyName="—"
+                          />
                         </p>
                         {canEditProfileFields && (
                           <button
@@ -779,7 +781,14 @@ export default function ProfileUserInspectPage() {
                         )}
                       </div>
                       <p className="profile-hero-callsign">
-                        Позывной: <strong>{inspectUser.callsign.trim() || "—"}</strong>
+                        Позывной:{" "}
+                        <strong>
+                          <UserIdentityText
+                            callsign={inspectUser.callsign}
+                            nameColor={inspectUser.nameColor ?? null}
+                            emptyName="—"
+                          />
+                        </strong>
                       </p>
                       {canExportExcel ? <ProfileExportExcelButton userId={inspectUser.id} /> : null}
                     </div>

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
+import { UserIdentityText } from "@/components/profile/UserIdentityText";
 import { useHomeStats, type HomeStatsEvent } from "@/hooks/useHomeStats";
 
 type HomePayload = {
@@ -23,6 +24,7 @@ type HomeEvent = {
   type: "user_added" | "user_removed" | "position_changed" | "commander_assigned";
   title: string;
   description: string;
+  person?: HomeStatsEvent["person"];
   createdAt: string | null;
 };
 
@@ -36,9 +38,24 @@ function parsePayload(raw: unknown): HomeEvent[] | null {
       type: item.type || "user_added",
       title: String(item.title || ""),
       description: String(item.description || ""),
+      person: item.person ?? null,
       createdAt: item.created_at ? String(item.created_at) : null,
     }))
     .filter((item) => item.title.length > 0);
+}
+
+function HomeEventDescription({ item }: { item: HomeEvent }) {
+  if (!item.person?.name && !item.person?.callsign) {
+    return <>{item.description}</>;
+  }
+  return (
+    <UserIdentityText
+      name={item.person.name}
+      callsign={item.person.callsign}
+      nameColor={item.person.nameColor ?? null}
+      emptyName={item.description}
+    />
+  );
 }
 
 function formatDayLabel(dateValue: string | null) {
@@ -230,7 +247,16 @@ export default function DashboardPage() {
                     <span className={`home-event-icon is-${item.type}`}>{iconByType(item.type)}</span>
                     <span className="home-event-main">
                       <span className="home-event-title">{item.title}</span>
-                      <span className="home-event-desc">{item.description}</span>
+                      <span className="home-event-desc">
+                        {item.person?.tail ? (
+                          <>
+                            <HomeEventDescription item={item} />
+                            {item.person.tail}
+                          </>
+                        ) : (
+                          <HomeEventDescription item={item} />
+                        )}
+                      </span>
                     </span>
                     {item.type === "commander_assigned" ? (
                       <span className="home-event-time" />
