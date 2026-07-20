@@ -449,131 +449,137 @@ export default function PersonnelListPage() {
         <>
           <article className="card">
             <div className="card-body personnel-filters">
-              <div>
-                <p className="label">Взвод</p>
-                <select className="select" value={platoon} onChange={(e) => setPlatoon(e.target.value as typeof platoon)}>
-                  <option value="all">Все</option>
-                  <option value="1">1 взвод</option>
-                  <option value="2">2 взвод</option>
-                </select>
-              </div>
-              <div>
-                <p className="label">Отделение</p>
-                <select className="select" value={section} onChange={(e) => setSection(e.target.value as typeof section)}>
-                  <option value="all">Все</option>
-                  <option value="1">1</option>
-                  <option value="2">2</option>
-                  <option value="3">3</option>
-                  <option value="4">4</option>
-                </select>
-              </div>
-              <div>
-                <p className="label">Модуль</p>
-                <select className="select" value={module} onChange={(e) => setModule(e.target.value)}>
-                  <option value="all">Все</option>
-                  {ROTA_MODULE_OPTIONS.map((value) => (
-                    <option key={value} value={String(value)}>
-                      {value}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="personnel-filters__wide personnel-filters__search-stack">
-                <div>
-                  <p className="label">Поиск</p>
-                  <input
-                    className="input"
-                    placeholder="Имя или позывной"
-                    value={searchInput}
-                    onChange={(e) => setSearchInput(e.target.value)}
-                  />
+              <div className="personnel-filters__row personnel-filters__row--primary">
+                <div className="personnel-filters__field">
+                  <p className="label">Взвод</p>
+                  <select className="select" value={platoon} onChange={(e) => setPlatoon(e.target.value as typeof platoon)}>
+                    <option value="all">Все</option>
+                    <option value="1">1 взвод</option>
+                    <option value="2">2 взвод</option>
+                  </select>
                 </div>
-                <div>
-                  <p className="label">Дата тестов</p>
-                  <input
-                    className="input"
-                    type="date"
-                    value={testDateFilter}
-                    onChange={(e) => setTestDateFilter(e.target.value)}
-                  />
+                <div className="personnel-filters__field">
+                  <p className="label">Отделение</p>
+                  <select className="select" value={section} onChange={(e) => setSection(e.target.value as typeof section)}>
+                    <option value="all">Все</option>
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                  </select>
+                </div>
+                <div className="personnel-filters__field">
+                  <p className="label">Модуль</p>
+                  <select className="select" value={module} onChange={(e) => setModule(e.target.value)}>
+                    <option value="all">Все</option>
+                    {ROTA_MODULE_OPTIONS.map((value) => (
+                      <option key={value} value={String(value)}>
+                        {value}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="personnel-filters__search-date">
+                  <div className="personnel-filters__field personnel-filters__field--grow">
+                    <p className="label">Поиск</p>
+                    <input
+                      className="input"
+                      placeholder="Имя или позывной"
+                      value={searchInput}
+                      onChange={(e) => setSearchInput(e.target.value)}
+                    />
+                  </div>
+                  <div className="personnel-filters__field personnel-filters__field--date">
+                    <p className="label">Дата тестов</p>
+                    <input
+                      className="input"
+                      type="date"
+                      value={testDateFilter}
+                      onChange={(e) => setTestDateFilter(e.target.value)}
+                    />
+                  </div>
                 </div>
               </div>
-              <div>
-                <p className="label">Зачёт</p>
-                <select
-                  className="select"
-                  value={rosterFilters.examType}
-                  onChange={(e) => {
-                    const nextType = e.target.value as RosterFilters["examType"];
-                    setRosterFilters((prev) => ({
-                      ...prev,
-                      examType: nextType,
-                      examStatus: nextType === "all" ? "all" : prev.examStatus,
-                    }));
-                  }}
-                >
-                  <option value="all">Все</option>
-                  {PERSONNEL_EXAM_TYPES.map((type) => (
-                    <option key={type} value={type}>
-                      {personnelExamLabel[type]}
-                    </option>
-                  ))}
-                </select>
+
+              <div className="personnel-filters__row personnel-filters__row--secondary">
+                <div className="personnel-filters__field">
+                  <p className="label">Зачёт</p>
+                  <select
+                    className="select"
+                    value={rosterFilters.examType}
+                    onChange={(e) => {
+                      const nextType = e.target.value as RosterFilters["examType"];
+                      setRosterFilters((prev) => ({
+                        ...prev,
+                        examType: nextType,
+                        examStatus: nextType === "all" ? "all" : prev.examStatus,
+                      }));
+                    }}
+                  >
+                    <option value="all">Все</option>
+                    {PERSONNEL_EXAM_TYPES.map((type) => (
+                      <option key={type} value={type}>
+                        {personnelExamLabel[type]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="personnel-filters__field">
+                  <p className="label">Результат зачёта</p>
+                  <select
+                    className="select"
+                    value={rosterFilters.examStatus}
+                    onChange={(e) => setRosterFilter("examStatus", e.target.value as ExamFilterStatus)}
+                    disabled={rosterFilters.examType === "all"}
+                  >
+                    <option value="all">Все</option>
+                    <option value="passed">Сдан</option>
+                    <option value="failed">Не сдан</option>
+                  </select>
+                </div>
+                <div className="personnel-filters__field">
+                  <p className="label">Права</p>
+                  <select
+                    className="select"
+                    value={rosterFilters.license}
+                    onChange={(e) => setRosterFilter("license", e.target.value as RosterFilters["license"])}
+                  >
+                    <option value="all">Все</option>
+                    {PERSONNEL_LICENSE_CATEGORIES.map((category) => (
+                      <option key={category} value={category}>
+                        Категория {category}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="personnel-filters__field">
+                  <p className="label">Сбития</p>
+                  <select
+                    className="select"
+                    value={rosterFilters.hits}
+                    onChange={(e) => setRosterFilter("hits", e.target.value as TriState)}
+                  >
+                    <option value="all">Все</option>
+                    <option value="yes">Есть</option>
+                    <option value="no">Нет</option>
+                  </select>
+                </div>
+                <div className="personnel-filters__field">
+                  <p className="label">Премии</p>
+                  <select
+                    className="select"
+                    value={rosterFilters.premiums}
+                    onChange={(e) => setRosterFilter("premiums", e.target.value as TriState)}
+                  >
+                    <option value="all">Все</option>
+                    <option value="yes">Есть</option>
+                    <option value="no">Нет</option>
+                  </select>
+                </div>
               </div>
-              <div>
-                <p className="label">Результат зачёта</p>
-                <select
-                  className="select"
-                  value={rosterFilters.examStatus}
-                  onChange={(e) => setRosterFilter("examStatus", e.target.value as ExamFilterStatus)}
-                  disabled={rosterFilters.examType === "all"}
-                >
-                  <option value="all">Все</option>
-                  <option value="passed">Сдан</option>
-                  <option value="failed">Не сдан</option>
-                </select>
-              </div>
-              <div>
-                <p className="label">Права</p>
-                <select
-                  className="select"
-                  value={rosterFilters.license}
-                  onChange={(e) => setRosterFilter("license", e.target.value as RosterFilters["license"])}
-                >
-                  <option value="all">Все</option>
-                  {PERSONNEL_LICENSE_CATEGORIES.map((category) => (
-                    <option key={category} value={category}>
-                      Категория {category}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <p className="label">Сбития</p>
-                <select
-                  className="select"
-                  value={rosterFilters.hits}
-                  onChange={(e) => setRosterFilter("hits", e.target.value as TriState)}
-                >
-                  <option value="all">Все</option>
-                  <option value="yes">Есть</option>
-                  <option value="no">Нет</option>
-                </select>
-              </div>
-              <div>
-                <p className="label">Премии</p>
-                <select
-                  className="select"
-                  value={rosterFilters.premiums}
-                  onChange={(e) => setRosterFilter("premiums", e.target.value as TriState)}
-                >
-                  <option value="all">Все</option>
-                  <option value="yes">Есть</option>
-                  <option value="no">Нет</option>
-                </select>
-              </div>
-              <div className="personnel-filters__row">
-                <div>
+
+              <div className="personnel-filters__row personnel-filters__row--tests">
+                <div className="personnel-filters__field">
                   <p className="label">Пробный тест</p>
                   <select
                     className="select"
@@ -585,7 +591,7 @@ export default function PersonnelListPage() {
                     <option value="failed">Не сдал</option>
                   </select>
                 </div>
-                <div>
+                <div className="personnel-filters__field">
                   <p className="label">Итоговый тест</p>
                   <select
                     className="select"
@@ -597,7 +603,7 @@ export default function PersonnelListPage() {
                     <option value="failed">Не сдал</option>
                   </select>
                 </div>
-                <div>
+                <div className="personnel-filters__field">
                   <p className="label">Статус</p>
                   <select
                     className="select"
