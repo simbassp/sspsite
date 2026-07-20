@@ -1,20 +1,14 @@
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 import { readSiteSettingNumber } from "@/lib/site-analytics";
-import { ONLINE_LAST_SEEN_MAX_MS } from "@/lib/presence-constants";
+import { effectiveOnlineStrict, onlineStaleBeforeIso } from "@/lib/presence-online";
 import { normalizeProfileNameColor, type ProfileNameColorId } from "@/lib/profile-name-color";
 import { IDENTITY_COSMETIC_USER_COLUMNS, mapIdentityCosmeticsFromRow, type UserIdentityCosmetics } from "@/lib/user-identity-cosmetics";
 import { UNIT_COMMANDERS, unitAssignmentLabel } from "@/lib/unit-assignment";
 
 export const runtime = "nodejs";
 
-function effectiveOnlineStrict(isOnline: unknown, lastSeenAt: unknown): boolean {
-  if (isOnline !== true) return false;
-  if (lastSeenAt == null || typeof lastSeenAt !== "string") return false;
-  const t = Date.parse(lastSeenAt);
-  if (!Number.isFinite(t)) return false;
-  return Date.now() - t <= ONLINE_LAST_SEEN_MAX_MS;
-}
+const ONLINE_USER_CORE_COLUMNS = "id,name,callsign,is_online,last_seen_at,status,profile_name_color";
 
 function isMissingColumnError(message: string | undefined) {
   const m = (message || "").toLowerCase();
@@ -119,16 +113,20 @@ export async function GET() {
     } | null = null;
     let siteAnalytics: { totalVisits: number; totalActiveSeconds: number } | null = null;
 
-    const onlineStrictQ = supabase
-      .from("app_users")
-      .select(`id,name,callsign,is_online,last_seen_at,status,${IDENTITY_COSMETIC_USER_COLUMNS}`)
-      .eq("status", "active");
+    const onlineStrictQ = supabase.from("app_users").select(ONLINE_USER_CORE_COLUMNS).eq("status", "active");
     const analyticsQ = supabase
       .from("site_settings")
       .select("key,value")
       .in("key", ["site_total_visits", "site_total_active_seconds"]);
 
     const [onlineStrictRes, analyticsRes] = await Promise.all([onlineStrictQ, analyticsQ]);
+
+    void supabase
+      .from("app_users")
+      .update({ is_online: false })
+      .eq("is_online", true)
+      .or(`last_seen_at.is.null,last_seen_at.lt.${onlineStaleBeforeIso()}`)
+      .then(() => undefined);
 
     if (onlineStrictRes.error && isMissingColumnError(onlineStrictRes.error.message)) {
       const fallbackQ = await supabase.from("app_users").select("id,name,callsign,is_online,status");
@@ -149,11 +147,32 @@ export async function GET() {
       const onlineRows = rows
         .filter((row) => effectiveOnlineStrict(row.is_online, row.last_seen_at))
         .sort((a, b) => toSafeString(a.name).localeCompare(toSafeString(b.name), "ru"));
+
+      const cosmeticsById = new Map<string, UserIdentityCosmetics>();
+      if (onlineRows.length) {
+        const cosmeticsRes = await supabase
+          .from("app_users")
+          .select(`id,${IDENTITY_COSMETIC_USER_COLUMNS}`)
+          .in(
+            "id",
+            onlineRows.map((row) => String(row.id || "")).filter(Boolean),
+          );
+        if (!cosmeticsRes.error) {
+          for (const row of cosmeticsRes.data ?? []) {
+            const record = row as Record<string, unknown>;
+            const id = String(record.id || "");
+            if (id) cosmeticsById.set(id, cosmeticsFromRow(record));
+          }
+        }
+      }
+
       usersSummary = {
         totalUsers: rows.length,
         onlineUsers: onlineRows.map((row) => {
           const record = row as Record<string, unknown>;
-          return mapOnlineUser(record, cosmeticsFromRow(record));
+          const id = String(record.id || "");
+          const cosmetics = cosmeticsById.get(id) ?? cosmeticsFromRow(record);
+          return mapOnlineUser(record, cosmetics);
         }),
       };
     }
