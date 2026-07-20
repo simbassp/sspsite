@@ -12,7 +12,6 @@ import { ProfilePersonnelMetaFields } from "@/components/profile/ProfilePersonne
 import { ProfileRotaUnitFields } from "@/components/profile/ProfileRotaUnitFields";
 import { UserIdentityDisplay } from "@/components/profile/UserIdentityDisplay";
 import { UserAvatar } from "@/components/profile/UserAvatar";
-import { AdminAvatarCrown } from "@/components/profile/AdminAvatarCrown";
 import { AchievementMedalsRow } from "@/components/achievements/AchievementMedalsRow";
 import { readClientSession } from "@/lib/client-auth";
 import type { ProfileNameColorId } from "@/lib/profile-name-color";
@@ -752,17 +751,15 @@ export default function ProfileUserInspectPage() {
                 <div className="profile-hero-sidebar">
                   <div className="profile-hero-identity">
                     <div className="profile-hero-avatar">
-                      <AdminAvatarCrown active={inspectUser.role === "admin"}>
-                        <UserAvatar
-                          name={inspectUser.name}
-                          callsign={inspectUser.callsign}
-                          avatarUrl={inspectUser.avatarUrl ?? null}
-                          size={64}
-                          avatarFrame={inspectUser.cosmetics?.avatarFrame ?? null}
-                          topRankBadge={inspectUser.cosmetics?.topRankBadge ?? null}
-                          title={`${inspectUser.name || ""} ${inspectUser.callsign || ""}`.trim()}
-                        />
-                      </AdminAvatarCrown>
+                      <UserAvatar
+                        name={inspectUser.name}
+                        callsign={inspectUser.callsign}
+                        avatarUrl={inspectUser.avatarUrl ?? null}
+                        size={64}
+                        avatarFrame={inspectUser.cosmetics?.avatarFrame ?? null}
+                        topRankBadge={inspectUser.cosmetics?.topRankBadge ?? null}
+                        title={`${inspectUser.name || ""} ${inspectUser.callsign || ""}`.trim()}
+                      />
                     </div>
                     <div className="profile-hero-identity-text">
                       <p className="profile-hero-kicker">Пользовательский профиль</p>
