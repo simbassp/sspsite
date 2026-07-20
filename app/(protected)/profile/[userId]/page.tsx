@@ -806,8 +806,8 @@ export default function ProfileUserInspectPage() {
                       {canExportExcel ? <ProfileExportExcelButton userId={inspectUser.id} /> : null}
                     </div>
                   </div>
-                  {inspectUser.unlockedAchievementIds?.length ? (
-                    <AchievementMedalsRow unlockedIds={inspectUser.unlockedAchievementIds} />
+                  {inspectUser ? (
+                    <AchievementMedalsRow unlockedIds={inspectUser.unlockedAchievementIds ?? []} />
                   ) : null}
                   <div className="profile-hero-status-block">
                     <div className="profile-hero-status-inline">

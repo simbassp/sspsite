@@ -18,3 +18,16 @@ export function employmentDaysSince(employmentDate: string | null | undefined): 
   const now = new Date();
   return Math.max(1, Math.round((now.getTime() - start.getTime()) / 86400000));
 }
+
+/** Полные календарные месяцы с даты трудоустройства (день в день). */
+export function employmentCalendarMonthsSince(employmentDate: string | null | undefined): number | null {
+  if (!employmentDate?.trim()) return null;
+  const start = new Date(`${employmentDate.trim()}T12:00:00`);
+  const now = new Date();
+  now.setHours(12, 0, 0, 0);
+  if (now.getTime() < start.getTime()) return 0;
+
+  let months = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth());
+  if (now.getDate() < start.getDate()) months -= 1;
+  return Math.max(0, months);
+}

@@ -3,24 +3,19 @@ import {
   getAchievementDefinition,
   normalizeFinalNameColor,
   normalizeTrialAvatarFrame,
+  TENURE_ACHIEVEMENTS,
   type AchievementProgress,
   type FinalNameColorId,
   type TopRankBadgeId,
   type TrialAvatarFrameId,
 } from "@/lib/achievements-catalog";
 import { loadTopRankBadgeMap } from "@/lib/user-identity-cosmetics-server";
-import { employmentDaysSince } from "@/lib/employment-date";
+import { employmentCalendarMonthsSince } from "@/lib/employment-date";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 
 function isMissingColumnError(message: string | undefined) {
   const m = (message || "").toLowerCase();
   return m.includes("column") && m.includes("does not exist");
-}
-
-function employmentMonthsSince(employmentDate: string | null | undefined): number | null {
-  const days = employmentDaysSince(employmentDate);
-  if (days == null) return null;
-  return Math.floor(days / 30);
 }
 
 async function countPassedTests(userId: string, type: "trial" | "final") {
@@ -75,7 +70,7 @@ export async function loadUserAchievementProgress(userId: string, employmentDate
     countPassedTests(userId, "final"),
   ]);
   const progress: AchievementProgress = {
-    employmentMonths: employmentMonthsSince(employmentDate),
+    employmentMonths: employmentCalendarMonthsSince(employmentDate),
     trialPassed,
     finalPassed,
   };
@@ -95,6 +90,15 @@ export async function syncUserAchievements(userId: string, employmentDate: strin
   const existingSet = new Set(existingRows.map((row) => String(row.achievement_id)));
 
   const newlyUnlocked = unlockedIds.filter((id) => !existingSet.has(id));
+  const tenureIds = new Set(TENURE_ACHIEVEMENTS.map((item) => item.id));
+  const revokedTenureIds = existingRows
+    .filter((row) => tenureIds.has(String(row.achievement_id)) && !unlockedIds.includes(String(row.achievement_id)))
+    .map((row) => String(row.id));
+
+  if (revokedTenureIds.length) {
+    await supabase.from("user_achievements").delete().in("id", revokedTenureIds);
+  }
+
   if (newlyUnlocked.length) {
     await supabase.from("user_achievements").insert(
       newlyUnlocked.map((achievementId) => ({
@@ -137,7 +141,10 @@ export async function loadUserAchievementsState(
   } else {
     const storedIdsQ = await supabase.from("user_achievements").select("achievement_id").eq("user_id", userId);
     if (!storedIdsQ.error && storedIdsQ.data?.length) {
-      unlockedIds = storedIdsQ.data.map((row) => String(row.achievement_id));
+      const storedIds = storedIdsQ.data.map((row) => String(row.achievement_id));
+      const computedSet = new Set(unlockedIds);
+      unlockedIds = storedIds.filter((id) => computedSet.has(id));
+      if (!unlockedIds.length) unlockedIds = computeUnlockedAchievementIds(progress);
     }
   }
 
@@ -251,7 +258,8 @@ export async function syncUserAchievementsByUserId(userId: string) {
 
 export async function loadUserUnlockedAchievementIds(userId: string): Promise<string[]> {
   const supabase = getServerSupabaseServiceClient();
-  const storedQ = await supabase.from("user_achievements").select("achievement_id").eq("user_id", userId);
-  if (storedQ.error) return [];
-  return (storedQ.data ?? []).map((row) => String(row.achievement_id));
+  const userQ = await supabase.from("app_users").select("employment_date").eq("id", userId).maybeSingle();
+  const employmentDate = userQ.data?.employment_date ? String(userQ.data.employment_date).slice(0, 10) : null;
+  const progress = await loadUserAchievementProgress(userId, employmentDate);
+  return computeUnlockedAchievementIds(progress);
 }

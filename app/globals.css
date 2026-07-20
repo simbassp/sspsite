@@ -6339,6 +6339,17 @@ html[data-theme="dark"] .final-review-answer--correct {
   background: color-mix(in srgb, var(--muted) 8%, transparent);
 }
 
+.achievement-medals-row__item.is-locked {
+  opacity: 0.42;
+  filter: saturate(0.45);
+}
+
+.achievement-medals-row__item.is-locked.is-active,
+.achievement-medals-row__item.is-locked:hover {
+  opacity: 0.72;
+  filter: saturate(0.7);
+}
+
 .achievement-medals-row__tip {
   position: absolute;
   left: 0;
@@ -6357,7 +6368,8 @@ html[data-theme="dark"] .final-review-answer--correct {
 }
 
 .achievement-medals-row__item.is-active .achievement-medals-row__tip,
-.achievement-medals-row__item:hover .achievement-medals-row__tip {
+.achievement-medals-row__item:hover .achievement-medals-row__tip,
+.achievement-medals-row__item.is-locked.is-active .achievement-medals-row__tip {
   display: grid;
 }
 
@@ -6425,7 +6437,7 @@ html[data-theme="dark"] .final-review-answer--correct {
 
 .profile-cosmetics-option.is-locked {
   opacity: 0.42;
-  cursor: not-allowed;
+  cursor: pointer;
   filter: saturate(0.45);
 }
 
@@ -6449,6 +6461,22 @@ html[data-theme="dark"] .final-review-answer--correct {
   line-height: 1.2;
   color: var(--muted);
   text-align: center;
+}
+
+.profile-cosmetics-locked-tip {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--line));
+  background: color-mix(in srgb, var(--accent) 6%, var(--panel));
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.profile-cosmetics-locked-tip strong {
+  font-size: 14px;
 }
 
 .profile-cosmetics-option__sample {
