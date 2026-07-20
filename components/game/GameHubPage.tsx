@@ -1,18 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import {
-  GAME_DAILY_TOURNAMENT,
-  GAME_MODES,
-  GAME_RECENT_ACHIEVEMENTS,
-  GAME_SEASON_LEADERBOARD,
-  GAME_TRAINING_PICKS,
-  formatCountdown,
-  getDailyTournamentTargetMs,
-  type GameModeId,
-} from "@/lib/game-preview-data";
+import { GAME_MODES, GAME_RECENT_ACHIEVEMENTS, GAME_SEASON_LEADERBOARD, type GameModeId } from "@/lib/game-preview-data";
 import { gameAccuracy, loadGameStats, type GameStoredStats } from "@/lib/game-stats";
 
 function ModeIcon({ id }: { id: GameModeId }) {
@@ -23,15 +13,6 @@ function ModeIcon({ id }: { id: GameModeId }) {
           <path d="M8 3 4 7v10l4 4" />
           <path d="M16 3l4 4v10l-4 4" />
           <path d="m12 8 4 4-4 4-4-4z" />
-        </svg>
-      );
-    case "team":
-      return (
-        <svg viewBox="0 0 24 24" className="game-mode-card__icon-svg" aria-hidden>
-          <circle cx="8" cy="8" r="3" />
-          <circle cx="16" cy="8" r="3" />
-          <path d="M3 20c1.2-2.5 2.8-3.8 5-3.8S12.8 17.5 14 20" />
-          <path d="M10 20c1.2-2.5 2.8-3.8 5-3.8s3.8 1.3 5 3.8" />
         </svg>
       );
     case "blitz":
@@ -56,14 +37,7 @@ function ModeIcon({ id }: { id: GameModeId }) {
         </svg>
       );
     default:
-      return (
-        <svg viewBox="0 0 24 24" className="game-mode-card__icon-svg" aria-hidden>
-          <path d="M8 21h8" />
-          <path d="M12 17V7" />
-          <path d="M7 7h10l-1-3H8z" />
-          <path d="M17 7a5 5 0 0 1-5 5 5 5 0 0 1-5-5" />
-        </svg>
-      );
+      return null;
   }
 }
 
@@ -94,23 +68,12 @@ function AchievementIcon({ type }: { type: "fire" | "bolt" | "star" }) {
 export function GameHubPage() {
   const router = useRouter();
   const [stats, setStats] = useState<GameStoredStats | null>(null);
-  const [countdown, setCountdown] = useState("00:00:00");
 
   useEffect(() => {
     setStats(loadGameStats());
     const onFocus = () => setStats(loadGameStats());
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
-  }, []);
-
-  useEffect(() => {
-    const tick = () => {
-      const left = getDailyTournamentTargetMs() - Date.now();
-      setCountdown(formatCountdown(left));
-    };
-    tick();
-    const timer = window.setInterval(tick, 1000);
-    return () => window.clearInterval(timer);
   }, []);
 
   const xpPercent = useMemo(() => {
@@ -130,7 +93,7 @@ export function GameHubPage() {
         <div>
           <p className="game-page__kicker">Preview · только администратор</p>
           <h1 className="page-title">Полигон</h1>
-          <p className="page-subtitle">Игровой раздел по ТТХ и карточкам БПЛА. Все режимы playable в preview — статистика сохраняется локально в браузере.</p>
+          <p className="page-subtitle">Игровой раздел по вопросам из банка тестов. Статистика сохраняется локально в браузере.</p>
         </div>
         <div className="game-page__head-note card">
           <div className="card-body">
@@ -192,45 +155,6 @@ export function GameHubPage() {
                 </div>
               </article>
             ))}
-          </div>
-
-          <div className="game-page__bottom-grid">
-            <article className="card game-tournament-card">
-              <div className="card-body">
-                <div className="game-tournament-card__head">
-                  <div>
-                    <p className="label">Ежедневный турнир</p>
-                    <h3>{GAME_DAILY_TOURNAMENT.title}</h3>
-                  </div>
-                  <div className="game-tournament-card__timer" aria-live="polite">
-                    {countdown}
-                  </div>
-                </div>
-                <ul className="game-tournament-card__rewards">
-                  {GAME_DAILY_TOURNAMENT.rewards.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-                <button type="button" className="btn" onClick={() => onPlay("tournament")}>
-                  Играть турнир
-                </button>
-              </div>
-            </article>
-
-            <article className="card game-training-card">
-              <div className="card-body">
-                <p className="label">Рекомендовано для тренировки</p>
-                <h3>БПЛА на сегодня</h3>
-                <div className="game-training-card__list">
-                  {GAME_TRAINING_PICKS.map((item) => (
-                    <Link key={item.id} href="/uav" prefetch={false} className="game-training-card__item">
-                      <strong>{item.title}</strong>
-                      <span>{item.hint}</span>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            </article>
           </div>
         </div>
 

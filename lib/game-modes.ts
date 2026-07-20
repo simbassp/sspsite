@@ -1,4 +1,4 @@
-export type GameModeId = "duel" | "team" | "blitz" | "survival" | "ladder" | "tournament";
+export type GameModeId = "duel" | "blitz" | "survival" | "ladder";
 
 export type GameModeTone = "red" | "blue" | "orange" | "green" | "purple" | "amber";
 
@@ -20,7 +20,7 @@ export type GameModeConfig = {
   revealFeedbackMs: number;
   /** Симулировать соперника (дуэль / команды). */
   simulatedOpponent: boolean;
-  opponentKind: "duel" | "team" | null;
+  opponentKind: "duel" | null;
 };
 
 export const GAME_MODE_CONFIGS: GameModeConfig[] = [
@@ -38,20 +38,6 @@ export const GAME_MODE_CONFIGS: GameModeConfig[] = [
     revealFeedbackMs: 900,
     simulatedOpponent: true,
     opponentKind: "duel",
-  },
-  {
-    id: "team",
-    title: "Командный бой",
-    description: "Две команды соревнуются в общем зачёте по ТТХ и распознаванию БПЛА.",
-    tone: "blue",
-    onlineHint: "бот-команда",
-    prepareCount: 15,
-    totalTimeSec: null,
-    perQuestionSec: 12,
-    failOnWrong: false,
-    revealFeedbackMs: 900,
-    simulatedOpponent: true,
-    opponentKind: "team",
   },
   {
     id: "blitz",
@@ -90,20 +76,6 @@ export const GAME_MODE_CONFIGS: GameModeConfig[] = [
     perQuestionSec: 10,
     failOnWrong: true,
     revealFeedbackMs: 800,
-    simulatedOpponent: false,
-    opponentKind: null,
-  },
-  {
-    id: "tournament",
-    title: "Турнир",
-    description: "Каждый вечер в 20:00 — один тест для всех. Автоматический рейтинг и награды XP.",
-    tone: "amber",
-    badge: "20:00",
-    prepareCount: 15,
-    totalTimeSec: null,
-    perQuestionSec: 12,
-    failOnWrong: false,
-    revealFeedbackMs: 900,
     simulatedOpponent: false,
     opponentKind: null,
   },

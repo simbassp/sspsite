@@ -7,8 +7,6 @@ export type GameStoredStats = {
   bestSurvival: number;
   bestLadder: number;
   duelWins: number;
-  teamWins: number;
-  tournamentBest: number;
   lastResults: Array<{
     mode: GameModeId;
     score: number;
@@ -27,8 +25,6 @@ export const EMPTY_GAME_STATS: GameStoredStats = {
   bestSurvival: 0,
   bestLadder: 0,
   duelWins: 0,
-  teamWins: 0,
-  tournamentBest: 0,
   lastResults: [],
 };
 
@@ -72,9 +68,7 @@ export function saveGameResult(input: {
   if (input.mode === "ladder" && input.correct === input.total) {
     next.bestLadder = Math.max(prev.bestLadder, input.correct);
   }
-  if (input.mode === "tournament") next.tournamentBest = Math.max(prev.tournamentBest, input.correct);
   if (input.mode === "duel" && input.won) next.duelWins = prev.duelWins + 1;
-  if (input.mode === "team" && input.won) next.teamWins = prev.teamWins + 1;
 
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
   return next;

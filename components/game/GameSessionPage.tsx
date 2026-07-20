@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { readClientSession } from "@/lib/client-auth";
 import { loadGameQuestionPool } from "@/lib/game-question-pool";
 import { getGameModeConfig, type GameModeId } from "@/lib/game-modes";
-import { mskDateKey, pickDailyQuestions, pickGameQuestions } from "@/lib/game-seeded-pick";
+import { pickGameQuestions } from "@/lib/game-seeded-pick";
 import { saveGameResult } from "@/lib/game-stats";
 import { loadRecentQuestionIds, rememberQuestionIds } from "@/lib/test-question-selection";
 import type { TestQuestion } from "@/lib/types";
@@ -46,8 +46,6 @@ export function GameSessionPage({ modeId }: { modeId: GameModeId }) {
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const [duelBot, setDuelBot] = useState<boolean[]>([]);
   const [duelBotScore, setDuelBotScore] = useState(0);
-  const [teamEnemyScore, setTeamEnemyScore] = useState(0);
-  const [teamPlayerScore, setTeamPlayerScore] = useState(0);
   const [resultLabel, setResultLabel] = useState("");
   const [won, setWon] = useState<boolean | undefined>(undefined);
 
@@ -56,17 +54,12 @@ export function GameSessionPage({ modeId }: { modeId: GameModeId }) {
   const correctRef = useRef(0);
   const answeredRef = useRef(0);
   const duelBotScoreRef = useRef(0);
-  const teamPlayerScoreRef = useRef(0);
-  const teamEnemyScoreRef = useRef(0);
 
   const current = questions[index] ?? null;
 
   const prepareQuestions = useCallback(
     (pool: TestQuestion[]) => {
       const recent = session ? loadRecentQuestionIds(session.id) : [];
-      if (modeId === "tournament") {
-        return pickDailyQuestions(pool, config.prepareCount ?? 15, mskDateKey());
-      }
       const count = config.prepareCount ?? Math.min(20, pool.length);
       const picked = pickGameQuestions(pool, count, recent);
       if (session && picked.length) rememberQuestionIds(session.id, picked.map((q) => q.id));
@@ -98,13 +91,6 @@ export function GameSessionPage({ modeId }: { modeId: GameModeId }) {
             : victory
               ? `Победа ${playerScore}:${botScore}`
               : `Поражение ${playerScore}:${botScore}`;
-      } else if (config.opponentKind === "team") {
-        victory = teamPlayerScoreRef.current > teamEnemyScoreRef.current;
-        label = victory
-          ? `Команда победила ${teamPlayerScoreRef.current}:${teamEnemyScoreRef.current}`
-          : teamPlayerScoreRef.current === teamEnemyScoreRef.current
-            ? `Ничья команд ${teamPlayerScoreRef.current}:${teamEnemyScoreRef.current}`
-            : `Поражение ${teamPlayerScoreRef.current}:${teamEnemyScoreRef.current}`;
       } else if (modeId === "blitz") {
         label = `${finalCorrect} правильных за 60 секунд`;
       } else if (modeId === "survival") {
@@ -114,8 +100,6 @@ export function GameSessionPage({ modeId }: { modeId: GameModeId }) {
           finalCorrect === questions.length && finalAnswered === questions.length
             ? `Лестница пройдена: ${finalCorrect}/${questions.length}`
             : `Остановились на ${finalCorrect}/${questions.length}`;
-      } else if (modeId === "tournament") {
-        label = `Турнир: ${finalCorrect}/${questions.length}`;
       }
 
       saveGameResult({
@@ -143,7 +127,7 @@ export function GameSessionPage({ modeId }: { modeId: GameModeId }) {
       const pool = await loadGameQuestionPool();
       if (cancelled) return;
       if (!pool.length) {
-        setError("Нет вопросов для игры. Добавьте вопросы в админке или заполните каталог БПЛА.");
+        setError("Нет вопросов в банке тестов. Добавьте активные вопросы в разделе «Админ → Тесты».");
         setPhase("intro");
         return;
       }
@@ -208,10 +192,6 @@ export function GameSessionPage({ modeId }: { modeId: GameModeId }) {
     answeredRef.current = 0;
     setDuelBotScore(0);
     duelBotScoreRef.current = 0;
-    setTeamEnemyScore(0);
-    setTeamPlayerScore(0);
-    teamEnemyScoreRef.current = 0;
-    teamPlayerScoreRef.current = 0;
     if (config.opponentKind === "duel") setDuelBot(simulateDuelBot(questions.length));
     setFeedback(null);
     setPhase("playing");
@@ -252,15 +232,6 @@ export function GameSessionPage({ modeId }: { modeId: GameModeId }) {
       duelBotScoreRef.current = nextBotScore;
       setDuelBotScore(nextBotScore);
       opponentNote = botCorrect ? "Соперник ответил верно" : "Соперник ошибся";
-    }
-    if (config.opponentKind === "team") {
-      const enemyGain = Math.floor(Math.random() * 8) + (isCorrect ? 2 : 6);
-      const playerGain = isCorrect ? 10 : 0;
-      teamEnemyScoreRef.current += enemyGain;
-      teamPlayerScoreRef.current += playerGain;
-      setTeamEnemyScore(teamEnemyScoreRef.current);
-      setTeamPlayerScore(teamPlayerScoreRef.current);
-      opponentNote = isCorrect ? "+10 очков команде" : "0 очков команде";
     }
 
     if (config.failOnWrong && !isCorrect) {
@@ -339,8 +310,6 @@ export function GameSessionPage({ modeId }: { modeId: GameModeId }) {
                   ) : null}
                   {config.failOnWrong ? <li>Одна ошибка — конец попытки</li> : null}
                   {config.opponentKind === "duel" ? <li>Соперник: бот (preview)</li> : null}
-                  {config.opponentKind === "team" ? <li>Вторая команда: бот (preview)</li> : null}
-                  {modeId === "tournament" ? <li>Один набор вопросов на сегодня для всех</li> : null}
                 </ul>
                 <button type="button" className="btn btn-primary" onClick={startGame} disabled={!questions.length}>
                   Начать
@@ -366,11 +335,6 @@ export function GameSessionPage({ modeId }: { modeId: GameModeId }) {
               {config.opponentKind === "duel" ? (
                 <span className="game-session__versus">
                   Вы {correctCount} : {duelBotScore} Бот
-                </span>
-              ) : null}
-              {config.opponentKind === "team" ? (
-                <span className="game-session__versus">
-                  Команда {teamPlayerScore} : {teamEnemyScore} Противник
                 </span>
               ) : null}
             </div>
