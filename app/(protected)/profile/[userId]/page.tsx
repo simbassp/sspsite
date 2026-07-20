@@ -10,7 +10,9 @@ import { ProfileNameEditModal } from "@/components/profile/ProfileNameEditModal"
 import { ProfileEmploymentDateField } from "@/components/profile/ProfileEmploymentDateField";
 import { ProfilePersonnelMetaFields } from "@/components/profile/ProfilePersonnelMetaFields";
 import { ProfileRotaUnitFields } from "@/components/profile/ProfileRotaUnitFields";
+import { ProfileNameColorText } from "@/components/profile/ProfileNameColorText";
 import { readClientSession } from "@/lib/client-auth";
+import type { ProfileNameColorId } from "@/lib/profile-name-color";
 import { formatDate, formatDateTime, formatTotalTestDuration } from "@/lib/format";
 import { formatTestResultForType } from "@/lib/test-pass-rules";
 import { dutyLocationLabel } from "@/lib/duty-location";
@@ -57,6 +59,7 @@ type InspectUser = {
   employment_date?: string | null;
   licenseCategories?: PersonnelLicenseCategory[];
   bloodGroup?: PersonnelBloodGroup | null;
+  nameColor?: ProfileNameColorId | null;
 };
 
 function mapRows(payload: { results?: Array<Record<string, unknown>> }): TestResult[] {
@@ -754,7 +757,11 @@ export default function ProfileUserInspectPage() {
                     <div className="profile-hero-identity-text">
                       <p className="profile-hero-kicker">Пользовательский профиль</p>
                       <div className="profile-hero-name-row">
-                        <p className="profile-hero-name">{inspectUser.name || "—"}</p>
+                        <p className="profile-hero-name">
+                          <ProfileNameColorText color={inspectUser.nameColor ?? null}>
+                            {inspectUser.name || "—"}
+                          </ProfileNameColorText>
+                        </p>
                         {canEditProfileFields && (
                           <button
                             type="button"

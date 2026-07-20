@@ -771,6 +771,107 @@ html[data-theme="dark"] .select option {
   margin: 0;
 }
 
+@keyframes profile-name-gradient-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 300% 50%;
+  }
+}
+
+.profile-name-color {
+  display: inline;
+}
+
+.profile-name-color--green {
+  color: #22c55e;
+}
+
+.profile-name-color--blue {
+  color: #3b82f6;
+}
+
+.profile-name-color--gold {
+  color: #eab308;
+}
+
+.profile-name-color--crimson {
+  color: #ef4444;
+}
+
+.profile-name-color--violet {
+  color: #a855f7;
+}
+
+.profile-name-color--cyan {
+  color: #06b6d4;
+}
+
+.profile-name-color--gradient-aurora,
+.profile-name-color--gradient-gold,
+.profile-name-color--gradient-ocean {
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: profile-name-gradient-shift 4s linear infinite;
+}
+
+.profile-name-color--gradient-aurora {
+  background-image: linear-gradient(90deg, #22d3ee, #6366f1, #ec4899, #22d3ee);
+}
+
+.profile-name-color--gradient-gold {
+  background-image: linear-gradient(90deg, #fde68a, #f59e0b, #fff1b8, #d97706, #fde68a);
+}
+
+.profile-name-color--gradient-ocean {
+  background-image: linear-gradient(90deg, #06b6d4, #3b82f6, #14b8a6, #06b6d4);
+}
+
+.profile-name-color-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 8px;
+}
+
+.profile-name-color-picker__option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  cursor: pointer;
+  min-height: 72px;
+}
+
+.profile-name-color-picker__option.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.profile-name-color-picker__option:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.profile-name-color-picker__sample {
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.profile-name-color-picker__label {
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.2;
+}
+
 .profile-page .profile-hero-edit-btn {
   width: 28px;
   height: 28px;

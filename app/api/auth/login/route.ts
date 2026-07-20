@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { normalizeProfileNameColor } from "@/lib/profile-name-color";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 
 export const runtime = "nodejs";
@@ -33,6 +34,7 @@ type ProfileRow = {
   can_moderate_personnel?: boolean;
   unit_assignment?: string | null;
   avatar_url?: string | null;
+  profile_name_color?: string | null;
   status: "active" | "inactive";
 };
 
@@ -348,6 +350,7 @@ export async function POST(request: Request) {
       permissions,
       unitAssignment,
       avatarUrl: typeof profile.avatar_url === "string" && profile.avatar_url.trim() ? profile.avatar_url.trim() : null,
+      nameColor: normalizeProfileNameColor(profile.profile_name_color),
     },
     auth: {
       accessToken,

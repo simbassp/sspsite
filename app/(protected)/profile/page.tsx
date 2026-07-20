@@ -11,7 +11,9 @@ import { UserAvatar } from "@/components/profile/UserAvatar";
 import { ProfileEmploymentDateField } from "@/components/profile/ProfileEmploymentDateField";
 import { ProfilePersonnelMetaFields } from "@/components/profile/ProfilePersonnelMetaFields";
 import { ProfileRotaUnitFields } from "@/components/profile/ProfileRotaUnitFields";
+import { ProfileNameColorText } from "@/components/profile/ProfileNameColorText";
 import { readClientSession } from "@/lib/client-auth";
+import type { ProfileNameColorId } from "@/lib/profile-name-color";
 import { formatDate, formatDateTime, formatTotalTestDuration } from "@/lib/format";
 import { formatTestResultForType } from "@/lib/test-pass-rules";
 import { isSupabaseConfigured } from "@/lib/supabase";
@@ -142,6 +144,7 @@ export default function ProfilePage() {
   const [personnelActivity, setPersonnelActivity] = useState<PersonnelActivityData | null>(null);
   const [personnelReloadToken, setPersonnelReloadToken] = useState(0);
   const [personnelInitialPayload, setPersonnelInitialPayload] = useState<PersonnelProfileInitialPayload | null>(null);
+  const [displayNameColor, setDisplayNameColor] = useState<ProfileNameColorId | null>(null);
   const resetStatsModal = useResetTestStatsModal("all");
   const canManageInvites = session?.role === "admin";
   const canResetStats = useMemo(() => (session ? canResetTestResults(session) : false), [session]);
@@ -150,6 +153,10 @@ export default function ProfilePage() {
   useEffect(() => {
     setSession(readClientSession());
     setSessionResolved(true);
+    const current = readClientSession();
+    if (current?.nameColor) {
+      setDisplayNameColor(current.nameColor);
+    }
   }, []);
 
   useEffect(() => {
@@ -179,6 +186,7 @@ export default function ProfilePage() {
           results?: Array<Record<string, unknown>>;
           inviteCodes?: Array<Record<string, unknown>>;
           personnelProfile?: PersonnelProfileInitialPayload | null;
+          nameColor?: ProfileNameColorId | null;
         };
         if (!response.ok || !payload.ok) {
           throw new Error(payload.error || "profile_bootstrap_failed");
@@ -237,6 +245,9 @@ export default function ProfilePage() {
         setAvatarUrl(nextAvatarUrl);
         if (payload.personnelProfile) {
           setPersonnelInitialPayload(payload.personnelProfile);
+        }
+        if ("nameColor" in payload) {
+          setDisplayNameColor(payload.nameColor ?? null);
         }
         if (typeof payload.email === "string" && payload.email) {
           setEmailInput(payload.email);
@@ -962,7 +973,11 @@ export default function ProfilePage() {
                 <div className="profile-hero-identity-text">
                   <p className="profile-hero-kicker">Пользовательский профиль</p>
                   <div className="profile-hero-name-row">
-                    <p className="profile-hero-name">{session.name || "—"}</p>
+                    <p className="profile-hero-name">
+                      <ProfileNameColorText color={displayNameColor ?? session.nameColor ?? null}>
+                        {session.name || "—"}
+                      </ProfileNameColorText>
+                    </p>
                     <button
                       type="button"
                       className="btn profile-hero-edit-btn"

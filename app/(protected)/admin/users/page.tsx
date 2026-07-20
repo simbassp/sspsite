@@ -3,12 +3,15 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AdminPermissionPicker } from "@/components/admin/AdminPermissionPicker";
+import { ProfileNameColorPicker } from "@/components/admin/ProfileNameColorPicker";
+import { ProfileNameColorText } from "@/components/profile/ProfileNameColorText";
 import { UserAvatar } from "@/components/profile/UserAvatar";
-import { readClientSession } from "@/lib/client-auth";
+import { readClientSession, writeClientSession } from "@/lib/client-auth";
 import { ADMIN_PERMISSION_OPTIONS } from "@/lib/admin-permission-ui";
 import { dutyLocationLabel } from "@/lib/duty-location";
 import { POSITION_OPTIONS, getPositionBadgeClass } from "@/lib/position-ui";
 import { canManageUsers } from "@/lib/permissions";
+import type { ProfileNameColorId } from "@/lib/profile-name-color";
 import { fetchUsers, patchUser, removeUser } from "@/lib/users-repository";
 import type { DutyLocation, Position, Role, UnitAssignment, UserRecord } from "@/lib/types";
 import { UNIT_ASSIGNMENT_OPTIONS, unitAssignmentLabel, unitAssignmentLabelOrEmpty, matchesUnitFilter } from "@/lib/unit-assignment";
@@ -50,6 +53,7 @@ export default function AdminUsersPage() {
   const [positionEditUser, setPositionEditUser] = useState<UserRecord | null>(null);
   const [positionDraft, setPositionDraft] = useState<Position | "">("");
   const [positionSaving, setPositionSaving] = useState(false);
+  const [savingNameColorId, setSavingNameColorId] = useState<string | null>(null);
   const permissionEditorRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -196,6 +200,31 @@ export default function AdminUsersPage() {
     }
   };
 
+  const renderUserNameLine = (user: UserRecord) => (
+    <>
+      <ProfileNameColorText color={user.nameColor}>{user.name || "Без имени"}</ProfileNameColorText>
+      {user.callsign ? ` ${user.callsign}` : ""}
+    </>
+  );
+
+  const saveNameColor = async (user: UserRecord, next: ProfileNameColorId | null) => {
+    if (savingNameColorId === user.id) return;
+    setSavingNameColorId(user.id);
+    setInfo("");
+    try {
+      await patchUser(user.id, { nameColor: next });
+      if (session?.id === user.id) {
+        writeClientSession({ ...session, nameColor: next });
+      }
+      setInfo("Цвет имени обновлён.");
+      await refresh(true);
+    } catch {
+      setInfo("Не удалось сохранить цвет имени.");
+    } finally {
+      setSavingNameColorId(null);
+    }
+  };
+
   const renderUserAvatar = (user: UserRecord) => (
     <UserAvatar
       name={user.name}
@@ -333,11 +362,16 @@ export default function AdminUsersPage() {
             <div className="admin-users-person">
               {renderUserAvatar(permissionsTargetUser)}
               <span>
-                <strong>{permissionsTargetUser.name || "Без имени"}{permissionsTargetUser.callsign ? ` ${permissionsTargetUser.callsign}` : ""}</strong>
+                <strong>{renderUserNameLine(permissionsTargetUser)}</strong>
                 <small>@{permissionsTargetUser.login}</small>
                 <small>{permissionsTargetUser.position}</small>
               </span>
             </div>
+            <ProfileNameColorPicker
+              value={permissionsTargetUser.nameColor ?? null}
+              disabled={savingNameColorId === permissionsTargetUser.id}
+              onChange={(next) => void saveNameColor(permissionsTargetUser, next)}
+            />
             {canGrantAdminRole && (
               <label className="admin-users-role-switch">
                 <span className="label">Роль администратора</span>
@@ -401,7 +435,7 @@ export default function AdminUsersPage() {
                       <div className="admin-users-person">
                         {renderUserAvatar(user)}
                         <span>
-                          <strong>{user.name || "Без имени"}{user.callsign ? ` ${user.callsign}` : ""}</strong>
+                          <strong>{renderUserNameLine(user)}</strong>
                           <small>@{user.login}</small>
                         </span>
                       </div>
@@ -499,7 +533,7 @@ export default function AdminUsersPage() {
                     <div className="admin-users-person">
                       {renderUserAvatar(user)}
                       <span>
-                        <strong>{user.name || "Без имени"}{user.callsign ? ` ${user.callsign}` : ""}</strong>
+                        <strong>{renderUserNameLine(user)}</strong>
                         <small>@{user.login}</small>
                       </span>
                     </div>

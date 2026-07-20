@@ -1,3 +1,5 @@
+import type { ProfileNameColorId } from "@/lib/profile-name-color";
+
 export type Role = "employee" | "admin";
 
 export type Position =
@@ -54,6 +56,8 @@ export interface SessionUser {
   unitAssignment?: UnitAssignment | null;
   /** Относительный путь uploads/avatars/... */
   avatarUrl?: string | null;
+  /** Preset id для цвета имени в профиле. */
+  nameColor?: ProfileNameColorId | null;
 }
 
 export interface UserRecord extends SessionUser {

@@ -1,5 +1,6 @@
 "use client";
 
+import { serializeSessionCookie } from "@/lib/auth";
 import { SESSION_COOKIE } from "@/lib/seed";
 import { SessionUser } from "@/lib/types";
 
@@ -31,4 +32,9 @@ export function readClientSession(): SessionUser | null {
   } catch {
     return null;
   }
+}
+
+export function writeClientSession(session: SessionUser) {
+  if (typeof document === "undefined") return;
+  document.cookie = serializeSessionCookie(session);
 }

@@ -15,6 +15,7 @@ import {
 } from "@/lib/storage";
 import { normalizeDutyLocation } from "@/lib/duty-location";
 import { normalizeAvatarStoragePath } from "@/lib/avatar-display";
+import { normalizeProfileNameColor } from "@/lib/profile-name-color";
 import { normalizeUnitAssignment, UNIT_ASSIGNMENT_OPTIONS, formatUnitAssignmentSaveError } from "@/lib/unit-assignment";
 import { normalizeRotaPlatoon, normalizeRotaSection, type RotaPlatoon, type RotaSection } from "@/lib/rota-unit";
 import { DutyLocation, Position, SessionUser, UserPermissions, UserRecord, UnitAssignment } from "@/lib/types";
@@ -43,6 +44,7 @@ type UserRow = {
   role: "employee" | "admin";
   status: "active" | "inactive";
   avatar_url?: string | null;
+  profile_name_color?: string | null;
 };
 
 type InviteCodeRow = {
@@ -195,6 +197,7 @@ function toSessionUser(row: UserRow): SessionUser {
     permissions,
     unitAssignment: normalizeUnitAssignment(row.unit_assignment),
     avatarUrl: normalizeAvatarStoragePath(typeof row.avatar_url === "string" ? row.avatar_url : null),
+    nameColor: normalizeProfileNameColor(row.profile_name_color),
   };
 }
 
@@ -1332,11 +1335,11 @@ export async function fetchUsers() {
 export async function patchUser(
   userId: string,
   patch: Partial<
-    Pick<UserRecord, "name" | "callsign" | "position" | "status" | "canManageContent" | "permissions" | "role">
+    Pick<UserRecord, "name" | "callsign" | "position" | "status" | "canManageContent" | "permissions" | "role" | "nameColor">
   >,
 ) {
   const patchForLocalCache: Partial<
-    Pick<UserRecord, "name" | "callsign" | "position" | "status" | "canManageContent" | "permissions" | "role">
+    Pick<UserRecord, "name" | "callsign" | "position" | "status" | "canManageContent" | "permissions" | "role" | "nameColor">
   > =
     patch.role === "admin"
       ? {

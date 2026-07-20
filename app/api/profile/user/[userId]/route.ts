@@ -1,6 +1,7 @@
 import { ONLINE_LAST_SEEN_MAX_MS } from "@/lib/presence-constants";
 import { loadProfilePersonnelMeta } from "@/lib/profile-personnel-meta";
 import { normalizeUnitAssignment } from "@/lib/unit-assignment";
+import { normalizeProfileNameColor } from "@/lib/profile-name-color";
 import { canInspectOtherUserProfile, canManageUsers } from "@/lib/permissions";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
@@ -45,7 +46,7 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
     const userPrimary = await supabase
       .from("app_users")
       .select(
-        "id,name,callsign,position,role,status,login,is_online,last_seen_at,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,employment_date",
+        "id,name,callsign,position,role,status,login,is_online,last_seen_at,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,employment_date,profile_name_color",
       )
       .eq("id", userId)
       .maybeSingle();
@@ -141,6 +142,7 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
         rota_section: rotaSection,
         rota_module: rotaModule,
         employment_date: employmentDate,
+        nameColor: normalizeProfileNameColor(userRow.profile_name_color),
         licenseCategories: personnelMeta.licenseCategories,
         bloodGroup: personnelMeta.bloodGroup,
       },

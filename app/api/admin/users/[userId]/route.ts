@@ -1,4 +1,5 @@
 import { canManageUsers } from "@/lib/permissions";
+import { normalizeProfileNameColor, profileNameColorStorageValue } from "@/lib/profile-name-color";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 
@@ -25,6 +26,7 @@ type PatchBody = {
   canManageContent?: boolean;
   permissions?: PermissionsPayload;
   role?: "employee" | "admin";
+  nameColor?: string | null;
 };
 
 function restErrorMissingColumn(message: string | undefined, column: string) {
@@ -113,6 +115,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ userI
     ...(nextPermissions !== undefined ? { can_view_user_list: nextPermissions.userList } : {}),
     ...(nextPermissions !== undefined ? { can_reset_test_results: nextPermissions.resetResults } : {}),
     ...(nextPermissions !== undefined ? { can_moderate_personnel: nextPermissions.personnelModeration } : {}),
+    ...(body.nameColor !== undefined
+      ? { profile_name_color: profileNameColorStorageValue(normalizeProfileNameColor(body.nameColor)) }
+      : {}),
     ...roleFragment,
   };
 
@@ -126,6 +131,18 @@ export async function PATCH(request: Request, context: { params: Promise<{ userI
       await recordPositionPromoted(supabase, beforeQ.data, String(body.position));
     }
     return Response.json({ ok: true });
+  }
+
+  if (body.nameColor !== undefined && restErrorMissingColumn(attempt.error.message, "profile_name_color")) {
+    const withoutNameColor = { ...payload } as Record<string, unknown>;
+    delete withoutNameColor.profile_name_color;
+    const retry = await supabase.from("app_users").update(withoutNameColor).eq("id", userId);
+    if (!retry.error) {
+      return Response.json({
+        ok: true,
+        warning: "profile_name_color_column_missing",
+      });
+    }
   }
 
   if (nextPermissions !== undefined && restErrorMissingColumn(attempt.error.message, "can_view_user_list")) {

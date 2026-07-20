@@ -4,6 +4,7 @@ import { loadPersonnelProfile } from "@/lib/personnel-server";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 import { normalizeUnitAssignment } from "@/lib/unit-assignment";
+import { normalizeProfileNameColor } from "@/lib/profile-name-color";
 import type { UnitAssignment } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -28,7 +29,7 @@ export async function GET() {
       .limit(20);
     const profilePrimaryPromise = supabase
       .from("app_users")
-      .select("auth_user_id,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,employment_date,avatar_url")
+      .select("auth_user_id,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,employment_date,avatar_url,profile_name_color")
       .eq("id", session.id)
       .maybeSingle();
 
@@ -56,6 +57,7 @@ export async function GET() {
     let rotaModule: number | null = null;
     let employmentDate: string | null = null;
     let avatarUrl: string | null = null;
+    let nameColor = normalizeProfileNameColor(null);
 
     if (profilePrimaryQ.error && isMissingColumnError(profilePrimaryQ.error.message)) {
       const profileLegacyQ = await supabase.from("app_users").select("auth_user_id").eq("id", session.id).maybeSingle();
@@ -73,6 +75,7 @@ export async function GET() {
       if (typeof profileRow.avatar_url === "string" && profileRow.avatar_url.trim()) {
         avatarUrl = profileRow.avatar_url.trim();
       }
+      nameColor = normalizeProfileNameColor(profileRow.profile_name_color);
     }
 
     if (resultsError || profileError) {
@@ -134,6 +137,7 @@ export async function GET() {
       rotaModule,
       employmentDate,
       avatarUrl,
+      nameColor,
       licenseCategories: personnelMeta.licenseCategories,
       bloodGroup: personnelMeta.bloodGroup,
       results: resultsRows.map((r) => ({
