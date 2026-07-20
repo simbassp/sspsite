@@ -5007,6 +5007,31 @@ html[data-theme="dark"] .final-review-answer--correct {
   text-decoration: none;
 }
 
+.personnel-roster-person {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.personnel-roster-person__name {
+  display: block;
+  font-weight: 700;
+}
+
+.personnel-roster-person__callsign {
+  display: block;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.personnel-mobile-card__name-text {
+  display: inline;
+}
+
+.personnel-top-list__person-identity {
+  display: contents;
+}
+
 .personnel-top-list__person:hover .personnel-top-list__name {
   color: var(--accent);
 }

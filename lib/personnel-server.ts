@@ -1,3 +1,4 @@
+import { normalizeProfileNameColor, type ProfileNameColorId } from "@/lib/profile-name-color";
 import { normalizeUnitAssignment } from "@/lib/unit-assignment";
 import type { DutyLocation, Position, UnitAssignment } from "@/lib/types";
 import {
@@ -54,6 +55,7 @@ export type PersonnelUserCard = {
   id: string;
   name: string;
   callsign: string;
+  nameColor?: ProfileNameColorId | null;
   position: Position;
   dutyLocation: DutyLocation;
   unitAssignment: UnitAssignment | null;
@@ -104,6 +106,32 @@ export type PersonnelProfilePayload = PersonnelUserCard & {
   activityByMonth: PersonnelActivityMonth[];
   activitySummary: PersonnelActivitySegment[];
 };
+
+const ROSTER_USER_SELECT =
+  "id,name,callsign,position,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,created_at,status,profile_name_color";
+const ROSTER_USER_SELECT_FALLBACK =
+  "id,name,callsign,position,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,created_at,status";
+
+function mapPersonnelUserCardRow(
+  u: Record<string, unknown>,
+  extras: Omit<PersonnelUserCard, keyof Pick<PersonnelUserCard, "id" | "name" | "callsign" | "nameColor" | "position" | "dutyLocation" | "unitAssignment" | "rotaPlatoon" | "rotaSection" | "rotaModule" | "createdAt" | "employmentDate">>,
+): PersonnelUserCard {
+  return {
+    id: String(u.id),
+    name: String(u.name ?? ""),
+    callsign: String(u.callsign ?? ""),
+    nameColor: normalizeProfileNameColor(u.profile_name_color),
+    position: String(u.position ?? "Специалист") as Position,
+    dutyLocation: (u.duty_location === "deployment" ? "deployment" : "base") as DutyLocation,
+    unitAssignment: normalizeUnitAssignment(u.unit_assignment),
+    rotaPlatoon: u.rota_platoon != null ? Number(u.rota_platoon) : null,
+    rotaSection: u.rota_section != null ? Number(u.rota_section) : null,
+    rotaModule: u.rota_module != null ? Number(u.rota_module) : null,
+    createdAt: String(u.created_at ?? new Date().toISOString()),
+    employmentDate: u.employment_date ? String(u.employment_date).slice(0, 10) : null,
+    ...extras,
+  };
+}
 
 function isMissingColumnError(message: string | undefined) {
   const m = (message || "").toLowerCase();
@@ -786,27 +814,33 @@ export async function loadPersonnelRoster(filters?: {
   testDate?: string;
 }) {
   const supabase = getServerSupabaseServiceClient();
-  let q = supabase
-    .from("app_users")
-    .select(
-      "id,name,callsign,position,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,created_at,status",
-    )
-    .eq("unit_assignment", "company_4")
-    .eq("status", "active")
-    .order("name", { ascending: true })
-    .limit(500);
 
-  if (filters?.platoon && filters.platoon !== "all") {
-    q = q.eq("rota_platoon", filters.platoon);
-  }
-  if (filters?.section && filters.section !== "all") {
-    q = q.eq("rota_section", filters.section);
-  }
-  if (filters?.module && filters.module !== "all") {
-    q = q.eq("rota_module", filters.module);
+  const buildRosterQuery = (select: string) => {
+    let q = supabase
+      .from("app_users")
+      .select(select)
+      .eq("unit_assignment", "company_4")
+      .eq("status", "active")
+      .order("name", { ascending: true })
+      .limit(500);
+
+    if (filters?.platoon && filters.platoon !== "all") {
+      q = q.eq("rota_platoon", filters.platoon);
+    }
+    if (filters?.section && filters.section !== "all") {
+      q = q.eq("rota_section", filters.section);
+    }
+    if (filters?.module && filters.module !== "all") {
+      q = q.eq("rota_module", filters.module);
+    }
+    return q;
+  };
+
+  let usersRes = await buildRosterQuery(ROSTER_USER_SELECT);
+  if (usersRes.error && isMissingColumnError(usersRes.error.message)) {
+    usersRes = await buildRosterQuery(ROSTER_USER_SELECT_FALLBACK);
   }
 
-  const usersRes = await q;
   if (usersRes.error) {
     if (isMissingColumnError(usersRes.error.message)) {
       return { ok: false as const, error: "missing_columns", users: [] as PersonnelUserCard[] };
@@ -814,7 +848,7 @@ export async function loadPersonnelRoster(filters?: {
     return { ok: false as const, error: usersRes.error.message, users: [] as PersonnelUserCard[] };
   }
 
-  let rows = (usersRes.data ?? []) as Array<Record<string, unknown>>;
+  let rows = (usersRes.data ?? []) as unknown as Array<Record<string, unknown>>;
   const search = (filters?.search ?? "").trim().toLowerCase();
   if (search) {
     rows = rows.filter((r) => {
@@ -844,18 +878,7 @@ export async function loadPersonnelRoster(filters?: {
     const id = String(u.id);
     const dep = depMap.get(id) ?? { count: 0, days: 0, hits: 0, premiums: 0 };
     const standalonePremiums = premiumMap.get(id) ?? 0;
-    return {
-      id,
-      name: String(u.name ?? ""),
-      callsign: String(u.callsign ?? ""),
-      position: String(u.position ?? "Специалист") as Position,
-      dutyLocation: (u.duty_location === "deployment" ? "deployment" : "base") as DutyLocation,
-      unitAssignment: normalizeUnitAssignment(u.unit_assignment),
-      rotaPlatoon: u.rota_platoon != null ? Number(u.rota_platoon) : null,
-      rotaSection: u.rota_section != null ? Number(u.rota_section) : null,
-      rotaModule: u.rota_module != null ? Number(u.rota_module) : null,
-      createdAt: String(u.created_at ?? new Date().toISOString()),
-      employmentDate: u.employment_date ? String(u.employment_date).slice(0, 10) : null,
+    return mapPersonnelUserCardRow(u, {
       exams: examsMap.get(id) ?? [],
       deploymentsCount: dep.count,
       deploymentDays: dep.days,
@@ -865,7 +888,7 @@ export async function loadPersonnelRoster(filters?: {
       licenseCategories: licensesMap.get(id) ?? [],
       testStats: testStatsMap.get(id) ?? emptyTestRosterStats(),
       testStatsOnDate: testDate ? testStatsOnDateMap.get(id) ?? emptyTestRosterStats() : null,
-    };
+    });
   });
 
   return { ok: true as const, users };
@@ -876,14 +899,21 @@ export async function loadPersonnelRosterCardsByIds(userIds: string[], testDate?
   if (!uniqueIds.length) return [] as PersonnelUserCard[];
 
   const supabase = getServerSupabaseServiceClient();
-  const usersRes = await supabase
+  const primaryRes = await supabase
     .from("app_users")
-    .select(
-      "id,name,callsign,position,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,created_at,employment_date,status",
-    )
+    .select(`${ROSTER_USER_SELECT},employment_date`)
     .in("id", uniqueIds)
     .eq("unit_assignment", "company_4")
     .eq("status", "active");
+  const usersRes =
+    primaryRes.error && isMissingColumnError(primaryRes.error.message)
+      ? await supabase
+          .from("app_users")
+          .select(`${ROSTER_USER_SELECT_FALLBACK},employment_date`)
+          .in("id", uniqueIds)
+          .eq("unit_assignment", "company_4")
+          .eq("status", "active")
+      : primaryRes;
 
   if (usersRes.error) return [] as PersonnelUserCard[];
 
@@ -906,18 +936,7 @@ export async function loadPersonnelRosterCardsByIds(userIds: string[], testDate?
     const id = String(u.id);
     const dep = depMap.get(id) ?? { count: 0, days: 0, hits: 0, premiums: 0 };
     const standalonePremiums = premiumMap.get(id) ?? 0;
-    return {
-      id,
-      name: String(u.name ?? ""),
-      callsign: String(u.callsign ?? ""),
-      position: String(u.position ?? "Специалист") as Position,
-      dutyLocation: (u.duty_location === "deployment" ? "deployment" : "base") as DutyLocation,
-      unitAssignment: normalizeUnitAssignment(u.unit_assignment),
-      rotaPlatoon: u.rota_platoon != null ? Number(u.rota_platoon) : null,
-      rotaSection: u.rota_section != null ? Number(u.rota_section) : null,
-      rotaModule: u.rota_module != null ? Number(u.rota_module) : null,
-      createdAt: String(u.created_at ?? new Date().toISOString()),
-      employmentDate: u.employment_date ? String(u.employment_date).slice(0, 10) : null,
+    return mapPersonnelUserCardRow(u, {
       exams: examsMap.get(id) ?? [],
       deploymentsCount: dep.count,
       deploymentDays: dep.days,
@@ -927,7 +946,7 @@ export async function loadPersonnelRosterCardsByIds(userIds: string[], testDate?
       licenseCategories: licensesMap.get(id) ?? [],
       testStats: testStatsMap.get(id) ?? emptyTestRosterStats(),
       testStatsOnDate: dateIso ? testStatsOnDateMap.get(id) ?? emptyTestRosterStats() : null,
-    };
+    });
   });
 
   users.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));

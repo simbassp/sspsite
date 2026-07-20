@@ -10,6 +10,7 @@ export type UserIdentityParts = {
 
 type UserIdentityTextProps = UserIdentityParts & {
   className?: string;
+  nameClassName?: string;
   callsignClassName?: string;
   separator?: ReactNode;
   emptyName?: string;
@@ -22,6 +23,7 @@ export function UserIdentityText({
   callsign,
   nameColor,
   className,
+  nameClassName,
   callsignClassName,
   separator = " ",
   emptyName = "—",
@@ -35,11 +37,23 @@ export function UserIdentityText({
     return <Tag className={[className, colorClass].filter(Boolean).join(" ")}>{emptyName}</Tag>;
   }
 
+  const nameNode = displayName ? (
+    colorClass || nameClassName ? (
+      <span className={[nameClassName, colorClass].filter(Boolean).join(" ")}>{displayName}</span>
+    ) : (
+      displayName
+    )
+  ) : null;
+
+  const callsignNode = displayCallsign ? (
+    <span className={[callsignClassName, colorClass].filter(Boolean).join(" ")}>{displayCallsign}</span>
+  ) : null;
+
   return (
-    <Tag className={[className, colorClass].filter(Boolean).join(" ")}>
-      {displayName || null}
+    <Tag className={className}>
+      {nameNode}
       {displayName && displayCallsign ? separator : null}
-      {displayCallsign ? <span className={callsignClassName}>{displayCallsign}</span> : null}
+      {callsignNode}
     </Tag>
   );
 }
