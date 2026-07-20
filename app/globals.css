@@ -374,10 +374,15 @@ html[data-theme="dark"] .selfcheck-hint__text svg {
   text-transform: uppercase;
 }
 
-.brand p {
+.brand p,
+.brand__callsign {
   margin-top: 2px;
   color: var(--muted);
   font-size: 11px;
+}
+
+.brand__callsign .profile-name-color {
+  font-weight: 600;
 }
 
 .header-actions {

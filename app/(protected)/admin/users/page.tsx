@@ -12,6 +12,7 @@ import { dutyLocationLabel } from "@/lib/duty-location";
 import { POSITION_OPTIONS, getPositionBadgeClass } from "@/lib/position-ui";
 import { canManageUsers } from "@/lib/permissions";
 import type { ProfileNameColorId } from "@/lib/profile-name-color";
+import { dispatchIdentityCosmeticsUpdated } from "@/lib/user-identity-cosmetics";
 import { fetchUsers, patchUser, removeUser } from "@/lib/users-repository";
 import type { DutyLocation, Position, Role, UnitAssignment, UserRecord } from "@/lib/types";
 import { UNIT_ASSIGNMENT_OPTIONS, unitAssignmentLabel, unitAssignmentLabelOrEmpty, matchesUnitFilter } from "@/lib/unit-assignment";
@@ -221,6 +222,7 @@ export default function AdminUsersPage() {
       await patchUser(user.id, { nameColor: next });
       if (session?.id === user.id) {
         writeClientSession({ ...session, nameColor: next });
+        dispatchIdentityCosmeticsUpdated({ adminNameColor: next });
       }
       setInfo("Цвет имени обновлён.");
       await refresh(true);

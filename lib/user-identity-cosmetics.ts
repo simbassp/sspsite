@@ -49,3 +49,10 @@ export function mergeIdentityCosmetics(
 
 export const IDENTITY_COSMETIC_USER_COLUMNS =
   "profile_name_color,profile_cosmetic_name_color,profile_cosmetic_avatar_frame";
+
+export const IDENTITY_COSMETICS_UPDATED_EVENT = "ssp:identity-cosmetics-updated";
+
+export function dispatchIdentityCosmeticsUpdated(cosmetics: Partial<UserIdentityCosmetics>) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(IDENTITY_COSMETICS_UPDATED_EVENT, { detail: cosmetics }));
+}

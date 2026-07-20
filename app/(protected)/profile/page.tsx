@@ -22,6 +22,7 @@ import { readClientSession } from "@/lib/client-auth";
 import { type FinalNameColorId, type TrialAvatarFrameId, type TopRankBadgeId } from "@/lib/achievements-catalog";
 import type { ProfileNameColorId } from "@/lib/profile-name-color";
 import type { UserIdentityCosmetics } from "@/lib/user-identity-cosmetics";
+import { dispatchIdentityCosmeticsUpdated } from "@/lib/user-identity-cosmetics";
 import { formatDate, formatDateTime, formatTotalTestDuration } from "@/lib/format";
 import { formatTestResultForType } from "@/lib/test-pass-rules";
 import { isSupabaseConfigured } from "@/lib/supabase";
@@ -1221,6 +1222,10 @@ export default function ProfilePage() {
                 if (!response.ok || !payload.ok) return;
                 setAchievementAvatarFrame(payload.cosmetics?.avatarFrame ?? null);
                 setAchievementNameColor(payload.cosmetics?.nameColor ?? null);
+                dispatchIdentityCosmeticsUpdated({
+                  achievementNameColor: payload.cosmetics?.nameColor ?? null,
+                  avatarFrame: payload.cosmetics?.avatarFrame ?? null,
+                });
                 setCosmeticsModalOpen(false);
               } finally {
                 setCosmeticsSaving(false);

@@ -27,7 +27,10 @@ import {
   PRESENCE_HIDDEN_OFFLINE_DELAY_MS,
 } from "@/lib/presence-constants";
 import { SessionUser } from "@/lib/types";
-import type { UserIdentityCosmetics } from "@/lib/user-identity-cosmetics";
+import {
+  IDENTITY_COSMETICS_UPDATED_EVENT,
+  type UserIdentityCosmetics,
+} from "@/lib/user-identity-cosmetics";
 
 const mobileHeaderIconSvg = {
   viewBox: "0 0 24 24" as const,
@@ -105,6 +108,7 @@ export function AppShell({ session, children }: AppShellProps) {
   >([]);
   const [headerCosmetics, setHeaderCosmetics] = useState<UserIdentityCosmetics>({
     adminNameColor: session.nameColor ?? null,
+    achievementNameColor: session.cosmetics?.achievementNameColor ?? null,
   });
   const isLoggingOutRef = useRef(false);
   const sessionCountedRef = useRef(false);
@@ -137,8 +141,45 @@ export function AppShell({ session, children }: AppShellProps) {
   }, [session.id]);
 
   useEffect(() => {
-    setHeaderCosmetics({ adminNameColor: session.nameColor ?? null });
-  }, [session.nameColor]);
+    setHeaderCosmetics((prev) => ({
+      ...prev,
+      adminNameColor: session.nameColor ?? null,
+      achievementNameColor: session.cosmetics?.achievementNameColor ?? prev.achievementNameColor ?? null,
+    }));
+  }, [session.nameColor, session.cosmetics?.achievementNameColor]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/profile/achievements", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((payload: { ok?: boolean; cosmetics?: { nameColor?: UserIdentityCosmetics["achievementNameColor"] } }) => {
+        if (!payload.ok || cancelled) return;
+        setHeaderCosmetics((prev) => ({
+          ...prev,
+          achievementNameColor: payload.cosmetics?.nameColor ?? null,
+        }));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [session.id]);
+
+  useEffect(() => {
+    const onCosmeticsUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<Partial<UserIdentityCosmetics>>).detail;
+      if (!detail) return;
+      setHeaderCosmetics((prev) => ({ ...prev, ...detail }));
+    };
+    window.addEventListener(IDENTITY_COSMETICS_UPDATED_EVENT, onCosmeticsUpdated);
+    return () => window.removeEventListener(IDENTITY_COSMETICS_UPDATED_EVENT, onCosmeticsUpdated);
+  }, []);
+
+  const brandCallsign = (
+    <p className="brand__callsign">
+      <UserIdentityDisplay callsign={session.callsign} cosmetics={headerCosmetics} emptyName="—" />
+    </p>
+  );
 
   const navLinks = showPersonnelNav
     ? (() => {
@@ -434,7 +475,7 @@ export function AppShell({ session, children }: AppShellProps) {
           <div className="brand-mark">ССП</div>
           <div>
             <h1>ПВО</h1>
-            <p>Закрытый контур</p>
+            {brandCallsign}
           </div>
         </div>
 
@@ -496,9 +537,7 @@ export function AppShell({ session, children }: AppShellProps) {
             </Link>
             <div>
               <h1>ПВО</h1>
-              <p>
-                <UserIdentityDisplay callsign={session.callsign} cosmetics={headerCosmetics} emptyName="—" />
-              </p>
+              {brandCallsign}
             </div>
           </div>
           <div className="header-actions">
