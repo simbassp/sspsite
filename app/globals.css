@@ -6269,49 +6269,94 @@ html[data-theme="dark"] .final-review-answer--correct {
 
 .avatar-frame {
   border-radius: 999px;
-  padding: 2px;
+  overflow: visible;
 }
 
-.avatar-frame--trial-frame-100 {
-  box-shadow: 0 0 0 2px color-mix(in srgb, #94a3b8 55%, transparent);
+.user-avatar-wrap.avatar-frame {
+  --frame-ring: max(3px, calc(var(--avatar-size, 64px) * 0.065));
 }
 
-.avatar-frame--trial-frame-250 {
-  box-shadow: 0 0 0 2px color-mix(in srgb, #38bdf8 55%, transparent);
+.user-avatar-wrap.avatar-frame::before {
+  content: "";
+  position: absolute;
+  inset: calc(-1 * var(--frame-ring));
+  border-radius: 999px;
+  z-index: 0;
+  pointer-events: none;
 }
 
-.avatar-frame--trial-frame-500 {
-  box-shadow: 0 0 0 2px color-mix(in srgb, #22c55e 60%, transparent), 0 0 10px color-mix(in srgb, #22c55e 25%, transparent);
+.user-avatar-wrap.avatar-frame .user-avatar {
+  position: relative;
+  z-index: 1;
 }
 
-.avatar-frame--trial-frame-1000 {
-  box-shadow: 0 0 0 2px color-mix(in srgb, #eab308 70%, transparent), 0 0 12px color-mix(in srgb, #eab308 30%, transparent);
+.avatar-frame--trial-frame-100::before {
+  background: #38bdf8;
+  box-shadow: 0 0 12px color-mix(in srgb, #38bdf8 55%, transparent);
 }
 
-.avatar-frame--trial-frame-5000 {
-  box-shadow: 0 0 0 2px color-mix(in srgb, #06b6d4 75%, transparent), 0 0 14px color-mix(in srgb, #06b6d4 35%, transparent);
+.avatar-frame--trial-frame-250::before {
+  background: #22c55e;
+  box-shadow: 0 0 12px color-mix(in srgb, #22c55e 55%, transparent);
 }
 
-.avatar-frame--trial-frame-10000 {
-  background: linear-gradient(135deg, #22d3ee, #6366f1, #ec4899, #22d3ee);
+.avatar-frame--trial-frame-500::before {
+  background: #ef4444;
+  box-shadow: 0 0 14px color-mix(in srgb, #ef4444 50%, transparent);
+}
+
+.avatar-frame--trial-frame-1000::before {
+  background: linear-gradient(135deg, #fde68a, #f59e0b, #fbbf24, #fde68a);
   background-size: 300% 300%;
-  animation: profile-name-gradient-shift 4s linear infinite;
-  box-shadow: 0 0 16px color-mix(in srgb, #6366f1 35%, transparent);
+  animation: profile-name-gradient-shift 3s linear infinite;
+  box-shadow: 0 0 16px color-mix(in srgb, #f59e0b 45%, transparent);
 }
 
-.profile-name-color--ach-final-50 { color: #64748b; }
-.profile-name-color--ach-final-100 { color: #059669; }
-.profile-name-color--ach-final-250 { color: #0284c7; }
-.profile-name-color--ach-final-500 { color: #7c3aed; }
-.profile-name-color--ach-final-1000 { color: #ca8a04; }
+.avatar-frame--trial-frame-1500::before {
+  background: linear-gradient(135deg, #06b6d4, #8b5cf6, #14b8a6, #a855f7);
+  background-size: 250% 250%;
+  animation: profile-name-gradient-shift 4s ease infinite;
+  box-shadow: 0 0 16px color-mix(in srgb, #06b6d4 40%, transparent), 0 0 10px color-mix(in srgb, #8b5cf6 30%, transparent);
+}
 
-.profile-name-color--ach-final-5000 {
+.avatar-frame--trial-frame-2000::before {
+  background: linear-gradient(135deg, #a5f3fc, #e0f2fe, #c4b5fd, #67e8f9, #ffffff, #bae6fd, #ddd6fe);
+  background-size: 400% 400%;
+  animation: profile-name-gradient-shift 5s linear infinite;
+  box-shadow:
+    0 0 18px color-mix(in srgb, #67e8f9 55%, transparent),
+    0 0 8px color-mix(in srgb, #ffffff 35%, transparent);
+}
+
+.profile-name-color--ach-final-5 { color: #38bdf8; }
+.profile-name-color--ach-final-10 { color: #22c55e; }
+.profile-name-color--ach-final-15 { color: #ef4444; }
+
+.profile-name-color--ach-final-20 {
   background-size: 300% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  background-image: linear-gradient(90deg, #f59e0b, #ef4444, #a855f7, #f59e0b);
-  animation: profile-name-gradient-shift 4s linear infinite;
+  background-image: linear-gradient(90deg, #fde68a, #f59e0b, #fbbf24, #fde68a);
+  animation: profile-name-gradient-shift 3s linear infinite;
+}
+
+.profile-name-color--ach-final-30 {
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  background-image: linear-gradient(90deg, #06b6d4, #8b5cf6, #14b8a6, #a855f7, #06b6d4);
+  animation: profile-name-gradient-shift 4s ease infinite;
+}
+
+.profile-name-color--ach-final-40 {
+  background-size: 400% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  background-image: linear-gradient(90deg, #a5f3fc, #e0f2fe, #c4b5fd, #67e8f9, #ffffff, #bae6fd, #ddd6fe, #a5f3fc);
+  animation: profile-name-gradient-shift 5s linear infinite;
 }
 
 .achievement-unlock-banner {
@@ -6525,27 +6570,29 @@ html[data-theme="dark"] .final-review-answer--correct {
 }
 
 .profile-cosmetics-option--frame.profile-cosmetics-option--frame.avatar-frame--trial-frame-100 .profile-cosmetics-option__swatch {
-  box-shadow: 0 0 0 2px #94a3b8;
+  box-shadow: 0 0 0 3px #38bdf8;
 }
 
 .profile-cosmetics-option--frame.avatar-frame--trial-frame-250 .profile-cosmetics-option__swatch {
-  box-shadow: 0 0 0 2px #38bdf8;
+  box-shadow: 0 0 0 3px #22c55e;
 }
 
 .profile-cosmetics-option--frame.avatar-frame--trial-frame-500 .profile-cosmetics-option__swatch {
-  box-shadow: 0 0 0 2px #22c55e, 0 0 8px color-mix(in srgb, #22c55e 35%, transparent);
+  box-shadow: 0 0 0 3px #ef4444, 0 0 8px color-mix(in srgb, #ef4444 35%, transparent);
 }
 
 .profile-cosmetics-option--frame.avatar-frame--trial-frame-1000 .profile-cosmetics-option__swatch {
-  box-shadow: 0 0 0 2px #eab308, 0 0 8px color-mix(in srgb, #eab308 35%, transparent);
+  background: linear-gradient(135deg, #fde68a, #f59e0b, #fbbf24);
+  box-shadow: 0 0 8px color-mix(in srgb, #f59e0b 35%, transparent);
 }
 
-.profile-cosmetics-option--frame.avatar-frame--trial-frame-5000 .profile-cosmetics-option__swatch {
-  box-shadow: 0 0 0 2px #06b6d4, 0 0 10px color-mix(in srgb, #06b6d4 35%, transparent);
+.profile-cosmetics-option--frame.avatar-frame--trial-frame-1500 .profile-cosmetics-option__swatch {
+  background: linear-gradient(135deg, #06b6d4, #8b5cf6);
+  box-shadow: 0 0 10px color-mix(in srgb, #06b6d4 35%, transparent);
 }
 
-.profile-cosmetics-option--frame.avatar-frame--trial-frame-10000 .profile-cosmetics-option__swatch {
-  background: linear-gradient(135deg, #22d3ee, #6366f1, #ec4899);
+.profile-cosmetics-option--frame.avatar-frame--trial-frame-2000 .profile-cosmetics-option__swatch {
+  background: linear-gradient(135deg, #a5f3fc, #e0f2fe, #c4b5fd, #67e8f9, #ffffff);
 }
 
 .profile-hero-cosmetics-btn {

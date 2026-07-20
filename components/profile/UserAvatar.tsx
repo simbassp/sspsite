@@ -52,7 +52,10 @@ export function UserAvatar({
   );
 
   return (
-    <span className={`user-avatar-wrap ${frameClass}`.trim()} style={{ width: size, height: size }}>
+    <span
+      className={`user-avatar-wrap ${frameClass}`.trim()}
+      style={{ width: size, height: size, ["--avatar-size" as string]: `${size}px` }}
+    >
       {avatarNode}
       {topRankBadge ? <TopRankBadge rank={topRankBadge} className="user-avatar-wrap__top-badge" /> : null}
     </span>
