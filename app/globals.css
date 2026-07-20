@@ -4731,10 +4731,14 @@ html[data-theme="dark"] .final-review-answer--correct {
   align-items: flex-end;
   gap: 8px;
   height: 140px;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .personnel-bar-chart__col {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -4753,6 +4757,10 @@ html[data-theme="dark"] .final-review-answer--correct {
 .personnel-bar-chart__col span {
   font-size: 11px;
   color: var(--muted);
+  display: block;
+  width: 100%;
+  text-align: center;
+  line-height: 1.1;
 }
 
 .personnel-bar-chart--stacked .personnel-bar-chart__stack {
@@ -4816,10 +4824,13 @@ html[data-theme="dark"] .final-review-answer--correct {
   align-items: flex-end;
   gap: 3px;
   height: 48px;
+  width: 100%;
+  min-width: 0;
 }
 
 .personnel-mini-bar-chart__bar {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
   border-radius: 3px 3px 1px 1px;
   min-height: 4px;
 }
