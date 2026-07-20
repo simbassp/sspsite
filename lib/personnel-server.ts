@@ -1159,8 +1159,7 @@ export async function notifyModerators(title: string, body: string, href: string
 }
 
 export async function notifyUser(userId: string, title: string, body: string, href?: string) {
-  const supabase = getServerSupabaseServiceClient();
-  await supabase.from("app_notifications").insert({
+  await insertNotificationRow({
     user_id: userId,
     kind: "personnel",
     title,
@@ -1169,25 +1168,105 @@ export async function notifyUser(userId: string, title: string, body: string, hr
   });
 }
 
-export async function sendAdminMessage(userId: string, title: string, body: string, href?: string | null) {
+export type NotificationSender = {
+  id?: string | null;
+  label: string;
+};
+
+function isMissingNotificationColumn(message: string | undefined, column: string) {
+  const lower = (message || "").toLowerCase();
+  return (
+    (lower.includes("column") && lower.includes(column.toLowerCase()) && lower.includes("does not exist")) ||
+    (lower.includes("could not find") && lower.includes(column.toLowerCase()) && lower.includes("column"))
+  );
+}
+
+export function formatNotificationSenderLabel(input: {
+  name?: string | null;
+  callsign?: string | null;
+  role?: string | null;
+}) {
+  const label = [input.name, input.callsign]
+    .map((part) => (typeof part === "string" ? part.trim() : ""))
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+  if (label) return label;
+  if (input.role === "admin") return "Администратор";
+  return null;
+}
+
+function resolveNotificationSenderLabel(kind: string, senderLabel: string | null | undefined) {
+  const trimmed = typeof senderLabel === "string" ? senderLabel.trim() : "";
+  if (trimmed) return trimmed;
+  if (kind === "admin_message" || kind === "admin_broadcast") return "Администратор";
+  return null;
+}
+
+function stripNotificationSenderFields(row: Record<string, unknown>) {
+  const next = { ...row };
+  delete next.sender_id;
+  delete next.sender_label;
+  return next;
+}
+
+async function insertNotificationRow(row: Record<string, unknown>) {
+  const supabase = getServerSupabaseServiceClient();
+  let ins = await supabase.from("app_notifications").insert(row);
+  if (
+    ins.error &&
+    (isMissingNotificationColumn(ins.error.message, "sender_id") ||
+      isMissingNotificationColumn(ins.error.message, "sender_label"))
+  ) {
+    ins = await supabase.from("app_notifications").insert(stripNotificationSenderFields(row));
+  }
+  return ins;
+}
+
+async function insertNotificationRows(rows: Array<Record<string, unknown>>) {
+  const supabase = getServerSupabaseServiceClient();
+  let ins = await supabase.from("app_notifications").insert(rows);
+  if (
+    ins.error &&
+    (isMissingNotificationColumn(ins.error.message, "sender_id") ||
+      isMissingNotificationColumn(ins.error.message, "sender_label"))
+  ) {
+    ins = await supabase.from("app_notifications").insert(rows.map(stripNotificationSenderFields));
+  }
+  return ins;
+}
+
+export async function sendAdminMessage(
+  userId: string,
+  title: string,
+  body: string,
+  href?: string | null,
+  sender?: NotificationSender | null,
+) {
   const normalizedTitle = title.trim();
   const normalizedBody = formatNotificationBody(body.trim());
   if (!normalizedTitle) return { ok: false as const, error: "title_required" };
   if (!userId.trim()) return { ok: false as const, error: "user_required" };
 
-  const supabase = getServerSupabaseServiceClient();
-  const ins = await supabase.from("app_notifications").insert({
+  const ins = await insertNotificationRow({
     user_id: userId,
     kind: "admin_message",
     title: normalizedTitle,
     body: normalizedBody,
     href: href?.trim() || null,
+    sender_id: sender?.id ?? null,
+    sender_label: sender?.label ?? null,
   });
   if (ins.error) return { ok: false as const, error: ins.error.message };
   return { ok: true as const };
 }
 
-export async function sendAdminBroadcast(title: string, body: string, href?: string | null) {
+export async function sendAdminBroadcast(
+  title: string,
+  body: string,
+  href?: string | null,
+  sender?: NotificationSender | null,
+) {
   const normalizedTitle = title.trim();
   const normalizedBody = formatNotificationBody(body.trim());
   if (!normalizedTitle) return { ok: false as const, error: "title_required" };
@@ -1205,13 +1284,15 @@ export async function sendAdminBroadcast(title: string, body: string, href?: str
       title: normalizedTitle,
       body: normalizedBody,
       href: href?.trim() || null,
+      sender_id: sender?.id ?? null,
+      sender_label: sender?.label ?? null,
     }));
 
   if (!rows.length) return { ok: true as const, sent: 0 };
 
   for (let offset = 0; offset < rows.length; offset += 200) {
     const chunk = rows.slice(offset, offset + 200);
-    const ins = await supabase.from("app_notifications").insert(chunk);
+    const ins = await insertNotificationRows(chunk);
     if (ins.error) return { ok: false as const, error: ins.error.message };
   }
 
@@ -1220,22 +1301,40 @@ export async function sendAdminBroadcast(title: string, body: string, href?: str
 
 export async function loadNotifications(userId: string, limit = 30) {
   const supabase = getServerSupabaseServiceClient();
-  const res = await supabase
+  const primary = await supabase
     .from("app_notifications")
-    .select("id,title,body,href,is_read,created_at,kind")
+    .select("id,title,body,href,is_read,created_at,kind,sender_label")
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(limit);
-  if (res.error) return [];
-  return (res.data ?? []).map((r) => ({
-    id: String((r as { id: string }).id),
-    title: String((r as { title: string }).title),
-    body: formatNotificationBody(String((r as { body?: string }).body ?? "")),
-    href: (r as { href?: string | null }).href ?? null,
-    isRead: (r as { is_read?: boolean }).is_read === true,
-    createdAt: String((r as { created_at: string }).created_at),
-    kind: String((r as { kind?: string }).kind ?? "info"),
-  }));
+
+  let rows: Array<Record<string, unknown>> = (primary.data ?? []) as Array<Record<string, unknown>>;
+  if (primary.error && isMissingNotificationColumn(primary.error.message, "sender_label")) {
+    const fallback = await supabase
+      .from("app_notifications")
+      .select("id,title,body,href,is_read,created_at,kind")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (fallback.error) return [];
+    rows = (fallback.data ?? []) as Array<Record<string, unknown>>;
+  } else if (primary.error) {
+    return [];
+  }
+
+  return rows.map((r) => {
+    const kind = String(r.kind ?? "info");
+    return {
+      id: String(r.id),
+      title: String(r.title),
+      body: formatNotificationBody(String(r.body ?? "")),
+      href: (r.href as string | null | undefined) ?? null,
+      isRead: r.is_read === true,
+      createdAt: String(r.created_at),
+      kind,
+      senderLabel: resolveNotificationSenderLabel(kind, r.sender_label as string | null | undefined),
+    };
+  });
 }
 
 export async function markNotificationsRead(userId: string, ids?: string[]) {

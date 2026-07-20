@@ -1,4 +1,4 @@
-import { sendAdminBroadcast, sendAdminMessage } from "@/lib/personnel-server";
+import { formatNotificationSenderLabel, sendAdminBroadcast, sendAdminMessage } from "@/lib/personnel-server";
 import { getServerSession } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
@@ -30,9 +30,19 @@ export async function POST(req: Request) {
       return Response.json({ ok: false, error: "title_required" }, { status: 400 });
     }
 
+    const sender = {
+      id: session.id,
+      label:
+        formatNotificationSenderLabel({
+          name: session.name,
+          callsign: session.callsign,
+          role: session.role,
+        }) ?? "Администратор",
+    };
+
     const target = String(body.target ?? body.userId ?? "").trim();
     if (target === "all") {
-      const result = await sendAdminBroadcast(title, text, href);
+      const result = await sendAdminBroadcast(title, text, href, sender);
       if (!result.ok) return Response.json({ ok: false, error: result.error }, { status: 500 });
       return Response.json({ ok: true, sent: result.sent });
     }
@@ -41,7 +51,7 @@ export async function POST(req: Request) {
       return Response.json({ ok: false, error: "invalid_user_id" }, { status: 400 });
     }
 
-    const result = await sendAdminMessage(target, title, text, href);
+    const result = await sendAdminMessage(target, title, text, href, sender);
     if (!result.ok) return Response.json({ ok: false, error: result.error }, { status: 500 });
     return Response.json({ ok: true, sent: 1 });
   } catch (error) {

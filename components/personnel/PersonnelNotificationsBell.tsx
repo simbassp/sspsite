@@ -10,6 +10,7 @@ type NotificationItem = {
   href: string | null;
   isRead: boolean;
   createdAt: string;
+  senderLabel?: string | null;
 };
 
 type PersonnelNotificationsBellProps = {
@@ -115,6 +116,14 @@ export function PersonnelNotificationsBell({ compact = false }: PersonnelNotific
     return () => document.removeEventListener("mousedown", onDoc);
   }, [open]);
 
+  const renderNotificationContent = (item: NotificationItem) => (
+    <>
+      {item.senderLabel ? <span className="personnel-notify-item__from">От: {item.senderLabel}</span> : null}
+      <strong className="personnel-notify-item__title">{item.title}</strong>
+      {item.body ? <span className="personnel-notify-item__body">{item.body}</span> : null}
+    </>
+  );
+
   return (
     <div className={`personnel-notify-wrap${compact ? " personnel-notify-wrap--compact" : ""}`} ref={ref}>
       <button
@@ -207,12 +216,6 @@ export function PersonnelNotificationsBell({ compact = false }: PersonnelNotific
               <p className="personnel-notify-panel__empty">Нет уведомлений</p>
             ) : (
               items.map((item) => {
-                const inner = (
-                  <>
-                    <strong className="personnel-notify-item__title">{item.title}</strong>
-                    {item.body ? <span className="personnel-notify-item__body">{item.body}</span> : null}
-                  </>
-                );
                 if (item.href) {
                   return (
                     <Link
@@ -221,13 +224,13 @@ export function PersonnelNotificationsBell({ compact = false }: PersonnelNotific
                       className={`personnel-notify-item${item.isRead ? "" : " is-unread"}`}
                       onClick={() => setOpen(false)}
                     >
-                      {inner}
+                      {renderNotificationContent(item)}
                     </Link>
                   );
                 }
                 return (
                   <div key={item.id} className={`personnel-notify-item${item.isRead ? "" : " is-unread"}`}>
-                    {inner}
+                    {renderNotificationContent(item)}
                   </div>
                 );
               })

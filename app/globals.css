@@ -5252,6 +5252,14 @@ html[data-theme="dark"] .final-review-answer--correct {
   display: block;
 }
 
+.personnel-notify-item__from {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
 .personnel-notify-item__body {
   display: block;
   margin-top: 4px;
