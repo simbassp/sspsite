@@ -1,4 +1,5 @@
 import { canResetTestResults } from "@/lib/permissions";
+import { syncUserAchievementsByUserId } from "@/lib/achievements-server";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 import { deleteTestResultAttempt } from "@/lib/test-results-reset-server";
@@ -25,7 +26,12 @@ export async function POST(req: Request) {
 
   try {
     const supabase = getServerSupabaseServiceClient();
+    const existingQ = await supabase.from("test_results").select("user_id").eq("id", resultId).maybeSingle();
+    const targetUserId = existingQ.data?.user_id ? String(existingQ.data.user_id) : null;
     await deleteTestResultAttempt(supabase, resultId);
+    if (targetUserId) {
+      void syncUserAchievementsByUserId(targetUserId).catch(() => undefined);
+    }
     return Response.json({ ok: true, resultId });
   } catch (error) {
     return Response.json(

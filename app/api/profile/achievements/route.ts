@@ -1,10 +1,10 @@
 import {
-  loadUserAchievementProgress,
   loadUserAchievementsState,
   markAchievementNotificationsRead,
+  resolveUserUnlockedAchievementIds,
+  syncUserAchievements,
   updateUserAchievementCosmetics,
 } from "@/lib/achievements-server";
-import { computeUnlockedAchievementIds } from "@/lib/achievements-catalog";
 import { loadAchievementNotifications } from "@/lib/user-identity-cosmetics-server";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
@@ -45,8 +45,8 @@ export async function PATCH(request: Request) {
   }
 
   const employmentDate = await readEmploymentDate(session.id);
-  const progress = await loadUserAchievementProgress(session.id, employmentDate);
-  const unlockedIds = computeUnlockedAchievementIds(progress);
+  await syncUserAchievements(session.id, employmentDate);
+  const unlockedIds = await resolveUserUnlockedAchievementIds(session.id, employmentDate);
 
   const result = await updateUserAchievementCosmetics(session.id, unlockedIds, {
     avatarFrame: body.avatarFrame,

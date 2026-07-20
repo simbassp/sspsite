@@ -1,3 +1,4 @@
+import { syncUserAchievementsByUserId } from "@/lib/achievements-server";
 import { canResetTestResults } from "@/lib/permissions";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
@@ -30,6 +31,7 @@ export async function POST(req: Request) {
   try {
     const supabase = getServerSupabaseServiceClient();
     await resetTestResultsForUser(supabase, targetUserId, scope, session.id);
+    void syncUserAchievementsByUserId(targetUserId).catch(() => undefined);
     return Response.json({ ok: true, scope, targetUserId });
   } catch (error) {
     return Response.json(
