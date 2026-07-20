@@ -1,6 +1,8 @@
 "use client";
 
 import { resolveAvatarDisplayUrl, getAvatarInitials } from "@/lib/avatar-display";
+import { trialAvatarFrameClass, type TopRankBadgeId, type TrialAvatarFrameId } from "@/lib/achievements-catalog";
+import { TopRankBadge } from "@/components/achievements/TopRankBadge";
 
 type UserAvatarProps = {
   name?: string | null;
@@ -9,6 +11,8 @@ type UserAvatarProps = {
   size?: number;
   className?: string;
   title?: string;
+  avatarFrame?: TrialAvatarFrameId | null;
+  topRankBadge?: TopRankBadgeId | null;
 };
 
 export function UserAvatar({
@@ -18,26 +22,25 @@ export function UserAvatar({
   size = 64,
   className = "",
   title,
+  avatarFrame = null,
+  topRankBadge = null,
 }: UserAvatarProps) {
   const src = resolveAvatarDisplayUrl(avatarUrl);
   const initials = getAvatarInitials(name || "", callsign || "");
   const label = title || [name, callsign].filter(Boolean).join(" ").trim() || "Профиль";
+  const frameClass = trialAvatarFrameClass(avatarFrame);
 
-  if (src) {
-    return (
-      <img
-        src={src}
-        alt={label}
-        title={label}
-        width={size}
-        height={size}
-        className={`user-avatar user-avatar--photo ${className}`.trim()}
-        style={{ width: size, height: size }}
-      />
-    );
-  }
-
-  return (
+  const avatarNode = src ? (
+    <img
+      src={src}
+      alt={label}
+      title={label}
+      width={size}
+      height={size}
+      className={`user-avatar user-avatar--photo ${className}`.trim()}
+      style={{ width: size, height: size }}
+    />
+  ) : (
     <span
       className={`user-avatar user-avatar--initials ${className}`.trim()}
       style={{ width: size, height: size, fontSize: Math.max(10, Math.round(size * 0.34)) }}
@@ -45,6 +48,13 @@ export function UserAvatar({
       title={title}
     >
       {initials}
+    </span>
+  );
+
+  return (
+    <span className={`user-avatar-wrap ${frameClass}`.trim()} style={{ width: size, height: size }}>
+      {avatarNode}
+      {topRankBadge ? <TopRankBadge rank={topRankBadge} className="user-avatar-wrap__top-badge" /> : null}
     </span>
   );
 }

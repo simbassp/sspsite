@@ -10,6 +10,7 @@ export type UserIdentityParts = {
 
 type UserIdentityTextProps = UserIdentityParts & {
   className?: string;
+  colorClassOverride?: string;
   nameClassName?: string;
   callsignClassName?: string;
   separator?: ReactNode;
@@ -22,6 +23,7 @@ export function UserIdentityText({
   name,
   callsign,
   nameColor,
+  colorClassOverride,
   className,
   nameClassName,
   callsignClassName,
@@ -29,7 +31,7 @@ export function UserIdentityText({
   emptyName = "—",
   as: Tag = "span",
 }: UserIdentityTextProps) {
-  const colorClass = profileNameColorClass(nameColor ?? null);
+  const colorClass = colorClassOverride ?? profileNameColorClass(nameColor ?? null);
   const displayName = (name || "").trim();
   const displayCallsign = (callsign || "").trim();
 

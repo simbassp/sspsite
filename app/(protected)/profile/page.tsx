@@ -12,7 +12,14 @@ import { ProfileEmploymentDateField } from "@/components/profile/ProfileEmployme
 import { ProfilePersonnelMetaFields } from "@/components/profile/ProfilePersonnelMetaFields";
 import { ProfileRotaUnitFields } from "@/components/profile/ProfileRotaUnitFields";
 import { UserIdentityText } from "@/components/profile/UserIdentityText";
+import { AchievementUnlockBanner } from "@/components/achievements/AchievementUnlockBanner";
+import { AchievementMedalsRow } from "@/components/achievements/AchievementMedalsRow";
+import {
+  ProfileCosmeticsButton,
+  ProfileCosmeticsModal,
+} from "@/components/achievements/ProfileCosmeticsModal";
 import { readClientSession } from "@/lib/client-auth";
+import { finalNameColorClass, type FinalNameColorId, type TrialAvatarFrameId, type TopRankBadgeId } from "@/lib/achievements-catalog";
 import type { ProfileNameColorId } from "@/lib/profile-name-color";
 import { formatDate, formatDateTime, formatTotalTestDuration } from "@/lib/format";
 import { formatTestResultForType } from "@/lib/test-pass-rules";
@@ -145,10 +152,52 @@ export default function ProfilePage() {
   const [personnelReloadToken, setPersonnelReloadToken] = useState(0);
   const [personnelInitialPayload, setPersonnelInitialPayload] = useState<PersonnelProfileInitialPayload | null>(null);
   const [displayNameColor, setDisplayNameColor] = useState<ProfileNameColorId | null>(null);
+  const [achievementUnlockedIds, setAchievementUnlockedIds] = useState<string[]>([]);
+  const [achievementNotifications, setAchievementNotifications] = useState<
+    Array<{ id: string; title: string; body: string }>
+  >([]);
+  const [achievementAvatarFrame, setAchievementAvatarFrame] = useState<TrialAvatarFrameId | null>(null);
+  const [achievementNameColor, setAchievementNameColor] = useState<FinalNameColorId | null>(null);
+  const [achievementTopBadge, setAchievementTopBadge] = useState<TopRankBadgeId | null>(null);
+  const [cosmeticsModalOpen, setCosmeticsModalOpen] = useState(false);
+  const [cosmeticsSaving, setCosmeticsSaving] = useState(false);
   const resetStatsModal = useResetTestStatsModal("all");
   const canManageInvites = session?.role === "admin";
+  const showAchievementsPreview = session?.role === "admin";
   const canResetStats = useMemo(() => (session ? canResetTestResults(session) : false), [session]);
   const canExportExcel = useMemo(() => (session ? canManageUsers(session) : false), [session]);
+  const effectiveIdentityColorClass = useMemo(() => {
+    if (achievementNameColor) return finalNameColorClass(achievementNameColor);
+    return "";
+  }, [achievementNameColor]);
+
+  useEffect(() => {
+    if (!session?.id || !showAchievementsPreview) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await fetch("/api/profile/achievements", { cache: "no-store" });
+        const payload = (await response.json()) as {
+          ok?: boolean;
+          unlockedIds?: string[];
+          pendingNotifications?: Array<{ id: string; title: string; body: string }>;
+          cosmetics?: { avatarFrame?: TrialAvatarFrameId | null; nameColor?: FinalNameColorId | null };
+          topRankBadge?: TopRankBadgeId | null;
+        };
+        if (!response.ok || !payload.ok || cancelled) return;
+        setAchievementUnlockedIds(Array.isArray(payload.unlockedIds) ? payload.unlockedIds : []);
+        setAchievementNotifications(Array.isArray(payload.pendingNotifications) ? payload.pendingNotifications : []);
+        setAchievementAvatarFrame(payload.cosmetics?.avatarFrame ?? null);
+        setAchievementNameColor(payload.cosmetics?.nameColor ?? null);
+        setAchievementTopBadge(payload.topRankBadge ?? null);
+      } catch {
+        /* optional block */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.id, showAchievementsPreview]);
 
   useEffect(() => {
     setSession(readClientSession());
@@ -955,6 +1004,18 @@ export default function ProfilePage() {
     <section className="profile-page">
       <h1 className="page-title">Профиль</h1>
       {!!initialLoadError && <p className="page-subtitle">{initialLoadError}</p>}
+      {showAchievementsPreview ? (
+        <AchievementUnlockBanner
+          notifications={achievementNotifications}
+          onDismiss={(ids) => {
+            void fetch("/api/profile/achievements", {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ dismissNotificationIds: ids }),
+            }).then(() => setAchievementNotifications([]));
+          }}
+        />
+      ) : null}
 
       <article className="card profile-hero-card">
         <div className="card-body">
@@ -967,6 +1028,8 @@ export default function ProfilePage() {
                     callsign={session.callsign}
                     avatarUrl={avatarUrl}
                     size={64}
+                    avatarFrame={showAchievementsPreview ? achievementAvatarFrame : null}
+                    topRankBadge={showAchievementsPreview ? achievementTopBadge : null}
                     title={`${session.name || ""} ${session.callsign || ""}`.trim()}
                   />
                 </div>
@@ -976,10 +1039,12 @@ export default function ProfilePage() {
                     <p className="profile-hero-name">
                       <UserIdentityText
                         name={session.name}
-                        nameColor={displayNameColor ?? session.nameColor ?? null}
+                        nameColor={achievementNameColor ? null : displayNameColor ?? session.nameColor ?? null}
+                        colorClassOverride={effectiveIdentityColorClass || undefined}
                         emptyName="—"
                       />
                     </p>
+                    {showAchievementsPreview ? <ProfileCosmeticsButton onClick={() => setCosmeticsModalOpen(true)} /> : null}
                     <button
                       type="button"
                       className="btn profile-hero-edit-btn"
@@ -999,7 +1064,8 @@ export default function ProfilePage() {
                     <strong>
                       <UserIdentityText
                         callsign={session.callsign}
-                        nameColor={displayNameColor ?? session.nameColor ?? null}
+                        nameColor={achievementNameColor ? null : displayNameColor ?? session.nameColor ?? null}
+                        colorClassOverride={effectiveIdentityColorClass || undefined}
                         emptyName="—"
                       />
                     </strong>
@@ -1007,6 +1073,9 @@ export default function ProfilePage() {
                   {canExportExcel && session?.id ? <ProfileExportExcelButton userId={session.id} /> : null}
                 </div>
               </div>
+              {showAchievementsPreview ? (
+                <AchievementMedalsRow unlockedIds={achievementUnlockedIds} />
+              ) : null}
               <div className="profile-hero-status-block">
                 <div className="profile-hero-status-inline">
                   <span className="profile-hero-status-value">
@@ -1124,6 +1193,46 @@ export default function ProfilePage() {
           onActivityData={setPersonnelActivity}
           reloadToken={personnelReloadToken}
           initialPayload={personnelInitialPayload}
+        />
+      ) : null}
+
+      {showAchievementsPreview ? (
+        <ProfileCosmeticsModal
+          open={cosmeticsModalOpen}
+          onClose={() => {
+            if (cosmeticsSaving) return;
+            setCosmeticsModalOpen(false);
+          }}
+          unlockedIds={achievementUnlockedIds}
+          adminPreviewAll
+          name={session.name ?? ""}
+          callsign={session.callsign ?? ""}
+          avatarUrl={avatarUrl}
+          avatarFrame={achievementAvatarFrame}
+          nameColor={achievementNameColor}
+          saving={cosmeticsSaving}
+          onSave={(next) => {
+            void (async () => {
+              setCosmeticsSaving(true);
+              try {
+                const response = await fetch("/api/profile/achievements", {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(next),
+                });
+                const payload = (await response.json()) as {
+                  ok?: boolean;
+                  cosmetics?: { avatarFrame?: TrialAvatarFrameId | null; nameColor?: FinalNameColorId | null };
+                };
+                if (!response.ok || !payload.ok) return;
+                setAchievementAvatarFrame(payload.cosmetics?.avatarFrame ?? null);
+                setAchievementNameColor(payload.cosmetics?.nameColor ?? null);
+                setCosmeticsModalOpen(false);
+              } finally {
+                setCosmeticsSaving(false);
+              }
+            })();
+          }}
         />
       ) : null}
 

@@ -6202,3 +6202,274 @@ html[data-theme="dark"] .final-review-answer--correct {
   gap: 8px;
   margin-top: 14px;
 }
+
+/* Achievements */
+.user-avatar-wrap {
+  position: relative;
+  display: inline-flex;
+  border-radius: 999px;
+}
+
+.user-avatar-wrap .user-avatar {
+  border-radius: 999px;
+}
+
+.user-avatar-wrap__top-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  z-index: 2;
+}
+
+.top-rank-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  border: 2px solid var(--panel);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+
+.top-rank-badge--top-1 {
+  background: linear-gradient(135deg, #fde68a, #f59e0b);
+  color: #78350f;
+}
+
+.top-rank-badge--top-2 {
+  background: linear-gradient(135deg, #e2e8f0, #94a3b8);
+  color: #334155;
+}
+
+.top-rank-badge--top-3 {
+  background: linear-gradient(135deg, #fdba74, #ea580c);
+  color: #7c2d12;
+}
+
+.avatar-frame {
+  border-radius: 999px;
+  padding: 2px;
+}
+
+.avatar-frame--trial-frame-100 {
+  box-shadow: 0 0 0 2px color-mix(in srgb, #94a3b8 55%, transparent);
+}
+
+.avatar-frame--trial-frame-250 {
+  box-shadow: 0 0 0 2px color-mix(in srgb, #38bdf8 55%, transparent);
+}
+
+.avatar-frame--trial-frame-500 {
+  box-shadow: 0 0 0 2px color-mix(in srgb, #22c55e 60%, transparent), 0 0 10px color-mix(in srgb, #22c55e 25%, transparent);
+}
+
+.avatar-frame--trial-frame-1000 {
+  box-shadow: 0 0 0 2px color-mix(in srgb, #eab308 70%, transparent), 0 0 12px color-mix(in srgb, #eab308 30%, transparent);
+}
+
+.avatar-frame--trial-frame-5000 {
+  box-shadow: 0 0 0 2px color-mix(in srgb, #06b6d4 75%, transparent), 0 0 14px color-mix(in srgb, #06b6d4 35%, transparent);
+}
+
+.avatar-frame--trial-frame-10000 {
+  background: linear-gradient(135deg, #22d3ee, #6366f1, #ec4899, #22d3ee);
+  background-size: 300% 300%;
+  animation: profile-name-gradient-shift 4s linear infinite;
+  box-shadow: 0 0 16px color-mix(in srgb, #6366f1 35%, transparent);
+}
+
+.profile-name-color--ach-final-50 { color: #64748b; }
+.profile-name-color--ach-final-100 { color: #059669; }
+.profile-name-color--ach-final-250 { color: #0284c7; }
+.profile-name-color--ach-final-500 { color: #7c3aed; }
+.profile-name-color--ach-final-1000 { color: #ca8a04; }
+
+.profile-name-color--ach-final-5000 {
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  background-image: linear-gradient(90deg, #f59e0b, #ef4444, #a855f7, #f59e0b);
+  animation: profile-name-gradient-shift 4s linear infinite;
+}
+
+.achievement-unlock-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+}
+
+.achievement-unlock-banner__body {
+  display: grid;
+  gap: 4px;
+}
+
+.achievement-medals-row {
+  margin-top: 10px;
+}
+
+.achievement-medals-row__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.achievement-medals-row__item {
+  position: relative;
+  display: inline-flex;
+  padding: 4px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.achievement-medals-row__item.is-active,
+.achievement-medals-row__item:hover {
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--muted) 8%, transparent);
+}
+
+.achievement-medals-row__tip {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  z-index: 5;
+  min-width: 180px;
+  display: none;
+  grid-gap: 2px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  font-size: 12px;
+  text-align: left;
+}
+
+.achievement-medals-row__item.is-active .achievement-medals-row__tip,
+.achievement-medals-row__item:hover .achievement-medals-row__tip {
+  display: grid;
+}
+
+.profile-cosmetics-modal {
+  width: min(560px, calc(100vw - 24px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+}
+
+.profile-cosmetics-modal__head,
+.profile-cosmetics-modal__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.profile-cosmetics-modal__preview {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 14px 0;
+  padding: 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--muted) 6%, transparent);
+}
+
+.profile-cosmetics-modal__preview-note {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.profile-cosmetics-section {
+  margin-top: 16px;
+}
+
+.profile-cosmetics-section h4 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.profile-cosmetics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.profile-cosmetics-option {
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  padding: 10px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.profile-cosmetics-option.is-selected {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.profile-cosmetics-option__sample {
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.profile-cosmetics-option__swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--panel);
+  box-shadow: inherit;
+}
+
+.profile-cosmetics-option--frame.profile-cosmetics-option--frame.avatar-frame--trial-frame-100 .profile-cosmetics-option__swatch {
+  box-shadow: 0 0 0 2px #94a3b8;
+}
+
+.profile-cosmetics-option--frame.avatar-frame--trial-frame-250 .profile-cosmetics-option__swatch {
+  box-shadow: 0 0 0 2px #38bdf8;
+}
+
+.profile-cosmetics-option--frame.avatar-frame--trial-frame-500 .profile-cosmetics-option__swatch {
+  box-shadow: 0 0 0 2px #22c55e, 0 0 8px color-mix(in srgb, #22c55e 35%, transparent);
+}
+
+.profile-cosmetics-option--frame.avatar-frame--trial-frame-1000 .profile-cosmetics-option__swatch {
+  box-shadow: 0 0 0 2px #eab308, 0 0 8px color-mix(in srgb, #eab308 35%, transparent);
+}
+
+.profile-cosmetics-option--frame.avatar-frame--trial-frame-5000 .profile-cosmetics-option__swatch {
+  box-shadow: 0 0 0 2px #06b6d4, 0 0 10px color-mix(in srgb, #06b6d4 35%, transparent);
+}
+
+.profile-cosmetics-option--frame.avatar-frame--trial-frame-10000 .profile-cosmetics-option__swatch {
+  background: linear-gradient(135deg, #22d3ee, #6366f1, #ec4899);
+}
+
+.profile-hero-cosmetics-btn {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 720px) {
+  .achievement-medals-row__item:hover .achievement-medals-row__tip {
+    display: none;
+  }
+
+  .achievement-medals-row__item.is-active .achievement-medals-row__tip {
+    display: grid;
+  }
+}
