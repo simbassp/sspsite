@@ -25,7 +25,7 @@ import { generateUavTtxQuestionBank } from "@/lib/uav-test-generator";
 import { fetchUavItems } from "@/lib/uav-repository";
 import { TestConfig, TestQuestion, TestResult } from "@/lib/types";
 
-const TRIAL_FEEDBACK_MS = 2600;
+const ANSWER_TRANSITION_MS = 3000;
 const QUESTION_START_COUNTDOWN_SEC = 3;
 
 function formatAttemptDuration(value: number | null | undefined) {
@@ -56,6 +56,7 @@ function resolveBankTimeFromQuestions(questions: TestQuestion[]) {
 }
 
 type TrialFeedback = { chosen: number | null; correct: number };
+type FinalTransition = { chosen: number | null };
 
 type FinalReviewItem = {
   questionText: string;
@@ -128,6 +129,7 @@ export default function TestsPage() {
   const [timeLeft, setTimeLeft] = useState(0);
   const [isAnswering, setIsAnswering] = useState(false);
   const [trialFeedback, setTrialFeedback] = useState<TrialFeedback | null>(null);
+  const [finalTransition, setFinalTransition] = useState<FinalTransition | null>(null);
   const [finalReview, setFinalReview] = useState<FinalReview | null>(null);
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [bootstrapError, setBootstrapError] = useState("");
@@ -153,6 +155,8 @@ export default function TestsPage() {
 
   const isAnsweringRef = useRef(false);
   isAnsweringRef.current = isAnswering;
+  const finalTransitionRef = useRef(false);
+  finalTransitionRef.current = finalTransition != null;
 
   /** Один раз на вопрос срабатывает истечение таймера (без «ложного» нуля из старого состояния). */
   const expireHandledForQuestionIdRef = useRef<string | null>(null);
@@ -163,6 +167,8 @@ export default function TestsPage() {
   const activeTestRef = useRef<"trial" | "final" | null>(null);
   const trialRevealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const completeTrialAfterRevealRef = useRef<() => void>(() => {});
+  const completeFinalAfterTransitionRef = useRef<() => void>(() => {});
+  const beginFinalAnswerTransitionRef = useRef<(optionIndex: number) => void>(() => {});
   const testStartedAtRef = useRef<string | null>(null);
   const testCardRef = useRef<HTMLDivElement | null>(null);
   const finalReviewRef = useRef<HTMLDivElement | null>(null);
@@ -464,6 +470,7 @@ export default function TestsPage() {
       clearTimeout(trialRevealTimerRef.current);
       trialRevealTimerRef.current = null;
     }
+    setFinalTransition(null);
     return () => {
       if (trialRevealTimerRef.current) {
         clearTimeout(trialRevealTimerRef.current);
@@ -531,7 +538,7 @@ export default function TestsPage() {
   }, [startCountdown]);
 
   useEffect(() => {
-    if (!isTestStarted || !activeTest || !currentQuestion || trialFeedback) return;
+    if (!isTestStarted || !activeTest || !currentQuestion || trialFeedback || finalTransition) return;
     const id = window.setInterval(() => {
       setTimeLeft((prev) => {
         const qNow = currentQuestionRef.current;
@@ -557,9 +564,9 @@ export default function TestsPage() {
               trialRevealTimerRef.current = setTimeout(() => {
                 trialRevealTimerRef.current = null;
                 completeTrialAfterRevealRef.current();
-              }, TRIAL_FEEDBACK_MS);
+              }, ANSWER_TRANSITION_MS);
             } else {
-              void submitFinalAnswer(-1);
+              beginFinalAnswerTransitionRef.current(-1);
             }
           });
           return 0;
@@ -568,7 +575,7 @@ export default function TestsPage() {
       });
     }, 1000);
     return () => window.clearInterval(id);
-  }, [activeTest, currentQuestion?.id, trialFeedback, isTestStarted]);
+  }, [activeTest, currentQuestion?.id, trialFeedback, finalTransition, isTestStarted]);
 
   useEffect(() => {
     if (!historyExpanded && historyPage !== 1) setHistoryPage(1);
@@ -621,6 +628,7 @@ export default function TestsPage() {
     currentQuestionRef.current = undefined;
     setTimeLeft(0);
     setTrialFeedback(null);
+    setFinalTransition(null);
     setIsTestStarted(false);
     setIsAnswering(false);
     if (trialRevealTimerRef.current) {
@@ -680,32 +688,53 @@ export default function TestsPage() {
 
   completeTrialAfterRevealRef.current = completeTrialAfterReveal;
 
-  const submitFinalAnswer = async (optionIndex: number) => {
+  const beginFinalAnswerTransition = (optionIndex: number) => {
     const at = activeTestRef.current;
     const q = currentQuestionRef.current;
-    const idx = questionIndexRef.current;
-    const list = activeQuestionsRef.current;
-    if (!isTestStarted || !at || at !== "final" || !q || isAnsweringRef.current) return;
+    if (!isTestStarted || !at || at !== "final" || !q || isAnsweringRef.current || finalTransitionRef.current) return;
     setIsAnswering(true);
     const nextAnswers = { ...answersRef.current, [q.id]: optionIndex };
     answersRef.current = nextAnswers;
     setAnswers(nextAnswers);
+    setFinalTransition({ chosen: optionIndex >= 0 ? optionIndex : null });
+    if (trialRevealTimerRef.current) clearTimeout(trialRevealTimerRef.current);
+    trialRevealTimerRef.current = setTimeout(() => {
+      trialRevealTimerRef.current = null;
+      completeFinalAfterTransitionRef.current();
+    }, ANSWER_TRANSITION_MS);
+  };
 
-    if (idx < list.length - 1) {
-      const nextIndex = idx + 1;
-      setQuestionIndex(nextIndex);
-      await persistFinalAttempt({
-        userId: session!.id,
-        startedAt: new Date().toISOString(),
-        questionIndex: nextIndex,
-        answers: Object.fromEntries(Object.entries(nextAnswers).map(([k, v]) => [k, String(v)])),
-      });
+  beginFinalAnswerTransitionRef.current = beginFinalAnswerTransition;
+
+  const completeFinalAfterTransition = () => {
+    setFinalTransition(null);
+    const idx = questionIndexRef.current;
+    const list = activeQuestionsRef.current;
+    const nextAnswers = answersRef.current;
+    if (!session || !list.length) {
       setIsAnswering(false);
       return;
     }
-
-    await finishAttempt("final", nextAnswers);
+    if (idx >= list.length - 1) {
+      void finishAttempt("final", nextAnswers);
+      setIsAnswering(false);
+      return;
+    }
+    const nextIndex = idx + 1;
+    setQuestionIndex(nextIndex);
+    void persistFinalAttempt({
+      userId: session.id,
+      startedAt: testStartedAtRef.current || new Date().toISOString(),
+      questionIndex: nextIndex,
+      answers: Object.fromEntries(Object.entries(nextAnswers).map(([k, v]) => [k, String(v)])),
+    });
     setIsAnswering(false);
+  };
+
+  completeFinalAfterTransitionRef.current = completeFinalAfterTransition;
+
+  const submitFinalAnswer = (optionIndex: number) => {
+    beginFinalAnswerTransition(optionIndex);
   };
 
   const onTrialOptionClick = (optionIndex: number) => {
@@ -720,7 +749,7 @@ export default function TestsPage() {
     trialRevealTimerRef.current = setTimeout(() => {
       trialRevealTimerRef.current = null;
       completeTrialAfterRevealRef.current();
-    }, TRIAL_FEEDBACK_MS);
+    }, ANSWER_TRANSITION_MS);
   };
 
   const onTrial = async () => {
@@ -746,6 +775,7 @@ export default function TestsPage() {
     const first = randomQuestions[0];
     expireHandledForQuestionIdRef.current = null;
     setTrialFeedback(null);
+    setFinalTransition(null);
     setFinalReview(null);
     setActiveTest("trial");
     setIsTestStarted(false);
@@ -796,6 +826,7 @@ export default function TestsPage() {
     await beginFinalAttempt(session.id);
     expireHandledForQuestionIdRef.current = null;
     setTrialFeedback(null);
+    setFinalTransition(null);
     setFinalReview(null);
     setActiveTest("final");
     setIsTestStarted(false);
@@ -1008,6 +1039,11 @@ export default function TestsPage() {
             <p className="page-subtitle" style={{ marginTop: 8 }}>
               {!isTestStarted && startCountdown != null ? (
                 <>Начинаем через {startCountdown} с…</>
+              ) : activeTest === "final" && finalTransition ? (
+                <>
+                  {finalTransition.chosen === null ? "Время вышло." : "Ответ принят."} Следующий вопрос через{" "}
+                  {Math.ceil(ANSWER_TRANSITION_MS / 1000)} с…
+                </>
               ) : activeTest === "trial" && trialFeedback ? (
                 <>
                   {trialFeedback.chosen === null
@@ -1015,7 +1051,7 @@ export default function TestsPage() {
                     : trialFeedback.chosen === trialFeedback.correct
                       ? "Верно. Правильный ответ подсвечен."
                       : "Неверно. Ваш вариант — красным, правильный — зелёным."}{" "}
-                  Следующий вопрос через {Math.ceil(TRIAL_FEEDBACK_MS / 1000)} с…
+                  Следующий вопрос через {Math.ceil(ANSWER_TRANSITION_MS / 1000)} с…
                 </>
               ) : (
                 <>Осталось времени на ответ:</>
@@ -1048,7 +1084,10 @@ export default function TestsPage() {
                       className={`btn test-option-btn ${activeTest === "trial" && trialFeedback ? "test-option-btn--trial-reveal" : ""}`}
                       type="button"
                       key={`${currentQuestion.id}-${index}-${option}`}
-                      disabled={(activeTest === "trial" && !!trialFeedback) || (activeTest === "final" && isAnswering)}
+                      disabled={
+                        (activeTest === "trial" && !!trialFeedback) ||
+                        (activeTest === "final" && (!!finalTransition || isAnswering))
+                      }
                       onClick={() => {
                         if (activeTest === "trial") void onTrialOptionClick(index);
                         else void submitFinalAnswer(index);
