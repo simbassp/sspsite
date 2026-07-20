@@ -3544,6 +3544,18 @@ html[data-theme="dark"] .trial-feedback-btn--dim {
   background: color-mix(in srgb, #d64a4a 22%, var(--panel));
 }
 
+.test-option-letter--selected {
+  border-color: var(--brand);
+  color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 20%, var(--panel));
+}
+
+.test-option-btn--final-selected {
+  border-color: color-mix(in srgb, var(--brand) 60%, var(--line));
+  background: color-mix(in srgb, var(--brand) 12%, var(--glass));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand) 24%, transparent);
+}
+
 .final-review-card {
   border-left: 4px solid var(--brand);
 }

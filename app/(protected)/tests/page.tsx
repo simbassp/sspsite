@@ -839,11 +839,14 @@ export default function TestsPage() {
     setMessage(`Итоговый тест запущен: ${randomQuestions.length} случайных вопросов. Режим строгий.`);
   };
 
-  const getTrialOptionState = (index: number) => {
-    if (activeTest !== "trial" || !trialFeedback) return "neutral";
-    const { chosen, correct } = trialFeedback;
-    if (index === correct) return "correct";
-    if (chosen !== null && index === chosen && chosen !== correct) return "wrong";
+  const getOptionLetterState = (index: number) => {
+    if (activeTest === "trial" && trialFeedback) {
+      const { chosen, correct } = trialFeedback;
+      if (index === correct) return "correct";
+      if (chosen !== null && index === chosen && chosen !== correct) return "wrong";
+      return "neutral";
+    }
+    if (activeTest === "final" && finalTransition?.chosen === index) return "selected";
     return "neutral";
   };
 
