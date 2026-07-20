@@ -262,148 +262,154 @@ export default function AdminResultsPage() {
       {!!resetMessage && <p className="page-subtitle">{resetMessage}</p>}
 
       <article className="card" style={{ marginTop: 12 }}>
-        <div className="card-body personnel-filters">
-          <div className="personnel-filters__wide">
-            <p className="label">Период</p>
-            <div className="admin-results-period">
-              <input
-                className="input admin-results-period__date"
-                type="date"
-                value={dateFrom}
-                onChange={(e) => {
-                  setDateFrom(e.target.value);
-                  setPeriodMode(e.target.value || dateTo ? "custom" : "all");
-                }}
-              />
-              <span className="admin-results-period__sep">—</span>
-              <input
-                className="input admin-results-period__date"
-                type="date"
-                value={dateTo}
-                onChange={(e) => {
-                  setDateTo(e.target.value);
-                  setPeriodMode(e.target.value || dateFrom ? "custom" : "all");
-                }}
-              />
-              <button
-                className={`btn ${periodMode === "today" ? "btn-primary" : ""}`}
-                type="button"
-                onClick={() => {
-                  setPeriodMode("today");
-                  setDateFrom("");
-                  setDateTo("");
-                }}
-              >
-                Сегодня
-              </button>
-              <button
-                className={`btn ${periodMode === "all" ? "btn-primary" : ""}`}
-                type="button"
-                onClick={() => {
-                  setPeriodMode("all");
-                  setDateFrom("");
-                  setDateTo("");
-                }}
-              >
-                Все
-              </button>
+        <div className="card-body personnel-filters admin-results-filters">
+          <div
+            className={`personnel-filters__row admin-results-filters__row--primary${unitFilter === "company_4" ? " has-rota" : ""}`}
+          >
+            <div className="personnel-filters__field admin-results-filters__period">
+              <p className="label">Период</p>
+              <div className="admin-results-period">
+                <input
+                  className="input admin-results-period__date"
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => {
+                    setDateFrom(e.target.value);
+                    setPeriodMode(e.target.value || dateTo ? "custom" : "all");
+                  }}
+                />
+                <span className="admin-results-period__sep">—</span>
+                <input
+                  className="input admin-results-period__date"
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => {
+                    setDateTo(e.target.value);
+                    setPeriodMode(e.target.value || dateFrom ? "custom" : "all");
+                  }}
+                />
+                <button
+                  className={`btn ${periodMode === "today" ? "btn-primary" : ""}`}
+                  type="button"
+                  onClick={() => {
+                    setPeriodMode("today");
+                    setDateFrom("");
+                    setDateTo("");
+                  }}
+                >
+                  Сегодня
+                </button>
+                <button
+                  className={`btn ${periodMode === "all" ? "btn-primary" : ""}`}
+                  type="button"
+                  onClick={() => {
+                    setPeriodMode("all");
+                    setDateFrom("");
+                    setDateTo("");
+                  }}
+                >
+                  Все
+                </button>
+              </div>
             </div>
+
+            <div className="personnel-filters__field">
+              <p className="label">Подразделение</p>
+              <select
+                className="select"
+                value={unitFilter}
+                onChange={(e) => setUnitFilter(e.target.value as UnitAssignmentFilter)}
+              >
+                <option value="all">Все подразделения</option>
+                <option value="unset">Не указано</option>
+                {UNIT_ASSIGNMENT_OPTIONS.map((unit) => (
+                  <option key={unit} value={unit}>
+                    {unitAssignmentLabel[unit]}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {unitFilter === "company_4" && (
+              <>
+                <div className="personnel-filters__field">
+                  <p className="label">Взвод</p>
+                  <select
+                    className="select"
+                    value={rotaPlatoon}
+                    onChange={(e) => setRotaPlatoon(e.target.value as RotaPlatoonFilter)}
+                  >
+                    <option value="all">Все</option>
+                    {ROTA_PLATOON_OPTIONS.map((value) => (
+                      <option key={value} value={String(value)}>
+                        {value} взвод
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="personnel-filters__field">
+                  <p className="label">Отделение</p>
+                  <select
+                    className="select"
+                    value={rotaSection}
+                    onChange={(e) => setRotaSection(e.target.value as RotaSectionFilter)}
+                  >
+                    <option value="all">Все</option>
+                    {ROTA_SECTION_OPTIONS.map((value) => (
+                      <option key={value} value={String(value)}>
+                        {value}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
           </div>
 
-          <div>
-            <p className="label">Подразделение</p>
-            <select
-              className="select"
-              value={unitFilter}
-              onChange={(e) => setUnitFilter(e.target.value as UnitAssignmentFilter)}
-            >
-              <option value="all">Все подразделения</option>
-              <option value="unset">Не указано</option>
-              {UNIT_ASSIGNMENT_OPTIONS.map((unit) => (
-                <option key={unit} value={unit}>
-                  {unitAssignmentLabel[unit]}
-                </option>
-              ))}
-            </select>
-          </div>
+          <div className="personnel-filters__row admin-results-filters__row--secondary">
+            <div className="personnel-filters__field admin-results-filters__search">
+              <p className="label">Поиск</p>
+              <input
+                className="input"
+                type="text"
+                placeholder="Имя или позывной"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
 
-          {unitFilter === "company_4" && (
-            <>
-              <div>
-                <p className="label">Взвод</p>
-                <select
-                  className="select"
-                  value={rotaPlatoon}
-                  onChange={(e) => setRotaPlatoon(e.target.value as RotaPlatoonFilter)}
-                >
-                  <option value="all">Все</option>
-                  {ROTA_PLATOON_OPTIONS.map((value) => (
-                    <option key={value} value={String(value)}>
-                      {value} взвод
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <p className="label">Отделение</p>
-                <select
-                  className="select"
-                  value={rotaSection}
-                  onChange={(e) => setRotaSection(e.target.value as RotaSectionFilter)}
-                >
-                  <option value="all">Все</option>
-                  {ROTA_SECTION_OPTIONS.map((value) => (
-                    <option key={value} value={String(value)}>
-                      {value}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </>
-          )}
+            <div className="personnel-filters__field">
+              <p className="label">Тест</p>
+              <select
+                className="select"
+                value={typeFilter}
+                onChange={(e) => {
+                  const next = e.target.value as TestTypeFilter;
+                  setTypeFilter(next);
+                  if (next === "trial" && statusFilter === "not_started") {
+                    setStatusFilter("all");
+                  }
+                }}
+              >
+                <option value="all">Все</option>
+                <option value="trial">Пробный</option>
+                <option value="final">Итоговый</option>
+              </select>
+            </div>
 
-          <div className="personnel-filters__wide">
-            <p className="label">Поиск</p>
-            <input
-              className="input"
-              type="text"
-              placeholder="Имя или позывной"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <p className="label">Тест</p>
-            <select
-              className="select"
-              value={typeFilter}
-              onChange={(e) => {
-                const next = e.target.value as TestTypeFilter;
-                setTypeFilter(next);
-                if (next === "trial" && statusFilter === "not_started") {
-                  setStatusFilter("all");
-                }
-              }}
-            >
-              <option value="all">Все</option>
-              <option value="trial">Пробный</option>
-              <option value="final">Итоговый</option>
-            </select>
-          </div>
-
-          <div>
-            <p className="label">Результат</p>
-            <select
-              className="select"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-            >
-              <option value="all">Все</option>
-              <option value="passed">Сдал</option>
-              <option value="failed">Не сдал</option>
-              {showNotStartedFilter && <option value="not_started">Не проходил итог</option>}
-            </select>
+            <div className="personnel-filters__field">
+              <p className="label">Результат</p>
+              <select
+                className="select"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+              >
+                <option value="all">Все</option>
+                <option value="passed">Сдал</option>
+                <option value="failed">Не сдал</option>
+                {showNotStartedFilter && <option value="not_started">Не проходил итог</option>}
+              </select>
+            </div>
           </div>
         </div>
       </article>
