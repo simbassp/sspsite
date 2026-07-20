@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
   GAME_DAILY_TOURNAMENT,
   GAME_MODES,
-  GAME_PLAYER_PREVIEW,
   GAME_RECENT_ACHIEVEMENTS,
   GAME_SEASON_LEADERBOARD,
   GAME_TRAINING_PICKS,
@@ -13,6 +13,7 @@ import {
   getDailyTournamentTargetMs,
   type GameModeId,
 } from "@/lib/game-preview-data";
+import { gameAccuracy, loadGameStats, type GameStoredStats } from "@/lib/game-stats";
 
 function ModeIcon({ id }: { id: GameModeId }) {
   switch (id) {
@@ -91,9 +92,16 @@ function AchievementIcon({ type }: { type: "fire" | "bolt" | "star" }) {
 }
 
 export function GameHubPage() {
-  const player = GAME_PLAYER_PREVIEW;
+  const router = useRouter();
+  const [stats, setStats] = useState<GameStoredStats | null>(null);
   const [countdown, setCountdown] = useState("00:00:00");
-  const [notice, setNotice] = useState("");
+
+  useEffect(() => {
+    setStats(loadGameStats());
+    const onFocus = () => setStats(loadGameStats());
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, []);
 
   useEffect(() => {
     const tick = () => {
@@ -105,13 +113,15 @@ export function GameHubPage() {
     return () => window.clearInterval(timer);
   }, []);
 
-  const xpPercent = useMemo(
-    () => Math.min(100, Math.round((player.xp / player.xpToNext) * 100)),
-    [player.xp, player.xpToNext],
-  );
+  const xpPercent = useMemo(() => {
+    if (!stats) return 0;
+    const xp = stats.totalCorrect * 10;
+    const xpToNext = 500;
+    return Math.min(100, Math.round((xp / xpToNext) * 100));
+  }, [stats]);
 
-  const onPlay = (modeTitle: string) => {
-    setNotice(`Режим «${modeTitle}» пока в разработке. Это preview-версия раздела для администраторов.`);
+  const onPlay = (modeId: GameModeId) => {
+    router.push(`/game/${modeId}`);
   };
 
   return (
@@ -120,7 +130,7 @@ export function GameHubPage() {
         <div>
           <p className="game-page__kicker">Preview · только администратор</p>
           <h1 className="page-title">Полигон</h1>
-          <p className="page-subtitle">Игровой раздел по ТТХ и карточкам БПЛА. Сейчас доступен как макет без влияния на остальной сайт.</p>
+          <p className="page-subtitle">Игровой раздел по ТТХ и карточкам БПЛА. Все режимы playable в preview — статистика сохраняется локально в браузере.</p>
         </div>
         <div className="game-page__head-note card">
           <div className="card-body">
@@ -132,33 +142,29 @@ export function GameHubPage() {
         </div>
       </div>
 
-      {notice ? <p className="game-page__notice">{notice}</p> : null}
-
       <div className="game-page__stats card">
         <div className="card-body game-page__stats-grid">
           <div className="game-stat">
             <span className="game-stat__label">Уровень</span>
             <strong className="game-stat__value">
-              {player.level} · {player.levelTitle}
+              {stats ? Math.max(1, Math.floor(stats.totalCorrect / 20) + 1) : 1} · Preview
             </strong>
             <div className="game-stat__bar" aria-hidden>
               <span style={{ width: `${xpPercent}%` }} />
             </div>
-            <small>
-              {player.xp} / {player.xpToNext} XP
-            </small>
+            <small>{stats ? stats.totalCorrect * 10 : 0} XP (локально)</small>
           </div>
           <div className="game-stat">
-            <span className="game-stat__label">Серия побед</span>
-            <strong className="game-stat__value">{player.streak}</strong>
+            <span className="game-stat__label">Лучший блиц</span>
+            <strong className="game-stat__value">{stats?.bestBlitz ?? 0}</strong>
           </div>
           <div className="game-stat">
             <span className="game-stat__label">Точность</span>
-            <strong className="game-stat__value">{player.accuracy}%</strong>
+            <strong className="game-stat__value">{stats ? gameAccuracy(stats) : 0}%</strong>
           </div>
           <div className="game-stat">
-            <span className="game-stat__label">Лучший ранг</span>
-            <strong className="game-stat__value">{player.bestRank}</strong>
+            <span className="game-stat__label">Выживание</span>
+            <strong className="game-stat__value">{stats?.bestSurvival ?? 0}</strong>
           </div>
         </div>
       </div>
@@ -180,7 +186,7 @@ export function GameHubPage() {
                   </div>
                   <h3>{mode.title}</h3>
                   <p className="page-subtitle game-mode-card__desc">{mode.description}</p>
-                  <button type="button" className="btn btn-primary game-mode-card__play" onClick={() => onPlay(mode.title)}>
+                  <button type="button" className="btn btn-primary game-mode-card__play" onClick={() => onPlay(mode.id)}>
                     Играть
                   </button>
                 </div>
@@ -205,8 +211,8 @@ export function GameHubPage() {
                     <li key={item}>{item}</li>
                   ))}
                 </ul>
-                <button type="button" className="btn" onClick={() => onPlay("Турнир")}>
-                  Записаться
+                <button type="button" className="btn" onClick={() => onPlay("tournament")}>
+                  Играть турнир
                 </button>
               </div>
             </article>

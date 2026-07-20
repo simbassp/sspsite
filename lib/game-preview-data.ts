@@ -1,13 +1,5 @@
-export type GameModeId = "duel" | "team" | "blitz" | "survival" | "ladder" | "tournament";
-
-export type GameModePreview = {
-  id: GameModeId;
-  title: string;
-  description: string;
-  tone: "red" | "blue" | "orange" | "green" | "purple" | "amber";
-  badge?: string;
-  onlineHint?: string;
-};
+export type { GameModeId } from "@/lib/game-modes";
+export { GAME_MODE_CONFIGS as GAME_MODES } from "@/lib/game-modes";
 
 export const GAME_PLAYER_PREVIEW = {
   level: 12,
@@ -18,50 +10,6 @@ export const GAME_PLAYER_PREVIEW = {
   accuracy: 87,
   bestRank: "Серебро II",
 };
-
-export const GAME_MODES: GameModePreview[] = [
-  {
-    id: "duel",
-    title: "Дуэль",
-    description: "10 одинаковых вопросов против другого игрока онлайн. Побеждает точность и скорость.",
-    tone: "red",
-    badge: "Топ",
-    onlineHint: "3 онлайн",
-  },
-  {
-    id: "team",
-    title: "Командный бой",
-    description: "Две команды соревнуются в общем зачёте по ТТХ и распознаванию БПЛА.",
-    tone: "blue",
-    onlineHint: "Скоро",
-  },
-  {
-    id: "blitz",
-    title: "Блиц",
-    description: "60 секунд — максимум правильных ответов. Ежедневный рейтинг обнуляется в полночь.",
-    tone: "orange",
-    badge: "Ежедневно",
-  },
-  {
-    id: "survival",
-    title: "Выживание",
-    description: "Серия вопросов подряд. Ошибка — начинаете сначала. Боритесь за рекорд лестницы.",
-    tone: "green",
-  },
-  {
-    id: "ladder",
-    title: "Лестница",
-    description: "100 вопросов без права на ошибку. Лучший результат сохраняется в таблице рекордов.",
-    tone: "purple",
-  },
-  {
-    id: "tournament",
-    title: "Турнир",
-    description: "Каждый вечер в 20:00 — один тест для всех. Автоматический рейтинг и награды XP.",
-    tone: "amber",
-    badge: "20:00",
-  },
-];
 
 export const GAME_SEASON_LEADERBOARD = [
   { place: 1, name: "Азат", callsign: "Сталин", xp: 4820, delta: "+120" },

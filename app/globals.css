@@ -5905,3 +5905,114 @@ html[data-theme="dark"] .final-review-answer--correct {
     flex-direction: column;
   }
 }
+
+.game-session {
+  display: grid;
+  gap: 12px;
+}
+
+.game-session__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.game-session__back {
+  flex: 0 0 auto;
+}
+
+.game-session__intro h2,
+.game-session__result h2,
+.game-session__question {
+  margin: 8px 0 0;
+}
+
+.game-session__rules {
+  margin: 12px 0 16px;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.game-session__rules li + li {
+  margin-top: 4px;
+}
+
+.game-session__error {
+  margin: 0 0 12px;
+  color: var(--bad);
+}
+
+.game-session__hud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.game-session__versus {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.game-session__question {
+  font-size: 20px;
+  line-height: 1.35;
+}
+
+.game-session__options {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.game-session__option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  justify-content: flex-start;
+  white-space: normal;
+}
+
+.game-session__option-letter {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  background: color-mix(in srgb, var(--muted) 12%, var(--panel));
+}
+
+.game-session__option.is-correct {
+  border-color: color-mix(in srgb, #2faa6d 50%, var(--line));
+  background: color-mix(in srgb, #2faa6d 12%, var(--panel));
+}
+
+.game-session__option.is-wrong {
+  border-color: color-mix(in srgb, var(--bad) 50%, var(--line));
+  background: color-mix(in srgb, var(--bad) 10%, var(--panel));
+}
+
+.game-session__opponent {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.game-session__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
