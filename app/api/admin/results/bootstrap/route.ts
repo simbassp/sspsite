@@ -5,7 +5,7 @@ import { normalizeProfileNameColor, type ProfileNameColorId } from "@/lib/profil
 import { loadIdentityCosmeticsMap } from "@/lib/user-identity-cosmetics-server";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
-import { normalizeUnitAssignment } from "@/lib/unit-assignment";
+import { normalizeUnitAssignment, matchesResultsUnitFilter, type RotaPlatoonFilter, type RotaSectionFilter, type UnitAssignmentFilter } from "@/lib/unit-assignment";
 import type { UnitAssignment } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -94,6 +94,105 @@ function applyCreatedAtRange<T extends { gte: (col: string, val: string) => T; l
   return next;
 }
 
+type AttemptListQuery = {
+  page: number;
+  pageSize: number;
+  typeFilter: "all" | "trial" | "final";
+  statusFilter: "all" | "passed" | "failed" | "not_started";
+  allowedUserIds: string[] | null;
+  startIso: string | null;
+  endIso: string | null;
+};
+
+async function fetchFinalResultsForSummaries(
+  supabase: ReturnType<typeof getServerSupabaseServiceClient>,
+): Promise<Array<Record<string, unknown>>> {
+  const selectFull =
+    "id,user_id,type,status,score,created_at,questions_total,questions_correct,final_attempt_index";
+  const selectMid = "id,user_id,type,status,score,created_at";
+  const selectLegacy = "id,user_id,test_type,status,score,created_at";
+
+  const full = await supabase
+    .from("test_results")
+    .select(selectFull)
+    .eq("type", "final")
+    .order("created_at", { ascending: false })
+    .limit(10000);
+  if (!full.error) return (full.data ?? []) as Array<Record<string, unknown>>;
+
+  if (!isMissingColumnError(full.error.message)) throw new Error(full.error.message);
+
+  const mid = await supabase
+    .from("test_results")
+    .select(selectMid)
+    .eq("type", "final")
+    .order("created_at", { ascending: false })
+    .limit(10000);
+  if (!mid.error) return (mid.data ?? []) as Array<Record<string, unknown>>;
+
+  if (!isMissingColumnError(mid.error.message)) throw new Error(mid.error.message);
+
+  const legacy = await supabase
+    .from("test_results")
+    .select(selectLegacy)
+    .eq("test_type", "final")
+    .order("created_at", { ascending: false })
+    .limit(10000);
+  if (legacy.error) throw new Error(legacy.error.message);
+  return (legacy.data ?? []) as Array<Record<string, unknown>>;
+}
+
+async function fetchAttemptsPage(
+  supabase: ReturnType<typeof getServerSupabaseServiceClient>,
+  query: AttemptListQuery,
+) {
+  if (query.statusFilter === "not_started") {
+    return { rows: [] as Array<Record<string, unknown>>, total: 0 };
+  }
+  if (query.allowedUserIds && query.allowedUserIds.length === 0) {
+    return { rows: [] as Array<Record<string, unknown>>, total: 0 };
+  }
+
+  const from = (query.page - 1) * query.pageSize;
+  const to = from + query.pageSize - 1;
+  const selectFull =
+    "id,user_id,type,status,score,created_at,questions_total,questions_correct,final_attempt_index";
+  const selectMid = "id,user_id,type,status,score,created_at";
+  const selectLegacy = "id,user_id,test_type,status,score,created_at";
+
+  const run = async (typeColumn: "type" | "test_type", select: string) => {
+    let q = supabase.from("test_results").select(select, { count: "exact" }).order("created_at", { ascending: false });
+    if (query.allowedUserIds?.length) q = q.in("user_id", query.allowedUserIds);
+    if (query.typeFilter !== "all") q = q.eq(typeColumn, query.typeFilter);
+    if (query.statusFilter !== "all") q = q.eq("status", query.statusFilter);
+    q = applyCreatedAtRange(q, query.startIso, query.endIso);
+    return q.range(from, to);
+  };
+
+  let res = await run("type", selectFull);
+  if (res.error && isMissingColumnError(res.error.message)) {
+    res = await run("type", selectMid);
+  }
+  if (res.error && isMissingColumnError(res.error.message)) {
+    res = await run("test_type", selectLegacy);
+  }
+  if (res.error) throw new Error(res.error.message);
+  return { rows: res.data ?? [], total: res.count ?? 0 };
+}
+
+function parseAttemptsQuery(searchParams: URLSearchParams) {
+  return {
+    page: Math.max(1, Number(searchParams.get("page") || 1) || 1),
+    pageSize: Math.min(50, Math.max(1, Number(searchParams.get("pageSize") || 10) || 10)),
+    typeFilter: (searchParams.get("attemptType") || "all") as "all" | "trial" | "final",
+    statusFilter: (searchParams.get("attemptStatus") || "all") as "all" | "passed" | "failed" | "not_started",
+    search: (searchParams.get("search") || "").trim().toLowerCase(),
+    unitFilter: (searchParams.get("unit") || "all") as UnitAssignmentFilter,
+    rotaPlatoon: (searchParams.get("rotaPlatoon") || "all") as RotaPlatoonFilter,
+    rotaSection: (searchParams.get("rotaSection") || "all") as RotaSectionFilter,
+  };
+}
+
 export async function GET(req: Request) {
   const session = await getServerSession();
   if (!session || (!canManageResults(session) && !canResetTestResults(session))) {
@@ -106,23 +205,17 @@ export async function GET(req: Request) {
   const startIso = startMs != null ? new Date(startMs).toISOString() : null;
   const endIso = endMs != null ? new Date(endMs).toISOString() : null;
   const hasPeriodFilter = startMs != null || endMs != null;
+  const attemptsQuery = parseAttemptsQuery(url.searchParams);
   const viewerIsAdmin = session.role === "admin";
   const viewerCanResetAttempts = canResetTestResults(session);
 
   try {
     const supabase = getServerSupabaseServiceClient();
 
-    const [usersPrimary, resultsPrimary] = await Promise.all([
-      supabase
-        .from("app_users")
-        .select("id,name,callsign,position,role,status,final_test_counting_from,unit_assignment,rota_platoon,rota_section,profile_name_color")
-        .limit(1000),
-      supabase
-        .from("test_results")
-        .select("id,user_id,type,status,score,created_at,questions_total,questions_correct,final_attempt_index")
-        .order("created_at", { ascending: false })
-        .limit(8000),
-    ]);
+    const usersPrimary = await supabase
+      .from("app_users")
+      .select("id,name,callsign,position,role,status,final_test_counting_from,unit_assignment,rota_platoon,rota_section,profile_name_color")
+      .limit(1000);
 
     let usersRows: AppUserListRow[] | null = usersPrimary.data as AppUserListRow[] | null;
     let usersErr = usersPrimary.error;
@@ -154,35 +247,7 @@ export async function GET(req: Request) {
     const users = usersRows;
     const cosmeticsMap = await loadIdentityCosmeticsMap(users.map((u) => u.id));
 
-    let resultsRows: Array<Record<string, unknown>> | null = resultsPrimary.data as Array<
-      Record<string, unknown>
-    > | null;
-    let resultsErr = resultsPrimary.error;
-
-    if (resultsErr && isMissingColumnError(resultsErr.message)) {
-      const resultsMid = await supabase
-        .from("test_results")
-        .select("id,user_id,type,status,score,created_at")
-        .order("created_at", { ascending: false })
-        .limit(8000);
-      resultsRows = resultsMid.data as Array<Record<string, unknown>> | null;
-      resultsErr = resultsMid.error;
-    }
-
-    if (resultsErr && isMissingColumnError(resultsErr.message)) {
-      const resultsLegacy = await supabase
-        .from("test_results")
-        .select("id,user_id,test_type,status,score,created_at")
-        .order("created_at", { ascending: false })
-        .limit(8000);
-      resultsRows = resultsLegacy.data as Array<Record<string, unknown>> | null;
-      resultsErr = resultsLegacy.error;
-    }
-
-    if (resultsErr) {
-      return Response.json({ ok: false, error: resultsErr.message || "results_failed" }, { status: 500 });
-    }
-
+    const finalResultsRaw = await fetchFinalResultsForSummaries(supabase);
     type NormalizedResult = {
       id: string;
       user_id: string;
@@ -195,10 +260,10 @@ export async function GET(req: Request) {
       final_attempt_index: number | null;
     };
 
-    const allRows: NormalizedResult[] = (resultsRows || []).map((r) => ({
+    const finalRows: NormalizedResult[] = finalResultsRaw.map((r) => ({
       id: String(r.id),
       user_id: String(r.user_id),
-      type: (r.type ?? r.test_type) === "final" ? ("final" as const) : ("trial" as const),
+      type: "final" as const,
       status: r.status === "passed" ? ("passed" as const) : ("failed" as const),
       score: Number(r.score ?? 0),
       created_at: String(r.created_at ?? ""),
@@ -209,10 +274,7 @@ export async function GET(req: Request) {
           ? Number(r.final_attempt_index)
           : null,
     }));
-
-    const finalRows = allRows.filter((r) => r.type === "final");
-
-    const finalsByUser = new Map<string, typeof finalRows>();
+    const finalsByUser = new Map<string, NormalizedResult[]>();
     for (const row of finalRows) {
       const list = finalsByUser.get(row.user_id) ?? [];
       list.push(row);
@@ -340,46 +402,90 @@ export async function GET(req: Request) {
       ]),
     );
 
-    const attempts = allRows
-      .filter((row) => {
-        if (!hasPeriodFilter) return true;
-        return timestampInRange(row.created_at, startMs, endMs);
+    const latestFinalAtByUser = new Map<string, string>();
+    for (const summary of summaries) {
+      if (summary.latestFinalAt) latestFinalAtByUser.set(summary.userId, summary.latestFinalAt);
+    }
+
+    const rosterUsers = users.filter((u) => u.role === "employee" || u.role === "admin");
+    const hasUserFilter =
+      !!attemptsQuery.search ||
+      attemptsQuery.unitFilter !== "all" ||
+      attemptsQuery.rotaPlatoon !== "all" ||
+      attemptsQuery.rotaSection !== "all";
+
+    const filteredUserIds = rosterUsers
+      .filter((user) => {
+        const unitAssignment = unitFromDb ? normalizeUnitAssignment(user.unit_assignment) : null;
+        const rotaPlatoon = rotaFromDb && user.rota_platoon != null ? Number(user.rota_platoon) : null;
+        const rotaSection = rotaFromDb && user.rota_section != null ? Number(user.rota_section) : null;
+        if (
+          !matchesResultsUnitFilter(
+            attemptsQuery.unitFilter,
+            attemptsQuery.rotaPlatoon,
+            attemptsQuery.rotaSection,
+            { unitAssignment, rotaPlatoon, rotaSection },
+          )
+        ) {
+          return false;
+        }
+        if (!attemptsQuery.search) return true;
+        return (
+          user.name.toLowerCase().includes(attemptsQuery.search) ||
+          user.callsign.toLowerCase().includes(attemptsQuery.search)
+        );
       })
+      .map((user) => user.id);
+
+    const attemptsPageData = await fetchAttemptsPage(supabase, {
+      page: attemptsQuery.page,
+      pageSize: attemptsQuery.pageSize,
+      typeFilter: attemptsQuery.typeFilter,
+      statusFilter: attemptsQuery.statusFilter,
+      allowedUserIds: hasUserFilter ? filteredUserIds : null,
+      startIso,
+      endIso,
+    });
+
+    const attempts = (attemptsPageData.rows as Array<Record<string, unknown>>)
       .map((row) => {
-        const user = userById.get(row.user_id);
+        const userId = String(row.user_id);
+        const user = userById.get(userId);
+        if (!user) return null;
+        const type = (row.type ?? row.test_type) === "final" ? ("final" as const) : ("trial" as const);
+        const createdAt = String(row.created_at ?? "");
+        const latestFinalAt = latestFinalAtByUser.get(userId);
         return {
-          id: row.id,
-          userId: row.user_id,
-          name: user?.name ?? "—",
-          callsign: user?.callsign ?? "",
-          nameColor: user?.nameColor ?? null,
-          cosmetics: user?.cosmetics ?? {},
-          position: user?.position ?? "",
-          unitAssignment: (user?.unitAssignment ?? null) as UnitAssignment | null,
-          rotaPlatoon: user?.rotaPlatoon ?? null,
-          rotaSection: user?.rotaSection ?? null,
-          type: row.type,
-          status: row.status,
-          scorePercent: row.score,
-          questionsCorrect: row.questions_correct,
-          questionsTotal: row.questions_total,
-          createdAt: row.created_at,
-          finalAttemptIndex: row.final_attempt_index,
-          showResetAttempts: false,
+          id: String(row.id),
+          userId,
+          name: user.name,
+          callsign: user.callsign,
+          nameColor: user.nameColor,
+          cosmetics: user.cosmetics,
+          position: user.position,
+          unitAssignment: user.unitAssignment,
+          rotaPlatoon: user.rotaPlatoon,
+          rotaSection: user.rotaSection,
+          type,
+          status: row.status === "passed" ? ("passed" as const) : ("failed" as const),
+          scorePercent: Number(row.score ?? 0),
+          questionsCorrect: row.questions_correct != null ? Number(row.questions_correct) : null,
+          questionsTotal: row.questions_total != null ? Number(row.questions_total) : null,
+          createdAt,
+          finalAttemptIndex:
+            row.final_attempt_index != null && Number.isFinite(Number(row.final_attempt_index))
+              ? Number(row.final_attempt_index)
+              : null,
+          showResetAttempts:
+            viewerCanResetAttempts && type === "final" && !!latestFinalAt && createdAt === latestFinalAt,
+          canDeleteAttempt: viewerCanResetAttempts,
         };
       })
-      .filter((row) => userById.has(row.userId));
+      .filter((row): row is NonNullable<typeof row> => Boolean(row));
 
-    for (const summary of summaries) {
-      if (!summary.showResetAttempts || !summary.latestFinalAt) continue;
-      const match = attempts.find(
-        (a) =>
-          a.userId === summary.userId &&
-          a.type === "final" &&
-          a.createdAt === summary.latestFinalAt,
-      );
-      if (match) match.showResetAttempts = true;
-    }
+    const attemptsTotal = attemptsPageData.total;
+    const attemptsPage = attemptsQuery.page;
+    const attemptsPageSize = attemptsQuery.pageSize;
 
     const passedSummaries = summaries.filter((s) => s.status === "passed");
     const failedSummaries = summaries.filter((s) => s.status === "failed");
@@ -531,6 +637,9 @@ export async function GET(req: Request) {
       period,
       summaries,
       attempts,
+      attemptsTotal,
+      attemptsPage,
+      attemptsPageSize,
       lastResetAudit,
       bannerStats,
     });

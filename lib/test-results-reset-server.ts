@@ -39,6 +39,13 @@ async function resetFinalAttemptWindow(
   }
 }
 
+export async function deleteTestResultAttempt(supabase: SupabaseClient, attemptId: string) {
+  const del = await supabase.from("test_results").delete().eq("id", attemptId);
+  if (del.error) {
+    throw new Error(del.error.message);
+  }
+}
+
 export async function resetTestResultsForUser(
   supabase: SupabaseClient,
   targetUserId: string,

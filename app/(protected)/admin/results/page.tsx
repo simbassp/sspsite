@@ -65,6 +65,7 @@ type AttemptRow = {
   createdAt: string;
   finalAttemptIndex: number | null;
   showResetAttempts: boolean;
+  canDeleteAttempt: boolean;
 };
 
 type LastPersonAt = {
@@ -93,6 +94,9 @@ type BootstrapPayload = {
   nextAutoResetAt?: string;
   summaries?: UserSummary[];
   attempts?: AttemptRow[];
+  attemptsTotal?: number;
+  attemptsPage?: number;
+  attemptsPageSize?: number;
   bannerStats?: BannerStats;
   lastResetAudit?: {
     created_at: string;
@@ -160,6 +164,8 @@ function formatAttemptResult(row: {
   return formatTestResultForType(row);
 }
 
+const ATTEMPTS_PAGE_SIZE = 10;
+
 export default function AdminResultsPage() {
   const session = readClientSession();
   const viewerCanReset = session ? canResetTestResults(session) : false;
@@ -175,11 +181,14 @@ export default function AdminResultsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [summaries, setSummaries] = useState<UserSummary[]>([]);
   const [attempts, setAttempts] = useState<AttemptRow[]>([]);
+  const [attemptsTotal, setAttemptsTotal] = useState(0);
+  const [attemptsPage, setAttemptsPage] = useState(1);
   const [bannerStats, setBannerStats] = useState<BannerStats>(emptyBannerStats);
   const [lastResetAudit, setLastResetAudit] = useState<BootstrapPayload["lastResetAudit"]>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [resetBusyId, setResetBusyId] = useState<string | null>(null);
+  const [deleteBusyId, setDeleteBusyId] = useState<string | null>(null);
   const [resetMessage, setResetMessage] = useState("");
   const [nextAutoResetAt, setNextAutoResetAt] = useState<string | null>(null);
 
@@ -194,6 +203,15 @@ export default function AdminResultsPage() {
         if (dateFrom) params.set("dateFrom", dateFrom);
         if (dateTo) params.set("dateTo", dateTo);
       }
+      params.set("page", String(attemptsPage));
+      params.set("pageSize", String(ATTEMPTS_PAGE_SIZE));
+      params.set("attemptType", typeFilter);
+      params.set("attemptStatus", statusFilter);
+      if (searchTerm.trim()) params.set("search", searchTerm.trim());
+      if (unitFilter !== "all") params.set("unit", unitFilter);
+      if (rotaPlatoon !== "all") params.set("rotaPlatoon", rotaPlatoon);
+      if (rotaSection !== "all") params.set("rotaSection", rotaSection);
+
       const response = await fetch(`/api/admin/results/bootstrap?${params.toString()}`, {
         cache: "no-store",
       });
@@ -203,6 +221,7 @@ export default function AdminResultsPage() {
       }
       setSummaries(Array.isArray(payload.summaries) ? payload.summaries : []);
       setAttempts(Array.isArray(payload.attempts) ? payload.attempts : []);
+      setAttemptsTotal(typeof payload.attemptsTotal === "number" ? payload.attemptsTotal : 0);
       setBannerStats(payload.bannerStats ?? emptyBannerStats);
       setLastResetAudit(payload.lastResetAudit ?? null);
       setNextAutoResetAt(payload.nextAutoResetAt ?? null);
@@ -210,12 +229,28 @@ export default function AdminResultsPage() {
       setLoadError("Не удалось получить данные результатов. Попробуйте обновить страницу.");
       setSummaries([]);
       setAttempts([]);
+      setAttemptsTotal(0);
       setBannerStats(emptyBannerStats);
       setNextAutoResetAt(null);
     } finally {
       setIsLoading(false);
     }
-  }, [periodMode, dateFrom, dateTo]);
+  }, [
+    periodMode,
+    dateFrom,
+    dateTo,
+    attemptsPage,
+    typeFilter,
+    statusFilter,
+    searchTerm,
+    unitFilter,
+    rotaPlatoon,
+    rotaSection,
+  ]);
+
+  useEffect(() => {
+    setAttemptsPage(1);
+  }, [periodMode, dateFrom, dateTo, typeFilter, statusFilter, searchTerm, unitFilter, rotaPlatoon, rotaSection]);
 
   useEffect(() => {
     void load();
@@ -234,18 +269,6 @@ export default function AdminResultsPage() {
     }
   }, [unitFilter]);
 
-  const visibleAttempts = useMemo(() => {
-    if (statusFilter === "not_started") return [];
-    const query = searchTerm.trim().toLowerCase();
-    return attempts.filter((row) => {
-      if (typeFilter !== "all" && row.type !== typeFilter) return false;
-      if (statusFilter !== "all" && row.status !== statusFilter) return false;
-      if (!matchesResultsUnitFilter(unitFilter, rotaPlatoon, rotaSection, row)) return false;
-      if (!query) return true;
-      return row.name.toLowerCase().includes(query) || row.callsign.toLowerCase().includes(query);
-    });
-  }, [attempts, typeFilter, statusFilter, unitFilter, rotaPlatoon, rotaSection, searchTerm]);
-
   const visibleNotStarted = useMemo(() => {
     if (statusFilter !== "not_started" || typeFilter === "trial") return [];
     const query = searchTerm.trim().toLowerCase();
@@ -256,6 +279,34 @@ export default function AdminResultsPage() {
       return row.name.toLowerCase().includes(query) || row.callsign.toLowerCase().includes(query);
     });
   }, [summaries, statusFilter, typeFilter, unitFilter, rotaPlatoon, rotaSection, searchTerm]);
+
+  const attemptsPageCount = Math.max(1, Math.ceil(attemptsTotal / ATTEMPTS_PAGE_SIZE));
+
+  const onDeleteAttempt = async (row: AttemptRow) => {
+    if (!viewerCanReset || !row.canDeleteAttempt) return;
+    const typeLabel = row.type === "trial" ? "пробную" : "итоговую";
+    const confirmed = window.confirm(`Удалить эту ${typeLabel} попытку из истории?`);
+    if (!confirmed) return;
+    setDeleteBusyId(row.id);
+    setResetMessage("");
+    try {
+      const response = await fetch("/api/admin/results/delete-attempt", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ resultId: row.id }),
+      });
+      const payload = (await response.json()) as { ok?: boolean; error?: string };
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error || "delete_failed");
+      }
+      setResetMessage("Попытка удалена.");
+      await load();
+    } catch {
+      setResetMessage("Не удалось удалить попытку.");
+    } finally {
+      setDeleteBusyId(null);
+    }
+  };
 
   const onResetAttempts = async (userId: string) => {
     if (!viewerCanReset) return;
@@ -523,7 +574,7 @@ export default function AdminResultsPage() {
       )}
 
       <div className="admin-results-list">
-        {visibleAttempts.map((row) => (
+        {attempts.map((row) => (
           <article
             className={`card admin-results-card admin-results-row admin-results-card--${row.status}`}
             key={row.id}
@@ -556,16 +607,28 @@ export default function AdminResultsPage() {
                     <span className="admin-results-row__date">Попытка №{row.finalAttemptIndex}</span>
                   )}
                 </div>
-                {row.showResetAttempts && (
+                {(row.canDeleteAttempt || row.showResetAttempts) && (
                   <div className="admin-results-row__actions">
-                    <button
-                      className="btn"
-                      type="button"
-                      disabled={resetBusyId === row.userId}
-                      onClick={() => void onResetAttempts(row.userId)}
-                    >
-                      {resetBusyId === row.userId ? "Сброс…" : "Сбросить попытки итога"}
-                    </button>
+                    {row.canDeleteAttempt && (
+                      <button
+                        className="btn btn-danger"
+                        type="button"
+                        disabled={deleteBusyId === row.id}
+                        onClick={() => void onDeleteAttempt(row)}
+                      >
+                        {deleteBusyId === row.id ? "Удаление…" : "Удалить из истории"}
+                      </button>
+                    )}
+                    {row.showResetAttempts && (
+                      <button
+                        className="btn"
+                        type="button"
+                        disabled={resetBusyId === row.userId}
+                        onClick={() => void onResetAttempts(row.userId)}
+                      >
+                        {resetBusyId === row.userId ? "Сброс…" : "Сбросить попытки итога"}
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -606,8 +669,35 @@ export default function AdminResultsPage() {
           </article>
         ))}
 
-        {!isLoading && !loadError && visibleAttempts.length === 0 && visibleNotStarted.length === 0 && (
+        {!isLoading && !loadError && attempts.length === 0 && visibleNotStarted.length === 0 && (
           <p className="page-subtitle">Нет записей по выбранным фильтрам.</p>
+        )}
+
+        {!isLoading && !loadError && statusFilter !== "not_started" && attemptsTotal > 0 && (
+          <div className="admin-results-footer">
+            <span className="admin-results-footer__total">Всего попыток: {attemptsTotal}</span>
+            <div className="admin-users-pagination">
+              <button
+                className="btn"
+                type="button"
+                disabled={attemptsPage <= 1}
+                onClick={() => setAttemptsPage((page) => Math.max(1, page - 1))}
+              >
+                ‹
+              </button>
+              <span className="admin-users-page-indicator">
+                {attemptsPage} / {attemptsPageCount}
+              </span>
+              <button
+                className="btn"
+                type="button"
+                disabled={attemptsPage >= attemptsPageCount}
+                onClick={() => setAttemptsPage((page) => Math.min(attemptsPageCount, page + 1))}
+              >
+                ›
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </section>
