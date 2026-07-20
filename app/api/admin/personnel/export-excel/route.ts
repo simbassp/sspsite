@@ -13,22 +13,123 @@ import {
 import {
   buildPersonnelBulkExcelBuffer,
   buildPersonnelRosterFilterExcelBuffer,
+  type PersonnelRosterFilterExportRow,
 } from "@/lib/personnel-profile-excel";
+import {
+  hasRosterFocusFilters,
+  parseRosterExportFilterConfig,
+  resolveRosterExportColumns,
+  type RosterExportFilterConfig,
+} from "@/lib/personnel-roster-export";
 import { getServerSession } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-type TestFilter = "all" | "passed" | "failed";
+function buildExportSummaryLines(rows: PersonnelRosterFilterExportRow[], config: RosterExportFilterConfig) {
+  const lines: Array<[string, string | number]> = [["Сотрудников", rows.length]];
 
-function parseTestFilter(value: unknown): TestFilter {
-  return value === "passed" || value === "failed" ? value : "all";
+  if (config.testDate) {
+    lines.push(["Дата тестов", config.testDate]);
+  }
+
+  if (config.dutyStatus !== "all") {
+    const deployed = rows.filter((row) => row.dutyLocation === dutyLocationLabel.deployment).length;
+    lines.push(["В командировке", deployed]);
+    lines.push(["На базе", rows.length - deployed]);
+    lines.push([
+      "Всего дней в командировке",
+      rows.reduce((sum, row) => sum + (row.deploymentDays ?? 0), 0),
+    ]);
+  }
+
+  if (config.hits !== "all") {
+    lines.push(["Всего сбитий", rows.reduce((sum, row) => sum + (row.uavHitsTotal ?? 0), 0)]);
+  }
+
+  if (config.premiums !== "all") {
+    lines.push(["Сумма премий, ₽", rows.reduce((sum, row) => sum + (row.premiumsTotal ?? 0), 0)]);
+  }
+
+  const includeTrial = config.trialTest !== "all" || config.testDate !== null;
+  const includeFinal = config.finalTest !== "all" || config.testDate !== null;
+
+  if (includeTrial) {
+    lines.push(["Пробных сдано (попыток)", rows.reduce((sum, row) => sum + (row.trialPassed ?? 0), 0)]);
+    lines.push(["Пробных не сдано (попыток)", rows.reduce((sum, row) => sum + (row.trialFailed ?? 0), 0)]);
+  }
+
+  if (includeFinal) {
+    lines.push(["Итоговых сдано (попыток)", rows.reduce((sum, row) => sum + (row.finalPassed ?? 0), 0)]);
+    lines.push(["Итоговых не сдано (попыток)", rows.reduce((sum, row) => sum + (row.finalFailed ?? 0), 0)]);
+  }
+
+  if (config.examType !== "all") {
+    const passed = rows.filter((row) => row.examResult === "Сдан").length;
+    lines.push(["Сдано по выбранному зачёту", passed]);
+    lines.push(["Не сдано по выбранному зачёту", rows.length - passed]);
+  }
+
+  return lines;
 }
 
-function parseTestDate(value: unknown) {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? trimmed : null;
+function buildExportRows(
+  cards: Awaited<ReturnType<typeof loadPersonnelRosterCardsByIds>>,
+  config: RosterExportFilterConfig,
+): PersonnelRosterFilterExportRow[] {
+  const includeTrial = config.trialTest !== "all" || config.testDate !== null;
+  const includeFinal = config.finalTest !== "all" || config.testDate !== null;
+
+  return cards.map((user) => {
+    const stats = config.testDate ? (user.testStatsOnDate ?? user.testStats) : user.testStats;
+    const exam = user.exams.find((item) => item.examType === config.examType);
+    const examResult =
+      exam?.status === "passed" ? "Сдан" : exam?.status === "failed" ? "Не сдан" : "—";
+
+    const row: PersonnelRosterFilterExportRow = {
+      name: user.name,
+      callsign: user.callsign,
+      rotaUnit: rotaUnitLabelCompact(user.rotaPlatoon, user.rotaSection, user.rotaModule),
+    };
+
+    if (config.dutyStatus !== "all") {
+      row.dutyLocation = dutyLocationLabel[user.dutyLocation];
+      row.deploymentsCount = user.deploymentsCount;
+      row.deploymentDays = user.deploymentDays;
+    }
+
+    if (config.hits !== "all") {
+      row.uavHitsTotal = user.uavHitsTotal;
+    }
+
+    if (config.premiums !== "all") {
+      row.premiumsTotal = user.premiumsTotal;
+    }
+
+    if (config.license !== "all") {
+      row.licenseCategories = user.licenseCategories.length ? user.licenseCategories.join(", ") : "—";
+    }
+
+    if (config.examType !== "all") {
+      row.examResult = examResult;
+    }
+
+    if (config.testDate) {
+      row.testDate = config.testDate;
+    }
+
+    if (includeTrial) {
+      row.trialPassed = stats.trialPassed;
+      row.trialFailed = stats.trialFailed;
+    }
+
+    if (includeFinal) {
+      row.finalPassed = stats.finalPassed;
+      row.finalFailed = stats.finalFailed;
+    }
+
+    return row;
+  });
 }
 
 export async function POST(request: Request) {
@@ -51,8 +152,14 @@ export async function POST(request: Request) {
     search?: unknown;
     userIds?: unknown;
     testDate?: unknown;
+    examType?: unknown;
+    examStatus?: unknown;
+    license?: unknown;
     trialTest?: unknown;
     finalTest?: unknown;
+    hits?: unknown;
+    premiums?: unknown;
+    dutyStatus?: unknown;
     filterLines?: unknown;
   };
 
@@ -61,9 +168,7 @@ export async function POST(request: Request) {
     return Response.json({ ok: false, error: "invalid_scope" }, { status: 400 });
   }
 
-  const testDate = parseTestDate(raw.testDate);
-  const trialTest = parseTestFilter(raw.trialTest);
-  const finalTest = parseTestFilter(raw.finalTest);
+  const exportConfig = parseRosterExportFilterConfig(raw);
   const filterLines = Array.isArray(raw.filterLines)
     ? raw.filterLines.filter((line): line is string => typeof line === "string" && line.trim().length > 0)
     : [];
@@ -83,8 +188,7 @@ export async function POST(request: Request) {
         ? (Number(sectionRaw) as 1 | 2 | 3 | 4)
         : null;
 
-  const useRosterFilterExport =
-    scope === "filter" && (testDate !== null || trialTest !== "all" || finalTest !== "all");
+  const useRosterFilterExport = scope === "filter" && hasRosterFocusFilters(exportConfig);
 
   try {
     let userIds: string[] = [];
@@ -127,30 +231,20 @@ export async function POST(request: Request) {
     }
 
     if (useRosterFilterExport) {
-      const cards = await loadPersonnelRosterCardsByIds(userIds, testDate);
+      const cards = await loadPersonnelRosterCardsByIds(userIds, exportConfig.testDate);
       if (!cards.length) {
         return Response.json({ ok: false, error: "no_data" }, { status: 404 });
       }
 
-      const rows = cards.map((user) => {
-        const stats = testDate ? (user.testStatsOnDate ?? user.testStats) : user.testStats;
-        return {
-          name: user.name,
-          callsign: user.callsign,
-          rotaUnit: rotaUnitLabelCompact(user.rotaPlatoon, user.rotaSection, user.rotaModule),
-          dutyLocation: dutyLocationLabel[user.dutyLocation],
-          testDate,
-          trialPassed: stats.trialPassed,
-          trialFailed: stats.trialFailed,
-          finalPassed: stats.finalPassed,
-          finalFailed: stats.finalFailed,
-        };
-      });
+      const rows = buildExportRows(cards, exportConfig);
+      const columns = resolveRosterExportColumns(exportConfig);
+      const summaryLines = buildExportSummaryLines(rows, exportConfig);
 
       const buffer = await buildPersonnelRosterFilterExcelBuffer({
         rows,
+        columns,
         filterLines,
-        testDate,
+        summaryLines,
       });
 
       return new Response(new Uint8Array(buffer), {

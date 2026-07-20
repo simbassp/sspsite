@@ -21,8 +21,14 @@ export async function postPersonnelExportExcel(body: {
   search?: string;
   userIds?: string[];
   testDate?: string;
+  examType?: string;
+  examStatus?: "all" | "passed" | "failed";
+  license?: string;
   trialTest?: "all" | "passed" | "failed";
   finalTest?: "all" | "passed" | "failed";
+  hits?: "all" | "yes" | "no";
+  premiums?: "all" | "yes" | "no";
+  dutyStatus?: "all" | "base" | "deployment";
   filterLines?: string[];
 }) {
   const res = await fetch("/api/admin/personnel/export-excel", {
@@ -84,8 +90,8 @@ export function PersonnelExportExcelModal({
             Скачать Excel
           </h3>
           <p className="page-subtitle" style={{ marginTop: 0 }}>
-            Выберите, для кого сформировать выгрузку. При фильтре по дате или тестам — сводка по сдаче за день; иначе
-            полный профиль с графиками.
+            Выберите, для кого сформировать выгрузку. При фильтрах по статусу, тестам, зачётам и т.п. — только
+            данные по выбранным фильтрам; иначе полный профиль с графиками.
           </p>
           <div className="form" style={{ marginTop: 12, gap: 10 }}>
             <label

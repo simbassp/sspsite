@@ -1,5 +1,6 @@
 import type { PersonnelProfileExportBundle } from "@/lib/personnel-profile-export-server";
 import { formatExportDuration, formatExportMoney } from "@/lib/personnel-profile-export-server";
+import type { RosterExportColumn, RosterExportColumnKey } from "@/lib/personnel-roster-export";
 import {
   buildBarChartSvg,
   buildMonthlyBarChartSvg,
@@ -986,18 +987,62 @@ export type PersonnelRosterFilterExportRow = {
   name: string;
   callsign: string;
   rotaUnit: string;
-  dutyLocation: string;
-  testDate: string | null;
-  trialPassed: number;
-  trialFailed: number;
-  finalPassed: number;
-  finalFailed: number;
+  dutyLocation?: string;
+  deploymentsCount?: number;
+  deploymentDays?: number;
+  uavHitsTotal?: number;
+  premiumsTotal?: number;
+  licenseCategories?: string;
+  examResult?: string;
+  testDate?: string | null;
+  trialPassed?: number;
+  trialFailed?: number;
+  finalPassed?: number;
+  finalFailed?: number;
 };
+
+function rosterExportCellValue(row: PersonnelRosterFilterExportRow, key: RosterExportColumnKey) {
+  switch (key) {
+    case "name":
+      return row.name || "—";
+    case "callsign":
+      return row.callsign || "—";
+    case "rotaUnit":
+      return row.rotaUnit || "—";
+    case "dutyStatus":
+      return row.dutyLocation || "—";
+    case "deployments":
+      return row.deploymentsCount ?? 0;
+    case "deploymentDays":
+      return row.deploymentDays ?? 0;
+    case "uavHits":
+      return row.uavHitsTotal ?? 0;
+    case "premiums":
+      return row.premiumsTotal ?? 0;
+    case "licenses":
+      return row.licenseCategories || "—";
+    case "exam":
+      return row.examResult || "—";
+    case "testDate":
+      return row.testDate || "—";
+    case "trialPassed":
+      return row.trialPassed ?? 0;
+    case "trialFailed":
+      return row.trialFailed ?? 0;
+    case "finalPassed":
+      return row.finalPassed ?? 0;
+    case "finalFailed":
+      return row.finalFailed ?? 0;
+    default:
+      return "—";
+  }
+}
 
 export async function buildPersonnelRosterFilterExcelBuffer(input: {
   rows: PersonnelRosterFilterExportRow[];
+  columns: RosterExportColumn[];
   filterLines: string[];
-  testDate: string | null;
+  summaryLines: Array<[string, string | number]>;
 }) {
   const ExcelJSModule = await import("exceljs");
   const ExcelJS = ExcelJSModule.default ?? ExcelJSModule;
@@ -1018,76 +1063,45 @@ export async function buildPersonnelRosterFilterExcelBuffer(input: {
     row.getCell(1).font = { size: 10, color: { argb: "FF374151" } };
   }
 
-  const totals = input.rows.reduce(
-    (acc, row) => {
-      acc.trialPassed += row.trialPassed;
-      acc.trialFailed += row.trialFailed;
-      acc.finalPassed += row.finalPassed;
-      acc.finalFailed += row.finalFailed;
-      return acc;
-    },
-    { trialPassed: 0, trialFailed: 0, finalPassed: 0, finalFailed: 0 },
-  );
-
-  summary.addRow([]);
-  const totalsTitle = summary.addRow(["Итого по выгрузке", ""]);
-  styleSectionTitle(totalsTitle.getCell(1));
-  summary.mergeCells(totalsTitle.number, 1, totalsTitle.number, 2);
-  summary.addRow(["Сотрудников", input.rows.length]);
-  if (input.testDate) {
-    summary.addRow(["Дата тестов", input.testDate]);
+  if (input.summaryLines.length > 0) {
+    summary.addRow([]);
+    const totalsTitle = summary.addRow(["Итого по выгрузке", ""]);
+    styleSectionTitle(totalsTitle.getCell(1));
+    summary.mergeCells(totalsTitle.number, 1, totalsTitle.number, 2);
+    for (const [label, value] of input.summaryLines) {
+      summary.addRow([label, value]);
+    }
   }
-  summary.addRow(["Пробных сдано (попыток)", totals.trialPassed]);
-  summary.addRow(["Пробных не сдано (попыток)", totals.trialFailed]);
-  summary.addRow(["Итоговых сдано (попыток)", totals.finalPassed]);
-  summary.addRow(["Итоговых не сдано (попыток)", totals.finalFailed]);
 
   const sheet = workbook.addWorksheet("Сотрудники");
-  sheet.columns = [
-    { width: 24 },
-    { width: 16 },
-    { width: 18 },
-    { width: 14 },
-    { width: 12 },
-    { width: 14 },
-    { width: 14 },
-    { width: 14 },
-    { width: 16 },
-    { width: 16 },
-  ];
+  sheet.columns = input.columns.map((column) => ({ width: column.width }));
 
-  const header = sheet.addRow([
-    "ФИО",
-    "Позывной",
-    "Взвод/отдел",
-    "Место",
-    "Дата",
-    "Пробный сдал",
-    "Пробный не сдал",
-    "Итоговый сдал",
-    "Итоговый не сдал",
-  ]);
+  const header = sheet.addRow(input.columns.map((column) => column.header));
   styleHeaderRow(header, 32);
 
+  const numericKeys = new Set([
+    "deployments",
+    "deploymentDays",
+    "uavHits",
+    "premiums",
+    "trialPassed",
+    "trialFailed",
+    "finalPassed",
+    "finalFailed",
+  ]);
+
   for (const row of input.rows) {
-    const dataRow = sheet.addRow([
-      row.name || "—",
-      row.callsign || "—",
-      row.rotaUnit || "—",
-      row.dutyLocation || "—",
-      row.testDate || "—",
-      row.trialPassed,
-      row.trialFailed,
-      row.finalPassed,
-      row.finalFailed,
-    ]);
+    const dataRow = sheet.addRow(input.columns.map((column) => rosterExportCellValue(row, column.key)));
     applyCompactRow(dataRow);
     dataRow.eachCell((cell, col) => {
-      styleCompactTableCell(cell, col >= 6 ? "center" : "left");
-      if (col === 6) styleCountCell(cell, row.trialPassed > 0 ? "pass" : "neutral");
-      if (col === 7) styleCountCell(cell, row.trialFailed > 0 ? "fail" : "neutral");
-      if (col === 8) styleCountCell(cell, row.finalPassed > 0 ? "pass" : "neutral");
-      if (col === 9) styleCountCell(cell, row.finalFailed > 0 ? "fail" : "neutral");
+      const column = input.columns[col - 1];
+      if (!column) return;
+      const horizontal = numericKeys.has(column.key) ? "center" : "left";
+      styleCompactTableCell(cell, horizontal);
+      if (column.key === "trialPassed") styleCountCell(cell, (row.trialPassed ?? 0) > 0 ? "pass" : "neutral");
+      if (column.key === "trialFailed") styleCountCell(cell, (row.trialFailed ?? 0) > 0 ? "fail" : "neutral");
+      if (column.key === "finalPassed") styleCountCell(cell, (row.finalPassed ?? 0) > 0 ? "pass" : "neutral");
+      if (column.key === "finalFailed") styleCountCell(cell, (row.finalFailed ?? 0) > 0 ? "fail" : "neutral");
     });
   }
 

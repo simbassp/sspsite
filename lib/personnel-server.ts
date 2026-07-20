@@ -892,14 +892,20 @@ export async function loadPersonnelRosterCardsByIds(userIds: string[], testDate?
   const dateIso =
     typeof testDate === "string" && isValidDateIso(testDate.trim()) ? testDate.trim() : null;
 
-  const [testStatsMap, testStatsOnDateMap] = await Promise.all([
+  const [testStatsMap, testStatsOnDateMap, examsMap, depMap, licensesMap, premiumMap] = await Promise.all([
     loadTestStatsForUsers(ids),
     dateIso ? loadTestStatsForUsersOnDate(ids, dateIso) : Promise.resolve(new Map<string, PersonnelTestRosterStats>()),
+    loadExamsForUsers(ids),
+    loadDeploymentStats(ids),
+    loadLicenses(ids),
+    loadPremiumTotals(ids),
   ]);
 
   const order = new Map(uniqueIds.map((id, index) => [id, index]));
   const users: PersonnelUserCard[] = rows.map((u) => {
     const id = String(u.id);
+    const dep = depMap.get(id) ?? { count: 0, days: 0, hits: 0, premiums: 0 };
+    const standalonePremiums = premiumMap.get(id) ?? 0;
     return {
       id,
       name: String(u.name ?? ""),
@@ -912,13 +918,13 @@ export async function loadPersonnelRosterCardsByIds(userIds: string[], testDate?
       rotaModule: u.rota_module != null ? Number(u.rota_module) : null,
       createdAt: String(u.created_at ?? new Date().toISOString()),
       employmentDate: u.employment_date ? String(u.employment_date).slice(0, 10) : null,
-      exams: [],
-      deploymentsCount: 0,
-      deploymentDays: 0,
-      uavHitsTotal: 0,
-      premiumsTotal: 0,
+      exams: examsMap.get(id) ?? [],
+      deploymentsCount: dep.count,
+      deploymentDays: dep.days,
+      uavHitsTotal: dep.hits,
+      premiumsTotal: dep.premiums + standalonePremiums,
       medalsCount: 0,
-      licenseCategories: [],
+      licenseCategories: licensesMap.get(id) ?? [],
       testStats: testStatsMap.get(id) ?? emptyTestRosterStats(),
       testStatsOnDate: dateIso ? testStatsOnDateMap.get(id) ?? emptyTestRosterStats() : null,
     };
