@@ -118,7 +118,7 @@ export const BANK_ACHIEVEMENTS: AchievementDefinition[] = [
     category: "bank",
     title: "50 прохождений банка",
     description: "50 полных прохождений теста «Весь банк»",
-    tierLabel: "Герань БПЛА",
+    tierLabel: "Большая корона",
     bankOverlay: "bank-overlay-geran",
     threshold: 50,
   },
