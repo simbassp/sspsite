@@ -224,7 +224,7 @@ export function formatPersonnelRequestNotificationBody(
 
 /** Старые уведомления хранили «Тип: exam» — приводим к понятному виду. */
 export function formatNotificationBody(body: string): string {
-  const trimmed = body.trim();
+  const trimmed = body.replace(/\r\n/g, "\n").trim();
   if (!trimmed) return trimmed;
   const legacy = /^Тип:\s*(\w+)\s*$/i.exec(trimmed);
   if (legacy) {
