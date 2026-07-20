@@ -474,6 +474,11 @@ export default function TestsPage() {
     };
   }, [session, reloadFinalSummary]);
 
+  useEffect(() => {
+    if (!session || isBootstrapping || !isConfigLoaded || questionPool.length > 0 || isPoolLoading) return;
+    void loadQuestionPool();
+  }, [session, isBootstrapping, isConfigLoaded, questionPool.length, isPoolLoading]);
+
   const activeQuestions = selectedQuestions;
   const currentQuestion = activeQuestions[questionIndex];
 
@@ -783,7 +788,7 @@ export default function TestsPage() {
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
-    const pool = await loadQuestionPool();
+    const pool = questionPool.length > 0 ? questionPool : await loadQuestionPool();
     if (!pool) {
       setMessage("Не удалось подготовить вопросы. Проверьте интернет.");
       return;
@@ -819,7 +824,7 @@ export default function TestsPage() {
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
-    const pool = await loadQuestionPool();
+    const pool = questionPool.length > 0 ? questionPool : await loadQuestionPool();
     if (!pool) {
       setMessage("Не удалось подготовить вопросы. Проверьте интернет.");
       return;
@@ -867,7 +872,7 @@ export default function TestsPage() {
       `Запустить итоговый тест?\n\nСтрогий режим: время на каждый вопрос ограничено, подсказок нет.\nБудет использована 1 попытка (осталось ${remainingAttempts} из ${finalTest?.maxAttempts ?? FINAL_TEST_MAX_ATTEMPTS}).\n\nСлучайное нажатие тоже засчитывается как попытка.${passedHint}`,
     );
     if (!confirmed) return;
-    const pool = await loadQuestionPool();
+    const pool = questionPool.length > 0 ? questionPool : await loadQuestionPool();
     if (!pool) {
       setMessage("Не удалось подготовить вопросы. Проверьте интернет.");
       return;
@@ -1027,7 +1032,7 @@ export default function TestsPage() {
                 className="btn tests-ref-btn-outline"
                 type="button"
                 onClick={onBank}
-                disabled={isBootstrapping || isPoolLoading || !isConfigLoaded || activeTest != null || questionPool.length === 0}
+                disabled={isBootstrapping || isPoolLoading || !isConfigLoaded || activeTest != null}
               >
                 Начать по всему банку
               </button>

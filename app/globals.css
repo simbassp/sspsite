@@ -3515,6 +3515,12 @@ html[data-theme="dark"] .trial-feedback-btn--dim {
   align-items: center;
   gap: 10px;
   justify-content: flex-start;
+  transition: transform 0.1s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.1s ease;
+}
+
+.test-option-btn:not(:disabled):active {
+  transform: scale(0.985);
+  box-shadow: inset 0 2px 5px color-mix(in srgb, var(--text) 10%, transparent);
 }
 
 .test-option-letter {
@@ -4014,11 +4020,23 @@ html[data-theme="dark"] .final-review-answer--correct {
   color: var(--accent);
   background: transparent;
   min-height: 38px;
+  transition: transform 0.1s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.1s ease;
+}
+
+.tests-ref-btn-outline:not(:disabled):active,
+.tests-ref-btn-solid:not(:disabled):active {
+  transform: scale(0.97);
+  box-shadow: inset 0 2px 6px color-mix(in srgb, var(--text) 12%, transparent);
 }
 
 .tests-ref-btn-solid {
   margin-top: 12px;
   min-height: 38px;
+  transition: transform 0.1s ease, filter 0.15s ease, box-shadow 0.1s ease;
+}
+
+.tests-ref-btn-solid:not(:disabled):active {
+  filter: brightness(0.94);
 }
 
 .tests-ref-metrics {
