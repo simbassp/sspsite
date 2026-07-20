@@ -5,7 +5,7 @@ import {
   BANK_ACHIEVEMENTS,
   FINAL_ACHIEVEMENTS,
   TRIAL_ACHIEVEMENTS,
-  bankAvatarOverlayClass,
+  bankCosmeticsPreviewClass,
   bankOverlayLabel,
   finalNameColorClass,
   finalNameColorLabel,
@@ -202,7 +202,7 @@ export function ProfileCosmeticsModal({
                     key={item.id}
                     type="button"
                     aria-disabled={!unlocked}
-                    className={`profile-cosmetics-option profile-cosmetics-option--bank ${bankAvatarOverlayClass(overlay)}${
+                    className={`profile-cosmetics-option profile-cosmetics-option--bank ${bankCosmeticsPreviewClass(overlay)}${
                       unlocked && draftBankOverlay === overlay ? " is-selected" : ""
                     }${!unlocked && isPreview ? " is-preview" : ""}${unlocked ? "" : " is-locked"}`}
                     onClick={() => selectBankOverlay(overlay, unlocked, tip)}

@@ -7023,7 +7023,7 @@ html[data-theme="dark"] .final-review-answer--correct {
   background: color-mix(in srgb, var(--muted) 35%, var(--panel));
 }
 
-.profile-cosmetics-option--bank.avatar-bank-overlay--flame .profile-cosmetics-option__bank-preview::after {
+.profile-cosmetics-option--bank.profile-cosmetics-bank-preview--flame .profile-cosmetics-option__bank-preview::after {
   content: "";
   position: absolute;
   top: -2px;
@@ -7035,7 +7035,7 @@ html[data-theme="dark"] .final-review-answer--correct {
   border-radius: 50% 50% 40% 40%;
 }
 
-.profile-cosmetics-option--bank.avatar-bank-overlay--crown .profile-cosmetics-option__bank-preview::after {
+.profile-cosmetics-option--bank.profile-cosmetics-bank-preview--crown .profile-cosmetics-option__bank-preview::after {
   content: "";
   position: absolute;
   top: -1px;
@@ -7047,7 +7047,7 @@ html[data-theme="dark"] .final-review-answer--correct {
   clip-path: polygon(0% 100%, 20% 40%, 50% 100%, 80% 40%, 100% 100%);
 }
 
-.profile-cosmetics-option--bank.avatar-bank-overlay--diamond .profile-cosmetics-option__bank-preview::after {
+.profile-cosmetics-option--bank.profile-cosmetics-bank-preview--diamond .profile-cosmetics-option__bank-preview::after {
   content: "";
   position: absolute;
   top: -3px;
@@ -7059,7 +7059,7 @@ html[data-theme="dark"] .final-review-answer--correct {
   clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
 }
 
-.profile-cosmetics-option--bank.avatar-bank-overlay--aurora-flame .profile-cosmetics-option__bank-preview::after {
+.profile-cosmetics-option--bank.profile-cosmetics-bank-preview--aurora-flame .profile-cosmetics-option__bank-preview::after {
   content: "";
   position: absolute;
   top: -2px;
@@ -7071,7 +7071,7 @@ html[data-theme="dark"] .final-review-answer--correct {
   border-radius: 50% 50% 40% 40%;
 }
 
-.profile-cosmetics-option--bank.avatar-bank-overlay--geran .profile-cosmetics-option__bank-preview::after {
+.profile-cosmetics-option--bank.profile-cosmetics-bank-preview--geran .profile-cosmetics-option__bank-preview::after {
   content: "";
   position: absolute;
   top: 4px;

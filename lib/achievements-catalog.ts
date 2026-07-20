@@ -197,6 +197,12 @@ export function bankAvatarOverlayClass(overlay: BankAvatarOverlayId | null | und
   return `avatar-bank-overlay avatar-bank-overlay--${overlay.replace("bank-overlay-", "")}`;
 }
 
+/** Превью эффекта в модалке косметики — без position:absolute у avatar-bank-overlay. */
+export function bankCosmeticsPreviewClass(overlay: BankAvatarOverlayId | null | undefined): string {
+  if (!overlay) return "";
+  return `profile-cosmetics-bank-preview--${overlay.replace("bank-overlay-", "")}`;
+}
+
 export function bankOverlayLabel(overlay: BankAvatarOverlayId): string {
   const item = BANK_ACHIEVEMENTS.find((entry) => entry.bankOverlay === overlay);
   return item?.tierLabel ?? overlay;
