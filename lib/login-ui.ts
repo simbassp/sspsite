@@ -6,7 +6,7 @@ export function mapLoginErrorForDisplay(raw: string, kind: LoginFailureKind): st
     return "Не удалось подключиться к серверу. Проверьте интернет и попробуйте ещё раз.";
   }
   if (kind === "network") {
-    return "Нет подключения к интернету или сеть нестабильна. Проверьте соединение.";
+    return "Не удалось подключиться к серверу. Проверьте интернет, отключите VPN/прокси и попробуйте снова.";
   }
   const e = raw.trim().toLowerCase();
   if (

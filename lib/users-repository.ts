@@ -243,32 +243,44 @@ async function loginViaServer(login: string, password: string): Promise<ServerLo
     ])) as Response;
 
     const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
-    if (!contentType.includes("application/json")) {
-      return null;
+    let payload: ServerLoginSuccess | ServerLoginError | null = null;
+    if (contentType.includes("application/json")) {
+      try {
+        payload = (await response.json()) as ServerLoginSuccess | ServerLoginError;
+      } catch {
+        payload = null;
+      }
     }
 
-    let payload: ServerLoginSuccess | ServerLoginError | null = null;
-    try {
-      payload = (await response.json()) as ServerLoginSuccess | ServerLoginError;
-    } catch {
-      payload = null;
-    }
+    const serverMessage =
+      payload && "error" in payload && typeof payload.error === "string" ? payload.error.trim() : "";
 
     if (!response.ok) {
-      if ([404, 405, 500, 502, 503, 504].includes(response.status)) {
-        return null;
+      if ([502, 503, 504].includes(response.status)) {
+        return {
+          ok: false,
+          error: serverMessage || "request_timeout",
+        };
+      }
+      if (response.status === 500) {
+        return {
+          ok: false,
+          error: serverMessage || "Сервер авторизации временно недоступен. Попробуйте через минуту.",
+        };
+      }
+      if ([404, 405].includes(response.status)) {
+        return {
+          ok: false,
+          error: "network_error",
+        };
       }
       return {
         ok: false,
-        error:
-          payload && "error" in payload && payload.error
-            ? payload.error
-            : `Сервер авторизации вернул ошибку (${response.status}).`,
+        error: serverMessage || `Сервер авторизации вернул ошибку (${response.status}).`,
       };
     }
+
     if (!payload || !("ok" in payload) || payload.ok !== true) {
-      const serverMessage =
-        payload && "error" in payload && typeof payload.error === "string" ? payload.error.trim() : "";
       return {
         ok: false,
         error: serverMessage || "Некорректный ответ сервера авторизации. Повторите попытку.",
@@ -283,7 +295,10 @@ async function loginViaServer(login: string, password: string): Promise<ServerLo
         error: "request_timeout",
       };
     }
-    return null;
+    return {
+      ok: false,
+      error: "network_error",
+    };
   }
 }
 
@@ -560,6 +575,8 @@ export async function loginUser(login: string, password: string) {
   let serverError = "";
   if (serverResult && !serverResult.ok) {
     serverError = serverResult.error;
+  } else if (!serverResult) {
+    serverError = "network_error";
   }
   if (!canUseLocalFallback()) {
     return {

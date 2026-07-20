@@ -149,6 +149,8 @@ export default function LoginPage() {
         setInfo("");
         if (result.error === "request_timeout") {
           setError(mapLoginErrorForDisplay("", "timeout"));
+        } else if (result.error === "network_error") {
+          setError(mapLoginErrorForDisplay("", "network"));
         } else {
           setError(mapLoginErrorForDisplay(result.error, "api"));
         }
