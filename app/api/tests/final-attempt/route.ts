@@ -1,3 +1,4 @@
+import { computeFinalTestSummary } from "@/lib/server-final-test-summary";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 
@@ -27,6 +28,15 @@ export async function POST(request: Request) {
   if (!session) return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
   const body = (await request.json()) as FinalAttemptBody;
   const supabase = getServerSupabaseServiceClient();
+
+  const inProgress = await supabase.from("final_attempts").select("user_id").eq("user_id", session.id).maybeSingle();
+  if (!inProgress.data) {
+    const summary = await computeFinalTestSummary(supabase, session.id);
+    if (!summary.canStartFinal) {
+      return Response.json({ ok: false, error: "final_attempts_exhausted" }, { status: 403 });
+    }
+  }
+
   const payload = {
     user_id: session.id,
     started_at: String(body.startedAt || new Date().toISOString()),

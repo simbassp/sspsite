@@ -61,8 +61,8 @@ export async function computeFinalTestSummary(supabase: SupabaseClient, userId: 
   }
 
   const hasPassedFinal = Boolean(passedRes.data);
-  const canStartFinal = !hasPassedFinal && usedAttempts < maxAttempts;
-  const attemptsExhausted = !hasPassedFinal && usedAttempts >= maxAttempts;
+  const canStartFinal = usedAttempts < maxAttempts;
+  const attemptsExhausted = usedAttempts >= maxAttempts;
 
   return {
     maxAttempts,

@@ -730,16 +730,20 @@ export default function TestsPage() {
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
-    if (finalTest?.hasPassedFinal) {
-      setMessage("Итоговый тест уже успешно сдан.");
-      return;
-    }
     if (finalTest && !finalTest.canStartFinal) {
       setMessage(
         "Итоговый тест недоступен: попытки израсходованы. Сброс выполняет администратор или автосброс 25-го числа.",
       );
       return;
     }
+    const remainingAttempts = finalTest
+      ? Math.max(0, finalTest.maxAttempts - finalTest.usedAttempts)
+      : FINAL_TEST_MAX_ATTEMPTS;
+    const passedHint = finalTest?.hasPassedFinal ? "\n\nИтоговый тест уже сдан в этом месяце, но оставшиеся попытки можно использовать для тренировки." : "";
+    const confirmed = window.confirm(
+      `Запустить итоговый тест?\n\nСтрогий режим: время на каждый вопрос ограничено, подсказок нет.\nБудет использована 1 попытка (осталось ${remainingAttempts} из ${finalTest?.maxAttempts ?? FINAL_TEST_MAX_ATTEMPTS}).\n\nСлучайное нажатие тоже засчитывается как попытка.${passedHint}`,
+    );
+    if (!confirmed) return;
     const pool = await loadQuestionPool();
     if (!pool) {
       setMessage("Не удалось подготовить вопросы. Проверьте интернет.");
@@ -790,11 +794,13 @@ export default function TestsPage() {
   const finalStatusText =
     finalTest == null
       ? "—"
-      : finalTest.hasPassedFinal
-        ? "Сдан"
-        : finalTest.canStartFinal
-          ? "Доступен"
-          : "Ограничено";
+      : finalTest.attemptsExhausted
+        ? finalTest.hasPassedFinal
+          ? "Сдан"
+          : "Ограничено"
+        : finalTest.hasPassedFinal
+          ? "Сдан · есть попытки"
+          : "Доступен";
   const historyPageSize = 10;
   const historyVisible = historyExpanded ? results : results.slice(0, 5);
   const historyPages = historyExpanded ? Math.max(1, Math.ceil(historyVisible.length / historyPageSize)) : 1;
@@ -823,7 +829,7 @@ export default function TestsPage() {
           </span>
           <div>
             <p>При запуске итогового теста вопросы всегда разные, время ответа ограничено.</p>
-            <p>При исчерпании попыток доступ будет заблокирован до ручного сброса.</p>
+            <p>При исчерпании попыток доступ будет заблокирован до ручного или автоматического сброса.</p>
           </div>
         </div>
         <div className="tests-ref-info__right">
@@ -896,17 +902,14 @@ export default function TestsPage() {
                     isPoolLoading ||
                     !isConfigLoaded ||
                     finalTest == null ||
-                    finalTest.hasPassedFinal ||
                     !finalTest.canStartFinal
                   }
                   title={
-                    finalTest != null && finalTest.hasPassedFinal
-                      ? "Итоговый тест уже успешно сдан в текущем окне попыток."
-                      : finalTest != null && finalTest.attemptsExhausted
-                        ? "Попытки итогового теста израсходованы. Нужен ручной или автоматический сброс (25-е число)."
-                        : finalTest != null && !finalTest.canStartFinal
-                          ? "Сейчас нельзя начать итоговый тест."
-                          : undefined
+                    finalTest != null && finalTest.attemptsExhausted
+                      ? "Попытки итогового теста израсходованы. Нужен ручной или автоматический сброс (25-е число)."
+                      : finalTest != null && !finalTest.canStartFinal
+                        ? "Сейчас нельзя начать итоговый тест."
+                        : undefined
                   }
                 >
                   Начать итоговый тест
