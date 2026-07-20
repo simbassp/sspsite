@@ -5782,6 +5782,29 @@ html[data-theme="dark"] .final-review-answer--correct {
 }
 
 @media (max-width: 819px) {
+  .personnel-bar-chart {
+    gap: 2px;
+    height: 118px;
+  }
+
+  .personnel-bar-chart__col {
+    gap: 4px;
+  }
+
+  .personnel-bar-chart__col span {
+    font-size: 9px;
+  }
+
+  .personnel-bar-chart__bar,
+  .personnel-bar-chart--stacked .personnel-bar-chart__stack {
+    max-width: 12px;
+  }
+
+  .personnel-mini-bar-chart {
+    gap: 1px;
+    height: 40px;
+  }
+
   .personnel-hero {
     grid-template-columns: 1fr;
   }
