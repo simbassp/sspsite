@@ -58,8 +58,21 @@ const EMPTY_ROSTER_FILTERS: RosterFilters = {
   dutyStatus: "all",
 };
 
-function hasActiveRosterFilters(filters: RosterFilters) {
+const EMPTY_TEST_STATS: PersonnelTestRosterStats = {
+  trialPassed: 0,
+  trialFailed: 0,
+  finalPassed: 0,
+  finalFailed: 0,
+};
+
+function resolveUserTestStats(user: UserRow, testDate: string) {
+  if (testDate) return user.testStatsOnDate ?? EMPTY_TEST_STATS;
+  return user.testStats ?? EMPTY_TEST_STATS;
+}
+
+function hasActiveRosterFilters(filters: RosterFilters, testDate: string) {
   return (
+    testDate !== "" ||
     filters.examType !== "all" ||
     filters.examStatus !== "all" ||
     filters.license !== "all" ||
@@ -75,6 +88,7 @@ function userMatchesRosterFilters(
   user: UserRow,
   filters: RosterFilters,
   examMap: Map<string, Map<string, string>>,
+  testDate: string,
 ) {
   if (filters.examType !== "all" && filters.examStatus !== "all") {
     const passed = examMap.get(user.id)?.get(filters.examType) === "passed";
@@ -84,11 +98,15 @@ function userMatchesRosterFilters(
 
   if (filters.license !== "all" && !user.licenseCategories.includes(filters.license)) return false;
 
-  const ts = user.testStats ?? { trialPassed: 0, trialFailed: 0, finalPassed: 0, finalFailed: 0 };
+  const ts = resolveUserTestStats(user, testDate);
   if (filters.trialTest === "passed" && ts.trialPassed === 0) return false;
-  if (filters.trialTest === "failed" && ts.trialPassed > 0) return false;
+  if (filters.trialTest === "failed") {
+    if (testDate ? ts.trialFailed === 0 : ts.trialPassed > 0) return false;
+  }
   if (filters.finalTest === "passed" && ts.finalPassed === 0) return false;
-  if (filters.finalTest === "failed" && ts.finalPassed > 0) return false;
+  if (filters.finalTest === "failed") {
+    if (testDate ? ts.finalFailed === 0 : ts.finalPassed > 0) return false;
+  }
 
   if (filters.hits === "yes" && user.uavHitsTotal === 0) return false;
   if (filters.hits === "no" && user.uavHitsTotal > 0) return false;
@@ -97,6 +115,47 @@ function userMatchesRosterFilters(
   if (filters.dutyStatus !== "all" && user.dutyLocation !== filters.dutyStatus) return false;
 
   return true;
+}
+
+function formatFilterDateLabel(iso: string) {
+  const [year, month, day] = iso.split("-");
+  if (!year || !month || !day) return iso;
+  return `${day}.${month}.${year}`;
+}
+
+function buildExportFilterLines(input: {
+  platoon: "all" | "1" | "2";
+  section: "all" | "1" | "2" | "3" | "4";
+  module: string;
+  search: string;
+  testDate: string;
+  filters: RosterFilters;
+}) {
+  const lines: string[] = [];
+  if (input.platoon !== "all") lines.push(`Взвод: ${input.platoon}`);
+  if (input.section !== "all") lines.push(`Отделение: ${input.section}`);
+  if (input.module !== "all") lines.push(`Модуль: ${input.module}`);
+  if (input.search) lines.push(`Поиск: ${input.search}`);
+  if (input.testDate) lines.push(`Дата тестов: ${formatFilterDateLabel(input.testDate)}`);
+  if (input.filters.examType !== "all") {
+    lines.push(`Зачёт: ${personnelExamLabel[input.filters.examType]}`);
+  }
+  if (input.filters.examStatus !== "all") {
+    lines.push(`Результат зачёта: ${input.filters.examStatus === "passed" ? "Сдан" : "Не сдан"}`);
+  }
+  if (input.filters.license !== "all") lines.push(`Права: категория ${input.filters.license}`);
+  if (input.filters.trialTest !== "all") {
+    lines.push(`Пробный тест: ${input.filters.trialTest === "passed" ? "Сдал" : "Не сдал"}`);
+  }
+  if (input.filters.finalTest !== "all") {
+    lines.push(`Итоговый тест: ${input.filters.finalTest === "passed" ? "Сдал" : "Не сдал"}`);
+  }
+  if (input.filters.hits !== "all") lines.push(`Сбития: ${input.filters.hits === "yes" ? "Есть" : "Нет"}`);
+  if (input.filters.premiums !== "all") lines.push(`Премии: ${input.filters.premiums === "yes" ? "Есть" : "Нет"}`);
+  if (input.filters.dutyStatus !== "all") {
+    lines.push(`Статус: ${dutyLocationLabel[input.filters.dutyStatus]}`);
+  }
+  return lines;
 }
 
 function calcFilteredStats(list: UserRow[]) {
@@ -134,6 +193,7 @@ type UserRow = {
   medalsCount: number;
   licenseCategories: string[];
   testStats: PersonnelTestRosterStats;
+  testStatsOnDate?: PersonnelTestRosterStats | null;
 };
 
 type Tab = "all" | "top";
@@ -150,6 +210,7 @@ export default function PersonnelListPage() {
   const [module, setModule] = useState<string>("all");
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [testDateFilter, setTestDateFilter] = useState("");
   const [users, setUsers] = useState<UserRow[]>([]);
   const [stats, setStats] = useState({ totalEmployees: 0, deployedNow: 0, avgDays: 0, totalHits: 0, totalPremiums: 0 });
   const [tops, setTops] = useState<PersonnelRosterTops<UserRow>>({
@@ -188,6 +249,7 @@ export default function PersonnelListPage() {
       if (section !== "all") q.set("section", section);
       if (module !== "all") q.set("module", module);
       if (debouncedSearch) q.set("search", debouncedSearch);
+      if (testDateFilter) q.set("testDate", testDateFilter);
       const res = await withTimeout(
         fetch(`/api/personnel/roster?${q.toString()}`, { cache: "no-store", signal: controller.signal }),
         ROSTER_FETCH_TIMEOUT_MS,
@@ -220,7 +282,7 @@ export default function PersonnelListPage() {
     } finally {
       if (seq === loadSeqRef.current) setIsLoading(false);
     }
-  }, [platoon, section, module, debouncedSearch]);
+  }, [platoon, section, module, debouncedSearch, testDateFilter]);
 
   const examMap = useMemo(() => {
     const m = new Map<string, Map<string, string>>();
@@ -233,13 +295,14 @@ export default function PersonnelListPage() {
   }, [users]);
 
   const filteredUsers = useMemo(
-    () => users.filter((user) => userMatchesRosterFilters(user, rosterFilters, examMap)),
-    [users, rosterFilters, examMap],
+    () => users.filter((user) => userMatchesRosterFilters(user, rosterFilters, examMap, testDateFilter)),
+    [users, rosterFilters, examMap, testDateFilter],
   );
 
   const tableStats = useMemo(() => calcFilteredStats(filteredUsers), [filteredUsers]);
   const displayStats = users.length === 0 && isLoading ? stats : tableStats;
-  const rosterFiltersActive = hasActiveRosterFilters(rosterFilters);
+  const rosterFiltersActive = hasActiveRosterFilters(rosterFilters, testDateFilter);
+  const displayTestStats = (user: UserRow) => resolveUserTestStats(user, testDateFilter);
 
   const setRosterFilter = <K extends keyof RosterFilters>(key: K, value: RosterFilters[K]) => {
     setRosterFilters((prev) => ({ ...prev, [key]: value }));
@@ -279,6 +342,17 @@ export default function PersonnelListPage() {
         await postPersonnelExportExcel({
           scope: "filter",
           userIds: filteredUsers.map((user) => user.id),
+          testDate: testDateFilter || undefined,
+          trialTest: rosterFilters.trialTest,
+          finalTest: rosterFilters.finalTest,
+          filterLines: buildExportFilterLines({
+            platoon,
+            section,
+            module,
+            search: debouncedSearch,
+            testDate: testDateFilter,
+            filters: rosterFilters,
+          }),
         });
       }
       exportExcelModal.setOpen(false);
@@ -404,14 +478,25 @@ export default function PersonnelListPage() {
                   ))}
                 </select>
               </div>
-              <div className="personnel-filters__wide">
-                <p className="label">Поиск</p>
-                <input
-                  className="input"
-                  placeholder="Имя или позывной"
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                />
+              <div className="personnel-filters__wide personnel-filters__search-stack">
+                <div>
+                  <p className="label">Поиск</p>
+                  <input
+                    className="input"
+                    placeholder="Имя или позывной"
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <p className="label">Дата тестов</p>
+                  <input
+                    className="input"
+                    type="date"
+                    value={testDateFilter}
+                    onChange={(e) => setTestDateFilter(e.target.value)}
+                  />
+                </div>
               </div>
               <div>
                 <p className="label">Зачёт</p>
@@ -464,30 +549,6 @@ export default function PersonnelListPage() {
                 </select>
               </div>
               <div>
-                <p className="label">Пробный тест</p>
-                <select
-                  className="select"
-                  value={rosterFilters.trialTest}
-                  onChange={(e) => setRosterFilter("trialTest", e.target.value as TestFilter)}
-                >
-                  <option value="all">Все</option>
-                  <option value="passed">Сдал</option>
-                  <option value="failed">Не сдал</option>
-                </select>
-              </div>
-              <div>
-                <p className="label">Итоговый тест</p>
-                <select
-                  className="select"
-                  value={rosterFilters.finalTest}
-                  onChange={(e) => setRosterFilter("finalTest", e.target.value as TestFilter)}
-                >
-                  <option value="all">Все</option>
-                  <option value="passed">Сдал</option>
-                  <option value="failed">Не сдал</option>
-                </select>
-              </div>
-              <div>
                 <p className="label">Сбития</p>
                 <select
                   className="select"
@@ -511,17 +572,43 @@ export default function PersonnelListPage() {
                   <option value="no">Нет</option>
                 </select>
               </div>
-              <div>
-                <p className="label">Статус</p>
-                <select
-                  className="select"
-                  value={rosterFilters.dutyStatus}
-                  onChange={(e) => setRosterFilter("dutyStatus", e.target.value as RosterFilters["dutyStatus"])}
-                >
-                  <option value="all">Все</option>
-                  <option value="base">На базе</option>
-                  <option value="deployment">В командировке</option>
-                </select>
+              <div className="personnel-filters__row">
+                <div>
+                  <p className="label">Пробный тест</p>
+                  <select
+                    className="select"
+                    value={rosterFilters.trialTest}
+                    onChange={(e) => setRosterFilter("trialTest", e.target.value as TestFilter)}
+                  >
+                    <option value="all">Все</option>
+                    <option value="passed">Сдал</option>
+                    <option value="failed">Не сдал</option>
+                  </select>
+                </div>
+                <div>
+                  <p className="label">Итоговый тест</p>
+                  <select
+                    className="select"
+                    value={rosterFilters.finalTest}
+                    onChange={(e) => setRosterFilter("finalTest", e.target.value as TestFilter)}
+                  >
+                    <option value="all">Все</option>
+                    <option value="passed">Сдал</option>
+                    <option value="failed">Не сдал</option>
+                  </select>
+                </div>
+                <div>
+                  <p className="label">Статус</p>
+                  <select
+                    className="select"
+                    value={rosterFilters.dutyStatus}
+                    onChange={(e) => setRosterFilter("dutyStatus", e.target.value as RosterFilters["dutyStatus"])}
+                  >
+                    <option value="all">Все</option>
+                    <option value="base">На базе</option>
+                    <option value="deployment">В командировке</option>
+                  </select>
+                </div>
               </div>
             </div>
           </article>
@@ -553,7 +640,14 @@ export default function PersonnelListPage() {
             <p className="page-subtitle personnel-table-filter-meta">
               Показано {filteredUsers.length} из {users.length}
               {" · "}
-              <button type="button" className="personnel-table-filter-reset" onClick={() => setRosterFilters(EMPTY_ROSTER_FILTERS)}>
+              <button
+                type="button"
+                className="personnel-table-filter-reset"
+                onClick={() => {
+                  setRosterFilters(EMPTY_ROSTER_FILTERS);
+                  setTestDateFilter("");
+                }}
+              >
                 Сбросить фильтры
               </button>
             </p>
@@ -618,7 +712,7 @@ export default function PersonnelListPage() {
                         </div>
                       </td>
                       <td className="personnel-table__compact">
-                        <PersonnelRosterTestCell stats={u.testStats} />
+                        <PersonnelRosterTestCell stats={displayTestStats(u)} />
                       </td>
                       <td className="personnel-table__compact">
                         {u.deploymentsCount} ({u.deploymentDays} дн.)
@@ -686,7 +780,7 @@ export default function PersonnelListPage() {
                   <div className="personnel-mobile-card__stats">
                     <div>
                       <span className="label">Тесты</span>
-                      <PersonnelRosterTestCell stats={u.testStats} />
+                      <PersonnelRosterTestCell stats={displayTestStats(u)} />
                     </div>
                     <div>
                       <span className="label">Сбития</span>

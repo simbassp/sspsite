@@ -70,6 +70,8 @@ export type PersonnelUserCard = {
   medalsCount: number;
   licenseCategories: PersonnelLicenseCategory[];
   testStats: PersonnelTestRosterStats;
+  /** Статистика тестов за выбранный день (если запрошен testDate). */
+  testStatsOnDate?: PersonnelTestRosterStats | null;
 };
 
 export type PersonnelTestRosterStats = {
@@ -399,6 +401,74 @@ function summarizeTestResultRows(
   return stats;
 }
 
+function mskDayBounds(dateIso: string) {
+  const start = new Date(`${dateIso}T00:00:00+03:00`);
+  const end = new Date(`${dateIso}T23:59:59.999+03:00`);
+  return { start: start.toISOString(), end: end.toISOString() };
+}
+
+function isValidDateIso(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+async function loadTestStatsForUsersOnDate(userIds: string[], dateIso: string) {
+  const map = new Map<string, PersonnelTestRosterStats>();
+  for (const id of userIds) map.set(id, emptyTestRosterStats());
+  if (userIds.length === 0 || !isValidDateIso(dateIso)) return map;
+
+  const supabase = getServerSupabaseServiceClient();
+  const linkedMap = await resolveBulkLinkedUserIds(supabase, userIds);
+  const queryIds = [...new Set(linkedMap.keys())];
+  if (!queryIds.length) return map;
+
+  const { start, end } = mskDayBounds(dateIso);
+
+  const fetchChunk = async (ids: string[]) => {
+    const primary = await supabase
+      .from("test_results")
+      .select("user_id,type,status,created_at")
+      .in("user_id", ids)
+      .gte("created_at", start)
+      .lte("created_at", end);
+
+    if (!primary.error) {
+      return (primary.data ?? []) as Array<Record<string, unknown>>;
+    }
+    if (isMissingColumnError(primary.error.message)) {
+      const legacy = await supabase
+        .from("test_results")
+        .select("user_id,test_type,status,created_at")
+        .in("user_id", ids)
+        .gte("created_at", start)
+        .lte("created_at", end);
+      if (!legacy.error) return (legacy.data ?? []) as Array<Record<string, unknown>>;
+    }
+    return [] as Array<Record<string, unknown>>;
+  };
+
+  const testRows: Array<Record<string, unknown>> = [];
+  for (let i = 0; i < queryIds.length; i += 80) {
+    testRows.push(...(await fetchChunk(queryIds.slice(i, i + 80))));
+  }
+
+  const rowsByUser = new Map<string, Array<{ type?: string; test_type?: string; status?: string }>>();
+  for (const row of testRows) {
+    const rawUid = String(row.user_id ?? "");
+    if (!rawUid) continue;
+    const canon = linkedMap.get(rawUid) ?? rawUid;
+    if (!map.has(canon)) continue;
+    const list = rowsByUser.get(canon) ?? [];
+    list.push(row as { type?: string; test_type?: string; status?: string });
+    rowsByUser.set(canon, list);
+  }
+
+  for (const [id, rows] of rowsByUser) {
+    map.set(id, summarizeTestResultRows(rows));
+  }
+
+  return map;
+}
+
 async function loadTestStatsForUsers(userIds: string[]) {
   const map = new Map<string, PersonnelTestRosterStats>();
   for (const id of userIds) map.set(id, emptyTestRosterStats());
@@ -713,6 +783,7 @@ export async function loadPersonnelRoster(filters?: {
   section?: number | "all";
   module?: number | "all";
   search?: string;
+  testDate?: string;
 }) {
   const supabase = getServerSupabaseServiceClient();
   let q = supabase
@@ -754,13 +825,19 @@ export async function loadPersonnelRoster(filters?: {
   }
 
   const userIds = rows.map((r) => String(r.id));
-  const [examsMap, depMap, medalsMap, licensesMap, premiumMap, testStatsMap] = await Promise.all([
+  const testDate =
+    typeof filters?.testDate === "string" && isValidDateIso(filters.testDate.trim())
+      ? filters.testDate.trim()
+      : null;
+  const [examsMap, depMap, medalsMap, licensesMap, premiumMap, testStatsMap, testStatsOnDateMap] =
+    await Promise.all([
     loadExamsForUsers(userIds),
     loadDeploymentStats(userIds),
     loadMedalsCount(userIds),
     loadLicenses(userIds),
     loadPremiumTotals(userIds),
     loadTestStatsForUsers(userIds),
+    testDate ? loadTestStatsForUsersOnDate(userIds, testDate) : Promise.resolve(new Map<string, PersonnelTestRosterStats>()),
   ]);
 
   const users: PersonnelUserCard[] = rows.map((u) => {
@@ -787,10 +864,68 @@ export async function loadPersonnelRoster(filters?: {
       medalsCount: medalsMap.get(id) ?? 0,
       licenseCategories: licensesMap.get(id) ?? [],
       testStats: testStatsMap.get(id) ?? emptyTestRosterStats(),
+      testStatsOnDate: testDate ? testStatsOnDateMap.get(id) ?? emptyTestRosterStats() : null,
     };
   });
 
   return { ok: true as const, users };
+}
+
+export async function loadPersonnelRosterCardsByIds(userIds: string[], testDate?: string | null) {
+  const uniqueIds = [...new Set(userIds.filter(Boolean))];
+  if (!uniqueIds.length) return [] as PersonnelUserCard[];
+
+  const supabase = getServerSupabaseServiceClient();
+  const usersRes = await supabase
+    .from("app_users")
+    .select(
+      "id,name,callsign,position,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,created_at,employment_date,status",
+    )
+    .in("id", uniqueIds)
+    .eq("unit_assignment", "company_4")
+    .eq("status", "active");
+
+  if (usersRes.error) return [] as PersonnelUserCard[];
+
+  const rows = (usersRes.data ?? []) as Array<Record<string, unknown>>;
+  const ids = rows.map((r) => String(r.id));
+  const dateIso =
+    typeof testDate === "string" && isValidDateIso(testDate.trim()) ? testDate.trim() : null;
+
+  const [testStatsMap, testStatsOnDateMap] = await Promise.all([
+    loadTestStatsForUsers(ids),
+    dateIso ? loadTestStatsForUsersOnDate(ids, dateIso) : Promise.resolve(new Map<string, PersonnelTestRosterStats>()),
+  ]);
+
+  const order = new Map(uniqueIds.map((id, index) => [id, index]));
+  const users: PersonnelUserCard[] = rows.map((u) => {
+    const id = String(u.id);
+    return {
+      id,
+      name: String(u.name ?? ""),
+      callsign: String(u.callsign ?? ""),
+      position: String(u.position ?? "Специалист") as Position,
+      dutyLocation: (u.duty_location === "deployment" ? "deployment" : "base") as DutyLocation,
+      unitAssignment: normalizeUnitAssignment(u.unit_assignment),
+      rotaPlatoon: u.rota_platoon != null ? Number(u.rota_platoon) : null,
+      rotaSection: u.rota_section != null ? Number(u.rota_section) : null,
+      rotaModule: u.rota_module != null ? Number(u.rota_module) : null,
+      createdAt: String(u.created_at ?? new Date().toISOString()),
+      employmentDate: u.employment_date ? String(u.employment_date).slice(0, 10) : null,
+      exams: [],
+      deploymentsCount: 0,
+      deploymentDays: 0,
+      uavHitsTotal: 0,
+      premiumsTotal: 0,
+      medalsCount: 0,
+      licenseCategories: [],
+      testStats: testStatsMap.get(id) ?? emptyTestRosterStats(),
+      testStatsOnDate: dateIso ? testStatsOnDateMap.get(id) ?? emptyTestRosterStats() : null,
+    };
+  });
+
+  users.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+  return users;
 }
 
 export async function loadPersonnelProfile(userId: string): Promise<PersonnelProfilePayload | null> {

@@ -20,6 +20,10 @@ export async function postPersonnelExportExcel(body: {
   section?: "all" | "1" | "2" | "3" | "4";
   search?: string;
   userIds?: string[];
+  testDate?: string;
+  trialTest?: "all" | "passed" | "failed";
+  finalTest?: "all" | "passed" | "failed";
+  filterLines?: string[];
 }) {
   const res = await fetch("/api/admin/personnel/export-excel", {
     method: "POST",
@@ -80,7 +84,8 @@ export function PersonnelExportExcelModal({
             Скачать Excel
           </h3>
           <p className="page-subtitle" style={{ marginTop: 0 }}>
-            Выберите, для кого сформировать выгрузку. В файле будут сводка, графики и детализация по сотрудникам.
+            Выберите, для кого сформировать выгрузку. При фильтре по дате или тестам — сводка по сдаче за день; иначе
+            полный профиль с графиками.
           </p>
           <div className="form" style={{ marginTop: 12, gap: 10 }}>
             <label

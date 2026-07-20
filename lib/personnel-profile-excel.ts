@@ -982,4 +982,117 @@ export async function buildPersonnelBulkExcelBuffer(bundles: PersonnelProfileExp
   return Buffer.from(buffer);
 }
 
+export type PersonnelRosterFilterExportRow = {
+  name: string;
+  callsign: string;
+  rotaUnit: string;
+  dutyLocation: string;
+  testDate: string | null;
+  trialPassed: number;
+  trialFailed: number;
+  finalPassed: number;
+  finalFailed: number;
+};
+
+export async function buildPersonnelRosterFilterExcelBuffer(input: {
+  rows: PersonnelRosterFilterExportRow[];
+  filterLines: string[];
+  testDate: string | null;
+}) {
+  const ExcelJSModule = await import("exceljs");
+  const ExcelJS = ExcelJSModule.default ?? ExcelJSModule;
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "SSP PVO";
+  workbook.created = new Date();
+
+  const summary = workbook.addWorksheet("Сводка");
+  summary.columns = [{ width: 28 }, { width: 52 }];
+  const title = summary.addRow(["Выгрузка по фильтрам", ""]);
+  styleSectionTitle(title.getCell(1));
+  summary.mergeCells(title.number, 1, title.number, 2);
+  title.height = 24;
+
+  for (const line of input.filterLines) {
+    const row = summary.addRow([line, ""]);
+    summary.mergeCells(row.number, 1, row.number, 2);
+    row.getCell(1).font = { size: 10, color: { argb: "FF374151" } };
+  }
+
+  const totals = input.rows.reduce(
+    (acc, row) => {
+      acc.trialPassed += row.trialPassed;
+      acc.trialFailed += row.trialFailed;
+      acc.finalPassed += row.finalPassed;
+      acc.finalFailed += row.finalFailed;
+      return acc;
+    },
+    { trialPassed: 0, trialFailed: 0, finalPassed: 0, finalFailed: 0 },
+  );
+
+  summary.addRow([]);
+  const totalsTitle = summary.addRow(["Итого по выгрузке", ""]);
+  styleSectionTitle(totalsTitle.getCell(1));
+  summary.mergeCells(totalsTitle.number, 1, totalsTitle.number, 2);
+  summary.addRow(["Сотрудников", input.rows.length]);
+  if (input.testDate) {
+    summary.addRow(["Дата тестов", input.testDate]);
+  }
+  summary.addRow(["Пробных сдано (попыток)", totals.trialPassed]);
+  summary.addRow(["Пробных не сдано (попыток)", totals.trialFailed]);
+  summary.addRow(["Итоговых сдано (попыток)", totals.finalPassed]);
+  summary.addRow(["Итоговых не сдано (попыток)", totals.finalFailed]);
+
+  const sheet = workbook.addWorksheet("Сотрудники");
+  sheet.columns = [
+    { width: 24 },
+    { width: 16 },
+    { width: 18 },
+    { width: 14 },
+    { width: 12 },
+    { width: 14 },
+    { width: 14 },
+    { width: 14 },
+    { width: 16 },
+    { width: 16 },
+  ];
+
+  const header = sheet.addRow([
+    "ФИО",
+    "Позывной",
+    "Взвод/отдел",
+    "Место",
+    "Дата",
+    "Пробный сдал",
+    "Пробный не сдал",
+    "Итоговый сдал",
+    "Итоговый не сдал",
+  ]);
+  styleHeaderRow(header, 32);
+
+  for (const row of input.rows) {
+    const dataRow = sheet.addRow([
+      row.name || "—",
+      row.callsign || "—",
+      row.rotaUnit || "—",
+      row.dutyLocation || "—",
+      row.testDate || "—",
+      row.trialPassed,
+      row.trialFailed,
+      row.finalPassed,
+      row.finalFailed,
+    ]);
+    applyCompactRow(dataRow);
+    dataRow.eachCell((cell, col) => {
+      styleCompactTableCell(cell, col >= 6 ? "center" : "left");
+      if (col === 6) styleCountCell(cell, row.trialPassed > 0 ? "pass" : "neutral");
+      if (col === 7) styleCountCell(cell, row.trialFailed > 0 ? "fail" : "neutral");
+      if (col === 8) styleCountCell(cell, row.finalPassed > 0 ? "pass" : "neutral");
+      if (col === 9) styleCountCell(cell, row.finalFailed > 0 ? "fail" : "neutral");
+    });
+  }
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  return Buffer.from(buffer);
+}
+
 export { employeeLabel };
