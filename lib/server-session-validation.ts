@@ -1,5 +1,6 @@
 import type { SessionUser } from "@/lib/types";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
+import { readCachedSessionValidation, writeCachedSessionValidation } from "@/lib/session-validation-cache";
 
 function isMissingColumnError(message: string | undefined) {
   const m = (message || "").toLowerCase();
@@ -52,6 +53,15 @@ function samePermissions(a: SessionUser["permissions"], b: SessionUser["permissi
 
 /** Returns true when session is still valid; false when user must re-login. */
 export async function isSessionStillValid(session: SessionUser): Promise<boolean> {
+  const cached = readCachedSessionValidation(session.id);
+  if (cached != null) return cached;
+
+  const valid = await validateSessionFromDb(session);
+  writeCachedSessionValidation(session.id, valid);
+  return valid;
+}
+
+async function validateSessionFromDb(session: SessionUser): Promise<boolean> {
   try {
     const supabase = getServerSupabaseServiceClient();
     const primary = await supabase

@@ -44,6 +44,14 @@ export async function GET() {
   try {
     const supabase = getServerSupabaseServiceClient();
     const t0 = Date.now();
+    const orphanPromise = supabase.from("final_attempts").select("user_id").eq("user_id", session.id).maybeSingle();
+    const bankTimePromise = supabase
+      .from("test_questions")
+      .select("time_limit_sec")
+      .eq("is_active", true)
+      .limit(2000);
+    const finalSummaryPromise = computeFinalTestSummary(supabase, session.id).catch(() => null);
+
     let configQ = await supabase
       .from("test_settings")
       .select(
@@ -121,12 +129,7 @@ export async function GET() {
     }
     const t1 = Date.now();
 
-    const orphanQ = await supabase.from("final_attempts").select("user_id").eq("user_id", session.id).maybeSingle();
-    const bankTimeQ = await supabase
-      .from("test_questions")
-      .select("time_limit_sec")
-      .eq("is_active", true)
-      .limit(2000);
+    const [orphanQ, bankTimeQ, finalTestSummary] = await Promise.all([orphanPromise, bankTimePromise, finalSummaryPromise]);
     const t2 = Date.now();
     if (configQ.error) {
       if (process.env.NODE_ENV !== "production") {
@@ -141,12 +144,6 @@ export async function GET() {
       );
     }
 
-    let finalTestSummary: Awaited<ReturnType<typeof computeFinalTestSummary>> | null = null;
-    try {
-      finalTestSummary = await computeFinalTestSummary(supabase, session.id);
-    } catch {
-      finalTestSummary = null;
-    }
     const t3 = Date.now();
 
     const cfg = (configQ.data || {}) as Partial<ConfigRow>;

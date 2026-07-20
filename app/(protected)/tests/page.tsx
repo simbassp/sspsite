@@ -199,22 +199,28 @@ export default function TestsPage() {
     );
   }, [finalTest]);
 
-  const refresh = async () => {
+  const applyHistoryResponse = async (
+    response: Response,
+    payload: { ok?: boolean; rows?: Array<Record<string, unknown>> },
+    options?: { reloadFinalSummaryAfter?: boolean },
+  ) => {
     if (!session) return;
-    setIsHistoryLoading(true);
     setHistoryError("");
     try {
-      const response = await fetch("/api/tests/history", { cache: "no-store" });
-      const payload = (await response.json()) as { ok?: boolean; rows?: Array<Record<string, unknown>> };
       if (process.env.NODE_ENV !== "production") {
-        console.debug("[tests] history response", { ok: payload.ok, status: response.status, count: payload.rows?.length || 0 });
+        console.debug("[tests] history response", {
+          ok: payload.ok,
+          status: response.status,
+          count: payload.rows?.length || 0,
+        });
       }
       if (!response.ok || !payload.ok || !Array.isArray(payload.rows)) {
         const fallbackRows = await fetchUserResults(session.id);
         setResults(fallbackRows);
         setHistoryError("");
-        setIsHistoryLoading(false);
-        void reloadFinalSummary();
+        if (options?.reloadFinalSummaryAfter !== false) {
+          void reloadFinalSummary();
+        }
         return;
       }
       const mapped = payload.rows.map((r) => {
@@ -246,7 +252,25 @@ export default function TestsPage() {
       }
     } finally {
       setIsHistoryLoading(false);
-      void reloadFinalSummary();
+      if (options?.reloadFinalSummaryAfter !== false) {
+        void reloadFinalSummary();
+      }
+    }
+  };
+
+  const refresh = async (options?: { reloadFinalSummaryAfter?: boolean }) => {
+    if (!session) return;
+    setIsHistoryLoading(true);
+    try {
+      const response = await fetch("/api/tests/history", { cache: "no-store" });
+      const payload = (await response.json()) as { ok?: boolean; rows?: Array<Record<string, unknown>> };
+      await applyHistoryResponse(response, payload, options);
+    } catch {
+      await applyHistoryResponse(
+        new Response(null, { status: 500 }),
+        { ok: false },
+        options,
+      );
     }
   };
 
@@ -329,17 +353,24 @@ export default function TestsPage() {
       setIsBootstrapping(true);
       setBootstrapError("");
       setIsConfigLoaded(false);
+      setIsHistoryLoading(true);
       try {
-        const response = await fetch("/api/tests/bootstrap", { cache: "no-store" });
-        const payload = (await response.json()) as {
-          ok?: boolean;
-          error?: string;
-          config?: TestConfig;
-          hasOrphanAttempt?: boolean;
-          bankQuestionTimeSec?: number | null;
-          timingsMs?: Record<string, number>;
-          finalTest?: FinalTestSummary | null;
-        };
+        const [response, historyResponse] = await Promise.all([
+          fetch("/api/tests/bootstrap", { cache: "no-store" }),
+          fetch("/api/tests/history", { cache: "no-store" }),
+        ]);
+        const [payload, historyPayload] = await Promise.all([
+          response.json() as Promise<{
+            ok?: boolean;
+            error?: string;
+            config?: TestConfig;
+            hasOrphanAttempt?: boolean;
+            bankQuestionTimeSec?: number | null;
+            timingsMs?: Record<string, number>;
+            finalTest?: FinalTestSummary | null;
+          }>,
+          historyResponse.json() as Promise<{ ok?: boolean; rows?: Array<Record<string, unknown>> }>,
+        ]);
         if (!response.ok || !payload.ok) {
           throw new Error(payload.error || "tests_bootstrap_failed");
         }
@@ -357,8 +388,6 @@ export default function TestsPage() {
         setIsConfigLoaded(true);
         if (payload.finalTest) {
           setFinalTest(payload.finalTest);
-        } else {
-          void reloadFinalSummary();
         }
 
         if (payload.hasOrphanAttempt) {
@@ -372,7 +401,9 @@ export default function TestsPage() {
             }
           }
         }
-        await refresh();
+        await applyHistoryResponse(historyResponse, historyPayload, {
+          reloadFinalSummaryAfter: !payload.finalTest,
+        });
       } catch (error) {
         if (cancelled) return;
         if (process.env.NODE_ENV !== "production") {

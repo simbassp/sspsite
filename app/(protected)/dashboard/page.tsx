@@ -1,18 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useHomeStats, type HomeStatsEvent } from "@/hooks/useHomeStats";
 
 type HomePayload = {
   ok?: boolean;
   error?: string;
-  events?: Array<{
-    id?: string;
-    type?: "user_added" | "user_removed" | "position_changed" | "commander_assigned";
-    title?: string;
-    description?: string;
-    created_at?: string | null;
-  }>;
+  events?: HomeStatsEvent[];
   usersSummary?: {
     totalUsers?: number;
     onlineUsers?: Array<{
@@ -102,9 +97,14 @@ function iconByType(type: HomeEvent["type"]) {
 }
 
 export default function DashboardPage() {
-  const [events, setEvents] = useState<HomeEvent[]>([]);
-  const [isLoadingEvents, setIsLoadingEvents] = useState(true);
-  const [eventsError, setEventsError] = useState("");
+  const { loading: isLoadingEvents, error: statsError, events: rawEvents } = useHomeStats();
+
+  const events = useMemo(() => {
+    const parsed = parsePayload({ ok: true, events: rawEvents });
+    return parsed ?? [];
+  }, [rawEvents]);
+
+  const eventsError = statsError ? "Не удалось загрузить события." : "";
 
   const sections = useMemo(() => {
     return [
@@ -178,37 +178,6 @@ export default function DashboardPage() {
       },
     ];
   }, []);
-
-  const refresh = async () => {
-    setIsLoadingEvents(true);
-    setEventsError("");
-    try {
-      const response = await fetch("/api/home-stats", { cache: "no-store" });
-      const payload = (await response.json()) as HomePayload;
-      if (!response.ok || payload.ok !== true) {
-        setEventsError("Не удалось загрузить события.");
-        return;
-      }
-      const parsed = parsePayload(payload);
-      if (!parsed) {
-        setEventsError("Не удалось загрузить события.");
-        return;
-      }
-      setEvents(parsed);
-    } catch {
-      setEventsError("Не удалось загрузить события.");
-    } finally {
-      setIsLoadingEvents(false);
-    }
-  };
-
-  useEffect(() => {
-    void refresh();
-    const timer = setInterval(() => {
-      void refresh();
-    }, 45_000);
-    return () => clearInterval(timer);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <section className="dashboard-page">

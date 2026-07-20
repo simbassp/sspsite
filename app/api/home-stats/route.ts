@@ -65,11 +65,18 @@ export async function GET() {
       null;
     let siteAnalytics: { totalVisits: number; totalActiveSeconds: number } | null = null;
 
-    const onlineStrictQ = await supabase
+    const onlineStrictQ = supabase
       .from("app_users")
       .select("id,name,callsign,is_online,last_seen_at,status")
       .eq("status", "active");
-    if (onlineStrictQ.error && isMissingColumnError(onlineStrictQ.error.message)) {
+    const analyticsQ = supabase
+      .from("site_settings")
+      .select("key,value")
+      .in("key", ["site_total_visits", "site_total_active_seconds"]);
+
+    const [onlineStrictRes, analyticsRes] = await Promise.all([onlineStrictQ, analyticsQ]);
+
+    if (onlineStrictRes.error && isMissingColumnError(onlineStrictRes.error.message)) {
       const fallbackQ = await supabase.from("app_users").select("id,name,callsign,is_online,status");
       if (!fallbackQ.error) {
         const rows = Array.isArray(fallbackQ.data) ? fallbackQ.data : [];
@@ -84,8 +91,8 @@ export async function GET() {
           })),
         };
       }
-    } else if (!onlineStrictQ.error) {
-      const rows = Array.isArray(onlineStrictQ.data) ? onlineStrictQ.data : [];
+    } else if (!onlineStrictRes.error) {
+      const rows = Array.isArray(onlineStrictRes.data) ? onlineStrictRes.data : [];
       const onlineRows = rows
         .filter((row) => effectiveOnlineStrict(row.is_online, row.last_seen_at))
         .sort((a, b) => toSafeString(a.name).localeCompare(toSafeString(b.name), "ru"));
@@ -99,12 +106,8 @@ export async function GET() {
       };
     }
 
-    const analyticsQ = await supabase
-      .from("site_settings")
-      .select("key,value")
-      .in("key", ["site_total_visits", "site_total_active_seconds"]);
-    if (!analyticsQ.error) {
-      const map = new Map((analyticsQ.data ?? []).map((row) => [String(row.key), row.value]));
+    if (!analyticsRes.error) {
+      const map = new Map((analyticsRes.data ?? []).map((row) => [String(row.key), row.value]));
       siteAnalytics = {
         totalVisits: readSiteSettingNumber(map.get("site_total_visits")),
         totalActiveSeconds: readSiteSettingNumber(map.get("site_total_active_seconds")),

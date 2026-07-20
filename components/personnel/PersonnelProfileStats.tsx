@@ -157,14 +157,23 @@ export type PersonnelActivityData = {
   activitySummary: PersonnelActivitySegment[];
 };
 
+export type PersonnelProfileInitialPayload = {
+  profile: ProfilePayload;
+  isPreview: boolean;
+  canEditOwn: boolean;
+  canModerate: boolean;
+};
+
 export function PersonnelProfileStats({
   userId,
   onActivityData,
   reloadToken = 0,
+  initialPayload = null,
 }: {
   userId: string;
   onActivityData?: (data: PersonnelActivityData) => void;
   reloadToken?: number;
+  initialPayload?: PersonnelProfileInitialPayload | null;
 }) {
   const [profile, setProfile] = useState<ProfilePayload | null>(null);
   const [isPreview, setIsPreview] = useState(false);
@@ -219,8 +228,20 @@ export function PersonnelProfileStats({
   }, [userId, onActivityData]);
 
   useEffect(() => {
+    if (initialPayload && reloadToken === 0) {
+      setProfile(initialPayload.profile);
+      setIsPreview(initialPayload.isPreview);
+      setCanEditOwn(initialPayload.canEditOwn);
+      setCanModerate(initialPayload.canModerate);
+      setHidden(false);
+      onActivityData?.({
+        activityByMonth: initialPayload.profile.activityByMonth,
+        activitySummary: initialPayload.profile.activitySummary,
+      });
+      return;
+    }
     void load();
-  }, [load, reloadToken]);
+  }, [load, reloadToken, initialPayload, onActivityData]);
 
   const examByType = useMemo(() => {
     const m = new Map<string, ProfilePayload["exams"][number]>();

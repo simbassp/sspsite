@@ -1,5 +1,7 @@
-import { getServerSession } from "@/lib/server-auth";
+import { resolvePersonnelProfileViewAccess } from "@/lib/personnel-profile-access";
 import { loadProfilePersonnelMeta } from "@/lib/profile-personnel-meta";
+import { loadPersonnelProfile } from "@/lib/personnel-server";
+import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 import { normalizeUnitAssignment } from "@/lib/unit-assignment";
 import type { UnitAssignment } from "@/lib/types";
@@ -17,12 +19,21 @@ export async function GET() {
 
   try {
     const supabase = getServerSupabaseServiceClient();
-    const resultsPrimaryQ = await supabase
+
+    const resultsPrimaryPromise = supabase
       .from("test_results")
       .select("id,user_id,type,status,score,created_at,started_at,finished_at,duration_seconds,is_completed,questions_total,questions_correct")
       .eq("user_id", session.id)
       .order("created_at", { ascending: false })
       .limit(20);
+    const profilePrimaryPromise = supabase
+      .from("app_users")
+      .select("auth_user_id,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,employment_date,avatar_url")
+      .eq("id", session.id)
+      .maybeSingle();
+
+    const [resultsPrimaryQ, profilePrimaryQ] = await Promise.all([resultsPrimaryPromise, profilePrimaryPromise]);
+
     let resultsRows: Array<Record<string, unknown>> = (resultsPrimaryQ.data || []) as Array<Record<string, unknown>>;
     let resultsError: string | null = resultsPrimaryQ.error?.message || null;
     if (resultsPrimaryQ.error && isMissingColumnError(resultsPrimaryQ.error.message)) {
@@ -35,11 +46,7 @@ export async function GET() {
       resultsRows = (resultsLegacyQ.data || []) as Array<Record<string, unknown>>;
       resultsError = resultsLegacyQ.error?.message || null;
     }
-    const profilePrimaryQ = await supabase
-      .from("app_users")
-      .select("auth_user_id,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,employment_date,avatar_url")
-      .eq("id", session.id)
-      .maybeSingle();
+
     let profileRow: Record<string, unknown> | null = (profilePrimaryQ.data || null) as Record<string, unknown> | null;
     let profileError: string | null = profilePrimaryQ.error?.message || null;
     let dutyLocation: "base" | "deployment" = "base";
@@ -49,6 +56,7 @@ export async function GET() {
     let rotaModule: number | null = null;
     let employmentDate: string | null = null;
     let avatarUrl: string | null = null;
+
     if (profilePrimaryQ.error && isMissingColumnError(profilePrimaryQ.error.message)) {
       const profileLegacyQ = await supabase.from("app_users").select("auth_user_id").eq("id", session.id).maybeSingle();
       profileRow = (profileLegacyQ.data || null) as Record<string, unknown> | null;
@@ -74,27 +82,47 @@ export async function GET() {
       );
     }
 
-    let email = "";
     const authUserId = typeof profileRow?.auth_user_id === "string" ? profileRow.auth_user_id : null;
-    if (authUserId) {
-      try {
-        const authInfo = await supabase.auth.admin.getUserById(authUserId);
-        email = authInfo.data.user?.email || "";
-      } catch {}
-    }
+    const invitesPromise =
+      session.role === "admin"
+        ? supabase
+            .from("registration_invites")
+            .select("code,is_active,max_uses,used_count,created_at")
+            .order("created_at", { ascending: false })
+            .limit(100)
+        : Promise.resolve({ data: [] as Array<Record<string, unknown>>, error: null });
+    const personnelViewPromise = resolvePersonnelProfileViewAccess(session, session.id);
+    const personnelProfileBundlePromise = personnelViewPromise.then(async (personnelView) => {
+      if (!personnelView.show) return null;
+      const profile = await loadPersonnelProfile(session.id);
+      if (!profile) return null;
+      return {
+        profile,
+        isPreview: personnelView.isPreview,
+        canEditOwn: personnelView.canEditOwn,
+        canModerate: personnelView.canModerate,
+      };
+    });
+    const authEmailPromise = authUserId
+      ? supabase.auth.admin.getUserById(authUserId).catch(() => ({ data: { user: null } }))
+      : Promise.resolve({ data: { user: null } });
+    const personnelMetaPromise =
+      unitAssignment === "company_4"
+        ? loadProfilePersonnelMeta(session.id)
+        : Promise.resolve({ licenseCategories: [] as string[], bloodGroup: null });
 
+    const [authInfo, invitesQ, personnelMeta, personnelProfile] = await Promise.all([
+      authEmailPromise,
+      invitesPromise,
+      personnelMetaPromise,
+      personnelProfileBundlePromise,
+    ]);
+
+    const email = authInfo.data.user?.email || "";
     let inviteCodes: Array<Record<string, unknown>> = [];
-    if (session.role === "admin") {
-      const invitesQ = await supabase
-        .from("registration_invites")
-        .select("code,is_active,max_uses,used_count,created_at")
-        .order("created_at", { ascending: false })
-        .limit(100);
-      if (!invitesQ.error) inviteCodes = invitesQ.data || [];
+    if (session.role === "admin" && !invitesQ.error) {
+      inviteCodes = invitesQ.data || [];
     }
-
-    const personnelMeta =
-      unitAssignment === "company_4" ? await loadProfilePersonnelMeta(session.id) : { licenseCategories: [], bloodGroup: null };
 
     return Response.json({
       ok: true,
@@ -123,6 +151,7 @@ export async function GET() {
         questions_correct: r.questions_correct ?? null,
       })),
       inviteCodes,
+      personnelProfile,
     });
   } catch (error) {
     return Response.json(

@@ -34,7 +34,7 @@ import {
   updateCurrentUserPasswordWithOldPassword,
   updateCurrentUserRotaUnit,
 } from "@/lib/users-repository";
-import { PersonnelProfileStats, type PersonnelActivityData } from "@/components/personnel/PersonnelProfileStats";
+import { PersonnelProfileStats, type PersonnelActivityData, type PersonnelProfileInitialPayload } from "@/components/personnel/PersonnelProfileStats";
 import { PersonnelTestActivityBlock } from "@/components/personnel/PersonnelTestActivityBlock";
 import {
   ResetTestStatsButton,
@@ -141,6 +141,7 @@ export default function ProfilePage() {
   const [finalAttemptsPage, setFinalAttemptsPage] = useState(1);
   const [personnelActivity, setPersonnelActivity] = useState<PersonnelActivityData | null>(null);
   const [personnelReloadToken, setPersonnelReloadToken] = useState(0);
+  const [personnelInitialPayload, setPersonnelInitialPayload] = useState<PersonnelProfileInitialPayload | null>(null);
   const resetStatsModal = useResetTestStatsModal("all");
   const canManageInvites = session?.role === "admin";
   const canResetStats = useMemo(() => (session ? canResetTestResults(session) : false), [session]);
@@ -177,6 +178,7 @@ export default function ProfilePage() {
           avatarUrl?: string | null;
           results?: Array<Record<string, unknown>>;
           inviteCodes?: Array<Record<string, unknown>>;
+          personnelProfile?: PersonnelProfileInitialPayload | null;
         };
         if (!response.ok || !payload.ok) {
           throw new Error(payload.error || "profile_bootstrap_failed");
@@ -233,6 +235,9 @@ export default function ProfilePage() {
         const nextAvatarUrl =
           typeof payload.avatarUrl === "string" && payload.avatarUrl.trim() ? payload.avatarUrl.trim() : null;
         setAvatarUrl(nextAvatarUrl);
+        if (payload.personnelProfile) {
+          setPersonnelInitialPayload(payload.personnelProfile);
+        }
         if (typeof payload.email === "string" && payload.email) {
           setEmailInput(payload.email);
         } else {
@@ -1095,6 +1100,7 @@ export default function ProfilePage() {
           userId={session.id}
           onActivityData={setPersonnelActivity}
           reloadToken={personnelReloadToken}
+          initialPayload={personnelInitialPayload}
         />
       ) : null}
 

@@ -109,10 +109,17 @@ export async function GET(req: Request) {
   try {
     const supabase = getServerSupabaseServiceClient();
 
-    const usersPrimary = await supabase
-      .from("app_users")
-      .select("id,name,callsign,position,role,status,final_test_counting_from,unit_assignment,rota_platoon,rota_section")
-      .limit(1000);
+    const [usersPrimary, resultsPrimary] = await Promise.all([
+      supabase
+        .from("app_users")
+        .select("id,name,callsign,position,role,status,final_test_counting_from,unit_assignment,rota_platoon,rota_section")
+        .limit(1000),
+      supabase
+        .from("test_results")
+        .select("id,user_id,type,status,score,created_at,questions_total,questions_correct,final_attempt_index")
+        .order("created_at", { ascending: false })
+        .limit(8000),
+    ]);
 
     let usersRows: AppUserListRow[] | null = usersPrimary.data as AppUserListRow[] | null;
     let usersErr = usersPrimary.error;
@@ -142,12 +149,6 @@ export async function GET(req: Request) {
     }
 
     const users = usersRows;
-
-    const resultsPrimary = await supabase
-      .from("test_results")
-      .select("id,user_id,type,status,score,created_at,questions_total,questions_correct,final_attempt_index")
-      .order("created_at", { ascending: false })
-      .limit(8000);
 
     let resultsRows: Array<Record<string, unknown>> | null = resultsPrimary.data as Array<
       Record<string, unknown>

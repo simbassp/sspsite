@@ -210,18 +210,49 @@ export async function GET(request: Request) {
       return Response.json({ ok: true, rows: mapped });
     }
 
+    const creatorIds = [
+      ...new Set(rows.map((row) => getNewsCreatorId(row)).filter((id): id is string => Boolean(id))),
+    ];
+    const needsLabelLookup = mapped.some((item, idx) => {
+      if (getNewsCreatorId(rows[idx])) return false;
+      if (hasStoredAuthorPosition(item)) return false;
+      if (needsAuthorEnrichment(idx)) return true;
+      if (item.author && !isPlaceholderNewsAuthor(item.author)) return true;
+      return false;
+    });
+
+    const userSelect = "id,auth_user_id,name,callsign,position,avatar_url";
     let usersRows: Array<Record<string, unknown>> | null = null;
-    const usersQ = await supabase.from("app_users").select("id,auth_user_id,name,callsign,position,avatar_url");
-    if (usersQ.error && isMissingColumn(usersQ.error.message || "", "avatar_url")) {
-      const fallbackUsersQ = await supabase.from("app_users").select("id,auth_user_id,name,callsign,position");
-      if (fallbackUsersQ.error || !Array.isArray(fallbackUsersQ.data)) {
-        return Response.json({ ok: true, rows: mapped });
+
+    const loadAllUsers = async () => {
+      const usersQ = await supabase.from("app_users").select(userSelect);
+      if (usersQ.error && isMissingColumn(usersQ.error.message || "", "avatar_url")) {
+        const fallbackUsersQ = await supabase.from("app_users").select("id,auth_user_id,name,callsign,position");
+        if (fallbackUsersQ.error || !Array.isArray(fallbackUsersQ.data)) return null;
+        return fallbackUsersQ.data as Array<Record<string, unknown>>;
       }
-      usersRows = fallbackUsersQ.data as Array<Record<string, unknown>>;
-    } else if (usersQ.error || !Array.isArray(usersQ.data)) {
-      return Response.json({ ok: true, rows: mapped });
+      if (usersQ.error || !Array.isArray(usersQ.data)) return null;
+      return usersQ.data as Array<Record<string, unknown>>;
+    };
+
+    const loadUsersByCreatorIds = async (ids: string[]) => {
+      const [byIdQ, byAuthQ] = await Promise.all([
+        supabase.from("app_users").select(userSelect).in("id", ids),
+        supabase.from("app_users").select(userSelect).in("auth_user_id", ids),
+      ]);
+      const merged = new Map<string, Record<string, unknown>>();
+      for (const row of [...(byIdQ.data ?? []), ...(byAuthQ.data ?? [])]) {
+        if (!row || typeof row !== "object") continue;
+        const id = typeof row.id === "string" ? row.id : "";
+        if (id) merged.set(id, row as Record<string, unknown>);
+      }
+      return [...merged.values()];
+    };
+
+    if (needsLabelLookup || creatorIds.length === 0) {
+      usersRows = await loadAllUsers();
     } else {
-      usersRows = usersQ.data as Array<Record<string, unknown>>;
+      usersRows = await loadUsersByCreatorIds(creatorIds);
     }
 
     if (!usersRows) {
