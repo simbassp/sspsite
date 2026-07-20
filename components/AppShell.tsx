@@ -115,6 +115,15 @@ export function AppShell({ session, children }: AppShellProps) {
   const isLoggingOutRef = useRef(false);
   const sessionCountedRef = useRef(false);
   const lastAnalyticsPingRef = useRef(Date.now());
+  const [notifyBellPlacement, setNotifyBellPlacement] = useState<"both" | "desktop" | "mobile">("both");
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 819px)");
+    const sync = () => setNotifyBellPlacement(media.matches ? "mobile" : "desktop");
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, []);
 
   useEffect(() => {
     void fetch("/api/personnel/nav", { cache: "no-store" })
@@ -520,7 +529,7 @@ export function AppShell({ session, children }: AppShellProps) {
         <div style={{ marginTop: 14, display: "grid", gap: 8 }}>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <ThemeToggle />
-            <PersonnelNotificationsBell />
+            {notifyBellPlacement !== "mobile" ? <PersonnelNotificationsBell /> : null}
           </div>
           <button className="btn btn-danger" type="button" onClick={logout} disabled={isLoggingOut}>
             {isLoggingOut ? "Выходим..." : "Выход"}
@@ -579,7 +588,7 @@ export function AppShell({ session, children }: AppShellProps) {
             </div>
           </div>
           <div className="header-actions">
-            <PersonnelNotificationsBell compact />
+            {notifyBellPlacement !== "desktop" ? <PersonnelNotificationsBell compact /> : null}
             {hasAdminAccess && (
               <Link prefetch={false} className="btn mobile-header-icon-btn" href="/admin" aria-label="Управление">
                 <AdminPanelIcon />

@@ -5245,6 +5245,11 @@ html[data-theme="dark"] .final-review-answer--correct {
   width: min(360px, calc(100vw - 24px));
 }
 
+.personnel-notify-panel--portal {
+  z-index: 50;
+  max-height: min(70vh, 420px);
+}
+
 @media (max-width: 819px) {
   .personnel-notify-wrap--compact .personnel-notify-panel {
     position: fixed;
