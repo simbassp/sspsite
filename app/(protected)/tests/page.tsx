@@ -20,13 +20,25 @@ import {
 import { filterDbPoolByManualTopicSettings } from "@/lib/manual-topic";
 import { DEFAULT_TEST_CONFIG } from "@/lib/test-config";
 import { formatTestResultDisplay, isFinalPassed } from "@/lib/test-pass-rules";
-import { loadRecentQuestionIds, pickTestQuestions, rememberQuestionIds } from "@/lib/test-question-selection";
+import { loadRecentQuestionIds, pickTestQuestions, rememberQuestionIds, shuffleQuestions } from "@/lib/test-question-selection";
 import { generateUavTtxQuestionBank } from "@/lib/uav-test-generator";
 import { fetchUavItems } from "@/lib/uav-repository";
 import { TestConfig, TestQuestion, TestResult } from "@/lib/types";
 
 const ANSWER_TRANSITION_MS = 3000;
 const QUESTION_START_COUNTDOWN_SEC = 3;
+
+type ActiveTestMode = "trial" | "bank" | "final";
+
+function testModeLabel(mode: ActiveTestMode) {
+  if (mode === "trial") return "Пробный";
+  if (mode === "bank") return "Весь банк";
+  return "Итоговый";
+}
+
+function isPracticeTestMode(mode: ActiveTestMode | null) {
+  return mode === "trial" || mode === "bank";
+}
 
 function formatAttemptDuration(value: number | null | undefined) {
   const sec = Number(value);
@@ -123,7 +135,7 @@ export default function TestsPage() {
   const [selectedQuestions, setSelectedQuestions] = useState<TestQuestion[]>([]);
   const [testConfig, setTestConfig] = useState<TestConfig>(DEFAULT_TEST_CONFIG);
   const [message, setMessage] = useState("");
-  const [activeTest, setActiveTest] = useState<"trial" | "final" | null>(null);
+  const [activeTest, setActiveTest] = useState<ActiveTestMode | null>(null);
   const [questionIndex, setQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [timeLeft, setTimeLeft] = useState(0);
@@ -164,9 +176,9 @@ export default function TestsPage() {
   const questionIndexRef = useRef(0);
   const activeQuestionsRef = useRef<TestQuestion[]>([]);
   const currentQuestionRef = useRef<TestQuestion | undefined>(undefined);
-  const activeTestRef = useRef<"trial" | "final" | null>(null);
+  const activeTestRef = useRef<ActiveTestMode | null>(null);
   const trialRevealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const completeTrialAfterRevealRef = useRef<() => void>(() => {});
+  const completePracticeAfterRevealRef = useRef<() => void>(() => {});
   const completeFinalAfterTransitionRef = useRef<() => void>(() => {});
   const beginFinalAnswerTransitionRef = useRef<(optionIndex: number) => void>(() => {});
   const testStartedAtRef = useRef<string | null>(null);
@@ -517,6 +529,14 @@ export default function TestsPage() {
 
   useEffect(() => {
     if (!activeTest || !currentQuestion || isTestStarted) return;
+    if (activeTest === "bank") {
+      setStartCountdown(null);
+      setIsTestStarted(true);
+      if (!testStartedAtRef.current) {
+        testStartedAtRef.current = new Date().toISOString();
+      }
+      return;
+    }
     setStartCountdown(QUESTION_START_COUNTDOWN_SEC);
   }, [activeTest, currentQuestion?.id, isTestStarted]);
 
@@ -539,6 +559,7 @@ export default function TestsPage() {
 
   useEffect(() => {
     if (!isTestStarted || !activeTest || !currentQuestion || trialFeedback || finalTransition) return;
+    if (activeTest === "bank") return;
     const id = window.setInterval(() => {
       setTimeLeft((prev) => {
         const qNow = currentQuestionRef.current;
@@ -553,7 +574,7 @@ export default function TestsPage() {
             const at = activeTestRef.current;
             const q = currentQuestionRef.current;
             if (!q || q.id !== qid || !at) return;
-            if (at === "trial") {
+            if (at === "trial" || at === "bank") {
               setTrialFeedback({ chosen: null, correct: q.correctIndex });
               setAnswers((prevA) => {
                 const next = { ...prevA, [q.id]: -1 };
@@ -563,7 +584,7 @@ export default function TestsPage() {
               if (trialRevealTimerRef.current) clearTimeout(trialRevealTimerRef.current);
               trialRevealTimerRef.current = setTimeout(() => {
                 trialRevealTimerRef.current = null;
-                completeTrialAfterRevealRef.current();
+                completePracticeAfterRevealRef.current();
               }, ANSWER_TRANSITION_MS);
             } else {
               beginFinalAnswerTransitionRef.current(-1);
@@ -597,7 +618,7 @@ export default function TestsPage() {
     return <p className="page-subtitle">Ошибка сессии. Перезайдите в систему.</p>;
   }
 
-  async function finishAttempt(type: "trial" | "final", finalAnswers: Record<string, number>) {
+  async function finishAttempt(type: "trial" | "bank" | "final", finalAnswers: Record<string, number>) {
     if (!session) return;
     const questions = activeQuestionsRef.current;
     const correct = questions.reduce((acc, q) => acc + (finalAnswers[q.id] === q.correctIndex ? 1 : 0), 0);
@@ -608,9 +629,11 @@ export default function TestsPage() {
     const messageText =
       type === "trial"
         ? `Пробный тест завершен: ${formatTestResultDisplay({ questionsCorrect: correct, questionsTotal: qTotal, scorePercent: score })}.`
-        : `Итоговый тест завершен: ${formatTestResultDisplay({ questionsCorrect: correct, questionsTotal: qTotal, scorePercent: score })}. Статус: ${
-            passed ? "СДАЛ" : "НЕ СДАЛ"
-          }.`;
+        : type === "bank"
+          ? `Тест по всему банку завершён: ${formatTestResultDisplay({ questionsCorrect: correct, questionsTotal: qTotal, scorePercent: score })}. Результат не сохраняется.`
+          : `Итоговый тест завершен: ${formatTestResultDisplay({ questionsCorrect: correct, questionsTotal: qTotal, scorePercent: score })}. Статус: ${
+              passed ? "СДАЛ" : "НЕ СДАЛ"
+            }.`;
 
     if (reviewSnapshot) {
       setFinalReview(reviewSnapshot);
@@ -652,7 +675,7 @@ export default function TestsPage() {
     try {
       if (type === "trial") {
         await createTrialResult(session.id, score, meta);
-      } else {
+      } else if (type === "final") {
         await finishFinalAttempt(session.id, score, passed, meta);
       }
       setMessage(messageText);
@@ -660,21 +683,24 @@ export default function TestsPage() {
       setMessage(messageText);
     } finally {
       testStartedAtRef.current = null;
-      await refresh();
+      if (type !== "bank") {
+        await refresh();
+      }
     }
   }
 
-  function completeTrialAfterReveal() {
+  function completePracticeAfterReveal() {
     setTrialFeedback(null);
     const idx = questionIndexRef.current;
     const list = activeQuestionsRef.current;
     const nextAnswers = answersRef.current;
-    if (!list.length) {
+    const mode = activeTestRef.current;
+    if (!list.length || !mode || !isPracticeTestMode(mode)) {
       setIsAnswering(false);
       return;
     }
     if (idx >= list.length - 1) {
-      void finishAttempt("trial", nextAnswers);
+      void finishAttempt(mode, nextAnswers);
       setIsAnswering(false);
       return;
     }
@@ -686,7 +712,7 @@ export default function TestsPage() {
     setIsAnswering(false);
   }
 
-  completeTrialAfterRevealRef.current = completeTrialAfterReveal;
+  completePracticeAfterRevealRef.current = completePracticeAfterReveal;
 
   const beginFinalAnswerTransition = (optionIndex: number) => {
     const at = activeTestRef.current;
@@ -737,9 +763,10 @@ export default function TestsPage() {
     beginFinalAnswerTransition(optionIndex);
   };
 
-  const onTrialOptionClick = (optionIndex: number) => {
+  const onPracticeOptionClick = (optionIndex: number) => {
     const q = currentQuestionRef.current;
-    if (!isTestStarted || !q || activeTestRef.current !== "trial" || trialFeedback || isAnswering) return;
+    const mode = activeTestRef.current;
+    if (!isTestStarted || !q || !isPracticeTestMode(mode) || trialFeedback || isAnswering) return;
     setIsAnswering(true);
     setTrialFeedback({ chosen: optionIndex, correct: q.correctIndex });
     const nextAnswers = { ...answersRef.current, [q.id]: optionIndex };
@@ -748,7 +775,7 @@ export default function TestsPage() {
     if (trialRevealTimerRef.current) clearTimeout(trialRevealTimerRef.current);
     trialRevealTimerRef.current = setTimeout(() => {
       trialRevealTimerRef.current = null;
-      completeTrialAfterRevealRef.current();
+      completePracticeAfterRevealRef.current();
     }, ANSWER_TRANSITION_MS);
   };
 
@@ -786,6 +813,40 @@ export default function TestsPage() {
     if (first) setTimeLeft(Math.max(1, first.timeLimitSec));
     testStartedAtRef.current = null;
     setMessage(`Пробный тест запущен: ${randomQuestions.length} случайных вопросов.`);
+  };
+
+  const onBank = async () => {
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    const pool = await loadQuestionPool();
+    if (!pool) {
+      setMessage("Не удалось подготовить вопросы. Проверьте интернет.");
+      return;
+    }
+    if (pool.length === 0) {
+      setMessage(
+        testConfig.uavAutoGeneration
+          ? "Нет карточек БПЛА с ТТХ и нет активных вопросов в банке. Заполните справочник БПЛА или добавьте вопросы в админке."
+          : "Нет активных вопросов в банке. Добавьте их в разделе «Админ / Тесты».",
+      );
+      return;
+    }
+    const allQuestions = shuffleQuestions(pool);
+    expireHandledForQuestionIdRef.current = null;
+    setTrialFeedback(null);
+    setFinalTransition(null);
+    setFinalReview(null);
+    setActiveTest("bank");
+    setIsTestStarted(true);
+    setStartCountdown(null);
+    setSelectedQuestions(allQuestions);
+    setQuestionIndex(0);
+    setAnswers({});
+    answersRef.current = {};
+    setTimeLeft(0);
+    testStartedAtRef.current = new Date().toISOString();
+    setMessage(`Тест по всему банку: ${allQuestions.length} вопросов. Порядок случайный, без ограничения по времени.`);
   };
 
   const startFinal = async () => {
@@ -840,7 +901,7 @@ export default function TestsPage() {
   };
 
   const getOptionLetterState = (index: number) => {
-    if (activeTest === "trial" && trialFeedback) {
+    if (isPracticeTestMode(activeTest) && trialFeedback) {
       const { chosen, correct } = trialFeedback;
       if (index === correct) return "correct";
       if (chosen !== null && index === chosen && chosen !== correct) return "wrong";
@@ -883,7 +944,7 @@ export default function TestsPage() {
         Тестирование
       </h1>
       <p className="page-subtitle" style={{ marginBottom: 12 }}>
-        Доступно два типа тестов: пробный для практики и итоговый для проверки знаний.
+        Пробный тест, проход по всему банку и итоговый — выберите режим ниже.
       </p>
 
       <div className="tests-ref-info">
@@ -938,9 +999,37 @@ export default function TestsPage() {
                 className="btn tests-ref-btn-outline"
                 type="button"
                 onClick={onTrial}
-                disabled={isBootstrapping || isPoolLoading || !isConfigLoaded}
+                disabled={isBootstrapping || isPoolLoading || !isConfigLoaded || activeTest != null}
               >
                 Начать пробный тест
+              </button>
+            </article>
+
+            <article className="tests-ref-test-card">
+              <div className="tests-ref-test-card__head">
+                <span className="tests-ref-test-card__icon tests-ref-test-card__icon--bank" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M4 7h16M4 12h16M4 17h10" />
+                    <path d="M18 17l2 2 4-4" />
+                  </svg>
+                </span>
+                <div>
+                  <h4>Весь банк</h4>
+                  <span className="tests-ref-chip tests-ref-chip--info">Все вопросы</span>
+                </div>
+              </div>
+              <p>
+                {questionPool.length > 0
+                  ? `Все ${questionPool.length} вопросов банка в случайном порядке. Подсказки как в пробном, без таймера.`
+                  : "Все вопросы банка в случайном порядке. Подсказки как в пробном, без таймера."}
+              </p>
+              <button
+                className="btn tests-ref-btn-outline"
+                type="button"
+                onClick={onBank}
+                disabled={isBootstrapping || isPoolLoading || !isConfigLoaded || activeTest != null || questionPool.length === 0}
+              >
+                Начать по всему банку
               </button>
             </article>
 
@@ -969,6 +1058,7 @@ export default function TestsPage() {
                     isBootstrapping ||
                     isPoolLoading ||
                     !isConfigLoaded ||
+                    activeTest != null ||
                     finalTest == null ||
                     !finalTest.canStartFinal
                   }
@@ -1037,7 +1127,7 @@ export default function TestsPage() {
         <article className="card" style={{ marginTop: 12 }} ref={testCardRef}>
           <div className="card-body">
             <p className="label">
-              {activeTest === "final" ? "Итоговый" : "Пробный"} вопрос {questionIndex + 1} / {activeQuestions.length}
+              {activeTest ? testModeLabel(activeTest) : "Тест"} вопрос {questionIndex + 1} / {activeQuestions.length}
             </p>
             <p className="page-subtitle" style={{ marginTop: 8 }}>
               {!isTestStarted && startCountdown != null ? (
@@ -1047,7 +1137,7 @@ export default function TestsPage() {
                   {finalTransition.chosen === null ? "Время вышло." : "Ответ принят."} Следующий вопрос через{" "}
                   {Math.ceil(ANSWER_TRANSITION_MS / 1000)} с…
                 </>
-              ) : activeTest === "trial" && trialFeedback ? (
+              ) : isPracticeTestMode(activeTest) && trialFeedback ? (
                 <>
                   {trialFeedback.chosen === null
                     ? "Время вышло. Правильный ответ подсвечен."
@@ -1056,47 +1146,70 @@ export default function TestsPage() {
                       : "Неверно. Ваш вариант — красным, правильный — зелёным."}{" "}
                   Следующий вопрос через {Math.ceil(ANSWER_TRANSITION_MS / 1000)} с…
                 </>
+              ) : activeTest === "bank" ? (
+                <>Без ограничения по времени. После ответа — пауза {Math.ceil(ANSWER_TRANSITION_MS / 1000)} с.</>
               ) : (
                 <>Осталось времени на ответ:</>
               )}
             </p>
             {isTestStarted ? (
               <>
-                <div
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 8,
-                    marginTop: 4,
-                    marginBottom: 10,
-                    padding: "7px 12px",
-                    borderRadius: 999,
-                    backgroundColor: `color-mix(in srgb, ${timerColor} 16%, var(--panel))`,
-                    border: `1px solid color-mix(in srgb, ${timerColor} 60%, transparent)`,
-                    color: timerColor,
-                    transition: "all .35s ease",
-                  }}
-                >
-                  <strong style={{ minWidth: 22, textAlign: "right" }}>{timeLeft}</strong>
-                  <span>секунд</span>
-                </div>
+                {activeTest === "final" ? (
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 8,
+                      marginTop: 4,
+                      marginBottom: 10,
+                      padding: "7px 12px",
+                      borderRadius: 999,
+                      backgroundColor: `color-mix(in srgb, ${timerColor} 16%, var(--panel))`,
+                      border: `1px solid color-mix(in srgb, ${timerColor} 60%, transparent)`,
+                      color: timerColor,
+                      transition: "all .35s ease",
+                    }}
+                  >
+                    <strong style={{ minWidth: 22, textAlign: "right" }}>{timeLeft}</strong>
+                    <span>секунд</span>
+                  </div>
+                ) : activeTest === "trial" ? (
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 8,
+                      marginTop: 4,
+                      marginBottom: 10,
+                      padding: "7px 12px",
+                      borderRadius: 999,
+                      backgroundColor: `color-mix(in srgb, ${timerColor} 16%, var(--panel))`,
+                      border: `1px solid color-mix(in srgb, ${timerColor} 60%, transparent)`,
+                      color: timerColor,
+                      transition: "all .35s ease",
+                    }}
+                  >
+                    <strong style={{ minWidth: 22, textAlign: "right" }}>{timeLeft}</strong>
+                    <span>секунд</span>
+                  </div>
+                ) : null}
                 <h3 style={{ marginTop: 8 }}>{currentQuestion.text}</h3>
                 <div className="form" style={{ marginTop: 10 }}>
                   {currentQuestion.options.map((option, index) => (
                     <button
                       className={`btn test-option-btn${
-                        activeTest === "trial" && trialFeedback ? " test-option-btn--trial-reveal" : ""
+                        isPracticeTestMode(activeTest) && trialFeedback ? " test-option-btn--trial-reveal" : ""
                       }${
                         activeTest === "final" && finalTransition?.chosen === index ? " test-option-btn--final-selected" : ""
                       }`}
                       type="button"
                       key={`${currentQuestion.id}-${index}-${option}`}
                       disabled={
-                        (activeTest === "trial" && !!trialFeedback) ||
+                        (isPracticeTestMode(activeTest) && !!trialFeedback) ||
                         (activeTest === "final" && (!!finalTransition || isAnswering))
                       }
                       onClick={() => {
-                        if (activeTest === "trial") void onTrialOptionClick(index);
+                        if (isPracticeTestMode(activeTest)) onPracticeOptionClick(index);
                         else void submitFinalAnswer(index);
                       }}
                     >

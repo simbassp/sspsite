@@ -173,7 +173,7 @@ export default function DashboardPage() {
       {
         href: "/tests",
         title: "Тесты",
-        description: "Пробный мягкий режим и строгий итоговый.",
+        description: "Пробный, тренировка по всему банку и итоговый тест.",
         color: "orange",
         icon: (
           <svg viewBox="0 0 24 24" aria-hidden="true" className="home-icon-svg">

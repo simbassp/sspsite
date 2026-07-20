@@ -3936,7 +3936,7 @@ html[data-theme="dark"] .final-review-answer--correct {
 
 .tests-ref-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -3972,6 +3972,11 @@ html[data-theme="dark"] .final-review-answer--correct {
   flex-shrink: 0;
 }
 
+.tests-ref-test-card__icon--bank {
+  color: #1d4ed8;
+  background: color-mix(in srgb, #3b82f6 14%, var(--panel));
+}
+
 .tests-ref-chip {
   display: inline-flex;
   margin-top: 2px;
@@ -3984,6 +3989,11 @@ html[data-theme="dark"] .final-review-answer--correct {
 .tests-ref-chip--neutral {
   color: #64748b;
   background: color-mix(in srgb, #94a3b8 18%, var(--panel));
+}
+
+.tests-ref-chip--info {
+  color: #1d4ed8;
+  background: color-mix(in srgb, #3b82f6 16%, var(--panel));
 }
 
 .tests-ref-chip--danger {
