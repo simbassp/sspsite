@@ -13,6 +13,7 @@ import { ProfileRotaUnitFields } from "@/components/profile/ProfileRotaUnitField
 import { UserIdentityDisplay } from "@/components/profile/UserIdentityDisplay";
 import { UserAvatar } from "@/components/profile/UserAvatar";
 import { AchievementMedalsRow } from "@/components/achievements/AchievementMedalsRow";
+import { SendUserNotificationCard } from "@/components/admin/SendUserNotificationCard";
 import { readClientSession } from "@/lib/client-auth";
 import type { ProfileNameColorId } from "@/lib/profile-name-color";
 import type { UserIdentityCosmetics } from "@/lib/user-identity-cosmetics";
@@ -105,6 +106,7 @@ export default function ProfileUserInspectPage() {
   const canEditPersonnelMeta = canEditRotaForOthers;
   const canExportExcel = session ? canManageUsers(session) : false;
   const canResetStats = session ? canResetTestResults(session) : false;
+  const canSendUserNotification = session?.role === "admin";
   const profileBackHref = useMemo(() => {
     if (!session) return "/dashboard";
     if (canManageUsers(session) || canViewUserList(session)) return "/admin/users";
@@ -996,6 +998,13 @@ export default function ProfileUserInspectPage() {
               userId={userId}
               onActivityData={setPersonnelActivity}
               reloadToken={personnelReloadToken}
+            />
+          ) : null}
+
+          {canSendUserNotification && inspectUser ? (
+            <SendUserNotificationCard
+              userId={inspectUser.id}
+              userLabel={[inspectUser.name, inspectUser.callsign].filter(Boolean).join(" ").trim() || "пользователя"}
             />
           ) : null}
 

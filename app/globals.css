@@ -5206,13 +5206,93 @@ html[data-theme="dark"] .final-review-answer--correct {
   right: 0;
   top: calc(100% + 8px);
   width: min(360px, 92vw);
-  max-height: 360px;
+  max-height: min(70vh, 420px);
   overflow: auto;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--panel);
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
   z-index: 40;
+}
+
+.personnel-notify-panel__title {
+  margin: 0;
+  padding: 10px 12px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+}
+
+.personnel-notify-panel__empty {
+  padding: 12px;
+  margin: 0;
+  color: var(--muted);
+}
+
+.personnel-notify-wrap--compact .personnel-notify-panel {
+  right: -4px;
+}
+
+.personnel-notify-wrap--compact .personnel-notify-btn {
+  border: 1px solid var(--line);
+}
+
+.personnel-notify-item__title {
+  display: block;
+}
+
+.personnel-notify-item__body {
+  display: block;
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.personnel-notify-compose {
+  border-top: 1px solid var(--line);
+  padding: 10px 12px 12px;
+  background: color-mix(in srgb, var(--panel2) 70%, var(--panel));
+}
+
+.personnel-notify-compose__toggle {
+  width: 100%;
+}
+
+.personnel-notify-compose__form {
+  display: grid;
+  gap: 8px;
+}
+
+.personnel-notify-compose__label {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.personnel-notify-compose__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.personnel-notify-compose__msg {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.personnel-notify-compose__msg.is-error {
+  color: var(--bad);
+}
+
+.profile-admin-notify-form {
+  display: grid;
+  gap: 8px;
+  max-width: 520px;
 }
 
 .personnel-notify-item {

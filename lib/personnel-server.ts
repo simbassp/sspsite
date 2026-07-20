@@ -1169,6 +1169,55 @@ export async function notifyUser(userId: string, title: string, body: string, hr
   });
 }
 
+export async function sendAdminMessage(userId: string, title: string, body: string, href?: string | null) {
+  const normalizedTitle = title.trim();
+  const normalizedBody = formatNotificationBody(body.trim());
+  if (!normalizedTitle) return { ok: false as const, error: "title_required" };
+  if (!userId.trim()) return { ok: false as const, error: "user_required" };
+
+  const supabase = getServerSupabaseServiceClient();
+  const ins = await supabase.from("app_notifications").insert({
+    user_id: userId,
+    kind: "admin_message",
+    title: normalizedTitle,
+    body: normalizedBody,
+    href: href?.trim() || null,
+  });
+  if (ins.error) return { ok: false as const, error: ins.error.message };
+  return { ok: true as const };
+}
+
+export async function sendAdminBroadcast(title: string, body: string, href?: string | null) {
+  const normalizedTitle = title.trim();
+  const normalizedBody = formatNotificationBody(body.trim());
+  if (!normalizedTitle) return { ok: false as const, error: "title_required" };
+
+  const supabase = getServerSupabaseServiceClient();
+  const usersRes = await supabase.from("app_users").select("id").eq("status", "active").limit(2000);
+  if (usersRes.error) return { ok: false as const, error: usersRes.error.message };
+
+  const rows = (usersRes.data ?? [])
+    .map((row) => String((row as { id?: string }).id ?? "").trim())
+    .filter(Boolean)
+    .map((user_id) => ({
+      user_id,
+      kind: "admin_broadcast",
+      title: normalizedTitle,
+      body: normalizedBody,
+      href: href?.trim() || null,
+    }));
+
+  if (!rows.length) return { ok: true as const, sent: 0 };
+
+  for (let offset = 0; offset < rows.length; offset += 200) {
+    const chunk = rows.slice(offset, offset + 200);
+    const ins = await supabase.from("app_notifications").insert(chunk);
+    if (ins.error) return { ok: false as const, error: ins.error.message };
+  }
+
+  return { ok: true as const, sent: rows.length };
+}
+
 export async function loadNotifications(userId: string, limit = 30) {
   const supabase = getServerSupabaseServiceClient();
   const res = await supabase

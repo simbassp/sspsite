@@ -520,7 +520,7 @@ export function AppShell({ session, children }: AppShellProps) {
         <div style={{ marginTop: 14, display: "grid", gap: 8 }}>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <ThemeToggle />
-            {showPersonnelNav && <PersonnelNotificationsBell />}
+            <PersonnelNotificationsBell />
           </div>
           <button className="btn btn-danger" type="button" onClick={logout} disabled={isLoggingOut}>
             {isLoggingOut ? "Выходим..." : "Выход"}
@@ -579,6 +579,7 @@ export function AppShell({ session, children }: AppShellProps) {
             </div>
           </div>
           <div className="header-actions">
+            <PersonnelNotificationsBell compact />
             {hasAdminAccess && (
               <Link prefetch={false} className="btn mobile-header-icon-btn" href="/admin" aria-label="Управление">
                 <AdminPanelIcon />
