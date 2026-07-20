@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Pencil } from "lucide-react";
+import { Bell, Pencil } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ProfileDutyLocationToggle } from "@/components/profile/ProfileDutyLocationToggle";
@@ -13,7 +13,7 @@ import { ProfileRotaUnitFields } from "@/components/profile/ProfileRotaUnitField
 import { UserIdentityDisplay } from "@/components/profile/UserIdentityDisplay";
 import { UserAvatar } from "@/components/profile/UserAvatar";
 import { AchievementMedalsRow } from "@/components/achievements/AchievementMedalsRow";
-import { SendUserNotificationCard } from "@/components/admin/SendUserNotificationCard";
+import { SendUserNotificationModal } from "@/components/admin/SendUserNotificationModal";
 import { readClientSession } from "@/lib/client-auth";
 import type { ProfileNameColorId } from "@/lib/profile-name-color";
 import type { UserIdentityCosmetics } from "@/lib/user-identity-cosmetics";
@@ -135,6 +135,7 @@ export default function ProfileUserInspectPage() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileMessage, setProfileMessage] = useState("");
   const [profileEditModalOpen, setProfileEditModalOpen] = useState(false);
+  const [notifyModalOpen, setNotifyModalOpen] = useState(false);
   const [fieldError, setFieldError] = useState<{ name?: string; callsign?: string }>({});
   const [personnelActivity, setPersonnelActivity] = useState<PersonnelActivityData | null>(null);
   const [personnelReloadToken, setPersonnelReloadToken] = useState(0);
@@ -791,6 +792,17 @@ export default function ProfileUserInspectPage() {
                             <Pencil width={16} height={16} strokeWidth={2} aria-hidden />
                           </button>
                         )}
+                        {canSendUserNotification && (
+                          <button
+                            type="button"
+                            className="btn profile-hero-edit-btn"
+                            title="Отправить уведомление"
+                            aria-label="Отправить уведомление"
+                            onClick={() => setNotifyModalOpen(true)}
+                          >
+                            <Bell width={16} height={16} strokeWidth={2} aria-hidden />
+                          </button>
+                        )}
                       </div>
                       <p className="profile-hero-callsign">
                         Позывной:{" "}
@@ -1002,7 +1014,9 @@ export default function ProfileUserInspectPage() {
           ) : null}
 
           {canSendUserNotification && inspectUser ? (
-            <SendUserNotificationCard
+            <SendUserNotificationModal
+              open={notifyModalOpen}
+              onClose={() => setNotifyModalOpen(false)}
               userId={inspectUser.id}
               userLabel={[inspectUser.name, inspectUser.callsign].filter(Boolean).join(" ").trim() || "пользователя"}
             />

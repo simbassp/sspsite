@@ -140,38 +140,9 @@ export function PersonnelNotificationsBell({ compact = false }: PersonnelNotific
       {open && (
         <div className="personnel-notify-panel">
           <p className="personnel-notify-panel__title">Уведомления</p>
-          {items.length === 0 ? (
-            <p className="personnel-notify-panel__empty">Нет уведомлений</p>
-          ) : (
-            items.map((item) => {
-              const inner = (
-                <>
-                  <strong className="personnel-notify-item__title">{item.title}</strong>
-                  {item.body ? <span className="personnel-notify-item__body">{item.body}</span> : null}
-                </>
-              );
-              if (item.href) {
-                return (
-                  <Link
-                    key={item.id}
-                    href={item.href}
-                    className={`personnel-notify-item${item.isRead ? "" : " is-unread"}`}
-                    onClick={() => setOpen(false)}
-                  >
-                    {inner}
-                  </Link>
-                );
-              }
-              return (
-                <div key={item.id} className={`personnel-notify-item${item.isRead ? "" : " is-unread"}`}>
-                  {inner}
-                </div>
-              );
-            })
-          )}
 
           {canSend ? (
-            <div className="personnel-notify-compose">
+            <div className="personnel-notify-compose personnel-notify-compose--top">
               {!composeOpen ? (
                 <button type="button" className="btn btn-primary personnel-notify-compose__toggle" onClick={() => setComposeOpen(true)}>
                   Отправить сообщение всем
@@ -230,6 +201,38 @@ export function PersonnelNotificationsBell({ compact = false }: PersonnelNotific
               )}
             </div>
           ) : null}
+
+          <div className="personnel-notify-panel__list">
+            {items.length === 0 ? (
+              <p className="personnel-notify-panel__empty">Нет уведомлений</p>
+            ) : (
+              items.map((item) => {
+                const inner = (
+                  <>
+                    <strong className="personnel-notify-item__title">{item.title}</strong>
+                    {item.body ? <span className="personnel-notify-item__body">{item.body}</span> : null}
+                  </>
+                );
+                if (item.href) {
+                  return (
+                    <Link
+                      key={item.id}
+                      href={item.href}
+                      className={`personnel-notify-item${item.isRead ? "" : " is-unread"}`}
+                      onClick={() => setOpen(false)}
+                    >
+                      {inner}
+                    </Link>
+                  );
+                }
+                return (
+                  <div key={item.id} className={`personnel-notify-item${item.isRead ? "" : " is-unread"}`}>
+                    {inner}
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
       )}
     </div>

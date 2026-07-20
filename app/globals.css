@@ -5207,12 +5207,20 @@ html[data-theme="dark"] .final-review-answer--correct {
   top: calc(100% + 8px);
   width: min(360px, 92vw);
   max-height: min(70vh, 420px);
-  overflow: auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--panel);
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
   z-index: 40;
+}
+
+.personnel-notify-panel__list {
+  overflow: auto;
+  min-height: 0;
+  flex: 1 1 auto;
 }
 
 .personnel-notify-panel__title {
@@ -5255,6 +5263,12 @@ html[data-theme="dark"] .final-review-answer--correct {
   border-top: 1px solid var(--line);
   padding: 10px 12px 12px;
   background: color-mix(in srgb, var(--panel2) 70%, var(--panel));
+  flex-shrink: 0;
+}
+
+.personnel-notify-compose--top {
+  border-top: none;
+  border-bottom: 1px solid var(--line);
 }
 
 .personnel-notify-compose__toggle {
@@ -5293,6 +5307,16 @@ html[data-theme="dark"] .final-review-answer--correct {
   display: grid;
   gap: 8px;
   max-width: 520px;
+}
+
+.profile-admin-notify-form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.profile-admin-notify-modal {
+  width: min(440px, calc(100vw - 32px));
 }
 
 .personnel-notify-item {
