@@ -15,22 +15,24 @@ type AchievementMedalsRowProps = {
 
 export function AchievementMedalsRow({ unlockedIds }: AchievementMedalsRowProps) {
   const [activeTip, setActiveTip] = useState<string | null>(null);
-  const unlockedSet = useMemo(() => new Set(unlockedIds), [unlockedIds]);
-
   const medals = useMemo(() => {
-    return TENURE_ACHIEVEMENTS.map((item) => ({
+    return TENURE_ACHIEVEMENTS.filter((item) => unlockedIds.includes(item.id)).map((item) => ({
       id: item.id,
       material: item.tenureMedal as TenureMedalMaterial,
       title: item.title,
       tierLabel: item.tierLabel,
       description: item.description,
-      unlocked: unlockedSet.has(item.id),
     }));
-  }, [unlockedSet]);
+  }, [unlockedIds]);
 
-  const toggleTip = (id: string) => {
-    setActiveTip((prev) => (prev === id ? null : id));
-  };
+  if (!medals.length) {
+    return (
+      <div className="achievement-medals-row achievement-medals-row--empty">
+        <p className="label">Медали за выслугу</p>
+        <p className="page-subtitle achievement-medals-row__empty">Пока нет медалей</p>
+      </div>
+    );
+  }
 
   return (
     <div className="achievement-medals-row">
@@ -40,25 +42,17 @@ export function AchievementMedalsRow({ unlockedIds }: AchievementMedalsRowProps)
           <button
             key={medal.id}
             type="button"
-            className={`achievement-medals-row__item${activeTip === medal.id ? " is-active" : ""}${
-              medal.unlocked ? "" : " is-locked"
-            }`}
-            onMouseEnter={() => {
-              if (medal.unlocked) setActiveTip(medal.id);
-            }}
-            onMouseLeave={() => {
-              if (medal.unlocked) setActiveTip((prev) => (prev === medal.id ? null : prev));
-            }}
-            onClick={() => toggleTip(medal.id)}
-            aria-label={`${medal.title}. ${medal.tierLabel}. ${medal.description}${
-              medal.unlocked ? "" : " — не открыто"
-            }`}
+            className={`achievement-medals-row__item${activeTip === medal.id ? " is-active" : ""}`}
+            onMouseEnter={() => setActiveTip(medal.id)}
+            onMouseLeave={() => setActiveTip((prev) => (prev === medal.id ? null : prev))}
+            onClick={() => setActiveTip((prev) => (prev === medal.id ? null : medal.id))}
+            aria-label={`${medal.title}. ${medal.tierLabel}. ${medal.description}`}
           >
             <AchievementMedalIcon material={medal.material} size={30} />
             <span className="achievement-medals-row__tip" role="tooltip">
               <strong>{medal.title}</strong>
               <span>{medal.tierLabel}</span>
-              <span>{medal.unlocked ? medal.description : `${medal.description} — не открыто`}</span>
+              <span>{medal.description}</span>
             </span>
           </button>
         ))}

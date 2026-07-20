@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   FINAL_ACHIEVEMENTS,
   TRIAL_ACHIEVEMENTS,
@@ -45,31 +45,41 @@ export function ProfileCosmeticsModal({
 }: ProfileCosmeticsModalProps) {
   const [draftFrame, setDraftFrame] = useState<TrialAvatarFrameId | null>(avatarFrame);
   const [draftColor, setDraftColor] = useState<FinalNameColorId | null>(nameColor);
+  const [previewFrame, setPreviewFrame] = useState<TrialAvatarFrameId | null>(avatarFrame);
+  const [previewColor, setPreviewColor] = useState<FinalNameColorId | null>(nameColor);
   const [lockedTip, setLockedTip] = useState<LockedTip | null>(null);
+
+  const unlockedSet = useMemo(() => new Set(unlockedIds), [unlockedIds]);
 
   useEffect(() => {
     if (!open) return;
-    const unlocked = new Set(unlockedIds);
     const frameOk =
       avatarFrame === null ||
-      TRIAL_ACHIEVEMENTS.some((item) => item.trialFrame === avatarFrame && unlocked.has(item.id));
+      TRIAL_ACHIEVEMENTS.some((item) => item.trialFrame === avatarFrame && unlockedSet.has(item.id));
     const colorOk =
       nameColor === null ||
-      FINAL_ACHIEVEMENTS.some((item) => item.finalNameColor === nameColor && unlocked.has(item.id));
-    setDraftFrame(frameOk ? avatarFrame : null);
-    setDraftColor(colorOk ? nameColor : null);
+      FINAL_ACHIEVEMENTS.some((item) => item.finalNameColor === nameColor && unlockedSet.has(item.id));
+    const nextFrame = frameOk ? avatarFrame : null;
+    const nextColor = colorOk ? nameColor : null;
+    setDraftFrame(nextFrame);
+    setDraftColor(nextColor);
+    setPreviewFrame(nextFrame);
+    setPreviewColor(nextColor);
     setLockedTip(null);
-  }, [open, avatarFrame, nameColor, unlockedIds]);
+  }, [open, avatarFrame, nameColor, unlockedIds, unlockedSet]);
 
-  const unlockedSet = new Set(unlockedIds);
-
-  const showLockedTip = (tip: LockedTip) => {
-    setLockedTip(tip);
-  };
+  const previewFrameLocked =
+    previewFrame != null &&
+    !TRIAL_ACHIEVEMENTS.some((item) => item.trialFrame === previewFrame && unlockedSet.has(item.id));
+  const previewColorLocked =
+    previewColor != null &&
+    !FINAL_ACHIEVEMENTS.some((item) => item.finalNameColor === previewColor && unlockedSet.has(item.id));
+  const isLockedPreview = previewFrameLocked || previewColorLocked;
 
   const selectFrame = (frame: TrialAvatarFrameId | null, unlocked: boolean, tip?: LockedTip) => {
+    setPreviewFrame(frame);
     if (!unlocked) {
-      if (tip) showLockedTip(tip);
+      if (tip) setLockedTip(tip);
       return;
     }
     setLockedTip(null);
@@ -77,8 +87,9 @@ export function ProfileCosmeticsModal({
   };
 
   const selectColor = (color: FinalNameColorId | null, unlocked: boolean, tip?: LockedTip) => {
+    setPreviewColor(color);
     if (!unlocked) {
-      if (tip) showLockedTip(tip);
+      if (tip) setLockedTip(tip);
       return;
     }
     setLockedTip(null);
@@ -86,15 +97,9 @@ export function ProfileCosmeticsModal({
   };
 
   const saveSelection = () => {
-    const frameUnlocked =
-      draftFrame === null ||
-      TRIAL_ACHIEVEMENTS.some((item) => item.trialFrame === draftFrame && unlockedSet.has(item.id));
-    const colorUnlocked =
-      draftColor === null ||
-      FINAL_ACHIEVEMENTS.some((item) => item.finalNameColor === draftColor && unlockedSet.has(item.id));
     onSave({
-      avatarFrame: frameUnlocked ? draftFrame : null,
-      nameColor: colorUnlocked ? draftColor : null,
+      avatarFrame: draftFrame,
+      nameColor: draftColor,
     });
   };
 
@@ -114,17 +119,24 @@ export function ProfileCosmeticsModal({
             </button>
           </div>
 
-          <div className="profile-cosmetics-modal__preview">
+          <div
+            className={`profile-cosmetics-modal__preview${isLockedPreview ? " is-locked-preview" : ""}`}
+          >
             <UserAvatar
               name={name}
               callsign={callsign}
               avatarUrl={avatarUrl}
               size={72}
-              avatarFrame={draftFrame}
+              avatarFrame={previewFrame}
             />
-            <p className={`profile-cosmetics-modal__preview-name ${finalNameColorClass(draftColor)}`.trim()}>
-              {name} {callsign}
-            </p>
+            <div className="profile-cosmetics-modal__preview-text">
+              <p className={`profile-cosmetics-modal__preview-name ${finalNameColorClass(previewColor)}`.trim()}>
+                {name} {callsign}
+              </p>
+              {isLockedPreview ? (
+                <p className="profile-cosmetics-modal__preview-note">Предпросмотр — достижение не открыто</p>
+              ) : null}
+            </div>
           </div>
 
           {lockedTip ? (
@@ -139,7 +151,9 @@ export function ProfileCosmeticsModal({
             <div className="profile-cosmetics-grid">
               <button
                 type="button"
-                className={`profile-cosmetics-option${draftFrame === null ? " is-selected" : ""}`}
+                className={`profile-cosmetics-option${
+                  previewFrame === null && !previewFrameLocked ? " is-selected" : ""
+                }${previewFrame === null && previewFrameLocked ? " is-preview" : ""}`}
                 onClick={() => selectFrame(null, true)}
               >
                 Без рамки
@@ -149,14 +163,15 @@ export function ProfileCosmeticsModal({
                 if (!frame) return null;
                 const unlocked = unlockedSet.has(item.id);
                 const tip = { title: item.title, body: item.description };
+                const isPreview = previewFrame === frame;
                 return (
                   <button
                     key={item.id}
                     type="button"
                     aria-disabled={!unlocked}
                     className={`profile-cosmetics-option profile-cosmetics-option--frame ${trialAvatarFrameClass(frame)}${
-                      draftFrame === frame && unlocked ? " is-selected" : ""
-                    }${unlocked ? "" : " is-locked"}`}
+                      unlocked && draftFrame === frame ? " is-selected" : ""
+                    }${!unlocked && isPreview ? " is-preview" : ""}${unlocked ? "" : " is-locked"}`}
                     onClick={() => selectFrame(frame, unlocked, tip)}
                   >
                     <span className="profile-cosmetics-option__swatch" />
@@ -173,7 +188,9 @@ export function ProfileCosmeticsModal({
             <div className="profile-cosmetics-grid">
               <button
                 type="button"
-                className={`profile-cosmetics-option${draftColor === null ? " is-selected" : ""}`}
+                className={`profile-cosmetics-option${
+                  previewColor === null && !previewColorLocked ? " is-selected" : ""
+                }${previewColor === null && previewColorLocked ? " is-preview" : ""}`}
                 onClick={() => selectColor(null, true)}
               >
                 Обычный
@@ -183,14 +200,15 @@ export function ProfileCosmeticsModal({
                 if (!color) return null;
                 const unlocked = unlockedSet.has(item.id);
                 const tip = { title: item.title, body: item.description };
+                const isPreview = previewColor === color;
                 return (
                   <button
                     key={item.id}
                     type="button"
                     aria-disabled={!unlocked}
-                    className={`profile-cosmetics-option${draftColor === color && unlocked ? " is-selected" : ""}${
-                      unlocked ? "" : " is-locked"
-                    }`}
+                    className={`profile-cosmetics-option${unlocked && draftColor === color ? " is-selected" : ""}${
+                      !unlocked && isPreview ? " is-preview" : ""
+                    }${unlocked ? "" : " is-locked"}`}
                     onClick={() => selectColor(color, unlocked, tip)}
                   >
                     <span className={`profile-cosmetics-option__sample ${finalNameColorClass(color)}`}>Аа</span>
