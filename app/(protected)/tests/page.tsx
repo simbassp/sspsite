@@ -1058,9 +1058,7 @@ export default function TestsPage() {
                   isBootstrapping || isPoolLoading || !isConfigLoaded || activeTest != null || isStartingTest
                 }
               >
-                {startingTest === "trial" || (isPoolLoading && !activeTest && startingTest === "trial")
-                  ? "Загружаю…"
-                  : "Начать пробный тест"}
+                {(startingTest === "trial" || (isPoolLoading && !activeTest)) ? "Загружаю…" : "Начать пробный тест"}
               </button>
             </article>
 
@@ -1090,7 +1088,7 @@ export default function TestsPage() {
                   isBootstrapping || isPoolLoading || !isConfigLoaded || activeTest != null || isStartingTest
                 }
               >
-                {startingTest === "bank" ? "Загружаю…" : "Начать по всему банку"}
+                {(startingTest === "bank" || (isPoolLoading && !activeTest)) ? "Загружаю…" : "Начать по всему банку"}
               </button>
             </article>
 
@@ -1135,7 +1133,7 @@ export default function TestsPage() {
                         : undefined
                   }
                 >
-                  {startingTest === "final" ? "Загружаю…" : "Начать итоговый тест"}
+                  {(startingTest === "final" || (isPoolLoading && !activeTest)) ? "Загружаю…" : "Начать итоговый тест"}
                 </button>
               )}
             </article>
