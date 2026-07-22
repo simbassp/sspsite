@@ -1016,7 +1016,10 @@ export default function TestsPage() {
                   <span className="tests-ref-chip tests-ref-chip--neutral">Без штрафов</span>
                 </div>
               </div>
-              <p>Без ограничений по времени и попыткам. Подсветка верного варианта после ответа.</p>
+              <p>
+                {testConfig.trialQuestionCount} вопросов. Ограничение времени на каждый ответ, как в итоговом. Подсветка
+                верного варианта после ответа. Попыток без лимита.
+              </p>
               <button
                 className="btn tests-ref-btn-outline"
                 type="button"
@@ -1070,7 +1073,10 @@ export default function TestsPage() {
                   <span className="tests-ref-chip tests-ref-chip--danger">Ограничено</span>
                 </div>
               </div>
-              <p>Ограничение по времени и количеству попыток. Результат засчитывается в систему.</p>
+              <p>
+                {testConfig.finalQuestionCount} вопросов. Ограничение по времени и количеству попыток. Результат
+                засчитывается в систему.
+              </p>
               {activeTest !== "final" && (
                 <button
                   className="btn btn-primary tests-ref-btn-solid"

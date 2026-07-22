@@ -3183,6 +3183,11 @@ html[data-theme="dark"] .chip:not(.active):hover {
   color: #dc2626;
 }
 
+.admin-users-position-badge.is-rota-commander {
+  background: rgba(124, 58, 237, 0.14);
+  color: #7c3aed;
+}
+
 .admin-users-position-badge.is-default {
   background: rgba(107, 114, 128, 0.14);
   color: #6b7280;
