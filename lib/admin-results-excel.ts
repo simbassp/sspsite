@@ -59,6 +59,23 @@ function styleStatusCell(cell: ExcelJS.Cell, status: "passed" | "failed" | "not_
 
 const NUMERIC_KEYS = new Set<ResultsExportColumnKey>(["usedAttempts", "maxAttempts", "trialPassedCount"]);
 
+function sortAttemptRowsForExport(rows: ResultsAttemptExportRow[], columns: ResultsExportColumn[]) {
+  if (!columns.some((column) => column.key === "trialPassedCount")) return rows;
+  return [...rows].sort((a, b) => {
+    const byCount = (b.trialPassedCount ?? 0) - (a.trialPassedCount ?? 0);
+    if (byCount !== 0) return byCount;
+    const byName = a.name.localeCompare(b.name, "ru");
+    if (byName !== 0) return byName;
+    return b.createdAt.localeCompare(a.createdAt);
+  });
+}
+
+function applyNumericCellFormat(cell: ExcelJS.Cell) {
+  if (typeof cell.value === "number" && Number.isFinite(cell.value)) {
+    cell.numFmt = "0";
+  }
+}
+
 function applySheetTableFilters(sheet: ExcelJS.Worksheet, columnCount: number) {
   if (sheet.rowCount < 1 || columnCount < 1) return;
   sheet.autoFilter = {
@@ -123,17 +140,20 @@ export async function buildResultsExcelBuffer(input: {
         const column = columns[col - 1];
         if (!column) return;
         styleCompactTableCell(cell, NUMERIC_KEYS.has(column.key) ? "center" : "left");
+        if (NUMERIC_KEYS.has(column.key)) applyNumericCellFormat(cell);
         if (column.key === "status") styleStatusCell(cell, "not_started");
       });
     }
   } else {
-    for (const row of input.attemptRows) {
+    const attemptRows = sortAttemptRowsForExport(input.attemptRows, columns);
+    for (const row of attemptRows) {
       const dataRow = sheet.addRow(columns.map((column) => resultsAttemptCellValue(row, column.key)));
       applyCompactRow(dataRow);
       dataRow.eachCell((cell, col) => {
         const column = columns[col - 1];
         if (!column) return;
         styleCompactTableCell(cell, NUMERIC_KEYS.has(column.key) ? "center" : "left");
+        if (NUMERIC_KEYS.has(column.key)) applyNumericCellFormat(cell);
         if (column.key === "status") styleStatusCell(cell, row.status);
         if (column.key === "trialPassedCount") {
           styleStatusCell(cell, (row.trialPassedCount ?? 0) >= 3 ? "passed" : "failed");
