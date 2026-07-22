@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ResultsExportExcelButton, postResultsExportExcel } from "@/components/admin/ResultsExportExcelButton";
 import { UserIdentityDisplay } from "@/components/profile/UserIdentityDisplay";
 import type { UserIdentityCosmetics } from "@/lib/user-identity-cosmetics";
@@ -205,73 +205,107 @@ export default function AdminResultsPage() {
   const [exportExcelLoading, setExportExcelLoading] = useState(false);
   const [exportExcelMsg, setExportExcelMsg] = useState("");
 
-  const load = useCallback(async () => {
-    setIsLoading(true);
-    setLoadError("");
-    try {
-      const params = new URLSearchParams();
-      if (periodMode === "today") {
-        params.set("range", "today");
-      } else if (periodMode === "custom") {
-        if (dateFrom) params.set("dateFrom", dateFrom);
-        if (dateTo) params.set("dateTo", dateTo);
-      }
-      params.set("page", String(attemptsPage));
-      params.set("pageSize", String(ATTEMPTS_PAGE_SIZE));
-      params.set("attemptType", typeFilter);
-      params.set("attemptStatus", statusFilter);
-      if (searchTerm.trim()) params.set("search", searchTerm.trim());
-      if (unitFilter !== "all") params.set("unit", unitFilter);
-      if (rotaPlatoon !== "all") params.set("rotaPlatoon", rotaPlatoon);
-      if (rotaSection !== "all") params.set("rotaSection", rotaSection);
+  const filterKey = useMemo(
+    () =>
+      [
+        periodMode,
+        dateFrom,
+        dateTo,
+        typeFilter,
+        statusFilter,
+        searchTerm.trim(),
+        unitFilter,
+        rotaPlatoon,
+        rotaSection,
+      ].join("|"),
+    [periodMode, dateFrom, dateTo, typeFilter, statusFilter, searchTerm, unitFilter, rotaPlatoon, rotaSection],
+  );
+  const prevFilterKeyRef = useRef<string | null>(null);
+  const loadAbortRef = useRef<AbortController | null>(null);
 
-      const response = await fetch(`/api/admin/results/bootstrap?${params.toString()}`, {
-        cache: "no-store",
-      });
-      const payload = (await response.json()) as BootstrapPayload;
-      if (!response.ok || !payload.ok) {
-        throw new Error(payload.error || "admin_results_bootstrap_failed");
+  const load = useCallback(
+    async (pageOverride?: number, signal?: AbortSignal) => {
+      setIsLoading(true);
+      setLoadError("");
+      try {
+        const page = pageOverride ?? attemptsPage;
+        const params = new URLSearchParams();
+        if (periodMode === "today") {
+          params.set("range", "today");
+        } else if (periodMode === "custom") {
+          if (dateFrom) params.set("dateFrom", dateFrom);
+          if (dateTo) params.set("dateTo", dateTo);
+        }
+        params.set("page", String(page));
+        params.set("pageSize", String(ATTEMPTS_PAGE_SIZE));
+        params.set("attemptType", typeFilter);
+        params.set("attemptStatus", statusFilter);
+        if (searchTerm.trim()) params.set("search", searchTerm.trim());
+        if (unitFilter !== "all") params.set("unit", unitFilter);
+        if (rotaPlatoon !== "all") params.set("rotaPlatoon", rotaPlatoon);
+        if (rotaSection !== "all") params.set("rotaSection", rotaSection);
+
+        const response = await fetch(`/api/admin/results/bootstrap?${params.toString()}`, {
+          cache: "no-store",
+          signal,
+        });
+        if (signal?.aborted) return;
+        const payload = (await response.json()) as BootstrapPayload;
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "admin_results_bootstrap_failed");
+        }
+        setSummaries(Array.isArray(payload.summaries) ? payload.summaries : []);
+        setAttempts(Array.isArray(payload.attempts) ? payload.attempts : []);
+        setAttemptsTotal(typeof payload.attemptsTotal === "number" ? payload.attemptsTotal : 0);
+        setFilterPeopleStats(payload.filterPeopleStats ?? null);
+        setTrialTripleStreakStats(payload.trialTripleStreakStats ?? null);
+        setBannerStats(payload.bannerStats ?? emptyBannerStats);
+        setLastResetAudit(payload.lastResetAudit ?? null);
+        setNextAutoResetAt(payload.nextAutoResetAt ?? null);
+      } catch (err) {
+        if (signal?.aborted || (err instanceof DOMException && err.name === "AbortError")) return;
+        setLoadError("Не удалось получить данные результатов. Попробуйте обновить страницу.");
+        setSummaries([]);
+        setAttempts([]);
+        setAttemptsTotal(0);
+        setFilterPeopleStats(null);
+        setTrialTripleStreakStats(null);
+        setBannerStats(emptyBannerStats);
+        setNextAutoResetAt(null);
+      } finally {
+        if (!signal?.aborted) setIsLoading(false);
       }
-      setSummaries(Array.isArray(payload.summaries) ? payload.summaries : []);
-      setAttempts(Array.isArray(payload.attempts) ? payload.attempts : []);
-      setAttemptsTotal(typeof payload.attemptsTotal === "number" ? payload.attemptsTotal : 0);
-      setFilterPeopleStats(payload.filterPeopleStats ?? null);
-      setTrialTripleStreakStats(payload.trialTripleStreakStats ?? null);
-      setBannerStats(payload.bannerStats ?? emptyBannerStats);
-      setLastResetAudit(payload.lastResetAudit ?? null);
-      setNextAutoResetAt(payload.nextAutoResetAt ?? null);
-    } catch {
-      setLoadError("Не удалось получить данные результатов. Попробуйте обновить страницу.");
-      setSummaries([]);
-      setAttempts([]);
-      setAttemptsTotal(0);
-      setFilterPeopleStats(null);
-      setTrialTripleStreakStats(null);
-      setBannerStats(emptyBannerStats);
-      setNextAutoResetAt(null);
-    } finally {
-      setIsLoading(false);
+    },
+    [
+      periodMode,
+      dateFrom,
+      dateTo,
+      attemptsPage,
+      typeFilter,
+      statusFilter,
+      searchTerm,
+      unitFilter,
+      rotaPlatoon,
+      rotaSection,
+    ],
+  );
+
+  useEffect(() => {
+    const isFirstLoad = prevFilterKeyRef.current === null;
+    const filtersChanged = !isFirstLoad && prevFilterKeyRef.current !== filterKey;
+    prevFilterKeyRef.current = filterKey;
+
+    if (filtersChanged && attemptsPage !== 1) {
+      setAttemptsPage(1);
+      return;
     }
-  }, [
-    periodMode,
-    dateFrom,
-    dateTo,
-    attemptsPage,
-    typeFilter,
-    statusFilter,
-    searchTerm,
-    unitFilter,
-    rotaPlatoon,
-    rotaSection,
-  ]);
 
-  useEffect(() => {
-    setAttemptsPage(1);
-  }, [periodMode, dateFrom, dateTo, typeFilter, statusFilter, searchTerm, unitFilter, rotaPlatoon, rotaSection]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+    loadAbortRef.current?.abort();
+    const controller = new AbortController();
+    loadAbortRef.current = controller;
+    void load(filtersChanged ? 1 : attemptsPage, controller.signal);
+    return () => controller.abort();
+  }, [filterKey, attemptsPage, load]);
 
   useEffect(() => {
     if (typeFilter === "trial" && statusFilter === "not_started") {

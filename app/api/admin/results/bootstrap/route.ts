@@ -22,6 +22,7 @@ import { normalizeUnitAssignment, matchesResultsUnitFilter, type RotaPlatoonFilt
 import type { UnitAssignment } from "@/lib/types";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 /** Строка пользователя после primary/fallback-select (поле окна попыток может отсутствовать в legacy-схеме). */
 type AppUserListRow = {
@@ -95,10 +96,15 @@ export async function GET(req: Request) {
   try {
     const supabase = getServerSupabaseServiceClient();
 
-    const usersPrimary = await supabase
+    const usersPrimaryPromise = supabase
       .from("app_users")
       .select("id,name,callsign,position,role,status,final_test_counting_from,unit_assignment,rota_platoon,rota_section,profile_name_color")
       .limit(1000);
+
+    const [usersPrimary, finalResultsRaw] = await Promise.all([
+      usersPrimaryPromise,
+      fetchFinalResultsForSummaries(supabase),
+    ]);
 
     let usersRows: AppUserListRow[] | null = usersPrimary.data as AppUserListRow[] | null;
     let usersErr = usersPrimary.error;
@@ -130,7 +136,6 @@ export async function GET(req: Request) {
     const users = usersRows;
     const cosmeticsMap = await loadIdentityCosmeticsMap(users.map((u) => u.id));
 
-    const finalResultsRaw = await fetchFinalResultsForSummaries(supabase);
     type NormalizedResult = {
       id: string;
       user_id: string;
@@ -320,38 +325,115 @@ export async function GET(req: Request) {
       })
       .map((user) => user.id);
 
-    const attemptsPageData = await fetchAttemptsPage(supabase, {
-      page: attemptsQuery.page,
-      pageSize: attemptsQuery.pageSize,
+    const cohortUserIds = hasUserFilter ? filteredUserIds : rosterUsers.map((user) => user.id);
+    const allowedUserIds = hasUserFilter ? filteredUserIds : null;
+    const listQuery = {
       typeFilter: attemptsQuery.typeFilter,
       statusFilter: attemptsQuery.statusFilter,
-      allowedUserIds: hasUserFilter ? filteredUserIds : null,
+      allowedUserIds,
       startIso,
       endIso,
-    });
+    };
+    const needTrialStats = shouldShowTrialTripleStreak(attemptsQuery.typeFilter, attemptsQuery.statusFilter);
 
-    const peopleStatsRows =
-      attemptsQuery.statusFilter === "not_started"
-        ? []
-        : await fetchAttemptsForPeopleStats(supabase, {
-            page: 1,
-            pageSize: 10000,
-            typeFilter: attemptsQuery.typeFilter,
-            statusFilter: attemptsQuery.statusFilter,
-            allowedUserIds: hasUserFilter ? filteredUserIds : null,
-            startIso,
-            endIso,
-          });
-    const filterPeopleStats = calcAttemptPeopleStats(peopleStatsRows);
-
-    let trialTripleStreakStats: { cohortPeople: number; passedPeople: number; failedPeople: number } | null = null;
-    if (shouldShowTrialTripleStreak(attemptsQuery.typeFilter, attemptsQuery.statusFilter)) {
-      const cohortUserIds = hasUserFilter ? filteredUserIds : rosterUsers.map((user) => user.id);
-      const trialAttempts = await fetchTrialAttemptsForStreak(supabase, {
-        allowedUserIds: hasUserFilter ? filteredUserIds : null,
+    const fetchTrialCount = async () => {
+      let res = await applyCreatedAtRange(
+        supabase.from("test_results").select("id", { count: "exact", head: true }).eq("type", "trial"),
         startIso,
         endIso,
+      );
+      if (res.error && isMissingColumnError(res.error.message)) {
+        res = await applyCreatedAtRange(
+          supabase.from("test_results").select("id", { count: "exact", head: true }).eq("test_type", "trial"),
+          startIso,
+          endIso,
+        );
+      }
+      return res;
+    };
+
+    const fetchTrialLast = async () => {
+      let res = await applyCreatedAtRange(
+        supabase.from("test_results").select("user_id,created_at").eq("type", "trial"),
+        startIso,
+        endIso,
+      ).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (res.error && isMissingColumnError(res.error.message)) {
+        res = await applyCreatedAtRange(
+          supabase.from("test_results").select("user_id,created_at").eq("test_type", "trial"),
+          startIso,
+          endIso,
+        ).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      }
+      return res;
+    };
+
+    const fetchFinalCount = async () => {
+      let res = await applyCreatedAtRange(
+        supabase.from("test_results").select("id", { count: "exact", head: true }).eq("type", "final"),
+        startIso,
+        endIso,
+      );
+      if (res.error && isMissingColumnError(res.error.message)) {
+        res = await applyCreatedAtRange(
+          supabase.from("test_results").select("id", { count: "exact", head: true }).eq("test_type", "final"),
+          startIso,
+          endIso,
+        );
+      }
+      return res;
+    };
+
+    const fetchFinalLast = async () => {
+      let res = await applyCreatedAtRange(
+        supabase.from("test_results").select("user_id,created_at").eq("type", "final"),
+        startIso,
+        endIso,
+      ).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (res.error && isMissingColumnError(res.error.message)) {
+        res = await applyCreatedAtRange(
+          supabase.from("test_results").select("user_id,created_at").eq("test_type", "final"),
+          startIso,
+          endIso,
+        ).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      }
+      return res;
+    };
+
+    const [
+      attemptsPageData,
+      trialAttempts,
+      trialCountRes,
+      trialLastRes,
+      finalCountRes,
+      finalLastRes,
+    ] = await Promise.all([
+      fetchAttemptsPage(supabase, {
+        ...listQuery,
+        page: attemptsQuery.page,
+        pageSize: attemptsQuery.pageSize,
+      }),
+      needTrialStats
+        ? fetchTrialAttemptsForStreak(supabase, { allowedUserIds, startIso, endIso })
+        : Promise.resolve([]),
+      fetchTrialCount(),
+      fetchTrialLast(),
+      fetchFinalCount(),
+      fetchFinalLast(),
+    ]);
+
+    let filterPeopleStats = { passedPeople: 0, failedPeople: 0 };
+    if (attemptsQuery.statusFilter !== "not_started" && !needTrialStats) {
+      const peopleStatsRows = await fetchAttemptsForPeopleStats(supabase, {
+        ...listQuery,
+        page: 1,
+        pageSize: 10000,
       });
+      filterPeopleStats = calcAttemptPeopleStats(peopleStatsRows);
+    }
+
+    let trialTripleStreakStats: { cohortPeople: number; passedPeople: number; failedPeople: number } | null = null;
+    if (needTrialStats) {
       const streakStats = calcTrialTripleStreakStats(cohortUserIds, trialAttempts);
       trialTripleStreakStats = {
         cohortPeople: streakStats.cohortPeople,
@@ -443,66 +525,6 @@ export async function GET(req: Request) {
       }
       return best;
     }, null);
-
-    let trialCountQ = applyCreatedAtRange(
-      supabase.from("test_results").select("id", { count: "exact", head: true }).eq("type", "trial"),
-      startIso,
-      endIso,
-    );
-    let trialCountRes = await trialCountQ;
-    if (trialCountRes.error && isMissingColumnError(trialCountRes.error.message)) {
-      let q = applyCreatedAtRange(
-        supabase.from("test_results").select("id", { count: "exact", head: true }).eq("test_type", "trial"),
-        startIso,
-        endIso,
-      );
-      trialCountRes = await q;
-    }
-
-    let trialLastQ = applyCreatedAtRange(
-      supabase.from("test_results").select("user_id,created_at").eq("type", "trial"),
-      startIso,
-      endIso,
-    );
-    let trialLastRes = await trialLastQ.order("created_at", { ascending: false }).limit(1).maybeSingle();
-    if (trialLastRes.error && isMissingColumnError(trialLastRes.error.message)) {
-      let q = applyCreatedAtRange(
-        supabase.from("test_results").select("user_id,created_at").eq("test_type", "trial"),
-        startIso,
-        endIso,
-      );
-      trialLastRes = await q.order("created_at", { ascending: false }).limit(1).maybeSingle();
-    }
-
-    let finalCountQ = applyCreatedAtRange(
-      supabase.from("test_results").select("id", { count: "exact", head: true }).eq("type", "final"),
-      startIso,
-      endIso,
-    );
-    let finalCountRes = await finalCountQ;
-    if (finalCountRes.error && isMissingColumnError(finalCountRes.error.message)) {
-      let q = applyCreatedAtRange(
-        supabase.from("test_results").select("id", { count: "exact", head: true }).eq("test_type", "final"),
-        startIso,
-        endIso,
-      );
-      finalCountRes = await q;
-    }
-
-    let finalLastQ = applyCreatedAtRange(
-      supabase.from("test_results").select("user_id,created_at").eq("type", "final"),
-      startIso,
-      endIso,
-    );
-    let finalLastRes = await finalLastQ.order("created_at", { ascending: false }).limit(1).maybeSingle();
-    if (finalLastRes.error && isMissingColumnError(finalLastRes.error.message)) {
-      let q = applyCreatedAtRange(
-        supabase.from("test_results").select("user_id,created_at").eq("test_type", "final"),
-        startIso,
-        endIso,
-      );
-      finalLastRes = await q.order("created_at", { ascending: false }).limit(1).maybeSingle();
-    }
 
     const trialRow = trialLastRes.data as { user_id?: string; created_at?: string } | null;
     const finalRow = finalLastRes.data as { user_id?: string; created_at?: string } | null;

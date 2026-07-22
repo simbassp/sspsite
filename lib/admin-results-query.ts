@@ -147,6 +147,44 @@ export function calcAttemptPeopleStats(
   };
 }
 
+const IN_FILTER_CHUNK_SIZE = 80;
+
+function chunkIds(ids: string[], size = IN_FILTER_CHUNK_SIZE) {
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += size) {
+    chunks.push(ids.slice(i, i + size));
+  }
+  return chunks;
+}
+
+async function runAttemptsQueryChunked(
+  supabase: { from: (table: string) => unknown },
+  query: AttemptListQuery,
+  select: string,
+  typeColumn: "type" | "test_type",
+  options?: { from?: number; to?: number; count?: boolean; limit?: number },
+) {
+  const ids = query.allowedUserIds;
+  if (!ids || ids.length <= IN_FILTER_CHUNK_SIZE) {
+    return runAttemptsQuery(supabase, query, select, typeColumn, options);
+  }
+
+  if (options?.from != null || options?.count) {
+    return runAttemptsQuery(supabase, query, select, typeColumn, options);
+  }
+
+  const parts = await Promise.all(
+    chunkIds(ids).map((chunk) =>
+      runAttemptsQuery(supabase, { ...query, allowedUserIds: chunk }, select, typeColumn, options),
+    ),
+  );
+  const firstError = parts.find((part) => part.error)?.error;
+  if (firstError) return { data: null, count: null, error: firstError };
+
+  const data = parts.flatMap((part) => (Array.isArray(part.data) ? part.data : []));
+  return { data, count: data.length, error: null };
+}
+
 export async function fetchAttemptsForPeopleStats(
   supabase: { from: (table: string) => unknown },
   query: AttemptListQuery,
@@ -159,9 +197,9 @@ export async function fetchAttemptsForPeopleStats(
     return [] as Array<{ userId: string; status: "passed" | "failed" }>;
   }
 
-  let res = await runAttemptsQuery(supabase, query, ATTEMPT_SELECT_STATS, "type", { limit: maxRows });
+  let res = await runAttemptsQueryChunked(supabase, query, ATTEMPT_SELECT_STATS, "type", { limit: maxRows });
   if (res.error && isMissingColumnError(res.error.message)) {
-    res = await runAttemptsQuery(supabase, query, ATTEMPT_SELECT_STATS_LEGACY, "test_type", { limit: maxRows });
+    res = await runAttemptsQueryChunked(supabase, query, ATTEMPT_SELECT_STATS_LEGACY, "test_type", { limit: maxRows });
   }
   if (res.error) throw new Error(res.error.message);
 
@@ -338,13 +376,24 @@ export function calcTrialTripleStreakStats(
   };
 }
 
+type TrialStreakAttempt = { userId: string; status: "passed" | "failed"; createdAt: string };
+
 export async function fetchTrialAttemptsForStreak(
   supabase: { from: (table: string) => unknown },
   query: Pick<AttemptListQuery, "allowedUserIds" | "startIso" | "endIso">,
   maxRows = 10000,
-) {
+): Promise<TrialStreakAttempt[]> {
   if (query.allowedUserIds && query.allowedUserIds.length === 0) {
-    return [] as Array<{ userId: string; status: "passed" | "failed"; createdAt: string }>;
+    return [];
+  }
+
+  if (query.allowedUserIds && query.allowedUserIds.length > IN_FILTER_CHUNK_SIZE) {
+    const parts = await Promise.all(
+      chunkIds(query.allowedUserIds).map((chunk) =>
+        fetchTrialAttemptsForStreak(supabase, { ...query, allowedUserIds: chunk }, maxRows),
+      ),
+    );
+    return parts.flat();
   }
 
   const trialQuery: AttemptListQuery = {
