@@ -59,6 +59,15 @@ function styleStatusCell(cell: ExcelJS.Cell, status: "passed" | "failed" | "not_
 
 const NUMERIC_KEYS = new Set<ResultsExportColumnKey>(["attemptIndex", "usedAttempts", "maxAttempts", "trialPassedCount"]);
 
+function applySheetTableFilters(sheet: ExcelJS.Worksheet, columnCount: number) {
+  if (sheet.rowCount < 1 || columnCount < 1) return;
+  sheet.autoFilter = {
+    from: { row: 1, column: 1 },
+    to: { row: sheet.rowCount, column: columnCount },
+  };
+  sheet.views = [{ state: "frozen", ySplit: 1, activeCell: "A2" }];
+}
+
 export async function buildResultsExcelBuffer(input: {
   config: ResultsExportFilterConfig;
   filterLines: string[];
@@ -132,6 +141,8 @@ export async function buildResultsExcelBuffer(input: {
       });
     }
   }
+
+  applySheetTableFilters(sheet, columns.length);
 
   const buffer = await workbook.xlsx.writeBuffer();
   return Buffer.from(buffer);
