@@ -62,7 +62,6 @@ const DEFAULT_SNAPSHOT: HomeStatsSnapshot = {
 
 let snapshot: HomeStatsSnapshot = DEFAULT_SNAPSHOT;
 let subscriberCount = 0;
-let pollTimer: ReturnType<typeof setInterval> | null = null;
 let inflight: Promise<void> | null = null;
 const listeners = new Set<() => void>();
 
@@ -112,30 +111,22 @@ async function loadHomeStats() {
   return inflight;
 }
 
-function startPolling(pollMs: number) {
+function startHomeStatsSubscription() {
   subscriberCount += 1;
-  if (subscriberCount === 1) {
-    void loadHomeStats();
-    pollTimer = setInterval(() => {
-      void loadHomeStats();
-    }, pollMs);
-  } else if (snapshot.loading && !inflight) {
+  if (subscriberCount === 1 || snapshot.loading) {
     void loadHomeStats();
   }
 
   return () => {
     subscriberCount = Math.max(0, subscriberCount - 1);
-    if (subscriberCount === 0 && pollTimer) {
-      clearInterval(pollTimer);
-      pollTimer = null;
-    }
   };
 }
 
-export function useHomeStats(pollMs = 90_000) {
+/** Загружает главную статистику один раз при открытии /dashboard (без фонового polling). */
+export function useHomeStats() {
   const storeSnapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
-  useEffect(() => startPolling(pollMs), [pollMs]);
+  useEffect(() => startHomeStatsSubscription(), []);
 
   return {
     loading: storeSnapshot.loading,

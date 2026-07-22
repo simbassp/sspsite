@@ -200,55 +200,11 @@ export default function ProfileUserInspectPage() {
     };
 
     void load();
-    const t = window.setInterval(() => {
-      if (document.visibilityState !== "visible") return;
-      void (async () => {
-        try {
-          const response = await fetch(`/api/profile/user/${encodeURIComponent(userId)}`, { cache: "no-store" });
-          const payload = (await response.json()) as {
-            ok?: boolean;
-            user?: InspectUser & { duty_location?: string; unit_assignment?: UnitAssignment | null };
-            results?: Array<Record<string, unknown>>;
-          };
-          if (cancelled || !response.ok || !payload.ok || !payload.user) return;
-          const u = payload.user;
-          const duty_location: DutyLocation =
-            u.duty_location === "deployment" ? "deployment" : "base";
-          const unit_assignment = normalizeUnitAssignment(u.unit_assignment);
-          setInspectUser((prev) => {
-            if (!prev) return { ...u, duty_location, unit_assignment };
-            return {
-              ...prev,
-              ...u,
-              duty_location,
-              unit_assignment: unitSaving ? prev.unit_assignment : unit_assignment,
-            };
-          });
-          if (!rotaSaving) {
-            setRotaPlatoon(u.rota_platoon === 1 || u.rota_platoon === 2 ? u.rota_platoon : null);
-            setRotaSection(
-              u.rota_section === 1 || u.rota_section === 2 || u.rota_section === 3 || u.rota_section === 4
-                ? u.rota_section
-                : null,
-            );
-            setRotaModule(normalizeRotaModule(u.rota_module));
-          }
-          if (!employmentSaving) {
-            setEmploymentDateStored(
-              typeof u.employment_date === "string" && u.employment_date ? u.employment_date : null,
-            );
-          }
-        } catch {
-          /* ignore */
-        }
-      })();
-    }, 60_000);
 
     return () => {
       cancelled = true;
-      window.clearInterval(t);
     };
-  }, [session, userId, router, canOpen, unitSaving, rotaSaving, employmentSaving]);
+  }, [session, userId, router, canOpen]);
 
   const stats = useMemo(() => trialStatsFromApi ?? computeTrialProfileStats(rows), [rows, trialStatsFromApi]);
 

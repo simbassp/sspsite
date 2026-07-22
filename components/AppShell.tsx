@@ -23,7 +23,6 @@ import { canAccessGameSection } from "@/lib/game-feature";
 import { HomeStatsBar } from "@/components/HomeStatsBar";
 import {
   PRESENCE_ANALYTICS_FLUSH_MS,
-  PRESENCE_HEARTBEAT_MS,
   PRESENCE_HIDDEN_OFFLINE_DELAY_MS,
 } from "@/lib/presence-constants";
 import { SessionUser } from "@/lib/types";
@@ -297,21 +296,6 @@ export function AppShell({ session, children }: AppShellProps) {
   }, []);
 
   useEffect(() => {
-    let HEARTBEAT_MS = PRESENCE_HEARTBEAT_MS;
-    try {
-      const conn =
-        typeof navigator !== "undefined" && "connection" in navigator
-          ? (navigator as Navigator & {
-              connection?: { effectiveType?: string; saveData?: boolean };
-            }).connection
-          : undefined;
-      if (conn?.saveData || conn?.effectiveType === "slow-2g" || conn?.effectiveType === "2g") {
-        HEARTBEAT_MS = PRESENCE_HEARTBEAT_MS * 2;
-      }
-    } catch {
-      /* ignore */
-    }
-
     const postPresence = (online: boolean, keepalive?: boolean) => {
       if (isLoggingOutRef.current) return;
       const now = Date.now();
@@ -346,7 +330,6 @@ export function AppShell({ session, children }: AppShellProps) {
       }).catch(() => undefined);
     };
 
-    let heartbeat: ReturnType<typeof setInterval> | undefined;
     let hiddenOfflineTimer: ReturnType<typeof setTimeout> | undefined;
 
     const clearHiddenOfflineTimer = () => {
@@ -356,25 +339,9 @@ export function AppShell({ session, children }: AppShellProps) {
       }
     };
 
-    const stopHeartbeat = () => {
-      if (heartbeat) clearInterval(heartbeat);
-      heartbeat = undefined;
-    };
-
-    const startHeartbeat = () => {
-      stopHeartbeat();
-      heartbeat = setInterval(() => {
-        if (typeof document !== "undefined" && document.visibilityState === "visible") {
-          postPresence(true);
-        }
-      }, HEARTBEAT_MS);
-    };
-
     const onHidden = () => {
       if (isLoggingOutRef.current) return;
-      stopHeartbeat();
       clearHiddenOfflineTimer();
-      // Не сразу офлайн: иначе Alt+Tab / шторка телефона выкидывают из списка.
       hiddenOfflineTimer = setTimeout(() => {
         hiddenOfflineTimer = undefined;
         if (typeof document !== "undefined" && document.visibilityState === "hidden") {
@@ -387,7 +354,6 @@ export function AppShell({ session, children }: AppShellProps) {
       if (isLoggingOutRef.current) return;
       clearHiddenOfflineTimer();
       postPresence(true);
-      startHeartbeat();
     };
 
     const onVisibility = () => {
@@ -399,12 +365,10 @@ export function AppShell({ session, children }: AppShellProps) {
     const onPageHide = () => {
       if (isLoggingOutRef.current) return;
       clearHiddenOfflineTimer();
-      stopHeartbeat();
       postPresence(false, true);
     };
 
     postPresence(true);
-    if (typeof document !== "undefined" && document.visibilityState === "visible") startHeartbeat();
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("pagehide", onPageHide);
 
@@ -412,12 +376,36 @@ export function AppShell({ session, children }: AppShellProps) {
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("pagehide", onPageHide);
       clearHiddenOfflineTimer();
-      stopHeartbeat();
       if (!isLoggingOutRef.current) {
         postPresence(false, true);
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (pathname === "/dashboard") {
+      if (isLoggingOutRef.current) return;
+      const now = Date.now();
+      let elapsedSeconds = 0;
+      if (sessionCountedRef.current) {
+        const sinceLast = now - lastAnalyticsPingRef.current;
+        if (sinceLast >= PRESENCE_ANALYTICS_FLUSH_MS) {
+          elapsedSeconds = Math.round(sinceLast / 1000);
+          lastAnalyticsPingRef.current = now;
+        }
+      }
+      elapsedSeconds = Math.min(Math.max(0, elapsedSeconds), 600);
+      void fetch("/api/presence", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          online: true,
+          newSession: false,
+          elapsedSeconds: elapsedSeconds > 0 ? elapsedSeconds : 0,
+        }),
+      }).catch(() => undefined);
+    }
+  }, [pathname]);
   const visibleAdminLinks: { href: string; label: string; icon: NavIconId }[] = [
     ...(canSeeUserDirectory ? [{ href: "/admin/users", label: "Пользователи", icon: "users" as const }] : []),
     ...(canManageResults(session) || canResetTestResults(session)
