@@ -1,5 +1,5 @@
 import type { RotaPlatoonFilter, RotaSectionFilter, UnitAssignmentFilter } from "@/lib/unit-assignment";
-import { normalizeBroadcastUnitFilter } from "@/lib/unit-assignment";
+import { normalizeBroadcastUnitFilter, normalizeUnitAssignment, matchesResultsUnitFilter } from "@/lib/unit-assignment";
 
 export function isMissingColumnError(message: string | undefined) {
   const m = (message || "").toLowerCase();
@@ -244,4 +244,136 @@ export async function fetchAllAttemptsForExport(
   }
   if (res.error) throw new Error(res.error.message);
   return { rows: (res.data ?? []) as Array<Record<string, unknown>>, total: res.count ?? 0 };
+}
+
+const ATTEMPT_SELECT_STREAK = "user_id,status,created_at";
+const ATTEMPT_SELECT_STREAK_LEGACY = "user_id,status,created_at";
+
+export type ResultsCohortUser = {
+  id: string;
+  name: string;
+  callsign: string;
+  unit_assignment?: string | null;
+  rota_platoon?: number | null;
+  rota_section?: number | null;
+};
+
+export function hasResultsUserFilters(filters: ResultsListFilters) {
+  return (
+    !!filters.search ||
+    filters.unitFilter !== "all" ||
+    filters.rotaPlatoon !== "all" ||
+    filters.rotaSection !== "all"
+  );
+}
+
+export function filterResultsCohortUserIds(
+  users: ResultsCohortUser[],
+  filters: ResultsListFilters,
+  options: { unitFromDb: boolean; rotaFromDb: boolean },
+) {
+  return users
+    .filter((user) => {
+      const unitAssignment = options.unitFromDb ? normalizeUnitAssignment(user.unit_assignment) : null;
+      const rotaPlatoon = options.rotaFromDb && user.rota_platoon != null ? Number(user.rota_platoon) : null;
+      const rotaSection = options.rotaFromDb && user.rota_section != null ? Number(user.rota_section) : null;
+      if (
+        !matchesResultsUnitFilter(filters.unitFilter, filters.rotaPlatoon, filters.rotaSection, {
+          unitAssignment,
+          rotaPlatoon,
+          rotaSection,
+        })
+      ) {
+        return false;
+      }
+      if (!filters.search) return true;
+      return (
+        user.name.toLowerCase().includes(filters.search) ||
+        user.callsign.toLowerCase().includes(filters.search)
+      );
+    })
+    .map((user) => user.id);
+}
+
+export function userHasThreePassedTrialsInPeriod(
+  attempts: Array<{ status: "passed" | "failed" }>,
+) {
+  let passedCount = 0;
+  for (const attempt of attempts) {
+    if (attempt.status === "passed") passedCount += 1;
+  }
+  return passedCount >= 3;
+}
+
+export type TrialTripleStreakStats = {
+  passedPeople: number;
+  failedPeople: number;
+  byUser: Map<string, boolean>;
+};
+
+export function calcTrialTripleStreakStats(
+  cohortUserIds: string[],
+  attempts: Array<{ userId: string; status: "passed" | "failed"; createdAt: string }>,
+): TrialTripleStreakStats {
+  const byUserAttempts = new Map<string, Array<{ status: "passed" | "failed"; createdAt: string }>>();
+  for (const row of attempts) {
+    const list = byUserAttempts.get(row.userId) ?? [];
+    list.push({ status: row.status, createdAt: row.createdAt });
+    byUserAttempts.set(row.userId, list);
+  }
+
+  const byUser = new Map<string, boolean>();
+  let passedPeople = 0;
+  for (const userId of cohortUserIds) {
+    const ok = userHasThreePassedTrialsInPeriod(byUserAttempts.get(userId) ?? []);
+    byUser.set(userId, ok);
+    if (ok) passedPeople += 1;
+  }
+
+  return {
+    passedPeople,
+    failedPeople: cohortUserIds.length - passedPeople,
+    byUser,
+  };
+}
+
+export async function fetchTrialAttemptsForStreak(
+  supabase: { from: (table: string) => unknown },
+  query: Pick<AttemptListQuery, "allowedUserIds" | "startIso" | "endIso">,
+  maxRows = 10000,
+) {
+  if (query.allowedUserIds && query.allowedUserIds.length === 0) {
+    return [] as Array<{ userId: string; status: "passed" | "failed"; createdAt: string }>;
+  }
+
+  const trialQuery: AttemptListQuery = {
+    page: 1,
+    pageSize: maxRows,
+    typeFilter: "trial",
+    statusFilter: "all",
+    allowedUserIds: query.allowedUserIds,
+    startIso: query.startIso,
+    endIso: query.endIso,
+  };
+
+  let res = await runAttemptsQuery(supabase, trialQuery, ATTEMPT_SELECT_STREAK, "type", { limit: maxRows });
+  if (res.error && isMissingColumnError(res.error.message)) {
+    res = await runAttemptsQuery(supabase, trialQuery, ATTEMPT_SELECT_STREAK_LEGACY, "test_type", { limit: maxRows });
+  }
+  if (res.error) throw new Error(res.error.message);
+
+  return ((res.data ?? []) as Array<Record<string, unknown>>)
+    .map((row) => ({
+      userId: String(row.user_id),
+      status: row.status === "passed" ? ("passed" as const) : ("failed" as const),
+      createdAt: String(row.created_at ?? ""),
+    }))
+    .filter((row) => row.userId && row.createdAt);
+}
+
+export function shouldShowTrialTripleStreak(
+  typeFilter: ResultsListFilters["typeFilter"],
+  statusFilter: ResultsListFilters["statusFilter"],
+) {
+  return typeFilter !== "final" && statusFilter !== "not_started";
 }

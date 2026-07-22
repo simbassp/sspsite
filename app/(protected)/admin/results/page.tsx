@@ -99,6 +99,7 @@ type BootstrapPayload = {
   attemptsPage?: number;
   attemptsPageSize?: number;
   filterPeopleStats?: { passedPeople: number; failedPeople: number };
+  trialTripleStreakStats?: { passedPeople: number; failedPeople: number } | null;
   bannerStats?: BannerStats;
   lastResetAudit?: {
     created_at: string;
@@ -188,6 +189,10 @@ export default function AdminResultsPage() {
   const [filterPeopleStats, setFilterPeopleStats] = useState<{ passedPeople: number; failedPeople: number } | null>(
     null,
   );
+  const [trialTripleStreakStats, setTrialTripleStreakStats] = useState<{
+    passedPeople: number;
+    failedPeople: number;
+  } | null>(null);
   const [bannerStats, setBannerStats] = useState<BannerStats>(emptyBannerStats);
   const [lastResetAudit, setLastResetAudit] = useState<BootstrapPayload["lastResetAudit"]>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -230,6 +235,7 @@ export default function AdminResultsPage() {
       setAttempts(Array.isArray(payload.attempts) ? payload.attempts : []);
       setAttemptsTotal(typeof payload.attemptsTotal === "number" ? payload.attemptsTotal : 0);
       setFilterPeopleStats(payload.filterPeopleStats ?? null);
+      setTrialTripleStreakStats(payload.trialTripleStreakStats ?? null);
       setBannerStats(payload.bannerStats ?? emptyBannerStats);
       setLastResetAudit(payload.lastResetAudit ?? null);
       setNextAutoResetAt(payload.nextAutoResetAt ?? null);
@@ -239,6 +245,7 @@ export default function AdminResultsPage() {
       setAttempts([]);
       setAttemptsTotal(0);
       setFilterPeopleStats(null);
+      setTrialTripleStreakStats(null);
       setBannerStats(emptyBannerStats);
       setNextAutoResetAt(null);
     } finally {
@@ -380,6 +387,9 @@ export default function AdminResultsPage() {
     }
   };
 
+  const showTrialTripleStreak =
+    typeFilter !== "final" && statusFilter !== "not_started" && trialTripleStreakStats != null;
+
   return (
     <section className="admin-results-page">
       <div className="personnel-page__header">
@@ -425,6 +435,12 @@ export default function AdminResultsPage() {
               ).
             </>
           )}
+        </p>
+      )}
+      {!isLoading && !loadError && showTrialTripleStreak && (
+        <p className="page-subtitle admin-results-export-meta">
+          3 пробных сдано: <strong>{trialTripleStreakStats.passedPeople}</strong> чел. сдали,{" "}
+          <strong>{trialTripleStreakStats.failedPeople}</strong> чел. не сдали.
         </p>
       )}
 

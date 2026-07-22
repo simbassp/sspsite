@@ -3,11 +3,14 @@ import { FINAL_TEST_MAX_ATTEMPTS } from "@/lib/final-test-constants";
 import {
   applyCreatedAtRange,
   calcAttemptPeopleStats,
+  calcTrialTripleStreakStats,
   fetchAttemptsForPeopleStats,
   fetchAttemptsPage,
+  fetchTrialAttemptsForStreak,
   isMissingColumnError,
   parseAttemptsQuery,
   resolveDateRange,
+  shouldShowTrialTripleStreak,
   timestampInRange,
 } from "@/lib/admin-results-query";
 import { canManageResults, canResetTestResults } from "@/lib/permissions";
@@ -341,6 +344,21 @@ export async function GET(req: Request) {
           });
     const filterPeopleStats = calcAttemptPeopleStats(peopleStatsRows);
 
+    let trialTripleStreakStats: { passedPeople: number; failedPeople: number } | null = null;
+    if (shouldShowTrialTripleStreak(attemptsQuery.typeFilter, attemptsQuery.statusFilter)) {
+      const cohortUserIds = hasUserFilter ? filteredUserIds : rosterUsers.map((user) => user.id);
+      const trialAttempts = await fetchTrialAttemptsForStreak(supabase, {
+        allowedUserIds: hasUserFilter ? filteredUserIds : null,
+        startIso,
+        endIso,
+      });
+      const streakStats = calcTrialTripleStreakStats(cohortUserIds, trialAttempts);
+      trialTripleStreakStats = {
+        passedPeople: streakStats.passedPeople,
+        failedPeople: streakStats.failedPeople,
+      };
+    }
+
     const attempts = (attemptsPageData.rows as Array<Record<string, unknown>>)
       .map((row) => {
         const userId = String(row.user_id);
@@ -535,6 +553,7 @@ export async function GET(req: Request) {
       attemptsPage,
       attemptsPageSize,
       filterPeopleStats,
+      trialTripleStreakStats,
       lastResetAudit,
       bannerStats,
     });

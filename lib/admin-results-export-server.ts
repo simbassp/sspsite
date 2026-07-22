@@ -1,10 +1,13 @@
 import { effectiveFinalCountingFromUtc } from "@/lib/final-effective-counting";
 import { FINAL_TEST_MAX_ATTEMPTS } from "@/lib/final-test-constants";
 import {
+  calcTrialTripleStreakStats,
   fetchAllAttemptsForExport,
+  fetchTrialAttemptsForStreak,
   isMissingColumnError,
   parseResultsFiltersFromBody,
   resolveDateRangeFromBody,
+  shouldShowTrialTripleStreak,
   type ResultsListFilters,
 } from "@/lib/admin-results-query";
 import type { ResultsAttemptExportRow, ResultsExportFilterConfig, ResultsNotStartedExportRow } from "@/lib/admin-results-export";
@@ -275,11 +278,26 @@ export async function loadResultsExportData(body: Record<string, unknown>) {
     })
     .filter((row): row is ResultsAttemptExportRow => Boolean(row));
 
+  let trialTripleStreakStats = null;
+  if (shouldShowTrialTripleStreak(config.typeFilter, config.statusFilter)) {
+    const cohortUserIds = hasUserFilter ? filteredUserIds : rosterUsers.map((user) => user.id);
+    const trialAttempts = await fetchTrialAttemptsForStreak(supabase, {
+      allowedUserIds: hasUserFilter ? filteredUserIds : null,
+      startIso,
+      endIso,
+    });
+    trialTripleStreakStats = calcTrialTripleStreakStats(cohortUserIds, trialAttempts);
+    for (const row of attemptRows) {
+      row.trialTripleStreak = trialTripleStreakStats.byUser.get(row.userId) ?? false;
+    }
+  }
+
   return {
     config,
     filterLines: buildResultsExportFilterLines(config),
     attemptRows,
     notStartedRows: [] as ResultsNotStartedExportRow[],
     attemptsTotal: attemptsData.total,
+    trialTripleStreakStats,
   };
 }

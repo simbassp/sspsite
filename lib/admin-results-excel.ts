@@ -65,6 +65,7 @@ export async function buildResultsExcelBuffer(input: {
   attemptRows: ResultsAttemptExportRow[];
   notStartedRows: ResultsNotStartedExportRow[];
   attemptsTotal: number;
+  trialTripleStreakStats?: import("@/lib/admin-results-query").TrialTripleStreakStats | null;
 }) {
   const ExcelJSModule = await import("exceljs");
   const ExcelJS = ExcelJSModule.default ?? ExcelJSModule;
@@ -125,6 +126,9 @@ export async function buildResultsExcelBuffer(input: {
         if (!column) return;
         styleCompactTableCell(cell, NUMERIC_KEYS.has(column.key) ? "center" : "left");
         if (column.key === "status") styleStatusCell(cell, row.status);
+        if (column.key === "trialTripleStreak" && row.trialTripleStreak != null) {
+          styleStatusCell(cell, row.trialTripleStreak ? "passed" : "failed");
+        }
       });
     }
   }

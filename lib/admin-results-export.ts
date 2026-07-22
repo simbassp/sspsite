@@ -1,4 +1,4 @@
-import { calcAttemptPeopleStats } from "@/lib/admin-results-query";
+import { calcAttemptPeopleStats, shouldShowTrialTripleStreak, type TrialTripleStreakStats } from "@/lib/admin-results-query";
 import { rotaUnitLabelCompact } from "@/lib/personnel-catalog";
 import { formatTestResultForType } from "@/lib/test-pass-rules";
 import { unitAssignmentLabel, type RotaPlatoonFilter, type RotaSectionFilter, type UnitAssignmentFilter } from "@/lib/unit-assignment";
@@ -28,7 +28,8 @@ export type ResultsExportColumnKey =
   | "attemptIndex"
   | "createdAt"
   | "usedAttempts"
-  | "maxAttempts";
+  | "maxAttempts"
+  | "trialTripleStreak";
 
 export type ResultsExportColumn = {
   key: ResultsExportColumnKey;
@@ -51,6 +52,7 @@ export type ResultsAttemptExportRow = {
   questionsTotal: number | null;
   createdAt: string;
   finalAttemptIndex: number | null;
+  trialTripleStreak?: boolean | null;
 };
 
 export type ResultsNotStartedExportRow = {
@@ -113,6 +115,10 @@ export function resolveResultsExportColumns(config: ResultsExportFilterConfig): 
   }
 
   columns.push({ key: "createdAt", header: "Дата", width: 18 });
+
+  if (shouldShowTrialTripleStreak(config.typeFilter, config.statusFilter)) {
+    columns.push({ key: "trialTripleStreak", header: "3 пробных сдано", width: 16 });
+  }
 
   return columns;
 }
@@ -206,6 +212,9 @@ export function resultsAttemptCellValue(row: ResultsAttemptExportRow, key: Resul
         : "—";
     case "createdAt":
       return formatExportDate(row.createdAt);
+    case "trialTripleStreak":
+      if (row.trialTripleStreak == null) return "—";
+      return row.trialTripleStreak ? "Да" : "Нет";
     default:
       return "—";
   }
@@ -239,6 +248,7 @@ export function buildResultsExportSummaryLines(input: {
   attemptRows: ResultsAttemptExportRow[];
   notStartedRows: ResultsNotStartedExportRow[];
   attemptsTotal: number;
+  trialTripleStreakStats?: TrialTripleStreakStats | null;
 }) {
   const lines: Array<[string, string | number]> = [];
 
@@ -266,6 +276,11 @@ export function buildResultsExportSummaryLines(input: {
   }
   if (input.config.typeFilter === "all" || input.config.typeFilter === "final") {
     lines.push(["Итоговых попыток", input.attemptRows.filter((row) => row.type === "final").length]);
+  }
+
+  if (input.trialTripleStreakStats && shouldShowTrialTripleStreak(input.config.typeFilter, input.config.statusFilter)) {
+    lines.push(["3 пробных сдано — да (людей)", input.trialTripleStreakStats.passedPeople]);
+    lines.push(["3 пробных сдано — нет (людей)", input.trialTripleStreakStats.failedPeople]);
   }
 
   return lines;
