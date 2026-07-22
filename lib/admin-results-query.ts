@@ -227,6 +227,10 @@ async function runAttemptsQueryChunked(
     return runAttemptsQuery(supabase, query, select, typeColumn, options);
   }
 
+  if (options?.limit != null) {
+    return runAttemptsQuery(supabase, query, select, typeColumn, options);
+  }
+
   const parts = await Promise.all(
     chunkIds(ids).map((chunk) =>
       runAttemptsQuery(supabase, { ...query, allowedUserIds: chunk }, select, typeColumn, options),
@@ -242,7 +246,7 @@ async function runAttemptsQueryChunked(
 export async function fetchAttemptsForPeopleStats(
   supabase: { from: (table: string) => unknown },
   query: AttemptListQuery,
-  maxRows = 10000,
+  maxRows = 50000,
 ) {
   if (query.statusFilter === "not_started") {
     return [] as Array<{ userId: string; status: "passed" | "failed" }>;
@@ -251,18 +255,31 @@ export async function fetchAttemptsForPeopleStats(
     return [] as Array<{ userId: string; status: "passed" | "failed" }>;
   }
 
-  let res = await runAttemptsQueryChunked(supabase, query, ATTEMPT_SELECT_STATS, "type", { limit: maxRows });
-  if (res.error && isMissingColumnError(res.error.message)) {
-    res = await runAttemptsQueryChunked(supabase, query, ATTEMPT_SELECT_STATS_LEGACY, "test_type", { limit: maxRows });
-  }
-  if (res.error) throw new Error(res.error.message);
+  const rows: Array<{ userId: string; status: "passed" | "failed" }> = [];
+  let page = 0;
 
-  return ((res.data ?? []) as Array<Record<string, unknown>>)
-    .map((row) => ({
-      userId: String(row.user_id),
-      status: row.status === "passed" ? ("passed" as const) : ("failed" as const),
-    }))
-    .filter((row) => row.userId);
+  while (rows.length < maxRows) {
+    const from = page * EXPORT_BATCH_SIZE;
+    const to = from + EXPORT_BATCH_SIZE - 1;
+    let res = await runAttemptsQueryChunked(supabase, query, ATTEMPT_SELECT_STATS, "type", { from, to });
+    if (res.error && isMissingColumnError(res.error.message)) {
+      res = await runAttemptsQueryChunked(supabase, query, ATTEMPT_SELECT_STATS_LEGACY, "test_type", { from, to });
+    }
+    if (res.error) throw new Error(res.error.message);
+
+    const batch = ((res.data ?? []) as Array<Record<string, unknown>>)
+      .map((row) => ({
+        userId: String(row.user_id),
+        status: row.status === "passed" ? ("passed" as const) : ("failed" as const),
+      }))
+      .filter((row) => row.userId);
+    if (!batch.length) break;
+    rows.push(...batch);
+    if (batch.length < EXPORT_BATCH_SIZE) break;
+    page += 1;
+  }
+
+  return rows.slice(0, maxRows);
 }
 
 const ATTEMPT_SELECT_FULL =
@@ -460,7 +477,7 @@ type TrialStreakAttempt = { userId: string; status: "passed" | "failed"; created
 export async function fetchTrialAttemptsForStreak(
   supabase: { from: (table: string) => unknown },
   query: Pick<AttemptListQuery, "allowedUserIds" | "startIso" | "endIso">,
-  maxRows = 10000,
+  maxRows = 50000,
 ): Promise<TrialStreakAttempt[]> {
   if (query.allowedUserIds && query.allowedUserIds.length === 0) {
     return [];
@@ -472,12 +489,12 @@ export async function fetchTrialAttemptsForStreak(
         fetchTrialAttemptsForStreak(supabase, { ...query, allowedUserIds: chunk }, maxRows),
       ),
     );
-    return parts.flat();
+    return parts.flat().slice(0, maxRows);
   }
 
   const trialQuery: AttemptListQuery = {
     page: 1,
-    pageSize: maxRows,
+    pageSize: EXPORT_BATCH_SIZE,
     typeFilter: "trial",
     statusFilter: "all",
     allowedUserIds: query.allowedUserIds,
@@ -485,19 +502,32 @@ export async function fetchTrialAttemptsForStreak(
     endIso: query.endIso,
   };
 
-  let res = await runAttemptsQuery(supabase, trialQuery, ATTEMPT_SELECT_STREAK, "type", { limit: maxRows });
-  if (res.error && isMissingColumnError(res.error.message)) {
-    res = await runAttemptsQuery(supabase, trialQuery, ATTEMPT_SELECT_STREAK_LEGACY, "test_type", { limit: maxRows });
-  }
-  if (res.error) throw new Error(res.error.message);
+  const rows: TrialStreakAttempt[] = [];
+  let page = 0;
 
-  return ((res.data ?? []) as Array<Record<string, unknown>>)
-    .map((row) => ({
-      userId: String(row.user_id),
-      status: row.status === "passed" ? ("passed" as const) : ("failed" as const),
-      createdAt: String(row.created_at ?? ""),
-    }))
-    .filter((row) => row.userId && row.createdAt);
+  while (rows.length < maxRows) {
+    const from = page * EXPORT_BATCH_SIZE;
+    const to = from + EXPORT_BATCH_SIZE - 1;
+    let res = await runAttemptsQuery(supabase, trialQuery, ATTEMPT_SELECT_STREAK, "type", { from, to });
+    if (res.error && isMissingColumnError(res.error.message)) {
+      res = await runAttemptsQuery(supabase, trialQuery, ATTEMPT_SELECT_STREAK_LEGACY, "test_type", { from, to });
+    }
+    if (res.error) throw new Error(res.error.message);
+
+    const batch = ((res.data ?? []) as Array<Record<string, unknown>>)
+      .map((row) => ({
+        userId: String(row.user_id),
+        status: row.status === "passed" ? ("passed" as const) : ("failed" as const),
+        createdAt: String(row.created_at ?? ""),
+      }))
+      .filter((row) => row.userId && row.createdAt);
+    if (!batch.length) break;
+    rows.push(...batch);
+    if (batch.length < EXPORT_BATCH_SIZE) break;
+    page += 1;
+  }
+
+  return rows.slice(0, maxRows);
 }
 
 export function shouldShowTrialTripleStreak(

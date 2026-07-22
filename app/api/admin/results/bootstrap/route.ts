@@ -10,6 +10,7 @@ import {
   isMissingColumnError,
   parseAttemptsQuery,
   resolveDateRange,
+  resolvePeriodIsoBounds,
   shouldShowTrialTripleStreak,
   timestampInRange,
 } from "@/lib/admin-results-query";
@@ -22,7 +23,7 @@ import { normalizeUnitAssignment, matchesResultsUnitFilter, type RotaPlatoonFilt
 import type { UnitAssignment } from "@/lib/types";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 /** Строка пользователя после primary/fallback-select (поле окна попыток может отсутствовать в legacy-схеме). */
 type AppUserListRow = {
@@ -41,38 +42,37 @@ type AppUserListRow = {
 
 async function fetchFinalResultsForSummaries(
   supabase: ReturnType<typeof getServerSupabaseServiceClient>,
+  startIso: string | null,
+  endIso: string | null,
 ): Promise<Array<Record<string, unknown>>> {
   const selectFull =
     "id,user_id,type,status,score,created_at,questions_total,questions_correct,final_attempt_index";
   const selectMid = "id,user_id,type,status,score,created_at";
   const selectLegacy = "id,user_id,test_type,status,score,created_at";
 
-  const full = await supabase
-    .from("test_results")
-    .select(selectFull)
-    .eq("type", "final")
-    .order("created_at", { ascending: false })
-    .limit(10000);
+  const full = await applyCreatedAtRange(
+    supabase.from("test_results").select(selectFull).eq("type", "final").order("created_at", { ascending: false }).limit(10000),
+    startIso,
+    endIso,
+  );
   if (!full.error) return (full.data ?? []) as Array<Record<string, unknown>>;
 
   if (!isMissingColumnError(full.error.message)) throw new Error(full.error.message);
 
-  const mid = await supabase
-    .from("test_results")
-    .select(selectMid)
-    .eq("type", "final")
-    .order("created_at", { ascending: false })
-    .limit(10000);
+  const mid = await applyCreatedAtRange(
+    supabase.from("test_results").select(selectMid).eq("type", "final").order("created_at", { ascending: false }).limit(10000),
+    startIso,
+    endIso,
+  );
   if (!mid.error) return (mid.data ?? []) as Array<Record<string, unknown>>;
 
   if (!isMissingColumnError(mid.error.message)) throw new Error(mid.error.message);
 
-  const legacy = await supabase
-    .from("test_results")
-    .select(selectLegacy)
-    .eq("test_type", "final")
-    .order("created_at", { ascending: false })
-    .limit(10000);
+  const legacy = await applyCreatedAtRange(
+    supabase.from("test_results").select(selectLegacy).eq("test_type", "final").order("created_at", { ascending: false }).limit(10000),
+    startIso,
+    endIso,
+  );
   if (legacy.error) throw new Error(legacy.error.message);
   return (legacy.data ?? []) as Array<Record<string, unknown>>;
 }
@@ -85,16 +85,13 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const period = resolveDateRange(url.searchParams);
-  const { startMs, endMs } = period;
-  const startIso = startMs != null ? new Date(startMs).toISOString() : null;
-  const endIso = endMs != null ? new Date(endMs).toISOString() : null;
-  const hasPeriodFilter = startMs != null || endMs != null;
+  const { startIso, endIso, hasPeriodFilter } = resolvePeriodIsoBounds(period);
   const attemptsQuery = parseAttemptsQuery(url.searchParams);
   const viewerIsAdmin = session.role === "admin";
   const viewerCanResetAttempts = canResetTestResults(session);
 
   try {
-    const supabase = getServerSupabaseServiceClient();
+    const supabase = getServerSupabaseServiceClient({ fetchTimeoutMs: 90_000 });
 
     const usersPrimaryPromise = supabase
       .from("app_users")
@@ -103,7 +100,7 @@ export async function GET(req: Request) {
 
     const [usersPrimary, finalResultsRaw] = await Promise.all([
       usersPrimaryPromise,
-      fetchFinalResultsForSummaries(supabase),
+      fetchFinalResultsForSummaries(supabase, startIso, endIso),
     ]);
 
     let usersRows: AppUserListRow[] | null = usersPrimary.data as AppUserListRow[] | null;
@@ -221,7 +218,7 @@ export async function GET(req: Request) {
       .filter((s) => {
         if (!hasPeriodFilter) return true;
         if (!s.latestFinalAt) return false;
-        return timestampInRange(s.latestFinalAt, startMs, endMs);
+        return timestampInRange(s.latestFinalAt, period.startMs, period.endMs);
       });
 
     let lastResetAudit: {
@@ -402,7 +399,6 @@ export async function GET(req: Request) {
 
     const [
       attemptsPageData,
-      trialAttempts,
       trialCountRes,
       trialLastRes,
       finalCountRes,
@@ -413,14 +409,15 @@ export async function GET(req: Request) {
         page: attemptsQuery.page,
         pageSize: attemptsQuery.pageSize,
       }),
-      needTrialStats
-        ? fetchTrialAttemptsForStreak(supabase, { allowedUserIds, startIso, endIso })
-        : Promise.resolve([]),
       fetchTrialCount(),
       fetchTrialLast(),
       fetchFinalCount(),
       fetchFinalLast(),
     ]);
+
+    const trialAttempts = needTrialStats
+      ? await fetchTrialAttemptsForStreak(supabase, { allowedUserIds, startIso, endIso })
+      : [];
 
     let filterPeopleStats = { passedPeople: 0, failedPeople: 0 };
     if (attemptsQuery.statusFilter !== "not_started" && !needTrialStats) {

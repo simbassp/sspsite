@@ -174,7 +174,7 @@ export default function AdminResultsPage() {
   const { session, hydrated } = useClientSession();
   const viewerCanReset = hydrated && session ? canResetTestResults(session) : false;
 
-  const [periodMode, setPeriodMode] = useState<PeriodMode>("all");
+  const [periodMode, setPeriodMode] = useState<PeriodMode>("today");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [typeFilter, setTypeFilter] = useState<TestTypeFilter>("all");
@@ -444,8 +444,12 @@ export default function AdminResultsPage() {
         Сброс попыток доступен вручную (администратором или пользователем с правом сброса) и автоматически{" "}
         {FINAL_AUTO_RESET_DAY_UTC}-го числа каждого месяца. Следующий автосброс: {autoResetText}.
       </div>
-      {isLoading && <p className="page-subtitle">Загружаем результаты…</p>}
-      {loadError && <p className="page-subtitle">{loadError}</p>}
+      {isLoading && (
+        <p className="page-subtitle">
+          {periodMode === "all" ? "Загружаем все результаты, это может занять до минуты…" : "Загружаем результаты…"}
+        </p>
+      )}
+      {!isLoading && loadError && <p className="page-subtitle">{loadError}</p>}
       {!!resetMessage && <p className="page-subtitle">{resetMessage}</p>}
       {!!exportExcelMsg && <p className="page-subtitle">{exportExcelMsg}</p>}
       {!isLoading && !loadError && exportRowCount > 0 && !showTrialTripleStreak && (
