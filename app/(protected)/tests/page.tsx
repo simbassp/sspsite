@@ -74,6 +74,12 @@ function resolveBankTimeFromQuestions(questions: TestQuestion[]) {
   return winner;
 }
 
+function waitForUiPaint() {
+  return new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+}
+
 type StartingTestMode = "trial" | "bank" | "final";
 type TrialFeedback = { chosen: number | null; correct: number };
 type FinalTransition = { chosen: number | null };
@@ -809,6 +815,7 @@ export default function TestsPage() {
       document.activeElement.blur();
     }
     setStartingTest("trial");
+    await waitForUiPaint();
     try {
       const pool = questionPool.length > 0 ? questionPool : await loadQuestionPool();
       if (!pool) {
@@ -851,6 +858,7 @@ export default function TestsPage() {
       document.activeElement.blur();
     }
     setStartingTest("bank");
+    await waitForUiPaint();
     try {
       const pool = questionPool.length > 0 ? questionPool : await loadQuestionPool();
       if (!pool) {
@@ -905,6 +913,7 @@ export default function TestsPage() {
     );
     if (!confirmed) return;
     setStartingTest("final");
+    await waitForUiPaint();
     try {
       const pool = questionPool.length > 0 ? questionPool : await loadQuestionPool();
       if (!pool) {
@@ -1049,7 +1058,9 @@ export default function TestsPage() {
                   isBootstrapping || isPoolLoading || !isConfigLoaded || activeTest != null || isStartingTest
                 }
               >
-                {startingTest === "trial" ? "Загружаю…" : "Начать пробный тест"}
+                {startingTest === "trial" || (isPoolLoading && !activeTest && startingTest === "trial")
+                  ? "Загружаю…"
+                  : "Начать пробный тест"}
               </button>
             </article>
 
