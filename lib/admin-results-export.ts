@@ -112,11 +112,7 @@ export function resolveResultsExportColumns(config: ResultsExportFilterConfig): 
 
   columns.push({ key: "result", header: "Балл / ответы", width: 18 });
 
-  if (config.typeFilter !== "trial") {
-    columns.push({ key: "attemptIndex", header: "Попытка №", width: 10 });
-  }
-
-  columns.push({ key: "createdAt", header: "Дата", width: 18 });
+  columns.push({ key: "createdAt", header: "Дата", width: 12 });
 
   if (shouldShowTrialTripleStreak(config.typeFilter, config.statusFilter)) {
     columns.push({ key: "trialPassedCount", header: "Пробных сдано", width: 14 });
@@ -128,13 +124,7 @@ export function resolveResultsExportColumns(config: ResultsExportFilterConfig): 
 export function buildResultsExportFilterLines(config: ResultsExportFilterConfig): string[] {
   const lines: string[] = [];
 
-  if (config.periodMode === "today") {
-    lines.push("Период: сегодня");
-  } else if (config.periodMode === "custom" && (config.dateFrom || config.dateTo)) {
-    lines.push(`Период: ${config.dateFrom || "…"} — ${config.dateTo || "…"}`);
-  } else {
-    lines.push("Период: все время");
-  }
+  lines.push(formatExportPeriodLine(config));
 
   if (config.unitFilter === "all") {
     lines.push("Подразделение: все");
@@ -180,18 +170,38 @@ export function appendCohortPeopleFilterLine(filterLines: string[], cohortPeople
   return [...filterLines, `Количество людей: ${cohortPeople}`];
 }
 
+function formatFilterDateParam(isoDate: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) return isoDate;
+  const [year, month, day] = isoDate.split("-");
+  return `${day}.${month}.${year}`;
+}
+
 function formatExportDate(iso: string) {
   if (!iso) return "—";
   const d = new Date(iso);
   return Number.isFinite(d.getTime())
-    ? d.toLocaleString("ru-RU", {
+    ? d.toLocaleDateString("ru-RU", {
         day: "2-digit",
         month: "2-digit",
         year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
+        timeZone: "Europe/Moscow",
       })
     : iso;
+}
+
+function formatExportPeriodLine(config: ResultsExportFilterConfig) {
+  if (config.periodMode === "today") {
+    return `Период: ${formatExportDate(new Date().toISOString())}`;
+  }
+  if (config.periodMode === "custom" && (config.dateFrom || config.dateTo)) {
+    const from = config.dateFrom ? formatFilterDateParam(config.dateFrom) : null;
+    const to = config.dateTo ? formatFilterDateParam(config.dateTo) : null;
+    if (from && to && config.dateFrom === config.dateTo) return `Период: ${from}`;
+    if (from && to) return `Период: ${from} — ${to}`;
+    if (from) return `Период: с ${from}`;
+    if (to) return `Период: по ${to}`;
+  }
+  return "Период: все время";
 }
 
 export function resultsAttemptCellValue(row: ResultsAttemptExportRow, key: ResultsExportColumnKey): string | number {

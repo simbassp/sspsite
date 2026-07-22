@@ -57,7 +57,7 @@ function styleStatusCell(cell: ExcelJS.Cell, status: "passed" | "failed" | "not_
   }
 }
 
-const NUMERIC_KEYS = new Set<ResultsExportColumnKey>(["attemptIndex", "usedAttempts", "maxAttempts", "trialPassedCount"]);
+const NUMERIC_KEYS = new Set<ResultsExportColumnKey>(["usedAttempts", "maxAttempts", "trialPassedCount"]);
 
 function applySheetTableFilters(sheet: ExcelJS.Worksheet, columnCount: number) {
   if (sheet.rowCount < 1 || columnCount < 1) return;
