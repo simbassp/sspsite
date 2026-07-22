@@ -39,7 +39,7 @@ import {
   type PersonnelLicenseCategory,
 } from "@/lib/personnel-catalog";
 import { computeTrialProfileStats, mapProfileTestResultsFromApi } from "@/lib/profile-trial-stats";
-import { DutyLocation, TestResult, TestResultsResetScope, UnitAssignment } from "@/lib/types";
+import { DutyLocation, SessionUser, TestResult, TestResultsResetScope, UnitAssignment } from "@/lib/types";
 
 const RESET_SCOPE_LABELS: Record<TestResultsResetScope, string> = {
   trial: "пробные тесты",
@@ -79,7 +79,14 @@ export default function ProfileUserInspectPage() {
   const router = useRouter();
   const userId = typeof params?.userId === "string" ? params.userId : "";
 
-  const session = useMemo(() => readClientSession(), []);
+  const [session, setSession] = useState<SessionUser | null>(null);
+  const [sessionResolved, setSessionResolved] = useState(false);
+
+  useEffect(() => {
+    setSession(readClientSession());
+    setSessionResolved(true);
+  }, []);
+
   const canOpen = session ? canInspectOtherUserProfile(session) : false;
   const canEditDutyForOthers = session ? canManageUsers(session) : false;
   const canEditUnitForOthers = session ? canManageUsers(session) || canModeratePersonnel(session) : false;
@@ -565,8 +572,12 @@ export default function ProfileUserInspectPage() {
     </svg>
   );
 
-  if (!session) {
+  if (!sessionResolved) {
     return <p className="page-subtitle">Загружаем...</p>;
+  }
+
+  if (!session) {
+    return <p className="page-subtitle">Сессия не найдена. Обновите страницу или войдите снова.</p>;
   }
 
   const onDutyChangeForUser = async (next: DutyLocation) => {

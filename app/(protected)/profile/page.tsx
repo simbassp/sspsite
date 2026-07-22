@@ -232,25 +232,8 @@ export default function ProfilePage() {
           throw new Error(payload.error || "profile_bootstrap_failed");
         }
         if (cancelled) return;
-        const mappedRows = (payload.results || []).map((r) => ({
-          id: String(r.id),
-          userId: String(r.user_id),
-          type: r.type === "final" ? "final" : "trial",
-          status: r.status === "passed" ? "passed" : "failed",
-          score: Number(r.score || 0),
-          createdAt: String(r.created_at),
-          startedAt: r.started_at ? String(r.started_at) : null,
-          finishedAt: r.finished_at ? String(r.finished_at) : null,
-          durationSeconds:
-            r.duration_seconds === null || r.duration_seconds === undefined ? null : Number(r.duration_seconds),
-          isCompleted: r.is_completed === null || r.is_completed === undefined ? null : Boolean(r.is_completed),
-          questionsTotal: r.questions_total === null || r.questions_total === undefined ? null : Number(r.questions_total),
-          questionsCorrect:
-            r.questions_correct === null || r.questions_correct === undefined ? null : Number(r.questions_correct),
-          finalAttemptIndex:
-            r.final_attempt_index === null || r.final_attempt_index === undefined ? null : Number(r.final_attempt_index),
-        })) as TestResult[];
-        setRows(mappedRows.sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)));
+        const mappedRows = mapProfileTestResultsFromApi(payload.results || []);
+        setRows(mappedRows);
         if (payload.dutyLocation === "deployment" || payload.dutyLocation === "base") {
           setDutyLocation(payload.dutyLocation);
         }

@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { THEME_COOKIE, THEME_COOKIE_MAX_AGE_SEC, type ThemePreference } from "@/lib/theme-preference";
 
-type Theme = "dark" | "light";
+type Theme = ThemePreference;
 
 const iconSvgProps = {
   viewBox: "0 0 24 24" as const,
@@ -32,9 +33,23 @@ function SunIcon() {
   );
 }
 
+function readThemeCookie(): Theme | null {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie.match(/(?:^|; )ssp-theme=(dark|light)(?:;|$)/);
+  return match?.[1] === "light" || match?.[1] === "dark" ? match[1] : null;
+}
+
+function persistTheme(next: Theme) {
+  document.documentElement.setAttribute("data-theme", next);
+  window.localStorage.setItem(THEME_COOKIE, next);
+  document.cookie = `${THEME_COOKIE}=${next}; path=/; max-age=${THEME_COOKIE_MAX_AGE_SEC}; SameSite=Lax`;
+}
+
 function readTheme(): Theme {
   if (typeof window === "undefined") return "dark";
-  const saved = window.localStorage.getItem("ssp-theme");
+  const fromCookie = readThemeCookie();
+  if (fromCookie) return fromCookie;
+  const saved = window.localStorage.getItem(THEME_COOKIE);
   if (saved === "dark" || saved === "light") return saved;
   return "dark";
 }
@@ -53,20 +68,19 @@ export function ThemeToggle({ showLabels = true, preferSvgIcon = false }: ThemeT
   useEffect(() => {
     const next = readTheme();
     setTheme(next);
-    document.documentElement.setAttribute("data-theme", next);
+    persistTheme(next);
     setIsHydrated(true);
   }, []);
 
   useEffect(() => {
     if (!isHydrated) return;
-    document.documentElement.setAttribute("data-theme", theme);
+    persistTheme(theme);
   }, [isHydrated, theme]);
 
   const onToggle = () => {
     const next: Theme = theme === "dark" ? "light" : "dark";
     setTheme(next);
-    document.documentElement.setAttribute("data-theme", next);
-    window.localStorage.setItem("ssp-theme", next);
+    persistTheme(next);
   };
 
   return (

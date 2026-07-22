@@ -1,25 +1,55 @@
+import { isMissingColumnError } from "@/lib/server-final-user-context";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 
 export const runtime = "nodejs";
 
+type PresenceBody = {
+  online?: unknown;
+  newSession?: unknown;
+  elapsedSeconds?: unknown;
+};
+
+async function readPresenceBody(request: Request): Promise<PresenceBody> {
+  try {
+    const text = await request.text();
+    if (!text.trim()) return {};
+    return JSON.parse(text) as PresenceBody;
+  } catch {
+    return {};
+  }
+}
+
 export async function POST(request: Request) {
-  const session = await getServerSession();
+  let session;
+  try {
+    session = await getServerSession();
+  } catch (error) {
+    return Response.json(
+      { ok: false, error: error instanceof Error ? error.message : "session_check_failed" },
+      { status: 500 },
+    );
+  }
   if (!session) return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
 
   try {
-    const body = (await request.json()) as {
-      online?: unknown;
-      newSession?: unknown;
-      elapsedSeconds?: unknown;
-    };
+    const body = await readPresenceBody(request);
     const online = body.online === true;
     const newSession = body.newSession === true;
     const elapsedRaw = typeof body.elapsedSeconds === "number" ? body.elapsedSeconds : Number(body.elapsedSeconds);
     const elapsedSeconds =
       Number.isFinite(elapsedRaw) && elapsedRaw > 0 ? Math.max(0, Math.min(Math.floor(elapsedRaw), 600)) : 0;
 
-    const supabase = getServerSupabaseServiceClient();
+    let supabase;
+    try {
+      supabase = getServerSupabaseServiceClient();
+    } catch (error) {
+      return Response.json(
+        { ok: false, error: error instanceof Error ? error.message : "backend_unavailable" },
+        { status: 503 },
+      );
+    }
+
     const patch = online
       ? { is_online: true, last_seen_at: new Date().toISOString() }
       : { is_online: false };
@@ -27,7 +57,13 @@ export async function POST(request: Request) {
     if (q.error && online && q.error.message.toLowerCase().includes("last_seen_at")) {
       q = await supabase.from("app_users").update({ is_online: true }).eq("id", session.id);
     }
-    if (q.error) return Response.json({ ok: false, error: q.error.message || "presence_update_failed" }, { status: 500 });
+    if (q.error) {
+      if (isMissingColumnError(q.error.message)) {
+        return Response.json({ ok: true, skipped: true });
+      }
+      console.error("[presence] update failed:", q.error.message);
+      return Response.json({ ok: false, error: q.error.message || "presence_update_failed" }, { status: 500 });
+    }
 
     if (newSession || elapsedSeconds > 0) {
       const analytics = await supabase.rpc("record_site_analytics", {
