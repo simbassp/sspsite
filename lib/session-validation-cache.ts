@@ -1,4 +1,4 @@
-const SESSION_VALIDATION_TTL_MS = 45_000;
+const SESSION_VALIDATION_TTL_MS = 120_000;
 
 type CacheEntry = {
   valid: boolean;

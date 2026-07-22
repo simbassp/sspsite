@@ -2,6 +2,8 @@ import type { SessionUser } from "@/lib/types";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 import { readCachedSessionValidation, writeCachedSessionValidation } from "@/lib/session-validation-cache";
 
+const SESSION_VALIDATION_TIMEOUT_MS = 12_000;
+
 function isMissingColumnError(message: string | undefined) {
   const m = (message || "").toLowerCase();
   return m.includes("column") && m.includes("does not exist");
@@ -56,7 +58,12 @@ export async function isSessionStillValid(session: SessionUser): Promise<boolean
   const cached = readCachedSessionValidation(session.id);
   if (cached != null) return cached;
 
-  const valid = await validateSessionFromDb(session);
+  const valid = await Promise.race([
+    validateSessionFromDb(session),
+    new Promise<boolean>((resolve) => {
+      setTimeout(() => resolve(true), SESSION_VALIDATION_TIMEOUT_MS);
+    }),
+  ]);
   writeCachedSessionValidation(session.id, valid);
   return valid;
 }

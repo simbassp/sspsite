@@ -1,7 +1,8 @@
 import { resolvePersonnelProfileViewAccess } from "@/lib/personnel-profile-access";
 import { syncUserAchievementsByUserId } from "@/lib/achievements-server";
 import { loadProfilePersonnelMeta } from "@/lib/profile-personnel-meta";
-import { loadProfileTestResults } from "@/lib/profile-test-results-server";
+import { loadProfileTestResultsBundle } from "@/lib/profile-test-results-server";
+import { serializeTrialProfileStats } from "@/lib/profile-trial-stats";
 import { loadPersonnelProfile } from "@/lib/personnel-server";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
@@ -24,17 +25,20 @@ export async function GET() {
     const supabase = getServerSupabaseServiceClient();
     void syncUserAchievementsByUserId(session.id).catch(() => undefined);
 
-    const resultsLoad = await loadProfileTestResults(supabase, session.id);
-    const resultsRows = resultsLoad.rows;
-    const resultsError = resultsLoad.error;
-
     const profilePrimaryPromise = supabase
       .from("app_users")
       .select("auth_user_id,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,employment_date,avatar_url,profile_name_color,position")
       .eq("id", session.id)
       .maybeSingle();
 
-    const [profilePrimaryQ] = await Promise.all([profilePrimaryPromise]);
+    const [resultsBundle, profilePrimaryQ] = await Promise.all([
+      loadProfileTestResultsBundle(supabase, session.id),
+      profilePrimaryPromise,
+    ]);
+
+    const resultsRows = resultsBundle.rows;
+    const resultsError = resultsBundle.error;
+    const trialStats = serializeTrialProfileStats(resultsBundle.trialStats);
 
     let profileRow: Record<string, unknown> | null = (profilePrimaryQ.data || null) as Record<string, unknown> | null;
     let profileError: string | null = profilePrimaryQ.error?.message || null;
@@ -134,6 +138,7 @@ export async function GET() {
       licenseCategories: personnelMeta.licenseCategories,
       bloodGroup: personnelMeta.bloodGroup,
       results: resultsRows,
+      trialStats,
       inviteCodes,
       personnelProfile,
     });

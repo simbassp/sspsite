@@ -38,7 +38,7 @@ import {
   type PersonnelBloodGroup,
   type PersonnelLicenseCategory,
 } from "@/lib/personnel-catalog";
-import { computeTrialProfileStats, mapProfileTestResultsFromApi } from "@/lib/profile-trial-stats";
+import { computeTrialProfileStats, deserializeTrialProfileStats, mapProfileTestResultsFromApi, type TrialProfileStatsPayload } from "@/lib/profile-trial-stats";
 import { DutyLocation, SessionUser, TestResult, TestResultsResetScope, UnitAssignment } from "@/lib/types";
 
 const RESET_SCOPE_LABELS: Record<TestResultsResetScope, string> = {
@@ -114,6 +114,7 @@ export default function ProfileUserInspectPage() {
   const [error, setError] = useState("");
   const [inspectUser, setInspectUser] = useState<InspectUser | null>(null);
   const [rows, setRows] = useState<TestResult[]>([]);
+  const [trialStatsFromApi, setTrialStatsFromApi] = useState<ReturnType<typeof deserializeTrialProfileStats>>(null);
   const [showAllAttempts, setShowAllAttempts] = useState(false);
   const [attemptsPage, setAttemptsPage] = useState(1);
   const [showAllFinalAttempts, setShowAllFinalAttempts] = useState(false);
@@ -166,6 +167,7 @@ export default function ProfileUserInspectPage() {
           error?: string;
           user?: InspectUser & { duty_location?: string; unit_assignment?: UnitAssignment | null };
           results?: Array<Record<string, unknown>>;
+          trialStats?: TrialProfileStatsPayload;
         };
         if (cancelled) return;
         if (!response.ok || !payload.ok || !payload.user) {
@@ -189,6 +191,7 @@ export default function ProfileUserInspectPage() {
         setLicenseCategories(normalizePersonnelLicenseCategories(u.licenseCategories));
         setBloodGroup(normalizePersonnelBloodGroup(u.bloodGroup));
         setRows(mapRows({ results: payload.results }).sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)));
+        setTrialStatsFromApi(deserializeTrialProfileStats(payload.trialStats));
       } catch {
         if (!cancelled) setError("network");
       } finally {
@@ -247,7 +250,7 @@ export default function ProfileUserInspectPage() {
     };
   }, [session, userId, router, canOpen, unitSaving, rotaSaving, employmentSaving]);
 
-  const stats = useMemo(() => computeTrialProfileStats(rows), [rows]);
+  const stats = useMemo(() => trialStatsFromApi ?? computeTrialProfileStats(rows), [rows, trialStatsFromApi]);
 
   const trialAttemptRows = useMemo(() => rows.filter((r) => r.type === "trial"), [rows]);
   const finalAttemptRows = useMemo(() => rows.filter((r) => r.type === "final"), [rows]);
@@ -406,9 +409,11 @@ export default function ProfileUserInspectPage() {
     const payload = (await response.json()) as {
       ok?: boolean;
       results?: Array<Record<string, unknown>>;
+      trialStats?: TrialProfileStatsPayload;
     };
     if (response.ok && payload.ok && Array.isArray(payload.results)) {
       setRows(mapRows({ results: payload.results }).sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)));
+      setTrialStatsFromApi(deserializeTrialProfileStats(payload.trialStats));
     }
   };
 

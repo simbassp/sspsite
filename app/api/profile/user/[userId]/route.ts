@@ -2,7 +2,8 @@ import { ONLINE_LAST_SEEN_MAX_MS } from "@/lib/presence-constants";
 import { loadUserUnlockedAchievementIds } from "@/lib/achievements-server";
 import { loadProfilePersonnelMeta } from "@/lib/profile-personnel-meta";
 import { loadInspectUserRow } from "@/lib/profile-inspect-user-server";
-import { loadProfileTestResults } from "@/lib/profile-test-results-server";
+import { loadProfileTestResultsBundle } from "@/lib/profile-test-results-server";
+import { serializeTrialProfileStats } from "@/lib/profile-trial-stats";
 import { normalizeAvatarStoragePath } from "@/lib/avatar-display";
 import { loadIdentityCosmeticsForUser } from "@/lib/user-identity-cosmetics-server";
 import { normalizeUnitAssignment } from "@/lib/unit-assignment";
@@ -42,10 +43,16 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
   try {
     const supabase = getServerSupabaseServiceClient();
 
-    const userLoad = await loadInspectUserRow(supabase, userId);
+    const [userLoad, resultsBundle] = await Promise.all([
+      loadInspectUserRow(supabase, userId),
+      loadProfileTestResultsBundle(supabase, userId),
+    ]);
     if (!userLoad.ok) {
       const status = userLoad.error === "not_found" ? 404 : 500;
       return Response.json({ ok: false, error: userLoad.error }, { status });
+    }
+    if (resultsBundle.error) {
+      return Response.json({ ok: false, error: resultsBundle.error }, { status: 500 });
     }
 
     const userRow = userLoad.row;
@@ -53,11 +60,8 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
     const unitFromDb = userLoad.unitFromDb;
     const onlineFromFlagOnly = userLoad.onlineFromFlagOnly;
 
-    const resultsLoad = await loadProfileTestResults(supabase, userId);
-    if (resultsLoad.error) {
-      return Response.json({ ok: false, error: resultsLoad.error }, { status: 500 });
-    }
-    const resultsRows = resultsLoad.rows;
+    const resultsRows = resultsBundle.rows;
+    const trialStats = serializeTrialProfileStats(resultsBundle.trialStats);
 
     const isOnline = onlineFromFlagOnly
       ? userRow.is_online === true
@@ -113,6 +117,7 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
         bloodGroup: personnelMeta.bloodGroup,
       },
       results: resultsRows,
+      trialStats,
     });
   } catch (error) {
     return Response.json(

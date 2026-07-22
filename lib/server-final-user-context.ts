@@ -35,38 +35,46 @@ export async function resolveFinalUserContext(supabase: SupabaseClient, sessionU
     final_test_counting_from?: string | null;
   };
 
-  const byId = await supabase
+  const byId = supabase
     .from("app_users")
     .select("id,auth_user_id,final_test_counting_from")
     .eq("id", sessionUserId)
     .limit(20);
-  if (!byId.error) {
-    for (const row of (byId.data || []) as AppUserRow[]) mergeRow(row);
-  } else if (isMissingColumnError(byId.error.message)) {
-    const fb = await supabase.from("app_users").select("id,auth_user_id").eq("id", sessionUserId).limit(20);
-    if (!fb.error) for (const row of (fb.data || []) as AppUserRow[]) mergeRow(row);
-  }
-
-  const byAuth = await supabase
+  const byAuth = supabase
     .from("app_users")
     .select("id,auth_user_id,final_test_counting_from")
     .eq("auth_user_id", sessionUserId)
     .limit(200);
-  if (!byAuth.error) {
-    for (const row of (byAuth.data || []) as AppUserRow[]) mergeRow(row);
-  } else if (isMissingColumnError(byAuth.error.message)) {
+
+  const [byIdRes, byAuthRes] = await Promise.all([byId, byAuth]);
+
+  if (!byIdRes.error) {
+    for (const row of (byIdRes.data || []) as AppUserRow[]) mergeRow(row);
+  } else if (isMissingColumnError(byIdRes.error.message)) {
+    const fb = await supabase.from("app_users").select("id,auth_user_id").eq("id", sessionUserId).limit(20);
+    if (!fb.error) for (const row of (fb.data || []) as AppUserRow[]) mergeRow(row);
+  }
+
+  if (!byAuthRes.error) {
+    for (const row of (byAuthRes.data || []) as AppUserRow[]) mergeRow(row);
+  } else if (isMissingColumnError(byAuthRes.error.message)) {
     const fb = await supabase.from("app_users").select("id,auth_user_id").eq("auth_user_id", sessionUserId).limit(200);
     if (!fb.error) for (const row of (fb.data || []) as AppUserRow[]) mergeRow(row);
   }
 
-  for (const authId of authLinked) {
-    const linkedByAuth = await supabase
-      .from("app_users")
-      .select("id,auth_user_id,final_test_counting_from")
-      .eq("auth_user_id", authId)
-      .limit(200);
-    if (!linkedByAuth.error) {
-      for (const row of (linkedByAuth.data || []) as AppUserRow[]) mergeRow(row);
+  if (authLinked.size) {
+    const linkedQueries = [...authLinked].map((authId) =>
+      supabase
+        .from("app_users")
+        .select("id,auth_user_id,final_test_counting_from")
+        .eq("auth_user_id", authId)
+        .limit(200),
+    );
+    const linkedResults = await Promise.all(linkedQueries);
+    for (const linkedByAuth of linkedResults) {
+      if (!linkedByAuth.error) {
+        for (const row of (linkedByAuth.data || []) as AppUserRow[]) mergeRow(row);
+      }
     }
   }
 

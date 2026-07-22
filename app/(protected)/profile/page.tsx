@@ -68,7 +68,7 @@ import {
   type PersonnelBloodGroup,
   type PersonnelLicenseCategory,
 } from "@/lib/personnel-catalog";
-import { computeTrialProfileStats, mapProfileTestResultsFromApi } from "@/lib/profile-trial-stats";
+import { computeTrialProfileStats, deserializeTrialProfileStats, mapProfileTestResultsFromApi, type TrialProfileStatsPayload } from "@/lib/profile-trial-stats";
 import { DutyLocation, Position, TestResult, TestResultsResetScope, UnitAssignment } from "@/lib/types";
 
 function mapBootstrapResults(raw: Array<Record<string, unknown>>): TestResult[] {
@@ -85,6 +85,7 @@ export default function ProfilePage() {
   const [session, setSession] = useState<ReturnType<typeof readClientSession>>(null);
   const [sessionResolved, setSessionResolved] = useState(false);
   const [rows, setRows] = useState<TestResult[]>([]);
+  const [trialStatsFromApi, setTrialStatsFromApi] = useState<ReturnType<typeof deserializeTrialProfileStats>>(null);
   const [inviteCodes, setInviteCodes] = useState<InviteCodeRecord[]>([]);
   const [inviteInput, setInviteInput] = useState("");
   const [maxUsesInput, setMaxUsesInput] = useState("");
@@ -223,6 +224,7 @@ export default function ProfilePage() {
           bloodGroup?: unknown;
           avatarUrl?: string | null;
           results?: Array<Record<string, unknown>>;
+          trialStats?: TrialProfileStatsPayload;
           inviteCodes?: Array<Record<string, unknown>>;
           personnelProfile?: PersonnelProfileInitialPayload | null;
           nameColor?: ProfileNameColorId | null;
@@ -234,6 +236,7 @@ export default function ProfilePage() {
         if (cancelled) return;
         const mappedRows = mapProfileTestResultsFromApi(payload.results || []);
         setRows(mappedRows);
+        setTrialStatsFromApi(deserializeTrialProfileStats(payload.trialStats));
         if (payload.dutyLocation === "deployment" || payload.dutyLocation === "base") {
           setDutyLocation(payload.dutyLocation);
         }
@@ -331,8 +334,8 @@ export default function ProfilePage() {
         lastAttempt: null as TestResult | null,
       };
     }
-    return computeTrialProfileStats(rows);
-  }, [rows, session]);
+    return trialStatsFromApi ?? computeTrialProfileStats(rows);
+  }, [rows, session, trialStatsFromApi]);
 
   /** Плашки сверху и сброс статистики относятся только к пробному тесту — список ниже разделён от итогового. */
   const trialAttemptRows = useMemo(() => rows.filter((r) => r.type === "trial"), [rows]);

@@ -8,6 +8,52 @@ export type TrialProfileStats = {
   lastAttempt: TestResult | null;
 };
 
+export type TrialProfileStatsPayload = {
+  total: number;
+  passed: number;
+  successRate: number;
+  totalTimeSec: number | null;
+  lastAttemptCreatedAt: string | null;
+};
+
+export function serializeTrialProfileStats(stats: TrialProfileStats): TrialProfileStatsPayload {
+  return {
+    total: stats.total,
+    passed: stats.passed,
+    successRate: stats.successRate,
+    totalTimeSec: stats.totalTimeSec,
+    lastAttemptCreatedAt: stats.lastAttempt?.createdAt ?? null,
+  };
+}
+
+export function deserializeTrialProfileStats(payload: TrialProfileStatsPayload | null | undefined): TrialProfileStats | null {
+  if (!payload) return null;
+  const lastCreatedAt = payload.lastAttemptCreatedAt;
+  return {
+    total: payload.total,
+    passed: payload.passed,
+    successRate: payload.successRate,
+    totalTimeSec: payload.totalTimeSec,
+    lastAttempt: lastCreatedAt
+      ? {
+          id: "stats-last",
+          userId: "",
+          type: "trial",
+          status: "passed",
+          score: 0,
+          createdAt: lastCreatedAt,
+          startedAt: null,
+          finishedAt: null,
+          durationSeconds: null,
+          isCompleted: null,
+          questionsTotal: null,
+          questionsCorrect: null,
+          finalAttemptIndex: null,
+        }
+      : null,
+  };
+}
+
 /** Статистика «Ваша активность» — только пробные попытки (type === trial). */
 export function computeTrialProfileStats(rows: TestResult[]): TrialProfileStats {
   const trialRows = rows.filter((r) => r.type === "trial");
