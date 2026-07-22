@@ -17,14 +17,21 @@ export type UserStatus = "active" | "inactive";
 /** Место положения сотрудника (профиль / админка). */
 export type DutyLocation = "base" | "deployment";
 
-/** Подразделение: взводы, рота, штаб, канцелярия. */
+/** Подразделение: взводы, рота, штаб, канцелярия и спецподразделения. */
 export type UnitAssignment =
   | "platoon_1"
   | "platoon_2"
   | "platoon_3"
   | "company_4"
   | "staff"
-  | "office";
+  | "office"
+  | "observation"
+  | "vohr"
+  | "fpv"
+  | "eger"
+  | "preparation"
+  | "vpv"
+  | "uik";
 export type TestType = "trial" | "final";
 export type TestStatus = "passed" | "failed";
 export type TestResultsResetScope = "trial" | "final" | "all";

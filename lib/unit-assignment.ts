@@ -4,7 +4,14 @@ export type UnitAssignment =
   | "platoon_3"
   | "company_4"
   | "staff"
-  | "office";
+  | "office"
+  | "observation"
+  | "vohr"
+  | "fpv"
+  | "eger"
+  | "preparation"
+  | "vpv"
+  | "uik";
 
 export const UNIT_ASSIGNMENT_OPTIONS: UnitAssignment[] = [
   "platoon_1",
@@ -13,6 +20,13 @@ export const UNIT_ASSIGNMENT_OPTIONS: UnitAssignment[] = [
   "company_4",
   "staff",
   "office",
+  "observation",
+  "vohr",
+  "fpv",
+  "eger",
+  "preparation",
+  "vpv",
+  "uik",
 ];
 
 export const unitAssignmentLabel: Record<UnitAssignment, string> = {
@@ -22,6 +36,13 @@ export const unitAssignmentLabel: Record<UnitAssignment, string> = {
   company_4: "4 рота",
   staff: "Штаб",
   office: "Канцелярия",
+  observation: "Наблюдение",
+  vohr: "ВОХР",
+  fpv: "FPV",
+  eger: "Егерь",
+  preparation: "Подготовка",
+  vpv: "ВПВ",
+  uik: "УИК",
 };
 
 /** Командиры подразделений для блока на главной. */
@@ -94,7 +115,7 @@ export function formatUnitAssignmentSaveError(raw: string | undefined) {
     (lower.includes("check constraint") && lower.includes("unit_assignment")) ||
     lower.includes("violates check constraint")
   ) {
-    return "Не удалось сохранить: в базе ещё не добавлены «Штаб» и «Канцелярия». В Supabase выполните SQL-миграцию (файл 20260716130000_user_unit_assignment_staff_office.sql).";
+    return "Не удалось сохранить: в базе ещё не добавлены новые подразделения. В Supabase выполните SQL-миграцию (файл 20260722120000_user_unit_assignment_extended.sql).";
   }
   if (message === "invalid_unit_assignment") {
     return "Некорректное подразделение.";
