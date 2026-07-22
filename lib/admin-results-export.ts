@@ -29,7 +29,8 @@ export type ResultsExportColumnKey =
   | "createdAt"
   | "usedAttempts"
   | "maxAttempts"
-  | "trialTripleStreak";
+  | "trialTripleStreak"
+  | "trialPassedCount";
 
 export type ResultsExportColumn = {
   key: ResultsExportColumnKey;
@@ -53,6 +54,7 @@ export type ResultsAttemptExportRow = {
   createdAt: string;
   finalAttemptIndex: number | null;
   trialTripleStreak?: boolean | null;
+  trialPassedCount?: number | null;
 };
 
 export type ResultsNotStartedExportRow = {
@@ -117,7 +119,7 @@ export function resolveResultsExportColumns(config: ResultsExportFilterConfig): 
   columns.push({ key: "createdAt", header: "Дата", width: 18 });
 
   if (shouldShowTrialTripleStreak(config.typeFilter, config.statusFilter)) {
-    columns.push({ key: "trialTripleStreak", header: "3 пробных сдано", width: 16 });
+    columns.push({ key: "trialPassedCount", header: "Пробных сдано", width: 14 });
   }
 
   return columns;
@@ -174,6 +176,10 @@ export function buildResultsExportFilterLines(config: ResultsExportFilterConfig)
   return lines;
 }
 
+export function appendCohortPeopleFilterLine(filterLines: string[], cohortPeople: number) {
+  return [...filterLines, `Количество людей: ${cohortPeople}`];
+}
+
 function formatExportDate(iso: string) {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -212,6 +218,8 @@ export function resultsAttemptCellValue(row: ResultsAttemptExportRow, key: Resul
         : "—";
     case "createdAt":
       return formatExportDate(row.createdAt);
+    case "trialPassedCount":
+      return row.trialPassedCount ?? 0;
     case "trialTripleStreak":
       if (row.trialTripleStreak == null) return "—";
       return row.trialTripleStreak ? "Да" : "Нет";
@@ -257,6 +265,20 @@ export function buildResultsExportSummaryLines(input: {
     return lines;
   }
 
+  if (input.trialTripleStreakStats && shouldShowTrialTripleStreak(input.config.typeFilter, input.config.statusFilter)) {
+    lines.push(["Количество людей", input.trialTripleStreakStats.cohortPeople]);
+    lines.push(["Попыток всего", input.attemptRows.length]);
+    if (input.attemptsTotal > input.attemptRows.length) {
+      lines.push(["Всего попыток по фильтру", input.attemptsTotal]);
+    }
+    lines.push(["Сдали 3 пробных", input.trialTripleStreakStats.passedPeople]);
+    lines.push(["Не сдали 3 пробных", input.trialTripleStreakStats.failedPeople]);
+    if (input.config.typeFilter === "all") {
+      lines.push(["Итоговых попыток", input.attemptRows.filter((row) => row.type === "final").length]);
+    }
+    return lines;
+  }
+
   lines.push(["Попыток в выгрузке", input.attemptRows.length]);
   if (input.attemptsTotal > input.attemptRows.length) {
     lines.push(["Всего попыток по фильтру", input.attemptsTotal]);
@@ -271,16 +293,8 @@ export function buildResultsExportSummaryLines(input: {
   lines.push(["Сдали (людей)", peopleStats.passedPeople]);
   lines.push(["Не сдали (людей)", peopleStats.failedPeople]);
 
-  if (input.config.typeFilter === "all" || input.config.typeFilter === "trial") {
-    lines.push(["Пробных попыток", input.attemptRows.filter((row) => row.type === "trial").length]);
-  }
   if (input.config.typeFilter === "all" || input.config.typeFilter === "final") {
     lines.push(["Итоговых попыток", input.attemptRows.filter((row) => row.type === "final").length]);
-  }
-
-  if (input.trialTripleStreakStats && shouldShowTrialTripleStreak(input.config.typeFilter, input.config.statusFilter)) {
-    lines.push(["3 пробных сдано — да (людей)", input.trialTripleStreakStats.passedPeople]);
-    lines.push(["3 пробных сдано — нет (людей)", input.trialTripleStreakStats.failedPeople]);
   }
 
   return lines;

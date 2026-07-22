@@ -344,7 +344,7 @@ export async function GET(req: Request) {
           });
     const filterPeopleStats = calcAttemptPeopleStats(peopleStatsRows);
 
-    let trialTripleStreakStats: { passedPeople: number; failedPeople: number } | null = null;
+    let trialTripleStreakStats: { cohortPeople: number; passedPeople: number; failedPeople: number } | null = null;
     if (shouldShowTrialTripleStreak(attemptsQuery.typeFilter, attemptsQuery.statusFilter)) {
       const cohortUserIds = hasUserFilter ? filteredUserIds : rosterUsers.map((user) => user.id);
       const trialAttempts = await fetchTrialAttemptsForStreak(supabase, {
@@ -354,6 +354,7 @@ export async function GET(req: Request) {
       });
       const streakStats = calcTrialTripleStreakStats(cohortUserIds, trialAttempts);
       trialTripleStreakStats = {
+        cohortPeople: streakStats.cohortPeople,
         passedPeople: streakStats.passedPeople,
         failedPeople: streakStats.failedPeople,
       };

@@ -57,7 +57,7 @@ function styleStatusCell(cell: ExcelJS.Cell, status: "passed" | "failed" | "not_
   }
 }
 
-const NUMERIC_KEYS = new Set<ResultsExportColumnKey>(["attemptIndex", "usedAttempts", "maxAttempts"]);
+const NUMERIC_KEYS = new Set<ResultsExportColumnKey>(["attemptIndex", "usedAttempts", "maxAttempts", "trialPassedCount"]);
 
 export async function buildResultsExcelBuffer(input: {
   config: ResultsExportFilterConfig;
@@ -126,8 +126,8 @@ export async function buildResultsExcelBuffer(input: {
         if (!column) return;
         styleCompactTableCell(cell, NUMERIC_KEYS.has(column.key) ? "center" : "left");
         if (column.key === "status") styleStatusCell(cell, row.status);
-        if (column.key === "trialTripleStreak" && row.trialTripleStreak != null) {
-          styleStatusCell(cell, row.trialTripleStreak ? "passed" : "failed");
+        if (column.key === "trialPassedCount") {
+          styleStatusCell(cell, (row.trialPassedCount ?? 0) >= 3 ? "passed" : "failed");
         }
       });
     }

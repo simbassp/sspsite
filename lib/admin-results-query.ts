@@ -295,20 +295,12 @@ export function filterResultsCohortUserIds(
     .map((user) => user.id);
 }
 
-export function userHasThreePassedTrialsInPeriod(
-  attempts: Array<{ status: "passed" | "failed" }>,
-) {
-  let passedCount = 0;
-  for (const attempt of attempts) {
-    if (attempt.status === "passed") passedCount += 1;
-  }
-  return passedCount >= 3;
-}
-
 export type TrialTripleStreakStats = {
+  cohortPeople: number;
   passedPeople: number;
   failedPeople: number;
   byUser: Map<string, boolean>;
+  passedCountByUser: Map<string, number>;
 };
 
 export function calcTrialTripleStreakStats(
@@ -323,17 +315,26 @@ export function calcTrialTripleStreakStats(
   }
 
   const byUser = new Map<string, boolean>();
+  const passedCountByUser = new Map<string, number>();
   let passedPeople = 0;
   for (const userId of cohortUserIds) {
-    const ok = userHasThreePassedTrialsInPeriod(byUserAttempts.get(userId) ?? []);
+    const userAttempts = byUserAttempts.get(userId) ?? [];
+    let passedCount = 0;
+    for (const attempt of userAttempts) {
+      if (attempt.status === "passed") passedCount += 1;
+    }
+    passedCountByUser.set(userId, passedCount);
+    const ok = passedCount >= 3;
     byUser.set(userId, ok);
     if (ok) passedPeople += 1;
   }
 
   return {
+    cohortPeople: cohortUserIds.length,
     passedPeople,
     failedPeople: cohortUserIds.length - passedPeople,
     byUser,
+    passedCountByUser,
   };
 }
 

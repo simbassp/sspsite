@@ -99,7 +99,7 @@ type BootstrapPayload = {
   attemptsPage?: number;
   attemptsPageSize?: number;
   filterPeopleStats?: { passedPeople: number; failedPeople: number };
-  trialTripleStreakStats?: { passedPeople: number; failedPeople: number } | null;
+  trialTripleStreakStats?: { cohortPeople: number; passedPeople: number; failedPeople: number } | null;
   bannerStats?: BannerStats;
   lastResetAudit?: {
     created_at: string;
@@ -190,6 +190,7 @@ export default function AdminResultsPage() {
     null,
   );
   const [trialTripleStreakStats, setTrialTripleStreakStats] = useState<{
+    cohortPeople: number;
     passedPeople: number;
     failedPeople: number;
   } | null>(null);
@@ -419,7 +420,7 @@ export default function AdminResultsPage() {
       {loadError && <p className="page-subtitle">{loadError}</p>}
       {!!resetMessage && <p className="page-subtitle">{resetMessage}</p>}
       {!!exportExcelMsg && <p className="page-subtitle">{exportExcelMsg}</p>}
-      {!isLoading && !loadError && exportRowCount > 0 && (
+      {!isLoading && !loadError && exportRowCount > 0 && !showTrialTripleStreak && (
         <p className="page-subtitle admin-results-export-meta">
           {statusFilter === "not_started" ? (
             <>
@@ -439,8 +440,11 @@ export default function AdminResultsPage() {
       )}
       {!isLoading && !loadError && showTrialTripleStreak && (
         <p className="page-subtitle admin-results-export-meta">
-          3 пробных сдано: <strong>{trialTripleStreakStats.passedPeople}</strong> чел. сдали,{" "}
-          <strong>{trialTripleStreakStats.failedPeople}</strong> чел. не сдали.
+          В выборке <strong>{trialTripleStreakStats.cohortPeople}</strong> чел. За период:{" "}
+          <strong>{exportRowCount}</strong>{" "}
+          {exportRowCount === 1 ? "попытка" : exportRowCount >= 2 && exportRowCount <= 4 ? "попытки" : "попыток"}.{" "}
+          <strong>Сдали 3 пробных:</strong> {trialTripleStreakStats.passedPeople} чел.,{" "}
+          <strong>не сдали:</strong> {trialTripleStreakStats.failedPeople} чел.
         </p>
       )}
 

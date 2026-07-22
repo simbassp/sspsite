@@ -11,7 +11,7 @@ import {
   type ResultsListFilters,
 } from "@/lib/admin-results-query";
 import type { ResultsAttemptExportRow, ResultsExportFilterConfig, ResultsNotStartedExportRow } from "@/lib/admin-results-export";
-import { buildResultsExportFilterLines } from "@/lib/admin-results-export";
+import { buildResultsExportFilterLines, appendCohortPeopleFilterLine } from "@/lib/admin-results-export";
 import { normalizeUnitAssignment, matchesResultsUnitFilter } from "@/lib/unit-assignment";
 import type { UnitAssignment } from "@/lib/types";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
@@ -151,6 +151,9 @@ export async function loadResultsExportData(body: Record<string, unknown>) {
     filters.rotaPlatoon !== "all" ||
     filters.rotaSection !== "all";
   const filteredUserIds = filterUserIds(rosterUsers, filters, unitFromDb, rotaFromDb);
+  const cohortUserIds = hasUserFilter ? filteredUserIds : rosterUsers.map((user) => user.id);
+  const buildFilterLines = (cohortPeople: number) =>
+    appendCohortPeopleFilterLine(buildResultsExportFilterLines(config), cohortPeople);
 
   const userById = new Map<
     string,
@@ -180,7 +183,7 @@ export async function loadResultsExportData(body: Record<string, unknown>) {
     if (config.typeFilter === "trial") {
       return {
         config,
-        filterLines: buildResultsExportFilterLines(config),
+        filterLines: buildFilterLines(cohortUserIds.length),
         attemptRows: [] as ResultsAttemptExportRow[],
         notStartedRows: [] as ResultsNotStartedExportRow[],
         attemptsTotal: 0,
@@ -233,7 +236,7 @@ export async function loadResultsExportData(body: Record<string, unknown>) {
 
     return {
       config,
-      filterLines: buildResultsExportFilterLines(config),
+      filterLines: buildFilterLines(notStartedRows.length),
       attemptRows: [] as ResultsAttemptExportRow[],
       notStartedRows,
       attemptsTotal: 0,
@@ -280,7 +283,6 @@ export async function loadResultsExportData(body: Record<string, unknown>) {
 
   let trialTripleStreakStats = null;
   if (shouldShowTrialTripleStreak(config.typeFilter, config.statusFilter)) {
-    const cohortUserIds = hasUserFilter ? filteredUserIds : rosterUsers.map((user) => user.id);
     const trialAttempts = await fetchTrialAttemptsForStreak(supabase, {
       allowedUserIds: hasUserFilter ? filteredUserIds : null,
       startIso,
@@ -289,12 +291,13 @@ export async function loadResultsExportData(body: Record<string, unknown>) {
     trialTripleStreakStats = calcTrialTripleStreakStats(cohortUserIds, trialAttempts);
     for (const row of attemptRows) {
       row.trialTripleStreak = trialTripleStreakStats.byUser.get(row.userId) ?? false;
+      row.trialPassedCount = trialTripleStreakStats.passedCountByUser.get(row.userId) ?? 0;
     }
   }
 
   return {
     config,
-    filterLines: buildResultsExportFilterLines(config),
+    filterLines: buildFilterLines(trialTripleStreakStats?.cohortPeople ?? cohortUserIds.length),
     attemptRows,
     notStartedRows: [] as ResultsNotStartedExportRow[],
     attemptsTotal: attemptsData.total,
