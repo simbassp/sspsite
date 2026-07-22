@@ -110,10 +110,14 @@ async function fetchExportTestRowsForUser(userId: string) {
   const { linkedUserIds } = await resolveFinalUserContext(supabase, userId);
   const userIdsForTests = linkedUserIds.length > 0 ? linkedUserIds : [userId];
 
+  const selectFull =
+    "id,type,status,score,created_at,duration_seconds,questions_total,questions_correct";
+  const selectMid = "id,type,status,score,created_at,questions_total,questions_correct";
+
   let testRows: Array<Record<string, unknown>> = [];
   const testPrimary = await supabase
     .from("test_results")
-    .select("id,type,status,score,created_at,duration_seconds,questions_total,questions_correct,test_type")
+    .select(selectFull)
     .in("user_id", userIdsForTests)
     .order("created_at", { ascending: false })
     .limit(500);
@@ -121,14 +125,14 @@ async function fetchExportTestRowsForUser(userId: string) {
   if (!testPrimary.error) {
     testRows = (testPrimary.data ?? []) as Array<Record<string, unknown>>;
   } else if (isMissingColumnError(testPrimary.error.message)) {
-    const legacy = await supabase
+    const retry = await supabase
       .from("test_results")
-      .select("id,test_type,status,score,created_at,questions_total,questions_correct")
+      .select(selectMid)
       .in("user_id", userIdsForTests)
       .order("created_at", { ascending: false })
       .limit(500);
-    if (!legacy.error) {
-      testRows = (legacy.data ?? []) as Array<Record<string, unknown>>;
+    if (!retry.error) {
+      testRows = (retry.data ?? []) as Array<Record<string, unknown>>;
     }
   }
 

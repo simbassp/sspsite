@@ -48,7 +48,6 @@ async function fetchFinalResultsForSummaries(
   const selectFull =
     "id,user_id,type,status,score,created_at,questions_total,questions_correct,final_attempt_index";
   const selectMid = "id,user_id,type,status,score,created_at";
-  const selectLegacy = "id,user_id,test_type,status,score,created_at";
 
   const full = await applyCreatedAtRange(
     supabase.from("test_results").select(selectFull).eq("type", "final").order("created_at", { ascending: false }).limit(10000),
@@ -64,17 +63,8 @@ async function fetchFinalResultsForSummaries(
     startIso,
     endIso,
   );
-  if (!mid.error) return (mid.data ?? []) as Array<Record<string, unknown>>;
-
-  if (!isMissingColumnError(mid.error.message)) throw new Error(mid.error.message);
-
-  const legacy = await applyCreatedAtRange(
-    supabase.from("test_results").select(selectLegacy).eq("test_type", "final").order("created_at", { ascending: false }).limit(10000),
-    startIso,
-    endIso,
-  );
-  if (legacy.error) throw new Error(legacy.error.message);
-  return (legacy.data ?? []) as Array<Record<string, unknown>>;
+  if (mid.error) throw new Error(mid.error.message);
+  return (mid.data ?? []) as Array<Record<string, unknown>>;
 }
 
 export async function GET(req: Request) {
@@ -333,69 +323,33 @@ export async function GET(req: Request) {
     };
     const needTrialStats = shouldShowTrialTripleStreak(attemptsQuery.typeFilter, attemptsQuery.statusFilter);
 
-    const fetchTrialCount = async () => {
-      let res = await applyCreatedAtRange(
+    const fetchTrialCount = async () =>
+      applyCreatedAtRange(
         supabase.from("test_results").select("id", { count: "exact", head: true }).eq("type", "trial"),
         startIso,
         endIso,
       );
-      if (res.error && isMissingColumnError(res.error.message)) {
-        res = await applyCreatedAtRange(
-          supabase.from("test_results").select("id", { count: "exact", head: true }).eq("test_type", "trial"),
-          startIso,
-          endIso,
-        );
-      }
-      return res;
-    };
 
-    const fetchTrialLast = async () => {
-      let res = await applyCreatedAtRange(
+    const fetchTrialLast = async () =>
+      applyCreatedAtRange(
         supabase.from("test_results").select("user_id,created_at").eq("type", "trial"),
         startIso,
         endIso,
       ).order("created_at", { ascending: false }).limit(1).maybeSingle();
-      if (res.error && isMissingColumnError(res.error.message)) {
-        res = await applyCreatedAtRange(
-          supabase.from("test_results").select("user_id,created_at").eq("test_type", "trial"),
-          startIso,
-          endIso,
-        ).order("created_at", { ascending: false }).limit(1).maybeSingle();
-      }
-      return res;
-    };
 
-    const fetchFinalCount = async () => {
-      let res = await applyCreatedAtRange(
+    const fetchFinalCount = async () =>
+      applyCreatedAtRange(
         supabase.from("test_results").select("id", { count: "exact", head: true }).eq("type", "final"),
         startIso,
         endIso,
       );
-      if (res.error && isMissingColumnError(res.error.message)) {
-        res = await applyCreatedAtRange(
-          supabase.from("test_results").select("id", { count: "exact", head: true }).eq("test_type", "final"),
-          startIso,
-          endIso,
-        );
-      }
-      return res;
-    };
 
-    const fetchFinalLast = async () => {
-      let res = await applyCreatedAtRange(
+    const fetchFinalLast = async () =>
+      applyCreatedAtRange(
         supabase.from("test_results").select("user_id,created_at").eq("type", "final"),
         startIso,
         endIso,
       ).order("created_at", { ascending: false }).limit(1).maybeSingle();
-      if (res.error && isMissingColumnError(res.error.message)) {
-        res = await applyCreatedAtRange(
-          supabase.from("test_results").select("user_id,created_at").eq("test_type", "final"),
-          startIso,
-          endIso,
-        ).order("created_at", { ascending: false }).limit(1).maybeSingle();
-      }
-      return res;
-    };
 
     const [
       attemptsPageData,

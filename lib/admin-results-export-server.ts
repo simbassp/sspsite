@@ -34,7 +34,6 @@ async function fetchFinalResultsForSummaries(supabase: ReturnType<typeof getServ
   const selectFull =
     "id,user_id,type,status,score,created_at,questions_total,questions_correct,final_attempt_index";
   const selectMid = "id,user_id,type,status,score,created_at";
-  const selectLegacy = "id,user_id,test_type,status,score,created_at";
 
   const full = await supabase
     .from("test_results")
@@ -52,18 +51,8 @@ async function fetchFinalResultsForSummaries(supabase: ReturnType<typeof getServ
     .eq("type", "final")
     .order("created_at", { ascending: false })
     .limit(10000);
-  if (!mid.error) return (mid.data ?? []) as Array<Record<string, unknown>>;
-
-  if (!isMissingColumnError(mid.error.message)) throw new Error(mid.error.message);
-
-  const legacy = await supabase
-    .from("test_results")
-    .select(selectLegacy)
-    .eq("test_type", "final")
-    .order("created_at", { ascending: false })
-    .limit(10000);
-  if (legacy.error) throw new Error(legacy.error.message);
-  return (legacy.data ?? []) as Array<Record<string, unknown>>;
+  if (mid.error) throw new Error(mid.error.message);
+  return (mid.data ?? []) as Array<Record<string, unknown>>;
 }
 
 function buildExportConfig(body: Record<string, unknown>): ResultsExportFilterConfig {

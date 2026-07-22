@@ -179,7 +179,6 @@ export function parseResultsFiltersFromBody(body: Record<string, unknown>): Resu
 }
 
 const ATTEMPT_SELECT_STATS = "user_id,type,status";
-const ATTEMPT_SELECT_STATS_LEGACY = "user_id,test_type,status";
 
 export type AttemptPeopleStats = {
   passedPeople: number;
@@ -215,25 +214,24 @@ async function runAttemptsQueryChunked(
   supabase: { from: (table: string) => unknown },
   query: AttemptListQuery,
   select: string,
-  typeColumn: "type" | "test_type",
   options?: { from?: number; to?: number; count?: boolean; limit?: number },
 ) {
   const ids = query.allowedUserIds;
   if (!ids || ids.length <= IN_FILTER_CHUNK_SIZE) {
-    return runAttemptsQuery(supabase, query, select, typeColumn, options);
+    return runAttemptsQuery(supabase, query, select, options);
   }
 
   if (options?.from != null || options?.count) {
-    return runAttemptsQuery(supabase, query, select, typeColumn, options);
+    return runAttemptsQuery(supabase, query, select, options);
   }
 
   if (options?.limit != null) {
-    return runAttemptsQuery(supabase, query, select, typeColumn, options);
+    return runAttemptsQuery(supabase, query, select, options);
   }
 
   const parts = await Promise.all(
     chunkIds(ids).map((chunk) =>
-      runAttemptsQuery(supabase, { ...query, allowedUserIds: chunk }, select, typeColumn, options),
+      runAttemptsQuery(supabase, { ...query, allowedUserIds: chunk }, select, options),
     ),
   );
   const firstError = parts.find((part) => part.error)?.error;
@@ -261,10 +259,7 @@ export async function fetchAttemptsForPeopleStats(
   while (rows.length < maxRows) {
     const from = page * EXPORT_BATCH_SIZE;
     const to = from + EXPORT_BATCH_SIZE - 1;
-    let res = await runAttemptsQueryChunked(supabase, query, ATTEMPT_SELECT_STATS, "type", { from, to });
-    if (res.error && isMissingColumnError(res.error.message)) {
-      res = await runAttemptsQueryChunked(supabase, query, ATTEMPT_SELECT_STATS_LEGACY, "test_type", { from, to });
-    }
+    const res = await runAttemptsQueryChunked(supabase, query, ATTEMPT_SELECT_STATS, { from, to });
     if (res.error) throw new Error(res.error.message);
 
     const batch = ((res.data ?? []) as Array<Record<string, unknown>>)
@@ -285,7 +280,6 @@ export async function fetchAttemptsForPeopleStats(
 const ATTEMPT_SELECT_FULL =
   "id,user_id,type,status,score,created_at,questions_total,questions_correct,final_attempt_index";
 const ATTEMPT_SELECT_MID = "id,user_id,type,status,score,created_at";
-const ATTEMPT_SELECT_LEGACY = "id,user_id,test_type,status,score,created_at";
 const EXPORT_BATCH_SIZE = 1000;
 
 async function runAttemptsQueryWithFallbacks(
@@ -293,12 +287,9 @@ async function runAttemptsQueryWithFallbacks(
   query: AttemptListQuery,
   options?: { from?: number; to?: number; count?: boolean; limit?: number },
 ) {
-  let res = await runAttemptsQuery(supabase, query, ATTEMPT_SELECT_FULL, "type", options);
+  let res = await runAttemptsQuery(supabase, query, ATTEMPT_SELECT_FULL, options);
   if (res.error && isMissingColumnError(res.error.message)) {
-    res = await runAttemptsQuery(supabase, query, ATTEMPT_SELECT_MID, "type", options);
-  }
-  if (res.error && isMissingColumnError(res.error.message)) {
-    res = await runAttemptsQuery(supabase, query, ATTEMPT_SELECT_LEGACY, "test_type", options);
+    res = await runAttemptsQuery(supabase, query, ATTEMPT_SELECT_MID, options);
   }
   return res;
 }
@@ -307,7 +298,6 @@ async function runAttemptsQuery(
   supabase: { from: (table: string) => unknown },
   query: AttemptListQuery,
   select: string,
-  typeColumn: "type" | "test_type",
   options?: { from?: number; to?: number; count?: boolean; limit?: number },
 ) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -315,7 +305,7 @@ async function runAttemptsQuery(
     .select(select, options?.count ? { count: "exact" } : undefined)
     .order("created_at", { ascending: false });
   if (query.allowedUserIds?.length) q = q.in("user_id", query.allowedUserIds);
-  if (query.typeFilter !== "all") q = q.eq(typeColumn, query.typeFilter);
+  if (query.typeFilter !== "all") q = q.eq("type", query.typeFilter);
   if (query.statusFilter !== "all" && query.statusFilter !== "not_started") q = q.eq("status", query.statusFilter);
   q = applyCreatedAtRange(q, query.startIso, query.endIso);
   if (options?.from != null && options?.to != null) q = q.range(options.from, options.to);
@@ -381,7 +371,6 @@ export async function fetchAllAttemptsForExport(
 }
 
 const ATTEMPT_SELECT_STREAK = "user_id,status,created_at";
-const ATTEMPT_SELECT_STREAK_LEGACY = "user_id,status,created_at";
 
 export type ResultsCohortUser = {
   id: string;
@@ -508,10 +497,7 @@ export async function fetchTrialAttemptsForStreak(
   while (rows.length < maxRows) {
     const from = page * EXPORT_BATCH_SIZE;
     const to = from + EXPORT_BATCH_SIZE - 1;
-    let res = await runAttemptsQuery(supabase, trialQuery, ATTEMPT_SELECT_STREAK, "type", { from, to });
-    if (res.error && isMissingColumnError(res.error.message)) {
-      res = await runAttemptsQuery(supabase, trialQuery, ATTEMPT_SELECT_STREAK_LEGACY, "test_type", { from, to });
-    }
+    const res = await runAttemptsQuery(supabase, trialQuery, ATTEMPT_SELECT_STREAK, { from, to });
     if (res.error) throw new Error(res.error.message);
 
     const batch = ((res.data ?? []) as Array<Record<string, unknown>>)

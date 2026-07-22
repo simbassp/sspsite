@@ -232,19 +232,19 @@ export async function fetchUserResults(userId: string) {
       "fetch_user_results_timeout",
     );
     if (error && isMissingColumnError(error.message)) {
-      const legacyRes = await withTimeoutAndRetry(
+      const retryRes = await withTimeoutAndRetry(
         () =>
           supabase
             .from("test_results")
-            .select("id,user_id,test_type,status,score,created_at,questions_total,questions_correct")
+            .select("id,user_id,type,status,score,created_at")
             .in("user_id", userIds)
             .order("created_at", { ascending: false }),
         7000,
         1,
-        "fetch_user_results_legacy_timeout",
+        "fetch_user_results_mid_timeout",
       );
-      data = legacyRes.data as unknown as typeof data;
-      error = legacyRes.error as unknown as typeof error;
+      data = retryRes.data as unknown as typeof data;
+      error = retryRes.error as unknown as typeof error;
     }
     if (error || !data) {
       return listTestResults().filter((r) => r.userId === userId);

@@ -36,15 +36,6 @@ export async function GET() {
         .limit(40);
       if (!retry.error) {
         queryRows = (retry.data as unknown[]) || [];
-      } else if (retry.error && isMissingColumnError(retry.error.message)) {
-        const legacyQ = await supabase
-          .from("test_results")
-          .select("id,user_id,test_type,status,score,created_at")
-          .in("user_id", userIds)
-          .order("created_at", { ascending: false })
-          .limit(40);
-        queryRows = (legacyQ.data as unknown[]) || [];
-        queryError = legacyQ.error?.message || null;
       } else {
         queryError = retry.error?.message || null;
       }
@@ -60,7 +51,7 @@ export async function GET() {
     }
 
     const normalized = (queryRows as Array<Record<string, unknown>>).map((r) => {
-      const rawType = r.type ?? r.test_type;
+      const rawType = r.type;
       const ty = rawType === "final" ? "final" : "trial";
       return {
         id: r.id,

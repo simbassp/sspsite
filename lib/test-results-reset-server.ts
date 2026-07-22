@@ -8,11 +8,9 @@ async function deleteTestResultsByType(
   linkedUserIds: string[],
   type: "trial" | "final",
 ) {
-  for (const column of ["type", "test_type"] as const) {
-    const del = await supabase.from("test_results").delete().in("user_id", linkedUserIds).eq(column, type);
-    if (del.error && !isMissingColumnError(del.error.message)) {
-      throw new Error(del.error.message);
-    }
+  const del = await supabase.from("test_results").delete().in("user_id", linkedUserIds).eq("type", type);
+  if (del.error && !isMissingColumnError(del.error.message)) {
+    throw new Error(del.error.message);
   }
 }
 

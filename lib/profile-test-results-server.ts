@@ -10,11 +10,11 @@ import { isMissingColumnError, resolveFinalUserContext } from "@/lib/server-fina
 const PROFILE_RESULTS_SELECT =
   "id,user_id,type,status,score,created_at,started_at,finished_at,duration_seconds,is_completed,questions_total,questions_correct";
 
-const PROFILE_RESULTS_LEGACY_SELECT =
-  "id,user_id,test_type,status,score,created_at,questions_total,questions_correct";
+const PROFILE_RESULTS_MID_SELECT =
+  "id,user_id,type,status,score,created_at,questions_total,questions_correct";
 
 const PROFILE_RESULTS_STATS_SELECT = "id,type,status,created_at,duration_seconds,is_completed";
-const PROFILE_RESULTS_STATS_LEGACY_SELECT = "id,test_type,status,created_at";
+const PROFILE_RESULTS_STATS_MID_SELECT = "id,type,status,created_at";
 
 const PAGE_SIZE = 500;
 const RECENT_RESULTS_LIMIT = 300;
@@ -76,7 +76,7 @@ async function scanTrialStats(
   supabase: SupabaseClient,
   userIds: string[],
 ): Promise<{ stats: TrialProfileStats; error: string | null }> {
-  let legacy = false;
+  let useMidSelect = false;
   const trialRows: ReturnType<typeof mapStatsRow>[] = [];
 
   for (const part of chunkIds(userIds)) {
@@ -85,14 +85,14 @@ async function scanTrialStats(
     for (;;) {
       if (pages >= MAX_STATS_PAGES) break;
       pages += 1;
-      const select = legacy ? PROFILE_RESULTS_STATS_LEGACY_SELECT : PROFILE_RESULTS_STATS_SELECT;
+      const select = useMidSelect ? PROFILE_RESULTS_STATS_MID_SELECT : PROFILE_RESULTS_STATS_SELECT;
       let page = await fetchResultsPage(supabase, part, offset, PAGE_SIZE, select);
-      if (page.error && !legacy && isMissingColumnError(page.error)) {
-        legacy = true;
+      if (page.error && !useMidSelect && isMissingColumnError(page.error)) {
+        useMidSelect = true;
         offset = 0;
         pages = 0;
         trialRows.length = 0;
-        page = await fetchResultsPage(supabase, part, offset, PAGE_SIZE, PROFILE_RESULTS_STATS_LEGACY_SELECT);
+        page = await fetchResultsPage(supabase, part, offset, PAGE_SIZE, PROFILE_RESULTS_STATS_MID_SELECT);
       }
       if (page.error) return { stats: emptyTrialStats(), error: page.error };
 
@@ -114,11 +114,11 @@ async function loadRecentFullResults(
   supabase: SupabaseClient,
   userIds: string[],
 ): Promise<{ rows: Array<Record<string, unknown>>; error: string | null }> {
-  let legacy = false;
+  let useMidSelect = false;
   const merged = new Map<string, Record<string, unknown>>();
 
   for (const part of chunkIds(userIds)) {
-    let select = legacy ? PROFILE_RESULTS_LEGACY_SELECT : PROFILE_RESULTS_SELECT;
+    let select = useMidSelect ? PROFILE_RESULTS_MID_SELECT : PROFILE_RESULTS_SELECT;
     let res = await supabase
       .from("test_results")
       .select(select)
@@ -126,10 +126,10 @@ async function loadRecentFullResults(
       .order("created_at", { ascending: false })
       .limit(RECENT_RESULTS_LIMIT);
 
-    if (res.error && !legacy && isMissingColumnError(res.error.message)) {
-      legacy = true;
+    if (res.error && !useMidSelect && isMissingColumnError(res.error.message)) {
+      useMidSelect = true;
       merged.clear();
-      select = PROFILE_RESULTS_LEGACY_SELECT;
+      select = PROFILE_RESULTS_MID_SELECT;
       res = await supabase
         .from("test_results")
         .select(select)

@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { effectiveFinalCountingFromUtc, nextAutoResetUtcIso } from "@/lib/final-effective-counting";
 import { FINAL_TEST_MAX_ATTEMPTS } from "@/lib/final-test-constants";
-import { isMissingColumnError, resolveFinalUserContext } from "@/lib/server-final-user-context";
+import { resolveFinalUserContext } from "@/lib/server-final-user-context";
 
 /** Сводка по лимиту итогового теста для пользователя (сервисный клиент Supabase). */
 export async function computeFinalTestSummary(supabase: SupabaseClient, userId: string) {
@@ -24,17 +24,6 @@ export async function computeFinalTestSummary(supabase: SupabaseClient, userId: 
 
   let attemptsRes = await attemptsQuery;
 
-  if (attemptsRes.error && isMissingColumnError(attemptsRes.error.message)) {
-    attemptsRes = await supabase
-      .from("test_results")
-      .select("id")
-      .in("user_id", tiedIds)
-      .eq("test_type", "final")
-      .gte("created_at", countingFrom)
-      .order("created_at", { ascending: false })
-      .limit(attemptsProbeLimit);
-  }
-
   const usedAttempts = Array.isArray(attemptsRes.data) ? attemptsRes.data.length : 0;
 
   /** «Сдал» только в текущем окне попыток (после сброса и/или с 1-го числа месяца). */
@@ -47,18 +36,6 @@ export async function computeFinalTestSummary(supabase: SupabaseClient, userId: 
     .gte("created_at", countingFrom);
 
   let passedRes = await passedQuery.limit(1).maybeSingle();
-
-  if (passedRes.error && isMissingColumnError(passedRes.error.message)) {
-    passedRes = await supabase
-      .from("test_results")
-      .select("id")
-      .in("user_id", tiedIds)
-      .eq("test_type", "final")
-      .eq("status", "passed")
-      .gte("created_at", countingFrom)
-      .limit(1)
-      .maybeSingle();
-  }
 
   const hasPassedFinal = Boolean(passedRes.data);
   const canStartFinal = usedAttempts < maxAttempts;

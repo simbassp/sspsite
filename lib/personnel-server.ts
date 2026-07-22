@@ -489,15 +489,6 @@ async function loadTestStatsForUsersOnDate(userIds: string[], dateIso: string) {
     if (!primary.error) {
       return (primary.data ?? []) as Array<Record<string, unknown>>;
     }
-    if (isMissingColumnError(primary.error.message)) {
-      const legacy = await supabase
-        .from("test_results")
-        .select("user_id,test_type,status,created_at")
-        .in("user_id", ids)
-        .gte("created_at", start)
-        .lte("created_at", end);
-      if (!legacy.error) return (legacy.data ?? []) as Array<Record<string, unknown>>;
-    }
     return [] as Array<Record<string, unknown>>;
   };
 
@@ -506,14 +497,14 @@ async function loadTestStatsForUsersOnDate(userIds: string[], dateIso: string) {
     testRows.push(...(await fetchChunk(queryIds.slice(i, i + 80))));
   }
 
-  const rowsByUser = new Map<string, Array<{ type?: string; test_type?: string; status?: string }>>();
+  const rowsByUser = new Map<string, Array<{ type?: string; status?: string }>>();
   for (const row of testRows) {
     const rawUid = String(row.user_id ?? "");
     if (!rawUid) continue;
     const canon = linkedMap.get(rawUid) ?? rawUid;
     if (!map.has(canon)) continue;
     const list = rowsByUser.get(canon) ?? [];
-    list.push(row as { type?: string; test_type?: string; status?: string });
+    list.push(row as { type?: string; status?: string });
     rowsByUser.set(canon, list);
   }
 
@@ -546,15 +537,6 @@ async function loadTestStatsForUsers(userIds: string[]) {
     if (!primary.error) {
       return (primary.data ?? []) as Array<Record<string, unknown>>;
     }
-    if (isMissingColumnError(primary.error.message)) {
-      const legacy = await supabase
-        .from("test_results")
-        .select("user_id,test_type,status")
-        .in("user_id", ids)
-        .order("created_at", { ascending: false })
-        .limit(Math.min(ids.length * 120, 8000));
-      if (!legacy.error) return (legacy.data ?? []) as Array<Record<string, unknown>>;
-    }
     return [] as Array<Record<string, unknown>>;
   };
 
@@ -571,7 +553,7 @@ async function loadTestStatsForUsers(userIds: string[]) {
     if (!map.has(canon)) continue;
     const list = rowsByUser.get(canon) ?? [];
     if (list.length >= 120) continue;
-    list.push(row as { type?: string; test_type?: string; status?: string });
+    list.push(row as { type?: string; status?: string });
     rowsByUser.set(canon, list);
   }
 
@@ -764,14 +746,8 @@ export async function loadPersonnelProfilesBulk(
   if (usersRes.error || !usersRes.data?.length) return result;
 
   let testRows = (testPrimaryRes.data ?? []) as Array<Record<string, unknown>>;
-  if (testPrimaryRes.error && isMissingColumnError(testPrimaryRes.error.message)) {
-    const legacy = await supabase
-      .from("test_results")
-      .select("user_id,test_type,status,created_at")
-      .in("user_id", testQueryIds)
-      .order("created_at", { ascending: false })
-      .limit(Math.min(uniqueIds.length * 120, 8000));
-    testRows = (legacy.data ?? []) as Array<Record<string, unknown>>;
+  if (testPrimaryRes.error) {
+    testRows = [];
   }
 
   const depByUser = groupRowsByUserId(
@@ -789,7 +765,7 @@ export async function loadPersonnelProfilesBulk(
     licenseMap.set(String(row.user_id), normalizePersonnelLicenseCategories(row.categories));
   }
 
-  const testsByUser = new Map<string, Array<{ type?: string; test_type?: string; status?: string; created_at?: string }>>();
+  const testsByUser = new Map<string, Array<{ type?: string; status?: string; created_at?: string }>>();
   for (const row of testRows) {
     const rawUid = String(row.user_id ?? "");
     if (!rawUid) continue;
@@ -797,7 +773,7 @@ export async function loadPersonnelProfilesBulk(
     if (!uniqueIds.includes(uid)) continue;
     const list = testsByUser.get(uid) ?? [];
     if (list.length >= 120) continue;
-    list.push(row as { type?: string; test_type?: string; status?: string; created_at?: string });
+    list.push(row as { type?: string; status?: string; created_at?: string });
     testsByUser.set(uid, list);
   }
 
@@ -1139,12 +1115,8 @@ export async function loadPersonnelProfile(userId: string): Promise<PersonnelPro
   ]);
 
   let testRows = (testPrimaryRes.data ?? []) as Array<Record<string, unknown>>;
-  if (testPrimaryRes.error && isMissingColumnError(testPrimaryRes.error.message)) {
-    const testLegacyRes = await supabase
-      .from("test_results")
-      .select("test_type,status,created_at")
-      .in("user_id", linkedUserIds);
-    testRows = (testLegacyRes.data ?? []) as Array<Record<string, unknown>>;
+  if (testPrimaryRes.error) {
+    testRows = [];
   }
 
   const deployments: PersonnelDeploymentRow[] = (depRes.data ?? []).map((row) => {

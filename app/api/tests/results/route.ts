@@ -81,16 +81,7 @@ async function insertTestResultCompat(
     primary = await supabase.from("test_results").insert(base);
   }
   if (!primary.error) return { error: null as string | null };
-  if (!isMissingColumnError(primary.error.message)) return { error: primary.error.message };
-
-  const legacy = await supabase.from("test_results").insert({
-    user_id: payload.user_id,
-    test_type: payload.type,
-    status: payload.status,
-    score: payload.score,
-  });
-  if (!legacy.error) return { error: null as string | null };
-  return { error: legacy.error.message };
+  return { error: primary.error.message };
 }
 
 export async function POST(request: Request) {
