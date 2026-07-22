@@ -51,8 +51,8 @@ type NewsRow = {
   format?: unknown;
 };
 
-const NEWS_CACHE_TTL_MS = 30_000;
-const NEWS_CACHE_KEY = "ssp_news_cache_v5";
+const NEWS_CACHE_TTL_MS = 5 * 60 * 1000;
+const NEWS_CACHE_KEY = "ssp_news_cache_v6";
 let newsMemoryCache: { ts: number; rows: NewsItem[] } | null = null;
 const DEFAULT_NEWS_TEXT_STYLE: NewsTextStyle = {
   fontSize: 16,
@@ -93,6 +93,17 @@ function mapNewsRow(row: NewsRow): NewsItem {
   const avatarUrl = mapAuthorAvatarUrl(row.author_profile);
   const cosmetics = row.author_profile?.cosmetics ?? null;
   const nameColor = cosmetics?.adminNameColor ?? normalizeProfileNameColor(row.author_profile?.nameColor);
+  let authorName = row.author_profile?.name?.trim() || row.author_name?.trim() || null;
+  let authorCallsign = row.author_profile?.callsign?.trim() || row.author_callsign?.trim() || null;
+  if (!authorName && !authorCallsign && row.author?.trim()) {
+    const parts = row.author.trim().split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+      authorName = parts[0] ?? null;
+      authorCallsign = parts.slice(1).join(" ") || null;
+    } else if (parts.length === 1) {
+      authorName = parts[0] ?? null;
+    }
+  }
   return {
     id: row.id,
     title: row.title,
@@ -104,8 +115,8 @@ function mapNewsRow(row: NewsRow): NewsItem {
     authorPosition: normalizeAuthorPosition(row.author_position),
     authorInfo: {
       id: row.author_profile?.id ?? row.author_id ?? null,
-      name: row.author_profile?.name?.trim() || row.author_name?.trim() || null,
-      callsign: row.author_profile?.callsign?.trim() || row.author_callsign?.trim() || null,
+      name: authorName,
+      callsign: authorCallsign,
       position: normalizeAuthorPosition(row.author_profile?.position ?? row.author_position),
       avatarUrl,
       nameColor,
@@ -113,8 +124,8 @@ function mapNewsRow(row: NewsRow): NewsItem {
     },
     authorProfile: {
       id: row.author_profile?.id ?? row.author_id ?? null,
-      name: row.author_profile?.name?.trim() || row.author_name?.trim() || null,
-      callsign: row.author_profile?.callsign?.trim() || row.author_callsign?.trim() || null,
+      name: authorName,
+      callsign: authorCallsign,
       position: normalizeAuthorPosition(row.author_profile?.position ?? row.author_position),
       avatarUrl,
       nameColor,
@@ -125,10 +136,18 @@ function mapNewsRow(row: NewsRow): NewsItem {
   };
 }
 
-function readNewsCache(limit: number) {
+function readNewsCache(limit: number, options?: { ignoreExpiry?: boolean }) {
   const now = Date.now();
-  if (newsMemoryCache && now - newsMemoryCache.ts < NEWS_CACHE_TTL_MS) {
-    return newsMemoryCache.rows.slice(0, limit);
+  const ignoreExpiry = options?.ignoreExpiry === true;
+
+  const pickRows = (ts: number, rows: NewsItem[]) => {
+    if (!ignoreExpiry && now - ts >= NEWS_CACHE_TTL_MS) return null;
+    return rows.slice(0, limit);
+  };
+
+  if (newsMemoryCache) {
+    const rows = pickRows(newsMemoryCache.ts, newsMemoryCache.rows);
+    if (rows) return rows;
   }
   if (typeof window === "undefined") return null;
   try {
@@ -136,12 +155,50 @@ function readNewsCache(limit: number) {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as { ts?: number; rows?: NewsItem[] };
     if (!parsed.ts || !Array.isArray(parsed.rows)) return null;
-    if (now - parsed.ts >= NEWS_CACHE_TTL_MS) return null;
+    const rows = pickRows(parsed.ts, parsed.rows);
+    if (!rows) return null;
     newsMemoryCache = { ts: parsed.ts, rows: parsed.rows };
-    return parsed.rows.slice(0, limit);
+    return rows;
   } catch {
     return null;
   }
+}
+
+export function peekNewsCache(limit = 200) {
+  const rows = readNewsCache(limit, { ignoreExpiry: true });
+  if (!rows || !newsMemoryCache) return null;
+  return {
+    rows,
+    ts: newsMemoryCache.ts,
+    fresh: Date.now() - newsMemoryCache.ts < NEWS_CACHE_TTL_MS,
+  };
+}
+
+function isNewsCacheFresh() {
+  if (!newsMemoryCache) return false;
+  return Date.now() - newsMemoryCache.ts < NEWS_CACHE_TTL_MS;
+}
+
+async function fetchNewsFromApi(safeLimit: number) {
+  const api = await withTimeoutAndRetry(
+    () =>
+      fetch(`/api/news?limit=${safeLimit}`, {
+        method: "GET",
+        cache: "no-store",
+        headers: { "cache-control": "no-store" },
+      }),
+    20_000,
+    1,
+    "fetch_news_timeout",
+  );
+  if (!api.ok) {
+    throw new Error(`news_fetch_failed_${api.status}`);
+  }
+  const payload = (await api.json()) as { ok?: boolean; rows?: NewsRow[] };
+  if (!payload.ok || !Array.isArray(payload.rows)) {
+    throw new Error("news_fetch_invalid_response");
+  }
+  return payload.rows.map(mapNewsRow);
 }
 
 function writeNewsCache(rows: NewsItem[]) {
@@ -158,13 +215,14 @@ export function invalidateNewsCache() {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.removeItem(NEWS_CACHE_KEY);
+    window.localStorage.removeItem("ssp_news_cache_v5");
     window.localStorage.removeItem("ssp_news_cache_v4");
   } catch {}
 }
 
 export async function fetchNews(limit = 40, forceRefresh = false): Promise<NewsItem[]> {
   const safeLimit = Math.max(1, Math.min(limit, 200));
-  if (!forceRefresh) {
+  if (!forceRefresh && isNewsCacheFresh()) {
     const cached = readNewsCache(safeLimit);
     if (cached) return cached;
   }
@@ -175,34 +233,17 @@ export async function fetchNews(limit = 40, forceRefresh = false): Promise<NewsI
   }
 
   try {
-    const api = await withTimeoutAndRetry(
-      () =>
-        fetch(`/api/news?limit=${safeLimit}`, {
-          method: "GET",
-          cache: "no-store",
-          headers: { "cache-control": "no-store" },
-        }),
-      20_000,
-      1,
-      "fetch_news_timeout",
-    );
-    if (!api.ok) {
-      throw new Error(`news_fetch_failed_${api.status}`);
-    }
-    const payload = (await api.json()) as { ok?: boolean; rows?: NewsRow[] };
-    if (!payload.ok || !Array.isArray(payload.rows)) {
-      throw new Error("news_fetch_invalid_response");
-    }
-    const mapped = payload.rows.map(mapNewsRow);
+    const mapped = await fetchNewsFromApi(safeLimit);
     writeNewsCache(mapped);
     return mapped;
   } catch (error) {
+    const stale = readNewsCache(safeLimit, { ignoreExpiry: true });
+    if (stale?.length) return stale;
     if (!isSupabaseConfigured) {
       const local = listNews().slice(0, safeLimit);
       writeNewsCache(local);
       return local;
     }
-    invalidateNewsCache();
     throw error instanceof Error ? error : new Error("news_fetch_failed");
   }
 }

@@ -9,6 +9,7 @@ import {
   deleteNews,
   fetchNews,
   normalizeNewsTextStyle,
+  peekNewsCache,
   updateNews,
 } from "@/lib/news-repository";
 import { countNewsByFilter, matchesNewsFilter, type NewsFilter } from "@/lib/news-ui";
@@ -44,21 +45,32 @@ export default function NewsPage() {
   const createBodyRef = useRef<HTMLTextAreaElement | null>(null);
 
   const load = async (forceRefresh = false) => {
-    setLoading(true);
+    const cached = !forceRefresh ? peekNewsCache(200) : null;
+    if (cached?.rows.length) {
+      setNews(cached.rows);
+      setLoading(false);
+      setError("");
+      if (cached.fresh && !forceRefresh) return;
+    } else {
+      setLoading(true);
+    }
+
     setError("");
     try {
       const rows = await fetchNews(200, forceRefresh);
       setNews(rows);
     } catch {
-      setError("Не удалось загрузить новости. Проверьте интернет и попробуйте снова.");
-      setNews([]);
+      if (!cached?.rows.length) {
+        setError("Не удалось загрузить новости. Проверьте интернет и попробуйте снова.");
+        setNews([]);
+      }
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    void load(true);
+    void load(false);
   }, []);
 
   const counts = useMemo(() => countNewsByFilter(news), [news]);

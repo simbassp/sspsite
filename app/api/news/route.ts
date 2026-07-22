@@ -136,15 +136,6 @@ function getNewsCreatorId(row: Record<string, unknown>) {
   );
 }
 
-function hasStoredAuthorPosition(item: {
-  author_position?: unknown;
-  author_profile?: { position?: unknown } | null;
-}) {
-  const direct = typeof item.author_position === "string" ? item.author_position.trim() : "";
-  const profile = typeof item.author_profile?.position === "string" ? item.author_profile.position.trim() : "";
-  return Boolean(direct || profile);
-}
-
 async function resolveNewsAuthorForInsert(
   supabase: ReturnType<typeof getServerSupabaseServiceClient>,
   session: SessionUser,
@@ -180,20 +171,6 @@ async function resolveNewsAuthorForInsert(
   };
 }
 
-function authorHasIdentityExtras(user: {
-  avatarUrl: string | null;
-  nameColor: ReturnType<typeof normalizeProfileNameColor>;
-  cosmetics: ReturnType<typeof mapIdentityCosmeticsFromRow>;
-}) {
-  return Boolean(
-    user.avatarUrl ||
-      user.nameColor ||
-      user.cosmetics?.achievementNameColor ||
-      user.cosmetics?.avatarFrame ||
-      user.cosmetics?.bankOverlay,
-  );
-}
-
 const NEWS_USER_SELECT_BASE = "id,auth_user_id,name,callsign,position,avatar_url";
 const NEWS_USER_SELECT = `${NEWS_USER_SELECT_BASE},${IDENTITY_COSMETIC_USER_COLUMNS}`;
 const NEWS_USER_SELECT_RESILIENT = `${NEWS_USER_SELECT_BASE},profile_name_color,${ACHIEVEMENT_COSMETIC_USER_COLUMNS}`;
@@ -203,6 +180,7 @@ async function loadUsersByCreatorIds(
   supabase: ReturnType<typeof getServerSupabaseServiceClient>,
   ids: string[],
 ) {
+  if (!ids.length) return [];
   const queryUsers = async (select: string, column: "id" | "auth_user_id", filterIds: string[]) =>
     supabase.from("app_users").select(select).in(column, filterIds);
 
@@ -224,7 +202,7 @@ async function loadUsersByCreatorIds(
     loadUsersSelect("id", ids),
     loadUsersSelect("auth_user_id", ids),
   ]);
-  if (!byIdRows && !byAuthRows) return null;
+  if (!byIdRows && !byAuthRows) return [];
   const merged = new Map<string, Record<string, unknown>>();
   for (const row of [...(byIdRows ?? []), ...(byAuthRows ?? [])]) {
     if (!row || typeof row !== "object") continue;
@@ -234,12 +212,99 @@ async function loadUsersByCreatorIds(
   return [...merged.values()];
 }
 
-function needsAuthorEnrichment(
+async function loadUsersByAuthorLabels(
+  supabase: ReturnType<typeof getServerSupabaseServiceClient>,
+  labels: string[],
+) {
+  const unique = [...new Set(labels.map((label) => label.trim()).filter(Boolean))];
+  if (!unique.length) return [];
+
+  const found = new Map<string, Record<string, unknown>>();
+  const attempts = [NEWS_USER_SELECT, NEWS_USER_SELECT_RESILIENT, NEWS_USER_SELECT_FALLBACK, NEWS_USER_SELECT_BASE];
+
+  const lookupLabel = async (label: string) => {
+    const parts = label.trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return null;
+
+    for (const select of attempts) {
+      if (parts.length >= 2) {
+        const byBoth = await supabase
+          .from("app_users")
+          .select(select)
+          .ilike("name", parts[0]!)
+          .ilike("callsign", parts.slice(1).join(" "))
+          .limit(1)
+          .maybeSingle();
+        if (!byBoth.error && byBoth.data) {
+          return byBoth.data as unknown as Record<string, unknown>;
+        }
+        if (byBoth.error && !isMissingColumnError(byBoth.error.message)) {
+          return null;
+        }
+      }
+
+      for (const part of parts) {
+        const byPart = await supabase
+          .from("app_users")
+          .select(select)
+          .or(`name.ilike.${part},callsign.ilike.${part}`)
+          .limit(1)
+          .maybeSingle();
+        if (!byPart.error && byPart.data) {
+          return byPart.data as unknown as Record<string, unknown>;
+        }
+        if (byPart.error && !isMissingColumnError(byPart.error.message)) {
+          return null;
+        }
+      }
+    }
+    return null;
+  };
+
+  await Promise.all(
+    unique.map(async (label) => {
+      const row = await lookupLabel(label);
+      const id = row && typeof row.id === "string" ? row.id : "";
+      if (id && !found.has(id)) found.set(id, row as Record<string, unknown>);
+    }),
+  );
+
+  return [...found.values()];
+}
+
+type ResolvedNewsAuthor = {
+  name: string;
+  callsign: string;
+  position: string;
+  avatarUrl: string | null;
+  nameColor: ReturnType<typeof normalizeProfileNameColor>;
+  cosmetics: NonNullable<ReturnType<typeof mapIdentityCosmeticsFromRow>>;
+};
+
+function applyResolvedAuthor(
   item: ReturnType<typeof normalizeNewsRows>[number],
   row: Record<string, unknown>,
+  user: ResolvedNewsAuthor,
 ) {
-  if (getNewsCreatorId(row)) return true;
-  return isPlaceholderNewsAuthor(item?.author ?? "");
+  const candidateId = getNewsCreatorId(row) || item.author_id || null;
+  const authorText = [user.name, user.callsign].filter(Boolean).join(" ").trim();
+  return {
+    ...item,
+    author_id: candidateId,
+    author: authorText || item.author,
+    author_name: user.name || item.author_name || null,
+    author_callsign: user.callsign || item.author_callsign || null,
+    author_position: user.position || item.author_position || null,
+    author_profile: {
+      id: candidateId || "",
+      name: user.name || item.author_name || "",
+      callsign: user.callsign || item.author_callsign || "",
+      position: user.position || item.author_position || null,
+      avatar_url: user.avatarUrl,
+      nameColor: user.nameColor,
+      cosmetics: user.cosmetics,
+    },
+  };
 }
 
 export async function GET(request: Request) {
@@ -266,13 +331,27 @@ export async function GET(request: Request) {
     const creatorIds = [
       ...new Set(rows.map((row) => getNewsCreatorId(row)).filter((id): id is string => Boolean(id))),
     ];
+    const authorLabels = [
+      ...new Set(
+        mapped
+          .map((item, idx) => ({ item, row: rows[idx] }))
+          .filter(({ row }) => !getNewsCreatorId(row))
+          .map(({ item }) => (typeof item.author === "string" ? item.author.trim() : ""))
+          .filter((label) => label && !isPlaceholderNewsAuthor(label)),
+      ),
+    ];
 
-    if (!creatorIds.length) {
-      return Response.json({ ok: true, rows: mapped });
-    }
+    const [usersById, usersByLabel] = await Promise.all([
+      loadUsersByCreatorIds(supabase, creatorIds),
+      loadUsersByAuthorLabels(supabase, authorLabels),
+    ]);
+    const usersRows = [...usersById, ...usersByLabel].filter((row, index, list) => {
+      const id = typeof row.id === "string" ? row.id : "";
+      if (!id) return false;
+      return list.findIndex((other) => other.id === id) === index;
+    });
 
-    const usersRows = await loadUsersByCreatorIds(supabase, creatorIds);
-    if (!usersRows) {
+    if (!usersRows.length) {
       return Response.json({ ok: true, rows: mapped });
     }
 
@@ -293,7 +372,7 @@ export async function GET(request: Request) {
         cosmetics: NonNullable<ReturnType<typeof mapIdentityCosmeticsFromRow>>;
       }
     >();
-    const usersByLabel = new Map<
+    const usersByLabelMap = new Map<
       string,
       {
         name: string;
@@ -319,8 +398,8 @@ export async function GET(request: Request) {
         cosmetics,
       };
       const label = [person.name, person.callsign].filter(Boolean).join(" ").trim().toLowerCase();
-      if (label) usersByLabel.set(label, person);
-      if (person.name) usersByLabel.set(person.name.trim().toLowerCase(), person);
+      if (label) usersByLabelMap.set(label, person);
+      if (person.name) usersByLabelMap.set(person.name.trim().toLowerCase(), person);
       if (id) usersMap.set(id, person);
       if (authUserId) usersMap.set(authUserId, person);
     }
@@ -333,7 +412,7 @@ export async function GET(request: Request) {
       }
       const authorLabel = typeof item.author === "string" ? item.author.trim().toLowerCase() : "";
       if (authorLabel) {
-        const byAuthor = usersByLabel.get(authorLabel);
+        const byAuthor = usersByLabelMap.get(authorLabel);
         if (byAuthor) return byAuthor;
       }
       const joined = [item.author_name, item.author_callsign]
@@ -342,63 +421,15 @@ export async function GET(request: Request) {
         .join(" ")
         .trim()
         .toLowerCase();
-      if (joined) return usersByLabel.get(joined) ?? null;
+      if (joined) return usersByLabelMap.get(joined) ?? null;
       return null;
     };
 
     const withAuthorFallback = mapped.map((item, idx) => {
       const row = rows[idx];
-      const fullReplace = needsAuthorEnrichment(item, row);
       const user = resolveAuthorUser(item, row);
       if (!user) return item;
-
-      const candidateId = getNewsCreatorId(row) || item.author_id || null;
-      const authorText = [user.name, user.callsign].filter(Boolean).join(" ").trim();
-      const nextPosition = user.position || item.author_position || null;
-      const existingAvatar = normalizeAvatarStoragePath(
-        typeof item.author_profile?.avatar_url === "string" ? item.author_profile.avatar_url : null,
-      );
-      const nextAvatar = user.avatarUrl || existingAvatar;
-
-      if (!fullReplace && hasStoredAuthorPosition(item)) {
-        if (!authorHasIdentityExtras(user)) {
-          return item;
-        }
-        return {
-          ...item,
-          author_profile: {
-            ...(item.author_profile || {
-              id: candidateId || "",
-              name: item.author_name || "",
-              callsign: item.author_callsign || "",
-              position: item.author_position || null,
-            }),
-            avatar_url: user.avatarUrl || existingAvatar,
-            nameColor: user.nameColor,
-            cosmetics: user.cosmetics,
-          },
-        };
-      }
-
-      if (!fullReplace && !user.position && !authorHasIdentityExtras(user)) return item;
-
-      return {
-        ...item,
-        author_id: candidateId,
-        author: fullReplace ? authorText || item.author : item.author,
-        author_name: user.name || item.author_name || null,
-        author_callsign: user.callsign || item.author_callsign || null,
-        author_position: nextPosition,
-            author_profile: {
-              id: candidateId || "",
-              name: user.name || item.author_name || "",
-              callsign: user.callsign || item.author_callsign || "",
-              position: nextPosition,
-              avatar_url: nextAvatar,
-              nameColor: user.nameColor,
-              cosmetics: user.cosmetics,
-            },
-      };
+      return applyResolvedAuthor(item, row, user);
     });
 
     return Response.json({ ok: true, rows: withAuthorFallback });
