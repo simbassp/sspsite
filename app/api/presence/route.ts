@@ -10,6 +10,19 @@ type PresenceBody = {
   elapsedSeconds?: unknown;
 };
 
+function isTransientSupabaseError(message: string | undefined) {
+  const m = (message || "").toLowerCase();
+  return (
+    m.includes("fetch failed") ||
+    m.includes("network") ||
+    m.includes("timeout") ||
+    m.includes("econnreset") ||
+    m.includes("enotfound") ||
+    m.includes("abort") ||
+    m.includes("socket")
+  );
+}
+
 async function readPresenceBody(request: Request): Promise<PresenceBody> {
   try {
     const text = await request.text();
@@ -58,7 +71,7 @@ export async function POST(request: Request) {
       q = await supabase.from("app_users").update({ is_online: true }).eq("id", session.id);
     }
     if (q.error) {
-      if (isMissingColumnError(q.error.message)) {
+      if (isMissingColumnError(q.error.message) || isTransientSupabaseError(q.error.message)) {
         return Response.json({ ok: true, skipped: true });
       }
       console.error("[presence] update failed:", q.error.message);
@@ -86,9 +99,10 @@ export async function POST(request: Request) {
 
     return Response.json({ ok: true });
   } catch (error) {
-    return Response.json(
-      { ok: false, error: error instanceof Error ? error.message : "presence_exception" },
-      { status: 500 },
-    );
+    const message = error instanceof Error ? error.message : "presence_exception";
+    if (isTransientSupabaseError(message)) {
+      return Response.json({ ok: true, skipped: true });
+    }
+    return Response.json({ ok: false, error: message }, { status: 500 });
   }
 }

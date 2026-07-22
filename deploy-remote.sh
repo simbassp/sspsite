@@ -7,6 +7,25 @@ PM2_APP="${PM2_APP:-ssp}"
 
 cd "$APP_DIR"
 
+if [ ! -f .env.production ]; then
+  echo "ERROR: missing .env.production in $APP_DIR"
+  exit 1
+fi
+
+if ! grep -q '^SUPABASE_SERVICE_ROLE_KEY=.' .env.production; then
+  echo "ERROR: SUPABASE_SERVICE_ROLE_KEY is missing in .env.production"
+  echo "Add it from Supabase → Project Settings → API → service_role key"
+  exit 1
+fi
+
+SUPABASE_URL="$(grep '^NEXT_PUBLIC_SUPABASE_URL=' .env.production | cut -d= -f2- | tr -d '\r\"')"
+if [ -n "$SUPABASE_URL" ]; then
+  echo "==> check Supabase reachability"
+  if ! curl -fsS -m 10 -I "$SUPABASE_URL/rest/v1/" >/dev/null; then
+    echo "WARN: cannot reach Supabase from this server ($SUPABASE_URL)"
+  fi
+fi
+
 echo "==> git pull ($BRANCH)"
 git pull origin "$BRANCH"
 
