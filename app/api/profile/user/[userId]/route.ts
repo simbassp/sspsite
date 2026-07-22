@@ -1,6 +1,7 @@
 import { ONLINE_LAST_SEEN_MAX_MS } from "@/lib/presence-constants";
 import { loadUserUnlockedAchievementIds } from "@/lib/achievements-server";
 import { loadProfilePersonnelMeta } from "@/lib/profile-personnel-meta";
+import { loadInspectUserRow } from "@/lib/profile-inspect-user-server";
 import { loadProfileTestResults } from "@/lib/profile-test-results-server";
 import { normalizeAvatarStoragePath } from "@/lib/avatar-display";
 import { loadIdentityCosmeticsForUser } from "@/lib/user-identity-cosmetics-server";
@@ -17,11 +18,6 @@ function effectiveOnlineStrict(isOnline: unknown, lastSeenAt: unknown): boolean 
   const t = Date.parse(lastSeenAt);
   if (!Number.isFinite(t)) return false;
   return Date.now() - t <= ONLINE_LAST_SEEN_MAX_MS;
-}
-
-function isMissingColumnError(message: string | undefined) {
-  const m = (message || "").toLowerCase();
-  return m.includes("column") && m.includes("does not exist");
 }
 
 function looksLikeUuid(id: string) {
@@ -46,39 +42,16 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
   try {
     const supabase = getServerSupabaseServiceClient();
 
-    const userPrimary = await supabase
-      .from("app_users")
-      .select(
-        "id,name,callsign,position,role,status,login,is_online,last_seen_at,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,employment_date,avatar_url,profile_name_color,profile_cosmetic_avatar_frame,profile_cosmetic_name_color,profile_cosmetic_bank_overlay",
-      )
-      .eq("id", userId)
-      .maybeSingle();
-
-    let userRow: Record<string, unknown> | null = (userPrimary.data || null) as Record<string, unknown> | null;
-    let userErr = userPrimary.error?.message || null;
-    let onlineFromFlagOnly = false;
-    let dutyFromDb = true;
-    let unitFromDb = true;
-
-    if (userPrimary.error && isMissingColumnError(userPrimary.error.message)) {
-      dutyFromDb = false;
-      unitFromDb = false;
-      const fallback = await supabase
-        .from("app_users")
-        .select("id,name,callsign,position,role,status,login,is_online")
-        .eq("id", userId)
-        .maybeSingle();
-      userRow = (fallback.data || null) as Record<string, unknown> | null;
-      userErr = fallback.error?.message || null;
-      onlineFromFlagOnly = true;
+    const userLoad = await loadInspectUserRow(supabase, userId);
+    if (!userLoad.ok) {
+      const status = userLoad.error === "not_found" ? 404 : 500;
+      return Response.json({ ok: false, error: userLoad.error }, { status });
     }
 
-    if (userErr) {
-      return Response.json({ ok: false, error: userErr }, { status: 500 });
-    }
-    if (!userRow) {
-      return Response.json({ ok: false, error: "not_found" }, { status: 404 });
-    }
+    const userRow = userLoad.row;
+    const dutyFromDb = userLoad.dutyFromDb;
+    const unitFromDb = userLoad.unitFromDb;
+    const onlineFromFlagOnly = userLoad.onlineFromFlagOnly;
 
     const resultsLoad = await loadProfileTestResults(supabase, userId);
     if (resultsLoad.error) {

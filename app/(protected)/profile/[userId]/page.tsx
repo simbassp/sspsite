@@ -212,7 +212,15 @@ export default function ProfileUserInspectPage() {
           const duty_location: DutyLocation =
             u.duty_location === "deployment" ? "deployment" : "base";
           const unit_assignment = normalizeUnitAssignment(u.unit_assignment);
-          setInspectUser({ ...u, duty_location, unit_assignment });
+          setInspectUser((prev) => {
+            if (!prev) return { ...u, duty_location, unit_assignment };
+            return {
+              ...prev,
+              ...u,
+              duty_location,
+              unit_assignment: unitSaving ? prev.unit_assignment : unit_assignment,
+            };
+          });
           if (!rotaSaving) {
             setRotaPlatoon(u.rota_platoon === 1 || u.rota_platoon === 2 ? u.rota_platoon : null);
             setRotaSection(
@@ -237,7 +245,7 @@ export default function ProfileUserInspectPage() {
       cancelled = true;
       window.clearInterval(t);
     };
-  }, [session, userId, router, canOpen]);
+  }, [session, userId, router, canOpen, unitSaving, rotaSaving, employmentSaving]);
 
   const stats = useMemo(() => computeTrialProfileStats(rows), [rows]);
 
