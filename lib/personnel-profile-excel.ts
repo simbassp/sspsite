@@ -62,6 +62,56 @@ function applyCompactRow(row: ExcelJS.Row, height = 18) {
   row.height = height;
 }
 
+function applySheetTableFilters(
+  sheet: ExcelJS.Worksheet,
+  headerRow: number,
+  columnCount: number,
+  options?: { preserveViews?: boolean },
+) {
+  if (headerRow < 1 || columnCount < 1 || sheet.rowCount < headerRow) return;
+  sheet.autoFilter = {
+    from: { row: headerRow, column: 1 },
+    to: { row: sheet.rowCount, column: columnCount },
+  };
+  if (!options?.preserveViews) {
+    sheet.views = [{ state: "frozen", ySplit: headerRow, activeCell: headerRow === 1 ? "A2" : `A${headerRow + 1}` }];
+  }
+}
+
+function applyWorkbookTableFilters(workbook: ExcelJS.Workbook, bulk: boolean) {
+  if (bulk) {
+    const bulkSheets: Array<{ name: string; headerRow: number; columns: number; preserveViews?: boolean }> = [
+      { name: "Сводка", headerRow: 3, columns: 13, preserveViews: true },
+      { name: "Зачёты", headerRow: 1, columns: 6 },
+      { name: "Командировки", headerRow: 1, columns: 7 },
+      { name: "Медали", headerRow: 1, columns: 4 },
+      { name: "Премии", headerRow: 1, columns: 6 },
+      { name: "Активность", headerRow: 1, columns: 5 },
+    ];
+    for (const cfg of bulkSheets) {
+      const sheet = workbook.getWorksheet(cfg.name);
+      if (sheet && sheet.rowCount > cfg.headerRow) {
+        applySheetTableFilters(sheet, cfg.headerRow, cfg.columns, { preserveViews: cfg.preserveViews });
+      }
+    }
+    return;
+  }
+
+  const singleSheets: Array<{ name: string; columns: number }> = [
+    { name: "Зачёты", columns: 4 },
+    { name: "Командировки", columns: 5 },
+    { name: "Медали", columns: 2 },
+    { name: "Премии", columns: 4 },
+    { name: "Активность", columns: 3 },
+  ];
+  for (const cfg of singleSheets) {
+    const sheet = workbook.getWorksheet(cfg.name);
+    if (sheet && sheet.rowCount > 1) {
+      applySheetTableFilters(sheet, 1, cfg.columns);
+    }
+  }
+}
+
 type TestSummaryCounts = {
   trialPassed: number;
   trialFailed: number;
@@ -643,10 +693,13 @@ async function addSingleTestsSheet(workbook: ExcelJS.Workbook, bundle: Personnel
     const row = sheet.addRow(["Нет попыток", "", "", "", "", ""]);
     sheet.mergeCells(row.number, 1, row.number, 6);
     applyCompactRow(row);
-    return;
+  } else {
+    appendTestsDetailRows(sheet, bundle, false);
   }
 
-  appendTestsDetailRows(sheet, bundle, false);
+  if (sheet.rowCount > detailHeader.number) {
+    applySheetTableFilters(sheet, detailHeader.number, 6, { preserveViews: true });
+  }
 }
 
 async function addBulkTestsSheet(workbook: ExcelJS.Workbook, bundles: PersonnelProfileExportBundle[]) {
@@ -711,6 +764,10 @@ async function addBulkTestsSheet(workbook: ExcelJS.Workbook, bundles: PersonnelP
     const row = sheet.addRow(["Нет попыток", "", "", "", "", "", "", ""]);
     sheet.mergeCells(row.number, 1, row.number, 8);
     applyCompactRow(row);
+  }
+
+  if (sheet.rowCount > detailHeader.number) {
+    applySheetTableFilters(sheet, detailHeader.number, 8, { preserveViews: true });
   }
 }
 
@@ -955,6 +1012,7 @@ async function buildWorkbook(bundles: PersonnelProfileExportBundle[], bulk: bool
       addActivitySheet(workbook, bundle, true);
     }
     await addBulkTestsSheet(workbook, bundles);
+    applyWorkbookTableFilters(workbook, true);
   } else {
     const bundle = bundles[0];
     if (!bundle) throw new Error("empty_export_bundle");
@@ -966,6 +1024,7 @@ async function buildWorkbook(bundles: PersonnelProfileExportBundle[], bulk: bool
     addPremiumsSheet(workbook, bundle);
     await addSingleTestsSheet(workbook, bundle);
     addActivitySheet(workbook, bundle);
+    applyWorkbookTableFilters(workbook, false);
   }
 
   return workbook;
@@ -1103,6 +1162,10 @@ export async function buildPersonnelRosterFilterExcelBuffer(input: {
       if (column.key === "finalPassed") styleCountCell(cell, (row.finalPassed ?? 0) > 0 ? "pass" : "neutral");
       if (column.key === "finalFailed") styleCountCell(cell, (row.finalFailed ?? 0) > 0 ? "fail" : "neutral");
     });
+  }
+
+  if (sheet.rowCount > 1) {
+    applySheetTableFilters(sheet, 1, input.columns.length);
   }
 
   const buffer = await workbook.xlsx.writeBuffer();
