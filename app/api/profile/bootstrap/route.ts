@@ -1,6 +1,7 @@
 import { resolvePersonnelProfileViewAccess } from "@/lib/personnel-profile-access";
 import { syncUserAchievementsByUserId } from "@/lib/achievements-server";
 import { loadProfilePersonnelMeta } from "@/lib/profile-personnel-meta";
+import { loadProfileTestResults } from "@/lib/profile-test-results-server";
 import { loadPersonnelProfile } from "@/lib/personnel-server";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
@@ -23,32 +24,17 @@ export async function GET() {
     const supabase = getServerSupabaseServiceClient();
     void syncUserAchievementsByUserId(session.id).catch(() => undefined);
 
-    const resultsPrimaryPromise = supabase
-      .from("test_results")
-      .select("id,user_id,type,status,score,created_at,started_at,finished_at,duration_seconds,is_completed,questions_total,questions_correct")
-      .eq("user_id", session.id)
-      .order("created_at", { ascending: false })
-      .limit(20);
+    const resultsLoad = await loadProfileTestResults(supabase, session.id);
+    const resultsRows = resultsLoad.rows;
+    const resultsError = resultsLoad.error;
+
     const profilePrimaryPromise = supabase
       .from("app_users")
       .select("auth_user_id,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,employment_date,avatar_url,profile_name_color,position")
       .eq("id", session.id)
       .maybeSingle();
 
-    const [resultsPrimaryQ, profilePrimaryQ] = await Promise.all([resultsPrimaryPromise, profilePrimaryPromise]);
-
-    let resultsRows: Array<Record<string, unknown>> = (resultsPrimaryQ.data || []) as Array<Record<string, unknown>>;
-    let resultsError: string | null = resultsPrimaryQ.error?.message || null;
-    if (resultsPrimaryQ.error && isMissingColumnError(resultsPrimaryQ.error.message)) {
-      const resultsLegacyQ = await supabase
-        .from("test_results")
-        .select("id,user_id,test_type,status,score,created_at,questions_total,questions_correct")
-        .eq("user_id", session.id)
-        .order("created_at", { ascending: false })
-        .limit(20);
-      resultsRows = (resultsLegacyQ.data || []) as Array<Record<string, unknown>>;
-      resultsError = resultsLegacyQ.error?.message || null;
-    }
+    const [profilePrimaryQ] = await Promise.all([profilePrimaryPromise]);
 
     let profileRow: Record<string, unknown> | null = (profilePrimaryQ.data || null) as Record<string, unknown> | null;
     let profileError: string | null = profilePrimaryQ.error?.message || null;
@@ -147,20 +133,7 @@ export async function GET() {
       position,
       licenseCategories: personnelMeta.licenseCategories,
       bloodGroup: personnelMeta.bloodGroup,
-      results: resultsRows.map((r) => ({
-        id: r.id,
-        user_id: r.user_id,
-        type: r.type ?? r.test_type,
-        status: r.status,
-        score: r.score,
-        created_at: r.created_at,
-        started_at: r.started_at ?? null,
-        finished_at: r.finished_at ?? null,
-        duration_seconds: r.duration_seconds ?? null,
-        is_completed: r.is_completed ?? null,
-        questions_total: r.questions_total ?? null,
-        questions_correct: r.questions_correct ?? null,
-      })),
+      results: resultsRows,
       inviteCodes,
       personnelProfile,
     });

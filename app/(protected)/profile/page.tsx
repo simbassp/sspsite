@@ -68,32 +68,11 @@ import {
   type PersonnelBloodGroup,
   type PersonnelLicenseCategory,
 } from "@/lib/personnel-catalog";
+import { computeTrialProfileStats, mapProfileTestResultsFromApi } from "@/lib/profile-trial-stats";
 import { DutyLocation, Position, TestResult, TestResultsResetScope, UnitAssignment } from "@/lib/types";
 
 function mapBootstrapResults(raw: Array<Record<string, unknown>>): TestResult[] {
-  return raw
-    .map((r) => ({
-      id: String(r.id),
-      userId: String(r.user_id),
-      type: r.type === "final" ? "final" : "trial",
-      status: r.status === "passed" ? "passed" : "failed",
-      score: Number(r.score || 0),
-      createdAt: String(r.created_at),
-      startedAt: r.started_at ? String(r.started_at) : null,
-      finishedAt: r.finished_at ? String(r.finished_at) : null,
-      durationSeconds:
-        r.duration_seconds === null || r.duration_seconds === undefined ? null : Number(r.duration_seconds),
-      isCompleted: r.is_completed === null || r.is_completed === undefined ? null : Boolean(r.is_completed),
-      questionsTotal:
-        r.questions_total === null || r.questions_total === undefined ? null : Number(r.questions_total),
-      questionsCorrect:
-        r.questions_correct === null || r.questions_correct === undefined ? null : Number(r.questions_correct),
-      finalAttemptIndex:
-        r.final_attempt_index === null || r.final_attempt_index === undefined
-          ? null
-          : Number(r.final_attempt_index),
-    }))
-    .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)) as TestResult[];
+  return mapProfileTestResultsFromApi(raw);
 }
 
 const RESET_SCOPE_LABELS: Record<TestResultsResetScope, string> = {
@@ -360,7 +339,7 @@ export default function ProfilePage() {
   }, []);
 
   const stats = useMemo(() => {
-    if (!session)
+    if (!session) {
       return {
         total: 0,
         passed: 0,
@@ -368,22 +347,8 @@ export default function ProfilePage() {
         totalTimeSec: null as number | null,
         lastAttempt: null as TestResult | null,
       };
-    const trialRows = rows.filter((r) => r.type === "trial");
-    const total = trialRows.length;
-    const passed = trialRows.filter((r) => r.status === "passed").length;
-    const successRate = total ? Math.round((passed / total) * 100) : 0;
-    const lastAttempt = trialRows[0] ?? null;
-    const completedWithDuration = trialRows.filter(
-      (item) =>
-        item.isCompleted !== false &&
-        item.durationSeconds != null &&
-        Number.isFinite(Number(item.durationSeconds)) &&
-        Number(item.durationSeconds) > 0,
-    );
-    const totalTimeSec = completedWithDuration.length
-      ? Math.round(completedWithDuration.reduce((acc, item) => acc + Number(item.durationSeconds || 0), 0))
-      : null;
-    return { total, passed, successRate, totalTimeSec, lastAttempt };
+    }
+    return computeTrialProfileStats(rows);
   }, [rows, session]);
 
   /** Плашки сверху и сброс статистики относятся только к пробному тесту — список ниже разделён от итогового. */
@@ -1427,6 +1392,9 @@ export default function ProfilePage() {
       <article className="card" style={{ marginTop: 12 }}>
         <div className="card-body">
           <h3>Ваша активность</h3>
+          <p className="page-subtitle" style={{ marginTop: 4, marginBottom: 0 }}>
+            По пробным тестам: сколько попыток завершено, сколько сдано и суммарное время прохождения.
+          </p>
           {!rows.length ? (
             <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
               Статистика появится после прохождения первого теста.

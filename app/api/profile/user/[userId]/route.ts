@@ -1,6 +1,7 @@
 import { ONLINE_LAST_SEEN_MAX_MS } from "@/lib/presence-constants";
 import { loadUserUnlockedAchievementIds } from "@/lib/achievements-server";
 import { loadProfilePersonnelMeta } from "@/lib/profile-personnel-meta";
+import { loadProfileTestResults } from "@/lib/profile-test-results-server";
 import { normalizeAvatarStoragePath } from "@/lib/avatar-display";
 import { loadIdentityCosmeticsForUser } from "@/lib/user-identity-cosmetics-server";
 import { normalizeUnitAssignment } from "@/lib/unit-assignment";
@@ -79,32 +80,11 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
       return Response.json({ ok: false, error: "not_found" }, { status: 404 });
     }
 
-    const resultsPrimaryQ = await supabase
-      .from("test_results")
-      .select(
-        "id,user_id,type,status,score,created_at,started_at,finished_at,duration_seconds,is_completed,questions_total,questions_correct",
-      )
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(100);
-
-    let resultsRows: Array<Record<string, unknown>> = (resultsPrimaryQ.data || []) as Array<Record<string, unknown>>;
-    let resultsError: string | null = resultsPrimaryQ.error?.message || null;
-
-    if (resultsPrimaryQ.error && isMissingColumnError(resultsPrimaryQ.error.message)) {
-      const legacy = await supabase
-        .from("test_results")
-        .select("id,user_id,test_type,status,score,created_at,questions_total,questions_correct")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false })
-        .limit(100);
-      resultsRows = (legacy.data || []) as Array<Record<string, unknown>>;
-      resultsError = legacy.error?.message || null;
+    const resultsLoad = await loadProfileTestResults(supabase, userId);
+    if (resultsLoad.error) {
+      return Response.json({ ok: false, error: resultsLoad.error }, { status: 500 });
     }
-
-    if (resultsError) {
-      return Response.json({ ok: false, error: resultsError }, { status: 500 });
-    }
+    const resultsRows = resultsLoad.rows;
 
     const isOnline = onlineFromFlagOnly
       ? userRow.is_online === true
@@ -159,20 +139,7 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
         licenseCategories: personnelMeta.licenseCategories,
         bloodGroup: personnelMeta.bloodGroup,
       },
-      results: resultsRows.map((r) => ({
-        id: r.id,
-        user_id: r.user_id,
-        type: r.type ?? r.test_type,
-        status: r.status,
-        score: r.score,
-        created_at: r.created_at,
-        started_at: r.started_at ?? null,
-        finished_at: r.finished_at ?? null,
-        duration_seconds: r.duration_seconds ?? null,
-        is_completed: r.is_completed ?? null,
-        questions_total: r.questions_total ?? null,
-        questions_correct: r.questions_correct ?? null,
-      })),
+      results: resultsRows,
     });
   } catch (error) {
     return Response.json(
