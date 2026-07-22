@@ -39,7 +39,7 @@ import type { Position } from "@/lib/types";
 
 import {
   EMPTY_ROSTER_FILTER_PARAMS,
-  hasActiveRosterFilters as hasActiveRosterFilterParams,
+  hasActiveRosterFilters,
   type ExamFilterStatus,
   type RosterFilterParams,
   type TestFilter,
@@ -61,8 +61,50 @@ function resolveUserTestStats(user: UserRow, testDate: string) {
 type RosterFilters = RosterFilterParams;
 const EMPTY_ROSTER_FILTERS = EMPTY_ROSTER_FILTER_PARAMS;
 
-function hasActiveRosterFilters(filters: RosterFilters, testDate: string) {
-  return hasActiveRosterFilterParams(filters, testDate);
+type RosterQuery = {
+  platoon: "all" | "1" | "2";
+  section: "all" | "1" | "2" | "3" | "4";
+  module: string;
+  search: string;
+  testDate: string;
+  filters: RosterFilters;
+};
+
+const DEFAULT_ROSTER_QUERY: RosterQuery = {
+  platoon: "all",
+  section: "all",
+  module: "all",
+  search: "",
+  testDate: "",
+  filters: EMPTY_ROSTER_FILTERS,
+};
+
+function buildRosterFilterKey(query: RosterQuery) {
+  const q = new URLSearchParams();
+  if (query.platoon !== "all") q.set("platoon", query.platoon);
+  if (query.section !== "all") q.set("section", query.section);
+  if (query.module !== "all") q.set("module", query.module);
+  if (query.search.trim()) q.set("search", query.search.trim());
+  if (query.testDate) q.set("testDate", query.testDate);
+  q.set("examType", query.filters.examType);
+  q.set("examStatus", query.filters.examStatus);
+  q.set("license", query.filters.license);
+  q.set("trialTest", query.filters.trialTest);
+  q.set("finalTest", query.filters.finalTest);
+  q.set("hits", query.filters.hits);
+  q.set("premiums", query.filters.premiums);
+  q.set("dutyStatus", query.filters.dutyStatus);
+  return q.toString();
+}
+
+function hasActiveRosterQuery(query: RosterQuery) {
+  return (
+    query.platoon !== "all" ||
+    query.section !== "all" ||
+    query.module !== "all" ||
+    !!query.search.trim() ||
+    hasActiveRosterFilters(query.filters, query.testDate)
+  );
 }
 
 function formatFilterDateLabel(iso: string) {
@@ -132,19 +174,14 @@ type UserRow = {
 type Tab = "all" | "top";
 
 const ROSTER_FETCH_TIMEOUT_MS = 45000;
-const SEARCH_DEBOUNCE_MS = 350;
 const ROSTER_PAGE_SIZE = 10;
 
 export default function PersonnelListPage() {
   const [isHydrated, setIsHydrated] = useState(false);
   const session = useMemo(() => (isHydrated ? readClientSession() : null), [isHydrated]);
   const [tab, setTab] = useState<Tab>("all");
-  const [platoon, setPlatoon] = useState<"all" | "1" | "2">("all");
-  const [section, setSection] = useState<"all" | "1" | "2" | "3" | "4">("all");
-  const [module, setModule] = useState<string>("all");
-  const [searchInput, setSearchInput] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [testDateFilter, setTestDateFilter] = useState("");
+  const [draftQuery, setDraftQuery] = useState<RosterQuery>(DEFAULT_ROSTER_QUERY);
+  const [appliedQuery, setAppliedQuery] = useState<RosterQuery>(DEFAULT_ROSTER_QUERY);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [usersTotal, setUsersTotal] = useState(0);
   const [stats, setStats] = useState({ totalEmployees: 0, deployedNow: 0, avgDays: 0, totalDays: 0, totalHits: 0, totalPremiums: 0 });
@@ -166,7 +203,6 @@ export default function PersonnelListPage() {
   const [resetExamsMsg, setResetExamsMsg] = useState("");
   const [exportExcelLoading, setExportExcelLoading] = useState(false);
   const [exportExcelMsg, setExportExcelMsg] = useState("");
-  const [rosterFilters, setRosterFilters] = useState<RosterFilters>(EMPTY_ROSTER_FILTERS);
   const [rosterPage, setRosterPage] = useState(1);
   const loadSeqRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
@@ -179,25 +215,11 @@ export default function PersonnelListPage() {
     isPreview?: boolean;
   };
 
-  const rosterFilterKey = useMemo(() => {
-    const q = new URLSearchParams();
-    if (platoon !== "all") q.set("platoon", platoon);
-    if (section !== "all") q.set("section", section);
-    if (module !== "all") q.set("module", module);
-    if (debouncedSearch) q.set("search", debouncedSearch);
-    if (testDateFilter) q.set("testDate", testDateFilter);
-    q.set("examType", rosterFilters.examType);
-    q.set("examStatus", rosterFilters.examStatus);
-    q.set("license", rosterFilters.license);
-    q.set("trialTest", rosterFilters.trialTest);
-    q.set("finalTest", rosterFilters.finalTest);
-    q.set("hits", rosterFilters.hits);
-    q.set("premiums", rosterFilters.premiums);
-    q.set("dutyStatus", rosterFilters.dutyStatus);
-    return q.toString();
-  }, [platoon, section, module, debouncedSearch, testDateFilter, rosterFilters]);
+  const appliedFilterKey = useMemo(() => buildRosterFilterKey(appliedQuery), [appliedQuery]);
+  const draftFilterKey = useMemo(() => buildRosterFilterKey(draftQuery), [draftQuery]);
+  const filtersDirty = draftFilterKey !== appliedFilterKey;
 
-  const rosterCacheKey = useCallback((page: number) => `personnel:${rosterFilterKey}:p=${page}`, [rosterFilterKey]);
+  const rosterCacheKey = useCallback((page: number) => `personnel:${appliedFilterKey}:p=${page}`, [appliedFilterKey]);
 
   const applyRosterPayload = useCallback((payload: RosterPagePayload) => {
     setUsers(payload.users);
@@ -209,7 +231,7 @@ export default function PersonnelListPage() {
 
   const fetchRosterPage = useCallback(
     async (page: number, signal?: AbortSignal): Promise<RosterPagePayload | null> => {
-      const q = new URLSearchParams(rosterFilterKey);
+      const q = new URLSearchParams(appliedFilterKey);
       q.set("page", String(page));
       q.set("pageSize", String(ROSTER_PAGE_SIZE));
       const res = await withTimeout(
@@ -235,7 +257,7 @@ export default function PersonnelListPage() {
         isPreview: payload.isPreview,
       };
     },
-    [rosterFilterKey],
+    [appliedFilterKey],
   );
 
   const prefetchRosterPage = useCallback(
@@ -307,17 +329,31 @@ export default function PersonnelListPage() {
 
   const rosterPageCount = Math.max(1, Math.ceil(usersTotal / ROSTER_PAGE_SIZE));
   const displayStats = stats;
-  const rosterFiltersActive = hasActiveRosterFilters(rosterFilters, testDateFilter);
-  const displayTestStats = (user: UserRow) => resolveUserTestStats(user, testDateFilter);
+  const rosterFiltersActive = hasActiveRosterQuery(appliedQuery);
+  const displayTestStats = (user: UserRow) => resolveUserTestStats(user, appliedQuery.testDate);
 
-  const setRosterFilter = <K extends keyof RosterFilters>(key: K, value: RosterFilters[K]) => {
-    setRosterFilters((prev) => ({ ...prev, [key]: value }));
+  const patchDraft = (patch: Partial<RosterQuery>) => {
+    setDraftQuery((current) => ({ ...current, ...patch }));
+  };
+
+  const patchDraftFilters = (patch: Partial<RosterFilters>) => {
+    setDraftQuery((current) => ({ ...current, filters: { ...current.filters, ...patch } }));
+  };
+
+  const applyFilters = () => {
+    setAppliedQuery(draftQuery);
+    setRosterPage(1);
+  };
+
+  const resetFilters = () => {
+    setDraftQuery(DEFAULT_ROSTER_QUERY);
+    setAppliedQuery(DEFAULT_ROSTER_QUERY);
+    setRosterPage(1);
   };
 
   useEffect(() => {
     clearPagePrefetchCache("personnel");
-    setRosterPage(1);
-  }, [platoon, section, module, debouncedSearch, testDateFilter, rosterFilters]);
+  }, [appliedFilterKey]);
 
   useEffect(() => {
     setRosterPage((page) => Math.min(page, rosterPageCount));
@@ -328,14 +364,9 @@ export default function PersonnelListPage() {
   }, []);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedSearch(searchInput.trim()), SEARCH_DEBOUNCE_MS);
-    return () => window.clearTimeout(timer);
-  }, [searchInput]);
-
-  useEffect(() => {
     if (!isHydrated) return;
     void load();
-  }, [isHydrated, load]);
+  }, [isHydrated, load, appliedFilterKey, rosterPage]);
 
   useEffect(
     () => () => {
@@ -356,26 +387,26 @@ export default function PersonnelListPage() {
       } else {
         await postPersonnelExportExcel({
           scope: "filter",
-          platoon,
-          section,
-          module,
-          search: debouncedSearch,
-          testDate: testDateFilter || undefined,
-          examType: rosterFilters.examType,
-          examStatus: rosterFilters.examStatus,
-          license: rosterFilters.license,
-          trialTest: rosterFilters.trialTest,
-          finalTest: rosterFilters.finalTest,
-          hits: rosterFilters.hits,
-          premiums: rosterFilters.premiums,
-          dutyStatus: rosterFilters.dutyStatus,
+          platoon: appliedQuery.platoon,
+          section: appliedQuery.section,
+          module: appliedQuery.module,
+          search: appliedQuery.search.trim(),
+          testDate: appliedQuery.testDate || undefined,
+          examType: appliedQuery.filters.examType,
+          examStatus: appliedQuery.filters.examStatus,
+          license: appliedQuery.filters.license,
+          trialTest: appliedQuery.filters.trialTest,
+          finalTest: appliedQuery.filters.finalTest,
+          hits: appliedQuery.filters.hits,
+          premiums: appliedQuery.filters.premiums,
+          dutyStatus: appliedQuery.filters.dutyStatus,
           filterLines: buildExportFilterLines({
-            platoon,
-            section,
-            module,
-            search: debouncedSearch,
-            testDate: testDateFilter,
-            filters: rosterFilters,
+            platoon: appliedQuery.platoon,
+            section: appliedQuery.section,
+            module: appliedQuery.module,
+            search: appliedQuery.search.trim(),
+            testDate: appliedQuery.testDate,
+            filters: appliedQuery.filters,
           }),
         });
       }
@@ -407,9 +438,9 @@ export default function PersonnelListPage() {
           ? await postResetPersonnelExams({ scope: "all" })
           : await postResetPersonnelExams({
               scope: "filter",
-              platoon,
-              section,
-              search: debouncedSearch,
+              platoon: appliedQuery.platoon,
+              section: appliedQuery.section,
+              search: appliedQuery.search.trim(),
             });
       resetExamsModal.setOpen(false);
       setResetExamsMsg(
@@ -476,7 +507,11 @@ export default function PersonnelListPage() {
               <div className="personnel-filters__row personnel-filters__row--primary">
                 <div className="personnel-filters__field">
                   <p className="label">Взвод</p>
-                  <select className="select" value={platoon} onChange={(e) => setPlatoon(e.target.value as typeof platoon)}>
+                  <select
+                    className="select"
+                    value={draftQuery.platoon}
+                    onChange={(e) => patchDraft({ platoon: e.target.value as RosterQuery["platoon"] })}
+                  >
                     <option value="all">Все</option>
                     <option value="1">1 взвод</option>
                     <option value="2">2 взвод</option>
@@ -484,7 +519,11 @@ export default function PersonnelListPage() {
                 </div>
                 <div className="personnel-filters__field">
                   <p className="label">Отделение</p>
-                  <select className="select" value={section} onChange={(e) => setSection(e.target.value as typeof section)}>
+                  <select
+                    className="select"
+                    value={draftQuery.section}
+                    onChange={(e) => patchDraft({ section: e.target.value as RosterQuery["section"] })}
+                  >
                     <option value="all">Все</option>
                     <option value="1">1</option>
                     <option value="2">2</option>
@@ -494,7 +533,7 @@ export default function PersonnelListPage() {
                 </div>
                 <div className="personnel-filters__field">
                   <p className="label">Модуль</p>
-                  <select className="select" value={module} onChange={(e) => setModule(e.target.value)}>
+                  <select className="select" value={draftQuery.module} onChange={(e) => patchDraft({ module: e.target.value })}>
                     <option value="all">Все</option>
                     {ROTA_MODULE_OPTIONS.map((value) => (
                       <option key={value} value={String(value)}>
@@ -509,8 +548,11 @@ export default function PersonnelListPage() {
                     <input
                       className="input"
                       placeholder="Имя или позывной"
-                      value={searchInput}
-                      onChange={(e) => setSearchInput(e.target.value)}
+                      value={draftQuery.search}
+                      onChange={(e) => patchDraft({ search: e.target.value })}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") applyFilters();
+                      }}
                     />
                   </div>
                   <div className="personnel-filters__field personnel-filters__field--date">
@@ -518,8 +560,8 @@ export default function PersonnelListPage() {
                     <input
                       className="input"
                       type="date"
-                      value={testDateFilter}
-                      onChange={(e) => setTestDateFilter(e.target.value)}
+                      value={draftQuery.testDate}
+                      onChange={(e) => patchDraft({ testDate: e.target.value })}
                     />
                   </div>
                 </div>
@@ -530,14 +572,13 @@ export default function PersonnelListPage() {
                   <p className="label">Зачёт</p>
                   <select
                     className="select"
-                    value={rosterFilters.examType}
+                    value={draftQuery.filters.examType}
                     onChange={(e) => {
                       const nextType = e.target.value as RosterFilters["examType"];
-                      setRosterFilters((prev) => ({
-                        ...prev,
+                      patchDraftFilters({
                         examType: nextType,
-                        examStatus: nextType === "all" ? "all" : prev.examStatus,
-                      }));
+                        examStatus: nextType === "all" ? "all" : draftQuery.filters.examStatus,
+                      });
                     }}
                   >
                     <option value="all">Все</option>
@@ -552,9 +593,9 @@ export default function PersonnelListPage() {
                   <p className="label">Результат зачёта</p>
                   <select
                     className="select"
-                    value={rosterFilters.examStatus}
-                    onChange={(e) => setRosterFilter("examStatus", e.target.value as ExamFilterStatus)}
-                    disabled={rosterFilters.examType === "all"}
+                    value={draftQuery.filters.examStatus}
+                    onChange={(e) => patchDraftFilters({ examStatus: e.target.value as ExamFilterStatus })}
+                    disabled={draftQuery.filters.examType === "all"}
                   >
                     <option value="all">Все</option>
                     <option value="passed">Сдан</option>
@@ -565,8 +606,8 @@ export default function PersonnelListPage() {
                   <p className="label">Права</p>
                   <select
                     className="select"
-                    value={rosterFilters.license}
-                    onChange={(e) => setRosterFilter("license", e.target.value as RosterFilters["license"])}
+                    value={draftQuery.filters.license}
+                    onChange={(e) => patchDraftFilters({ license: e.target.value as RosterFilters["license"] })}
                   >
                     <option value="all">Все</option>
                     {PERSONNEL_LICENSE_CATEGORIES.map((category) => (
@@ -580,8 +621,8 @@ export default function PersonnelListPage() {
                   <p className="label">Сбития</p>
                   <select
                     className="select"
-                    value={rosterFilters.hits}
-                    onChange={(e) => setRosterFilter("hits", e.target.value as TriState)}
+                    value={draftQuery.filters.hits}
+                    onChange={(e) => patchDraftFilters({ hits: e.target.value as TriState })}
                   >
                     <option value="all">Все</option>
                     <option value="yes">Есть</option>
@@ -592,8 +633,8 @@ export default function PersonnelListPage() {
                   <p className="label">Премии</p>
                   <select
                     className="select"
-                    value={rosterFilters.premiums}
-                    onChange={(e) => setRosterFilter("premiums", e.target.value as TriState)}
+                    value={draftQuery.filters.premiums}
+                    onChange={(e) => patchDraftFilters({ premiums: e.target.value as TriState })}
                   >
                     <option value="all">Все</option>
                     <option value="yes">Есть</option>
@@ -607,8 +648,8 @@ export default function PersonnelListPage() {
                   <p className="label">Пробный тест</p>
                   <select
                     className="select"
-                    value={rosterFilters.trialTest}
-                    onChange={(e) => setRosterFilter("trialTest", e.target.value as TestFilter)}
+                    value={draftQuery.filters.trialTest}
+                    onChange={(e) => patchDraftFilters({ trialTest: e.target.value as TestFilter })}
                   >
                     <option value="all">Все</option>
                     <option value="passed">Сдал</option>
@@ -619,8 +660,8 @@ export default function PersonnelListPage() {
                   <p className="label">Итоговый тест</p>
                   <select
                     className="select"
-                    value={rosterFilters.finalTest}
-                    onChange={(e) => setRosterFilter("finalTest", e.target.value as TestFilter)}
+                    value={draftQuery.filters.finalTest}
+                    onChange={(e) => patchDraftFilters({ finalTest: e.target.value as TestFilter })}
                   >
                     <option value="all">Все</option>
                     <option value="passed">Сдал</option>
@@ -631,17 +672,34 @@ export default function PersonnelListPage() {
                   <p className="label">Статус</p>
                   <select
                     className="select"
-                    value={rosterFilters.dutyStatus}
-                    onChange={(e) => setRosterFilter("dutyStatus", e.target.value as RosterFilters["dutyStatus"])}
+                    value={draftQuery.filters.dutyStatus}
+                    onChange={(e) => patchDraftFilters({ dutyStatus: e.target.value as RosterFilters["dutyStatus"] })}
                   >
                     <option value="all">Все</option>
                     <option value="base">На базе</option>
                     <option value="deployment">В командировке</option>
                   </select>
                 </div>
+                <div className="personnel-filters__field personnel-filters__actions">
+                  <p className="label">&nbsp;</p>
+                  <div className="personnel-filters__buttons">
+                    <button className="btn btn-primary" type="button" onClick={applyFilters}>
+                      Применить
+                    </button>
+                    {(filtersDirty || rosterFiltersActive) && (
+                      <button className="btn" type="button" onClick={resetFilters}>
+                        Сбросить
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </article>
+
+          {filtersDirty && !isLoading && (
+            <p className="page-subtitle">Фильтры изменены — нажмите «Применить».</p>
+          )}
 
           <div className="personnel-stat-grid">
             <div className="personnel-stat-card">
@@ -670,14 +728,7 @@ export default function PersonnelListPage() {
             <p className="page-subtitle personnel-table-filter-meta">
               Найдено {usersTotal}
               {" · "}
-              <button
-                type="button"
-                className="personnel-table-filter-reset"
-                onClick={() => {
-                  setRosterFilters(EMPTY_ROSTER_FILTERS);
-                  setTestDateFilter("");
-                }}
-              >
+              <button type="button" className="personnel-table-filter-reset" onClick={resetFilters}>
                 Сбросить фильтры
               </button>
             </p>

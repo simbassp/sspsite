@@ -5081,8 +5081,14 @@ html[data-theme="dark"] .final-review-answer--correct {
 }
 
 .personnel-filters__row--tests {
-  grid-template-columns: repeat(3, minmax(140px, 1fr));
-  max-width: 640px;
+  grid-template-columns: repeat(3, minmax(140px, 1fr)) auto;
+  max-width: 820px;
+}
+
+.personnel-filters__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 @media (max-width: 960px) {
