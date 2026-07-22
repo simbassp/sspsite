@@ -102,6 +102,17 @@ export function appendResultsPeriodParams(
   if (input.dateTo) params.set("dateTo", input.dateTo);
 }
 
+export function resolvePeriodIsoBounds(period: ReturnType<typeof resolveDateRange>) {
+  if (period.range === "all") {
+    return { startIso: null as string | null, endIso: null as string | null, hasPeriodFilter: false };
+  }
+  return {
+    startIso: period.startMs != null ? new Date(period.startMs).toISOString() : null,
+    endIso: period.endMs != null ? new Date(period.endMs).toISOString() : null,
+    hasPeriodFilter: period.startMs != null || period.endMs != null,
+  };
+}
+
 export function timestampInRange(timestamp: string, startMs: number | null, endMs: number | null) {
   const t = new Date(timestamp).getTime();
   if (!Number.isFinite(t)) return false;
@@ -258,6 +269,22 @@ const ATTEMPT_SELECT_FULL =
   "id,user_id,type,status,score,created_at,questions_total,questions_correct,final_attempt_index";
 const ATTEMPT_SELECT_MID = "id,user_id,type,status,score,created_at";
 const ATTEMPT_SELECT_LEGACY = "id,user_id,test_type,status,score,created_at";
+const EXPORT_BATCH_SIZE = 1000;
+
+async function runAttemptsQueryWithFallbacks(
+  supabase: { from: (table: string) => unknown },
+  query: AttemptListQuery,
+  options?: { from?: number; to?: number; count?: boolean; limit?: number },
+) {
+  let res = await runAttemptsQuery(supabase, query, ATTEMPT_SELECT_FULL, "type", options);
+  if (res.error && isMissingColumnError(res.error.message)) {
+    res = await runAttemptsQuery(supabase, query, ATTEMPT_SELECT_MID, "type", options);
+  }
+  if (res.error && isMissingColumnError(res.error.message)) {
+    res = await runAttemptsQuery(supabase, query, ATTEMPT_SELECT_LEGACY, "test_type", options);
+  }
+  return res;
+}
 
 async function runAttemptsQuery(
   supabase: { from: (table: string) => unknown },
@@ -293,13 +320,7 @@ export async function fetchAttemptsPage(
   const from = (query.page - 1) * query.pageSize;
   const to = from + query.pageSize - 1;
 
-  let res = await runAttemptsQuery(supabase, query, ATTEMPT_SELECT_FULL, "type", { from, to, count: true });
-  if (res.error && isMissingColumnError(res.error.message)) {
-    res = await runAttemptsQuery(supabase, query, ATTEMPT_SELECT_MID, "type", { from, to, count: true });
-  }
-  if (res.error && isMissingColumnError(res.error.message)) {
-    res = await runAttemptsQuery(supabase, query, ATTEMPT_SELECT_LEGACY, "test_type", { from, to, count: true });
-  }
+  let res = await runAttemptsQueryWithFallbacks(supabase, query, { from, to, count: true });
   if (res.error) throw new Error(res.error.message);
   return { rows: (res.data ?? []) as Array<Record<string, unknown>>, total: res.count ?? 0 };
 }
@@ -307,7 +328,7 @@ export async function fetchAttemptsPage(
 export async function fetchAllAttemptsForExport(
   supabase: { from: (table: string) => unknown },
   query: AttemptListQuery,
-  maxRows = 10000,
+  maxRows = 50000,
 ) {
   if (query.statusFilter === "not_started") {
     return { rows: [] as Array<Record<string, unknown>>, total: 0 };
@@ -316,15 +337,30 @@ export async function fetchAllAttemptsForExport(
     return { rows: [] as Array<Record<string, unknown>>, total: 0 };
   }
 
-  let res = await runAttemptsQuery(supabase, query, ATTEMPT_SELECT_FULL, "type", { count: true, limit: maxRows });
-  if (res.error && isMissingColumnError(res.error.message)) {
-    res = await runAttemptsQuery(supabase, query, ATTEMPT_SELECT_MID, "type", { count: true, limit: maxRows });
+  const rows: Array<Record<string, unknown>> = [];
+  let total: number | null = null;
+  let page = 0;
+
+  while (rows.length < maxRows) {
+    const from = page * EXPORT_BATCH_SIZE;
+    const to = from + EXPORT_BATCH_SIZE - 1;
+    const res = await runAttemptsQueryWithFallbacks(supabase, query, {
+      from,
+      to,
+      count: page === 0,
+    });
+    if (res.error) throw new Error(res.error.message);
+    if (page === 0 && res.count != null) total = res.count;
+
+    const batch = (res.data ?? []) as Array<Record<string, unknown>>;
+    if (!batch.length) break;
+
+    rows.push(...batch);
+    if (batch.length < EXPORT_BATCH_SIZE) break;
+    page += 1;
   }
-  if (res.error && isMissingColumnError(res.error.message)) {
-    res = await runAttemptsQuery(supabase, query, ATTEMPT_SELECT_LEGACY, "test_type", { count: true, limit: maxRows });
-  }
-  if (res.error) throw new Error(res.error.message);
-  return { rows: (res.data ?? []) as Array<Record<string, unknown>>, total: res.count ?? 0 };
+
+  return { rows: rows.slice(0, maxRows), total: total ?? rows.length };
 }
 
 const ATTEMPT_SELECT_STREAK = "user_id,status,created_at";

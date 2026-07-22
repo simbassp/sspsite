@@ -7,6 +7,7 @@ import {
   isMissingColumnError,
   parseResultsFiltersFromBody,
   resolveDateRangeFromBody,
+  resolvePeriodIsoBounds,
   shouldShowTrialTripleStreak,
   type ResultsListFilters,
 } from "@/lib/admin-results-query";
@@ -104,13 +105,10 @@ function filterUserIds(users: AppUserListRow[], filters: ResultsListFilters, uni
 export async function loadResultsExportData(body: Record<string, unknown>) {
   const config = buildExportConfig(body);
   const period = resolveDateRangeFromBody(body);
-  const { startMs, endMs } = period;
-  const startIso = startMs != null ? new Date(startMs).toISOString() : null;
-  const endIso = endMs != null ? new Date(endMs).toISOString() : null;
-  const hasPeriodFilter = startMs != null || endMs != null;
+  const { startIso, endIso, hasPeriodFilter } = resolvePeriodIsoBounds(period);
   const filters = parseResultsFiltersFromBody(body);
 
-  const supabase = getServerSupabaseServiceClient();
+  const supabase = getServerSupabaseServiceClient({ fetchTimeoutMs: 90_000 });
 
   const usersPrimary = await supabase
     .from("app_users")
