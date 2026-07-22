@@ -51,8 +51,8 @@ type NewsRow = {
   format?: unknown;
 };
 
-const NEWS_CACHE_TTL_MS = 60_000;
-const NEWS_CACHE_KEY = "ssp_news_cache_v4";
+const NEWS_CACHE_TTL_MS = 30_000;
+const NEWS_CACHE_KEY = "ssp_news_cache_v5";
 let newsMemoryCache: { ts: number; rows: NewsItem[] } | null = null;
 const DEFAULT_NEWS_TEXT_STYLE: NewsTextStyle = {
   fontSize: 16,
@@ -153,6 +153,15 @@ function writeNewsCache(rows: NewsItem[]) {
   } catch {}
 }
 
+export function invalidateNewsCache() {
+  newsMemoryCache = null;
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(NEWS_CACHE_KEY);
+    window.localStorage.removeItem("ssp_news_cache_v4");
+  } catch {}
+}
+
 export async function fetchNews(limit = 40, forceRefresh = false): Promise<NewsItem[]> {
   const safeLimit = Math.max(1, Math.min(limit, 200));
   if (!forceRefresh) {
@@ -173,22 +182,28 @@ export async function fetchNews(limit = 40, forceRefresh = false): Promise<NewsI
           cache: "no-store",
           headers: { "cache-control": "no-store" },
         }),
-      7000,
+      20_000,
       1,
       "fetch_news_timeout",
     );
     if (!api.ok) {
-      return listNews().slice(0, safeLimit);
+      throw new Error(`news_fetch_failed_${api.status}`);
     }
     const payload = (await api.json()) as { ok?: boolean; rows?: NewsRow[] };
     if (!payload.ok || !Array.isArray(payload.rows)) {
-      return listNews().slice(0, safeLimit);
+      throw new Error("news_fetch_invalid_response");
     }
     const mapped = payload.rows.map(mapNewsRow);
     writeNewsCache(mapped);
     return mapped;
-  } catch {
-    return listNews().slice(0, safeLimit);
+  } catch (error) {
+    if (!isSupabaseConfigured) {
+      const local = listNews().slice(0, safeLimit);
+      writeNewsCache(local);
+      return local;
+    }
+    invalidateNewsCache();
+    throw error instanceof Error ? error : new Error("news_fetch_failed");
   }
 }
 
@@ -244,6 +259,7 @@ export async function createNews(payload: {
       });
       return { ok: false as const, error: data.error || `request_failed_${response.status}` };
     }
+    invalidateNewsCache();
     return { ok: true as const };
   } catch {
     addNews({
@@ -277,6 +293,7 @@ export async function updateNews(input: {
       kind: normalizedKind,
       textStyle: normalizedStyle,
     });
+    invalidateNewsCache();
     return { ok: true as const, localOnly: !isSupabaseConfigured || !isUuidLike(input.id) };
   }
 
@@ -296,6 +313,7 @@ export async function updateNews(input: {
       const data = (await response.json().catch(() => ({}))) as { error?: string };
       return { ok: false as const, error: data.error || `request_failed_${response.status}` };
     }
+    invalidateNewsCache();
     return { ok: true as const, localOnly: false };
   } catch {
     return { ok: false as const, error: "network_error" };
@@ -305,6 +323,7 @@ export async function updateNews(input: {
 export async function deleteNews(id: string) {
   if (!isSupabaseConfigured || !isUuidLike(id)) {
     removeNewsItem(id);
+    invalidateNewsCache();
     return { ok: true as const, localOnly: !isSupabaseConfigured || !isUuidLike(id) };
   }
 
@@ -314,6 +333,7 @@ export async function deleteNews(id: string) {
       const data = (await response.json().catch(() => ({}))) as { error?: string };
       return { ok: false as const, error: data.error || `request_failed_${response.status}` };
     }
+    invalidateNewsCache();
     return { ok: true as const, localOnly: false };
   } catch {
     return { ok: false as const, error: "network_error" };

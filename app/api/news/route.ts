@@ -194,6 +194,54 @@ function authorHasIdentityExtras(user: {
   );
 }
 
+const NEWS_USER_SELECT_BASE = "id,auth_user_id,name,callsign,position,avatar_url";
+const NEWS_USER_SELECT = `${NEWS_USER_SELECT_BASE},${IDENTITY_COSMETIC_USER_COLUMNS}`;
+const NEWS_USER_SELECT_RESILIENT = `${NEWS_USER_SELECT_BASE},profile_name_color,${ACHIEVEMENT_COSMETIC_USER_COLUMNS}`;
+const NEWS_USER_SELECT_FALLBACK = `${NEWS_USER_SELECT_BASE},profile_name_color`;
+
+async function loadUsersByCreatorIds(
+  supabase: ReturnType<typeof getServerSupabaseServiceClient>,
+  ids: string[],
+) {
+  const queryUsers = async (select: string, column: "id" | "auth_user_id", filterIds: string[]) =>
+    supabase.from("app_users").select(select).in(column, filterIds);
+
+  const loadUsersSelect = async (column: "id" | "auth_user_id", filterIds: string[]) => {
+    const attempts = [NEWS_USER_SELECT, NEWS_USER_SELECT_RESILIENT, NEWS_USER_SELECT_FALLBACK, NEWS_USER_SELECT_BASE];
+    for (const select of attempts) {
+      const usersQ = await queryUsers(select, column, filterIds);
+      if (!usersQ.error && Array.isArray(usersQ.data)) {
+        return usersQ.data as unknown as Array<Record<string, unknown>>;
+      }
+      if (usersQ.error && !isMissingColumnError(usersQ.error.message)) {
+        return null;
+      }
+    }
+    return null;
+  };
+
+  const [byIdRows, byAuthRows] = await Promise.all([
+    loadUsersSelect("id", ids),
+    loadUsersSelect("auth_user_id", ids),
+  ]);
+  if (!byIdRows && !byAuthRows) return null;
+  const merged = new Map<string, Record<string, unknown>>();
+  for (const row of [...(byIdRows ?? []), ...(byAuthRows ?? [])]) {
+    if (!row || typeof row !== "object") continue;
+    const id = typeof row.id === "string" ? row.id : "";
+    if (id) merged.set(id, row);
+  }
+  return [...merged.values()];
+}
+
+function needsAuthorEnrichment(
+  item: ReturnType<typeof normalizeNewsRows>[number],
+  row: Record<string, unknown>,
+) {
+  if (getNewsCreatorId(row)) return true;
+  return isPlaceholderNewsAuthor(item?.author ?? "");
+}
+
 export async function GET(request: Request) {
   const session = await getServerSession();
   if (!session) return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
@@ -212,91 +260,18 @@ export async function GET(request: Request) {
       return Response.json({ ok: false, error: q.error.message || "news_query_failed" }, { status: 500 });
     }
     const rows: Array<Record<string, unknown>> = ((q.data as unknown[]) || []) as Array<Record<string, unknown>>;
-    if (!rows.length) return Response.json({ ok: true, rows: fallbackSeedRows(limit), degraded: true });
+    if (!rows.length) return Response.json({ ok: true, rows: [] });
     const mapped = normalizeNewsRows(rows);
-
-    const needsAuthorEnrichment = (idx: number) => {
-      const item = mapped[idx];
-      const row = rows[idx];
-      const hasCreator = Boolean(getNewsCreatorId(row));
-      // Если есть ссылка на пользователя, всегда приоритезируем профиль из app_users.
-      if (hasCreator) return true;
-      return isPlaceholderNewsAuthor(item?.author ?? "");
-    };
-
-    const shouldResolveAuthors = mapped.some((item, idx) => {
-      if (needsAuthorEnrichment(idx)) return true;
-      if (getNewsCreatorId(rows[idx])) return true;
-      if (hasStoredAuthorPosition(item)) return false;
-      if (item.author && !isPlaceholderNewsAuthor(item.author)) return true;
-      return false;
-    });
-
-    if (!shouldResolveAuthors) {
-      return Response.json({ ok: true, rows: mapped });
-    }
 
     const creatorIds = [
       ...new Set(rows.map((row) => getNewsCreatorId(row)).filter((id): id is string => Boolean(id))),
     ];
-    const needsLabelLookup = mapped.some((item, idx) => {
-      if (getNewsCreatorId(rows[idx])) return false;
-      if (hasStoredAuthorPosition(item)) return false;
-      if (needsAuthorEnrichment(idx)) return true;
-      if (item.author && !isPlaceholderNewsAuthor(item.author)) return true;
-      return false;
-    });
 
-    const userSelectBase = "id,auth_user_id,name,callsign,position,avatar_url";
-    const userSelect = `${userSelectBase},${IDENTITY_COSMETIC_USER_COLUMNS}`;
-    const userSelectResilient = `${userSelectBase},profile_name_color,${ACHIEVEMENT_COSMETIC_USER_COLUMNS}`;
-    const userSelectFallback = `${userSelectBase},profile_name_color`;
-    let usersRows: Array<Record<string, unknown>> | null = null;
-
-    const queryUsers = async (select: string, filter?: { column: "id" | "auth_user_id"; ids: string[] }) => {
-      if (filter?.ids.length) {
-        return supabase.from("app_users").select(select).in(filter.column, filter.ids);
-      }
-      return supabase.from("app_users").select(select);
-    };
-
-    const loadUsersSelect = async (filter?: { column: "id" | "auth_user_id"; ids: string[] }) => {
-      const attempts = [userSelect, userSelectResilient, userSelectFallback, userSelectBase];
-      for (const select of attempts) {
-        const usersQ = await queryUsers(select, filter);
-        if (!usersQ.error && Array.isArray(usersQ.data)) {
-          return usersQ.data as unknown as Array<Record<string, unknown>>;
-        }
-        if (usersQ.error && !isMissingColumnError(usersQ.error.message)) {
-          return null;
-        }
-      }
-      return null;
-    };
-
-    const loadAllUsers = async () => loadUsersSelect();
-
-    const loadUsersByCreatorIds = async (ids: string[]) => {
-      const [byIdRows, byAuthRows] = await Promise.all([
-        loadUsersSelect({ column: "id", ids }),
-        loadUsersSelect({ column: "auth_user_id", ids }),
-      ]);
-      if (!byIdRows && !byAuthRows) return null;
-      const merged = new Map<string, Record<string, unknown>>();
-      for (const row of [...(byIdRows ?? []), ...(byAuthRows ?? [])]) {
-        if (!row || typeof row !== "object") continue;
-        const id = typeof row.id === "string" ? row.id : "";
-        if (id) merged.set(id, row as Record<string, unknown>);
-      }
-      return [...merged.values()];
-    };
-
-    if (needsLabelLookup || creatorIds.length === 0) {
-      usersRows = await loadAllUsers();
-    } else {
-      usersRows = await loadUsersByCreatorIds(creatorIds);
+    if (!creatorIds.length) {
+      return Response.json({ ok: true, rows: mapped });
     }
 
+    const usersRows = await loadUsersByCreatorIds(supabase, creatorIds);
     if (!usersRows) {
       return Response.json({ ok: true, rows: mapped });
     }
@@ -373,7 +348,7 @@ export async function GET(request: Request) {
 
     const withAuthorFallback = mapped.map((item, idx) => {
       const row = rows[idx];
-      const fullReplace = needsAuthorEnrichment(idx);
+      const fullReplace = needsAuthorEnrichment(item, row);
       const user = resolveAuthorUser(item, row);
       if (!user) return item;
 
@@ -427,8 +402,11 @@ export async function GET(request: Request) {
     });
 
     return Response.json({ ok: true, rows: withAuthorFallback });
-  } catch {
-    return Response.json({ ok: true, rows: fallbackSeedRows(limit), degraded: true });
+  } catch (error) {
+    return Response.json(
+      { ok: false, error: error instanceof Error ? error.message : "news_query_exception" },
+      { status: 500 },
+    );
   }
 }
 

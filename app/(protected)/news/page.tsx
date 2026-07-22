@@ -58,7 +58,7 @@ export default function NewsPage() {
   };
 
   useEffect(() => {
-    void load();
+    void load(true);
   }, []);
 
   const counts = useMemo(() => countNewsByFilter(news), [news]);
