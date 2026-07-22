@@ -10,20 +10,25 @@ type CatalogChipTrackProps = {
 
 export function CatalogChipTrack({ activeId, className, children }: CatalogChipTrackProps) {
   const trackRef = useRef<HTMLDivElement>(null);
-  const [slider, setSlider] = useState({ width: 0, x: 0 });
+  const [slider, setSlider] = useState({ width: 0, height: 0, x: 0, y: 0 });
 
   const syncSlider = useCallback(() => {
     const track = trackRef.current;
     if (!track || !activeId) {
-      setSlider({ width: 0, x: 0 });
+      setSlider({ width: 0, height: 0, x: 0, y: 0 });
       return;
     }
     const active = track.querySelector<HTMLElement>(`[data-chip-id="${CSS.escape(activeId)}"]`);
     if (!active) {
-      setSlider({ width: 0, x: 0 });
+      setSlider({ width: 0, height: 0, x: 0, y: 0 });
       return;
     }
-    setSlider({ width: active.offsetWidth, x: active.offsetLeft });
+    setSlider({
+      width: active.offsetWidth,
+      height: active.offsetHeight,
+      x: active.offsetLeft,
+      y: active.offsetTop,
+    });
     active.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
   }, [activeId]);
 
@@ -36,7 +41,12 @@ export function CatalogChipTrack({ activeId, className, children }: CatalogChipT
       if (!activeId) return;
       const active = track.querySelector<HTMLElement>(`[data-chip-id="${CSS.escape(activeId)}"]`);
       if (!active) return;
-      setSlider({ width: active.offsetWidth, x: active.offsetLeft });
+      setSlider({
+        width: active.offsetWidth,
+        height: active.offsetHeight,
+        x: active.offsetLeft,
+        y: active.offsetTop,
+      });
     };
 
     window.addEventListener("resize", syncSlider);
@@ -55,7 +65,8 @@ export function CatalogChipTrack({ activeId, className, children }: CatalogChipT
         aria-hidden
         style={{
           width: slider.width ? `${slider.width}px` : 0,
-          transform: `translateX(${slider.x}px)`,
+          height: slider.height ? `${slider.height}px` : 0,
+          transform: `translate(${slider.x}px, ${slider.y}px)`,
           opacity: slider.width ? 1 : 0,
         }}
       />

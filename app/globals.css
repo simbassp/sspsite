@@ -1573,19 +1573,20 @@ html[data-theme="dark"] .profile-rota-badge {
 
 .chip-track {
   position: relative;
+  padding-bottom: 0;
 }
 
 .chip-track__slider {
   position: absolute;
   top: 0;
-  bottom: 0;
   left: 0;
   border-radius: 999px;
   background: rgba(207, 46, 46, 0.15);
   border: 1px solid rgba(255, 82, 82, 0.24);
-  transition: transform 0.22s ease, width 0.22s ease, opacity 0.15s ease;
+  transition: transform 0.22s ease, width 0.22s ease, height 0.22s ease, opacity 0.15s ease;
   pointer-events: none;
   z-index: 0;
+  box-sizing: border-box;
 }
 
 html[data-theme="dark"] .chip-track__slider {
@@ -1597,11 +1598,29 @@ html[data-theme="dark"] .chip-track__slider {
 .chip-track .chip {
   position: relative;
   z-index: 1;
+  background: transparent;
+}
+
+.chip-track .chip:not(.active):not(:disabled) {
+  background: var(--glass);
 }
 
 .chip-track .chip.active {
   background: transparent;
+  border-color: transparent;
   box-shadow: none;
+}
+
+html[data-theme="dark"] .chip-track .chip.active {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: #ffffff;
+}
+
+html[data-theme="dark"] .chip-track .chip:not(.active):not(:disabled) {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.16);
 }
 
 .chip.chip-back {
