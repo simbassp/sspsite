@@ -1,24 +1,47 @@
-import { getPersonnelContext } from "@/lib/personnel-api-guard";
-import { countUnreadNotifications } from "@/lib/personnel-server";
+import { resolvePersonnelAccess } from "@/lib/personnel-access";
+import { getServerSession } from "@/lib/server-auth";
+import { normalizeUnitAssignment } from "@/lib/unit-assignment";
+import type { UnitAssignment } from "@/lib/types";
+import { countUnreadNotifications, loadPersonnelModuleSettings, loadPersonnelUserBasics } from "@/lib/personnel-server";
 import { canModeratePersonnel } from "@/lib/permissions";
 
 export const runtime = "nodejs";
 
 export async function GET() {
-  const ctx = await getPersonnelContext();
-  if (!ctx.ok) {
-    return Response.json({ ok: false, error: ctx.error }, { status: ctx.status });
+  const session = await getServerSession();
+  if (!session) {
+    return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
-  const unread = await countUnreadNotifications(ctx.session.id);
+  const settings = await loadPersonnelModuleSettings();
+  let unitAssignment: UnitAssignment | null = session.unitAssignment ?? null;
+  if (!unitAssignment) {
+    const basic = await loadPersonnelUserBasics(session.id);
+    unitAssignment = basic?.unitAssignment ?? null;
+  }
+
+  const access = resolvePersonnelAccess({ session, unitAssignment, settings });
+  if (!access.canView) {
+    return Response.json({
+      ok: true,
+      showPersonnel: false,
+      isPreview: false,
+      moduleEnabled: settings.moduleEnabled,
+      canModerate: false,
+      unreadNotifications: 0,
+      unitAssignment: normalizeUnitAssignment(unitAssignment),
+    });
+  }
+
+  const unread = await countUnreadNotifications(session.id);
 
   return Response.json({
     ok: true,
-    showPersonnel: ctx.access.canView,
-    isPreview: ctx.access.isPreview,
-    moduleEnabled: ctx.settings.moduleEnabled,
-    canModerate: canModeratePersonnel(ctx.session) || ctx.session.role === "admin",
+    showPersonnel: true,
+    isPreview: access.isPreview,
+    moduleEnabled: settings.moduleEnabled,
+    canModerate: canModeratePersonnel(session) || session.role === "admin",
     unreadNotifications: unread,
-    unitAssignment: ctx.unitAssignment,
+    unitAssignment,
   });
 }

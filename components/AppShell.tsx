@@ -126,8 +126,8 @@ export function AppShell({ session, children }: AppShellProps) {
 
   useEffect(() => {
     void fetch("/api/personnel/nav", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((p: { showPersonnel?: boolean }) => setShowPersonnelNav(p.showPersonnel === true))
+      .then((r) => (r.ok ? r.json() : null))
+      .then((p: { showPersonnel?: boolean } | null) => setShowPersonnelNav(p?.showPersonnel === true))
       .catch(() => undefined);
   }, []);
 
