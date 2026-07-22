@@ -114,7 +114,7 @@ a {
   margin: 0 auto;
   min-width: 0;
   /* Запас под фиксированный bottom-nav + safe area (история и низ страницы не прячутся на телефоне) */
-  padding-bottom: calc(110px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));
 }
 
 .desktop-sidebar {
@@ -2473,24 +2473,67 @@ html[data-theme="dark"] .chip:not(.active):hover {
   right: 0;
   bottom: 0;
   z-index: 20;
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 4px 6px;
-  padding: 10px 8px calc(10px + env(safe-area-inset-bottom));
+  padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
   background: color-mix(in srgb, var(--bg) 88%, transparent);
   backdrop-filter: blur(12px);
   border-top: 1px solid var(--line);
 }
 
+.bottom-nav__track {
+  position: relative;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 2px;
+}
+
+.bottom-nav__track::-webkit-scrollbar {
+  display: none;
+}
+
+.bottom-nav__slider {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 0;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+  transition: transform 0.22s ease, width 0.22s ease, opacity 0.15s ease;
+  pointer-events: none;
+  z-index: 0;
+}
+
 .bottom-nav a {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
   display: grid;
   justify-items: center;
   gap: 2px;
-  padding: 6px 2px;
+  min-width: 52px;
+  padding: 8px 10px;
   border-radius: 12px;
   font-size: 10px;
   line-height: 1.2;
-  min-width: 0;
+  scroll-snap-align: center;
+  transition: color 0.15s ease;
+}
+
+.bottom-nav a.active {
+  background: transparent;
+  color: var(--accent);
+}
+
+html[data-theme="dark"] .bottom-nav a.active {
+  color: color-mix(in srgb, var(--accent) 70%, white);
 }
 
 @media (max-width: 819px) {
@@ -2505,7 +2548,8 @@ html[data-theme="dark"] .chip:not(.active):hover {
   }
 
   .bottom-nav a {
-    padding: 10px 2px;
+    padding: 10px 12px;
+    min-width: 48px;
   }
 
   .news-card-header {
@@ -2534,10 +2578,6 @@ html[data-theme="dark"] .chip:not(.active):hover {
     font-size: 22px;
     line-height: 1;
   }
-}
-
-.bottom-nav a.active {
-  background: var(--glass);
 }
 
 .tabs {

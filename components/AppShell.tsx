@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   canAccessAdminPanel,
@@ -249,6 +249,41 @@ export function AppShell({ session, children }: AppShellProps) {
       })()
     : mainLinks;
   const bottomLinks = navLinks;
+
+  const bottomNavTrackRef = useRef<HTMLDivElement>(null);
+  const [bottomNavSlider, setBottomNavSlider] = useState({ width: 0, x: 0 });
+
+  const syncBottomNavSlider = useCallback(() => {
+    const track = bottomNavTrackRef.current;
+    if (!track) return;
+    const active = track.querySelector<HTMLElement>("a.active");
+    if (!active) {
+      setBottomNavSlider({ width: 0, x: 0 });
+      return;
+    }
+    setBottomNavSlider({ width: active.offsetWidth, x: active.offsetLeft });
+    active.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+  }, []);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      syncBottomNavSlider();
+    });
+    const track = bottomNavTrackRef.current;
+    if (!track) return () => cancelAnimationFrame(frame);
+    const onScroll = () => {
+      const active = track.querySelector<HTMLElement>("a.active");
+      if (!active) return;
+      setBottomNavSlider({ width: active.offsetWidth, x: active.offsetLeft });
+    };
+    window.addEventListener("resize", syncBottomNavSlider);
+    track.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("resize", syncBottomNavSlider);
+      track.removeEventListener("scroll", onScroll);
+    };
+  }, [pathname, showPersonnelNav, syncBottomNavSlider]);
 
   useEffect(() => {
     const sync = () => setIsOnline(typeof navigator !== "undefined" ? navigator.onLine : true);
@@ -646,24 +681,36 @@ export function AppShell({ session, children }: AppShellProps) {
         </footer>
       </main>
 
-      <nav className="bottom-nav">
-        {bottomLinks.map((link) => {
-          const active = pathname === link.href || pathname.startsWith(`${link.href}/`);
-          return (
-            <Link
-              prefetch={false}
-              key={link.href}
-              href={link.href}
-              className={active ? "active" : ""}
-              aria-label={link.label}
-            >
-              <span className="bottom-nav-icon" aria-hidden="true">
-                {renderNavIcon(link.icon)}
-              </span>
-              <span className="bottom-nav-label">{link.label}</span>
-            </Link>
-          );
-        })}
+      <nav className="bottom-nav" aria-label="Основная навигация">
+        <div className="bottom-nav__track" ref={bottomNavTrackRef}>
+          <span
+            className="bottom-nav__slider"
+            aria-hidden
+            style={{
+              width: bottomNavSlider.width ? `${bottomNavSlider.width}px` : 0,
+              transform: `translateX(${bottomNavSlider.x}px)`,
+              opacity: bottomNavSlider.width ? 1 : 0,
+            }}
+          />
+          {bottomLinks.map((link) => {
+            const active = pathname === link.href || pathname.startsWith(`${link.href}/`);
+            return (
+              <Link
+                prefetch={false}
+                key={link.href}
+                href={link.href}
+                className={active ? "active" : ""}
+                aria-label={link.label}
+                aria-current={active ? "page" : undefined}
+              >
+                <span className="bottom-nav-icon" aria-hidden="true">
+                  {renderNavIcon(link.icon)}
+                </span>
+                <span className="bottom-nav-label">{link.label}</span>
+              </Link>
+            );
+          })}
+        </div>
       </nav>
     </div>
   );
