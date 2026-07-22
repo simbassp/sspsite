@@ -1736,8 +1736,14 @@ html[data-theme="dark"] .chip:not(.active):hover {
 }
 
 .admin-results-filters__row--secondary {
-  grid-template-columns: minmax(180px, 2fr) minmax(120px, 1fr) minmax(140px, 1fr);
-  max-width: 760px;
+  grid-template-columns: minmax(180px, 2fr) minmax(120px, 1fr) minmax(140px, 1fr) auto;
+  max-width: 920px;
+}
+
+.admin-results-filters__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 @media (max-width: 960px) {

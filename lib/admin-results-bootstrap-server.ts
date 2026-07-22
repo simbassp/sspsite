@@ -1,18 +1,12 @@
-import { buildFinalAttemptIndexLookup } from "@/lib/final-attempt-index";
 import { effectiveFinalCountingFromUtc, nextAutoResetUtcIso } from "@/lib/final-effective-counting";
 import { FINAL_TEST_MAX_ATTEMPTS } from "@/lib/final-test-constants";
 import {
   applyCreatedAtRange,
-  calcAttemptPeopleStats,
-  calcTrialTripleStreakStats,
-  fetchAttemptsForPeopleStats,
   fetchAttemptsPage,
-  fetchTrialAttemptsForStreak,
   isMissingColumnError,
   parseAttemptsQuery,
   resolveDateRange,
   resolvePeriodIsoBounds,
-  shouldShowTrialTripleStreak,
   timestampInRange,
   type ResultsListFilters,
 } from "@/lib/admin-results-query";
@@ -63,41 +57,6 @@ export type ResultsUserSummary = {
   showResetAttempts: boolean;
 };
 
-export type ResultsBannerStats = {
-  passedCount: number;
-  lastPassed: {
-    name: string;
-    callsign: string;
-    nameColor: ProfileNameColorId | null;
-    cosmetics: Record<string, unknown>;
-    at: string;
-  } | null;
-  notPassedCount: number;
-  lastNotPassed: {
-    name: string;
-    callsign: string;
-    nameColor: ProfileNameColorId | null;
-    cosmetics: Record<string, unknown>;
-    at: string;
-  } | null;
-  trialAttemptsCount: number;
-  lastTrial: {
-    name: string;
-    callsign: string;
-    nameColor: ProfileNameColorId | null;
-    cosmetics: Record<string, unknown>;
-    at: string;
-  } | null;
-  finalAttemptsCount: number;
-  lastFinal: {
-    name: string;
-    callsign: string;
-    nameColor: ProfileNameColorId | null;
-    cosmetics: Record<string, unknown>;
-    at: string;
-  } | null;
-};
-
 type NormalizedFinalRow = {
   id: string;
   user_id: string;
@@ -143,7 +102,6 @@ type BootstrapContext = {
     startIso: string | null;
     endIso: string | null;
   };
-  needTrialStats: boolean;
 };
 
 export async function loadResultsBootstrapContext(
@@ -262,7 +220,6 @@ export async function loadResultsBootstrapContext(
       startIso,
       endIso,
     },
-    needTrialStats: shouldShowTrialTripleStreak(attemptsQuery.typeFilter, attemptsQuery.statusFilter),
   };
 }
 
@@ -355,116 +312,49 @@ function buildSummaries(ctx: BootstrapContext, finalRows: NormalizedFinalRow[]):
     });
 }
 
-async function fetchSqlBannerParts(ctx: BootstrapContext) {
-  const { supabase, startIso, endIso } = ctx;
-
-  const [trialCountRes, trialLastRes, finalCountRes, finalLastRes] = await Promise.all([
-    applyCreatedAtRange(
-      supabase.from("test_results").select("id", { count: "exact", head: true }).eq("type", "trial"),
-      startIso,
-      endIso,
-    ),
-    applyCreatedAtRange(
-      supabase.from("test_results").select("user_id,created_at").eq("type", "trial"),
-      startIso,
-      endIso,
-    )
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    applyCreatedAtRange(
-      supabase.from("test_results").select("id", { count: "exact", head: true }).eq("type", "final"),
-      startIso,
-      endIso,
-    ),
-    applyCreatedAtRange(
-      supabase.from("test_results").select("user_id,created_at").eq("type", "final"),
-      startIso,
-      endIso,
-    )
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-  ]);
-
-  const trialRow = trialLastRes.data as { user_id?: string; created_at?: string } | null;
-  const finalRow = finalLastRes.data as { user_id?: string; created_at?: string } | null;
-  const trialUser = trialRow?.user_id ? ctx.userById.get(String(trialRow.user_id)) : undefined;
-  const finalUser = finalRow?.user_id ? ctx.userById.get(String(finalRow.user_id)) : undefined;
-
-  return {
-    trialAttemptsCount: trialCountRes.count ?? 0,
-    lastTrial:
-      trialRow?.created_at && trialUser
-        ? {
-            name: trialUser.name,
-            callsign: trialUser.callsign,
-            nameColor: trialUser.nameColor,
-            cosmetics: trialUser.cosmetics ?? {},
-            at: String(trialRow.created_at),
-          }
-        : trialRow?.created_at
-          ? { name: "—", callsign: "", nameColor: null, cosmetics: {}, at: String(trialRow.created_at) }
-          : null,
-    finalAttemptsCount: finalCountRes.count ?? 0,
-    lastFinal:
-      finalRow?.created_at && finalUser
-        ? {
-            name: finalUser.name,
-            callsign: finalUser.callsign,
-            nameColor: finalUser.nameColor,
-            cosmetics: finalUser.cosmetics ?? {},
-            at: String(finalRow.created_at),
-          }
-        : finalRow?.created_at
-          ? { name: "—", callsign: "", nameColor: null, cosmetics: {}, at: String(finalRow.created_at) }
-          : null,
-  };
+function filterNotStartedSummaries(ctx: BootstrapContext, summaries: ResultsUserSummary[]) {
+  const query = ctx.attemptsQuery.search?.toLowerCase() ?? "";
+  return summaries.filter((row) => {
+    if (row.status !== "not_started") return false;
+    if (
+      !matchesResultsUnitFilter(ctx.attemptsQuery.unitFilter, ctx.attemptsQuery.rotaPlatoon, ctx.attemptsQuery.rotaSection, {
+        unitAssignment: row.unitAssignment,
+        rotaPlatoon: row.rotaPlatoon,
+        rotaSection: row.rotaSection,
+      })
+    ) {
+      return false;
+    }
+    if (!query) return true;
+    return row.name.toLowerCase().includes(query) || row.callsign.toLowerCase().includes(query);
+  });
 }
 
-function buildBannerFromSummaries(
-  ctx: BootstrapContext,
-  summaries: ResultsUserSummary[],
-  sqlParts: Awaited<ReturnType<typeof fetchSqlBannerParts>>,
-): ResultsBannerStats {
-  const passedSummaries = summaries.filter((s) => s.status === "passed");
-  const failedSummaries = summaries.filter((s) => s.status === "failed");
-  const notStartedSummaries = summaries.filter((s) => s.status === "not_started");
+async function loadNotStartedPage(ctx: BootstrapContext) {
+  const finalResultsRaw = await fetchFinalResultsForSummaries(ctx.supabase, ctx.startIso, ctx.endIso);
+  const finalRows: NormalizedFinalRow[] = finalResultsRaw.map((r) => ({
+    id: String(r.id),
+    user_id: String(r.user_id),
+    status: r.status === "passed" ? ("passed" as const) : ("failed" as const),
+    score: Number(r.score ?? 0),
+    created_at: String(r.created_at ?? ""),
+    questions_total: r.questions_total != null ? Number(r.questions_total) : null,
+    questions_correct: r.questions_correct != null ? Number(r.questions_correct) : null,
+  }));
 
-  const lastPassed = passedSummaries.reduce<ResultsBannerStats["lastPassed"]>((best, s) => {
-    if (!s.latestFinalAt) return best;
-    if (!best || new Date(s.latestFinalAt) > new Date(best.at)) {
-      return {
-        name: s.name,
-        callsign: s.callsign,
-        nameColor: s.nameColor ?? null,
-        cosmetics: s.cosmetics ?? {},
-        at: s.latestFinalAt,
-      };
-    }
-    return best;
-  }, null);
-
-  const lastFailed = failedSummaries.reduce<ResultsBannerStats["lastNotPassed"]>((best, s) => {
-    if (!s.latestFinalAt) return best;
-    if (!best || new Date(s.latestFinalAt) > new Date(best.at)) {
-      return {
-        name: s.name,
-        callsign: s.callsign,
-        nameColor: s.nameColor ?? null,
-        cosmetics: s.cosmetics ?? {},
-        at: s.latestFinalAt,
-      };
-    }
-    return best;
-  }, null);
+  const summaries = buildSummaries(ctx, finalRows);
+  const notStarted = filterNotStartedSummaries(ctx, summaries);
+  const page = ctx.attemptsQuery.page;
+  const pageSize = ctx.attemptsQuery.pageSize;
+  const from = (page - 1) * pageSize;
 
   return {
-    passedCount: passedSummaries.length,
-    lastPassed,
-    notPassedCount: failedSummaries.length + notStartedSummaries.length,
-    lastNotPassed: lastFailed,
-    ...sqlParts,
+    attempts: [],
+    attemptsTotal: 0,
+    attemptsPage: page,
+    attemptsPageSize: pageSize,
+    notStartedUsers: notStarted.slice(from, from + pageSize),
+    notStartedTotal: notStarted.length,
   };
 }
 
@@ -505,7 +395,6 @@ function mapAttemptRows(
   ctx: BootstrapContext,
   attemptsPageData: { rows: Array<Record<string, unknown>>; total: number },
   latestFinalAtByUser: Map<string, string>,
-  finalAttemptIndexById: Map<string, number>,
 ) {
   const attempts = attemptsPageData.rows
     .map((row) => {
@@ -532,7 +421,6 @@ function mapAttemptRows(
         questionsCorrect: row.questions_correct != null ? Number(row.questions_correct) : null,
         questionsTotal: row.questions_total != null ? Number(row.questions_total) : null,
         createdAt,
-        finalAttemptIndex: type === "final" ? finalAttemptIndexById.get(String(row.id)) ?? null : null,
         showResetAttempts:
           ctx.viewerCanResetAttempts && type === "final" && !!latestFinalAt && createdAt === latestFinalAt,
         canDeleteAttempt: ctx.viewerCanResetAttempts,
@@ -572,127 +460,33 @@ async function loadLatestFinalAtForUsers(ctx: BootstrapContext, userIds: string[
   return latestFinalAtByUser;
 }
 
-async function loadFinalAttemptIndexForPage(ctx: BootstrapContext, pageRows: Array<Record<string, unknown>>) {
-  const userIds = [
-    ...new Set(
-      pageRows
-        .filter((row) => (row.type ?? row.test_type) === "final")
-        .map((row) => String(row.user_id))
-        .filter(Boolean),
-    ),
-  ];
-  if (!userIds.length) return new Map<string, number>();
-
-  const { data, error } = await ctx.supabase
-    .from("test_results")
-    .select("id,user_id,created_at")
-    .eq("type", "final")
-    .in("user_id", userIds)
-    .order("created_at", { ascending: true })
-    .limit(5000);
-
-  if (error) throw new Error(error.message);
-
-  const countingFromByUser = new Map(ctx.users.map((u) => [u.id, u.final_test_counting_from ?? null]));
-  return buildFinalAttemptIndexLookup(
-    ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
-      id: String(r.id),
-      user_id: String(r.user_id),
-      created_at: String(r.created_at ?? ""),
-    })),
-    countingFromByUser,
-  );
-}
-
 export async function loadResultsBootstrapFast(ctx: BootstrapContext) {
-  const [attemptsPageData, sqlParts, lastResetAudit] = await Promise.all([
-    fetchAttemptsPage(ctx.supabase, {
-      ...ctx.listQuery,
-      page: ctx.attemptsQuery.page,
-      pageSize: ctx.attemptsQuery.pageSize,
-    }),
-    fetchSqlBannerParts(ctx),
-    loadLastResetAudit(ctx),
-  ]);
+  const lastResetAudit = await loadLastResetAudit(ctx);
 
-  const finalAttemptIndexById = await loadFinalAttemptIndexForPage(ctx, attemptsPageData.rows);
-  const pageUserIds = [...new Set(attemptsPageData.rows.map((row) => String(row.user_id)).filter(Boolean))];
-  const latestFinalAtByUser = await loadLatestFinalAtForUsers(ctx, pageUserIds);
-
-  const attemptPayload = mapAttemptRows(ctx, attemptsPageData, latestFinalAtByUser, finalAttemptIndexById);
-
-  const bannerStats: ResultsBannerStats = {
-    passedCount: 0,
-    lastPassed: null,
-    notPassedCount: 0,
-    lastNotPassed: null,
-    ...sqlParts,
-  };
-
-  return {
-    nextAutoResetAt: nextAutoResetUtcIso(),
-    summaries: [] as ResultsUserSummary[],
-    ...attemptPayload,
-    filterPeopleStats: null as { passedPeople: number; failedPeople: number } | null,
-    trialTripleStreakStats: null as { cohortPeople: number; passedPeople: number; failedPeople: number } | null,
-    lastResetAudit,
-    bannerStats,
-  };
-}
-
-export async function loadResultsBootstrapStats(ctx: BootstrapContext) {
-  const finalResultsRaw = await fetchFinalResultsForSummaries(ctx.supabase, ctx.startIso, ctx.endIso);
-  const finalRows: NormalizedFinalRow[] = finalResultsRaw.map((r) => ({
-    id: String(r.id),
-    user_id: String(r.user_id),
-    status: r.status === "passed" ? ("passed" as const) : ("failed" as const),
-    score: Number(r.score ?? 0),
-    created_at: String(r.created_at ?? ""),
-    questions_total: r.questions_total != null ? Number(r.questions_total) : null,
-    questions_correct: r.questions_correct != null ? Number(r.questions_correct) : null,
-  }));
-
-  const summaries = buildSummaries(ctx, finalRows);
-  const sqlParts = await fetchSqlBannerParts(ctx);
-  const bannerStats = buildBannerFromSummaries(ctx, summaries, sqlParts);
-
-  let filterPeopleStats: { passedPeople: number; failedPeople: number } | null = null;
-  if (ctx.attemptsQuery.statusFilter !== "not_started" && !ctx.needTrialStats) {
-    const peopleStatsRows = await fetchAttemptsForPeopleStats(ctx.supabase, {
-      ...ctx.listQuery,
-      page: 1,
-      pageSize: 10000,
-    });
-    filterPeopleStats = calcAttemptPeopleStats(peopleStatsRows);
-  }
-
-  let trialTripleStreakStats: { cohortPeople: number; passedPeople: number; failedPeople: number } | null = null;
-  if (ctx.needTrialStats) {
-    const trialAttempts = await fetchTrialAttemptsForStreak(ctx.supabase, {
-      allowedUserIds: ctx.allowedUserIds,
-      startIso: ctx.startIso,
-      endIso: ctx.endIso,
-    });
-    const streakStats = calcTrialTripleStreakStats(ctx.cohortUserIds, trialAttempts);
-    trialTripleStreakStats = {
-      cohortPeople: streakStats.cohortPeople,
-      passedPeople: streakStats.passedPeople,
-      failedPeople: streakStats.failedPeople,
+  if (ctx.attemptsQuery.statusFilter === "not_started" && ctx.attemptsQuery.typeFilter !== "trial") {
+    const notStartedPayload = await loadNotStartedPage(ctx);
+    return {
+      nextAutoResetAt: nextAutoResetUtcIso(),
+      ...notStartedPayload,
+      lastResetAudit,
     };
   }
 
-  return {
-    summaries,
-    bannerStats,
-    filterPeopleStats,
-    trialTripleStreakStats,
-  };
-}
+  const attemptsPageData = await fetchAttemptsPage(ctx.supabase, {
+    ...ctx.listQuery,
+    page: ctx.attemptsQuery.page,
+    pageSize: ctx.attemptsQuery.pageSize,
+  });
 
-export async function loadResultsBootstrapFull(ctx: BootstrapContext) {
-  const [fast, stats] = await Promise.all([loadResultsBootstrapFast(ctx), loadResultsBootstrapStats(ctx)]);
+  const pageUserIds = [...new Set(attemptsPageData.rows.map((row) => String(row.user_id)).filter(Boolean))];
+  const latestFinalAtByUser = await loadLatestFinalAtForUsers(ctx, pageUserIds);
+  const attemptPayload = mapAttemptRows(ctx, attemptsPageData, latestFinalAtByUser);
+
   return {
-    ...fast,
-    ...stats,
+    nextAutoResetAt: nextAutoResetUtcIso(),
+    ...attemptPayload,
+    notStartedUsers: [] as ResultsUserSummary[],
+    notStartedTotal: 0,
+    lastResetAudit,
   };
 }

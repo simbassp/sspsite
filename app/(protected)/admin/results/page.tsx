@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ResultsExportExcelButton, postResultsExportExcel } from "@/components/admin/ResultsExportExcelButton";
 import { UserIdentityDisplay } from "@/components/profile/UserIdentityDisplay";
 import type { UserIdentityCosmetics } from "@/lib/user-identity-cosmetics";
@@ -12,7 +12,6 @@ import { getPositionBadgeClass } from "@/lib/position-ui";
 import { formatDateTime } from "@/lib/format";
 import { formatTestResultForType } from "@/lib/test-pass-rules";
 import {
-  matchesResultsUnitFilter,
   UNIT_ASSIGNMENT_OPTIONS,
   unitAssignmentLabel,
   type RotaPlatoonFilter,
@@ -23,10 +22,23 @@ import type { UnitAssignment } from "@/lib/types";
 import { ROTA_PLATOON_OPTIONS, ROTA_SECTION_OPTIONS } from "@/lib/personnel-catalog";
 import { FINAL_AUTO_RESET_DAY_UTC } from "@/lib/final-effective-counting";
 import { appendResultsPeriodParams, buildResultsPeriodBody } from "@/lib/admin-results-query";
+import { clearPagePrefetchCache, readPagePrefetchCache, writePagePrefetchCache } from "@/lib/page-prefetch-cache";
 
 type PeriodMode = "all" | "today" | "custom";
 type TestTypeFilter = "all" | "trial" | "final";
 type StatusFilter = "all" | "passed" | "failed" | "not_started";
+
+type ResultsFilters = {
+  periodMode: PeriodMode;
+  dateFrom: string;
+  dateTo: string;
+  typeFilter: TestTypeFilter;
+  statusFilter: StatusFilter;
+  unitFilter: UnitAssignmentFilter;
+  rotaPlatoon: RotaPlatoonFilter;
+  rotaSection: RotaSectionFilter;
+  searchTerm: string;
+};
 
 type UserSummary = {
   userId: string;
@@ -35,17 +47,6 @@ type UserSummary = {
   nameColor?: ProfileNameColorId | null;
   cosmetics?: UserIdentityCosmetics | null;
   position?: string;
-  unitAssignment?: UnitAssignment | null;
-  rotaPlatoon?: number | null;
-  rotaSection?: number | null;
-  status: "passed" | "failed" | "not_started";
-  scorePercent: number | null;
-  questionsCorrect: number | null;
-  questionsTotal: number | null;
-  latestFinalAt: string | null;
-  usedFinalAttempts: number;
-  maxFinalAttempts: number;
-  showResetAttempts: boolean;
 };
 
 type AttemptRow = {
@@ -65,61 +66,81 @@ type AttemptRow = {
   questionsCorrect: number | null;
   questionsTotal: number | null;
   createdAt: string;
-  finalAttemptIndex: number | null;
   showResetAttempts: boolean;
   canDeleteAttempt: boolean;
-};
-
-type LastPersonAt = {
-  name: string;
-  callsign: string;
-  nameColor?: ProfileNameColorId | null;
-  cosmetics?: UserIdentityCosmetics | null;
-  at: string;
-};
-
-type BannerStats = {
-  passedCount: number;
-  lastPassed: LastPersonAt | null;
-  notPassedCount: number;
-  lastNotPassed: LastPersonAt | null;
-  trialAttemptsCount: number;
-  lastTrial: LastPersonAt | null;
-  finalAttemptsCount: number;
-  lastFinal: LastPersonAt | null;
 };
 
 type BootstrapPayload = {
   ok?: boolean;
   error?: string;
-  viewerIsAdmin?: boolean;
-  nextAutoResetAt?: string;
-  summaries?: UserSummary[];
   attempts?: AttemptRow[];
   attemptsTotal?: number;
-  attemptsPage?: number;
-  attemptsPageSize?: number;
-  filterPeopleStats?: { passedPeople: number; failedPeople: number };
-  trialTripleStreakStats?: { cohortPeople: number; passedPeople: number; failedPeople: number } | null;
-  bannerStats?: BannerStats;
+  notStartedUsers?: UserSummary[];
+  notStartedTotal?: number;
   lastResetAudit?: {
     created_at: string;
     admin_name: string;
     target_name: string;
     target_callsign: string;
   } | null;
+  nextAutoResetAt?: string;
 };
 
-const emptyBannerStats: BannerStats = {
-  passedCount: 0,
-  lastPassed: null,
-  notPassedCount: 0,
-  lastNotPassed: null,
-  trialAttemptsCount: 0,
-  lastTrial: null,
-  finalAttemptsCount: 0,
-  lastFinal: null,
+type ResultsPagePayload = {
+  attempts: AttemptRow[];
+  attemptsTotal: number;
+  notStartedUsers: UserSummary[];
+  notStartedTotal: number;
+  lastResetAudit: BootstrapPayload["lastResetAudit"];
+  nextAutoResetAt: string | null;
+  page: number;
 };
+
+const ATTEMPTS_PAGE_SIZE = 10;
+
+const DEFAULT_FILTERS: ResultsFilters = {
+  periodMode: "all",
+  dateFrom: "",
+  dateTo: "",
+  typeFilter: "all",
+  statusFilter: "all",
+  unitFilter: "all",
+  rotaPlatoon: "all",
+  rotaSection: "all",
+  searchTerm: "",
+};
+
+function filtersKey(filters: ResultsFilters) {
+  return [
+    filters.periodMode,
+    filters.dateFrom,
+    filters.dateTo,
+    filters.typeFilter,
+    filters.statusFilter,
+    filters.searchTerm.trim(),
+    filters.unitFilter,
+    filters.rotaPlatoon,
+    filters.rotaSection,
+  ].join("|");
+}
+
+function buildBootstrapParams(filters: ResultsFilters, page: number) {
+  const params = new URLSearchParams();
+  appendResultsPeriodParams(params, {
+    periodMode: filters.periodMode,
+    dateFrom: filters.dateFrom,
+    dateTo: filters.dateTo,
+  });
+  params.set("page", String(page));
+  params.set("pageSize", String(ATTEMPTS_PAGE_SIZE));
+  params.set("attemptType", filters.typeFilter);
+  params.set("attemptStatus", filters.statusFilter);
+  if (filters.searchTerm.trim()) params.set("search", filters.searchTerm.trim());
+  if (filters.unitFilter !== "all") params.set("unit", filters.unitFilter);
+  if (filters.rotaPlatoon !== "all") params.set("rotaPlatoon", filters.rotaPlatoon);
+  if (filters.rotaSection !== "all") params.set("rotaSection", filters.rotaSection);
+  return params;
+}
 
 function ResultsUserName({
   name,
@@ -143,22 +164,6 @@ function ResultsUserName({
   );
 }
 
-function formatLastPersonLine(row: LastPersonAt | null) {
-  if (!row) return <>Последний: —</>;
-  return (
-    <>
-      Последний:{" "}
-      <ResultsUserName
-        name={row.name}
-        callsign={row.callsign}
-        nameColor={row.nameColor}
-        cosmetics={row.cosmetics}
-      />{" "}
-      · {formatDateTime(row.at)}
-    </>
-  );
-}
-
 function formatAttemptResult(row: {
   type: "trial" | "final";
   questionsTotal: number | null;
@@ -168,37 +173,18 @@ function formatAttemptResult(row: {
   return formatTestResultForType(row);
 }
 
-const ATTEMPTS_PAGE_SIZE = 10;
-
 export default function AdminResultsPage() {
   const { session, hydrated } = useClientSession();
   const viewerCanReset = hydrated && session ? canResetTestResults(session) : false;
 
-  const [periodMode, setPeriodMode] = useState<PeriodMode>("today");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [typeFilter, setTypeFilter] = useState<TestTypeFilter>("all");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [unitFilter, setUnitFilter] = useState<UnitAssignmentFilter>("all");
-  const [rotaPlatoon, setRotaPlatoon] = useState<RotaPlatoonFilter>("all");
-  const [rotaSection, setRotaSection] = useState<RotaSectionFilter>("all");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [summaries, setSummaries] = useState<UserSummary[]>([]);
+  const [draftFilters, setDraftFilters] = useState<ResultsFilters>(DEFAULT_FILTERS);
+  const [appliedFilters, setAppliedFilters] = useState<ResultsFilters>(DEFAULT_FILTERS);
   const [attempts, setAttempts] = useState<AttemptRow[]>([]);
-  const [attemptsTotal, setAttemptsTotal] = useState(0);
+  const [notStartedUsers, setNotStartedUsers] = useState<UserSummary[]>([]);
+  const [listTotal, setListTotal] = useState(0);
   const [attemptsPage, setAttemptsPage] = useState(1);
-  const [filterPeopleStats, setFilterPeopleStats] = useState<{ passedPeople: number; failedPeople: number } | null>(
-    null,
-  );
-  const [trialTripleStreakStats, setTrialTripleStreakStats] = useState<{
-    cohortPeople: number;
-    passedPeople: number;
-    failedPeople: number;
-  } | null>(null);
-  const [bannerStats, setBannerStats] = useState<BannerStats>(emptyBannerStats);
   const [lastResetAudit, setLastResetAudit] = useState<BootstrapPayload["lastResetAudit"]>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isStatsLoading, setIsStatsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [resetBusyId, setResetBusyId] = useState<string | null>(null);
   const [deleteBusyId, setDeleteBusyId] = useState<string | null>(null);
@@ -207,159 +193,146 @@ export default function AdminResultsPage() {
   const [exportExcelLoading, setExportExcelLoading] = useState(false);
   const [exportExcelMsg, setExportExcelMsg] = useState("");
 
-  const filterKey = useMemo(
-    () =>
-      [
-        periodMode,
-        dateFrom,
-        dateTo,
-        typeFilter,
-        statusFilter,
-        searchTerm.trim(),
-        unitFilter,
-        rotaPlatoon,
-        rotaSection,
-      ].join("|"),
-    [periodMode, dateFrom, dateTo, typeFilter, statusFilter, searchTerm, unitFilter, rotaPlatoon, rotaSection],
-  );
-  const prevFilterKeyRef = useRef<string | null>(null);
-  const loadAbortRef = useRef<AbortController | null>(null);
-  const statsAbortRef = useRef<AbortController | null>(null);
+  const appliedFilterKey = useMemo(() => filtersKey(appliedFilters), [appliedFilters]);
+  const draftFilterKey = useMemo(() => filtersKey(draftFilters), [draftFilters]);
+  const filtersDirty = draftFilterKey !== appliedFilterKey;
+  const isNotStartedView =
+    appliedFilters.statusFilter === "not_started" && appliedFilters.typeFilter !== "trial";
 
-  const buildBootstrapParams = useCallback(
-    (page: number) => {
-      const params = new URLSearchParams();
-      appendResultsPeriodParams(params, { periodMode, dateFrom, dateTo });
-      params.set("page", String(page));
-      params.set("pageSize", String(ATTEMPTS_PAGE_SIZE));
-      params.set("attemptType", typeFilter);
-      params.set("attemptStatus", statusFilter);
-      if (searchTerm.trim()) params.set("search", searchTerm.trim());
-      if (unitFilter !== "all") params.set("unit", unitFilter);
-      if (rotaPlatoon !== "all") params.set("rotaPlatoon", rotaPlatoon);
-      if (rotaSection !== "all") params.set("rotaSection", rotaSection);
-      return params;
-    },
-    [periodMode, dateFrom, dateTo, typeFilter, statusFilter, searchTerm, unitFilter, rotaPlatoon, rotaSection],
+  const resultsCacheKey = useCallback(
+    (page: number) => `admin-results:${appliedFilterKey}:p=${page}`,
+    [appliedFilterKey],
   );
 
-  const load = useCallback(
-    async (pageOverride?: number, signal?: AbortSignal, statsSignal?: AbortSignal) => {
-      setIsLoading(true);
-      setIsStatsLoading(true);
-      setLoadError("");
-      setSummaries([]);
-      setFilterPeopleStats(null);
-      setTrialTripleStreakStats(null);
+  const applyPayload = useCallback((payload: ResultsPagePayload, viewingNotStarted: boolean) => {
+    setAttempts(payload.attempts);
+    setNotStartedUsers(payload.notStartedUsers);
+    setListTotal(viewingNotStarted ? payload.notStartedTotal : payload.attemptsTotal);
+    setLastResetAudit(payload.lastResetAudit ?? null);
+    setNextAutoResetAt(payload.nextAutoResetAt);
+    setAttemptsPage(payload.page);
+  }, []);
 
-      const page = pageOverride ?? attemptsPage;
-      const params = buildBootstrapParams(page);
-
+  const fetchResultsPage = useCallback(
+    async (filters: ResultsFilters, targetPage: number, signal?: AbortSignal): Promise<ResultsPagePayload | null> => {
       try {
-        const fastResponse = await fetch(`/api/admin/results/bootstrap?${params.toString()}`, {
+        const response = await fetch(`/api/admin/results/bootstrap?${buildBootstrapParams(filters, targetPage).toString()}`, {
           cache: "no-store",
           signal,
         });
-        if (signal?.aborted) return;
-        const fastPayload = (await fastResponse.json()) as BootstrapPayload;
-        if (!fastResponse.ok || !fastPayload.ok) {
-          throw new Error(fastPayload.error || "admin_results_bootstrap_failed");
+        if (signal?.aborted) return null;
+        const payload = (await response.json()) as BootstrapPayload;
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "admin_results_bootstrap_failed");
         }
-
-        setAttempts(Array.isArray(fastPayload.attempts) ? fastPayload.attempts : []);
-        setAttemptsTotal(typeof fastPayload.attemptsTotal === "number" ? fastPayload.attemptsTotal : 0);
-        setBannerStats(fastPayload.bannerStats ?? emptyBannerStats);
-        setLastResetAudit(fastPayload.lastResetAudit ?? null);
-        setNextAutoResetAt(fastPayload.nextAutoResetAt ?? null);
+        const notStartedTotal = typeof payload.notStartedTotal === "number" ? payload.notStartedTotal : 0;
+        const attemptsTotal = typeof payload.attemptsTotal === "number" ? payload.attemptsTotal : 0;
+        return {
+          attempts: Array.isArray(payload.attempts) ? payload.attempts : [],
+          attemptsTotal,
+          notStartedUsers: Array.isArray(payload.notStartedUsers) ? payload.notStartedUsers : [],
+          notStartedTotal,
+          lastResetAudit: payload.lastResetAudit ?? null,
+          nextAutoResetAt: payload.nextAutoResetAt ?? null,
+          page: targetPage,
+        };
       } catch (err) {
-        if (signal?.aborted || (err instanceof DOMException && err.name === "AbortError")) return;
-        setLoadError("Не удалось получить данные результатов. Попробуйте обновить страницу.");
-        setSummaries([]);
-        setAttempts([]);
-        setAttemptsTotal(0);
-        setFilterPeopleStats(null);
-        setTrialTripleStreakStats(null);
-        setBannerStats(emptyBannerStats);
-        setNextAutoResetAt(null);
-        return;
-      } finally {
-        if (!signal?.aborted) setIsLoading(false);
-      }
-
-      try {
-        const statsParams = new URLSearchParams(params);
-        statsParams.set("part", "stats");
-        const statsResponse = await fetch(`/api/admin/results/bootstrap?${statsParams.toString()}`, {
-          cache: "no-store",
-          signal: statsSignal,
-        });
-        if (statsSignal?.aborted) return;
-        const statsPayload = (await statsResponse.json()) as BootstrapPayload;
-        if (!statsResponse.ok || !statsPayload.ok) {
-          throw new Error(statsPayload.error || "admin_results_stats_failed");
-        }
-
-        setSummaries(Array.isArray(statsPayload.summaries) ? statsPayload.summaries : []);
-        setFilterPeopleStats(statsPayload.filterPeopleStats ?? null);
-        setTrialTripleStreakStats(statsPayload.trialTripleStreakStats ?? null);
-        if (statsPayload.bannerStats) setBannerStats(statsPayload.bannerStats);
-      } catch (err) {
-        if (statsSignal?.aborted || (err instanceof DOMException && err.name === "AbortError")) return;
-      } finally {
-        if (!statsSignal?.aborted) setIsStatsLoading(false);
+        if (signal?.aborted || (err instanceof DOMException && err.name === "AbortError")) return null;
+        return null;
       }
     },
-    [attemptsPage, buildBootstrapParams],
+    [],
+  );
+
+  const prefetchResultsPage = useCallback(
+    async (targetPage: number) => {
+      const key = resultsCacheKey(targetPage);
+      if (readPagePrefetchCache(key)) return;
+      const data = await fetchResultsPage(appliedFilters, targetPage);
+      if (data) writePagePrefetchCache(key, data);
+    },
+    [appliedFilters, fetchResultsPage, resultsCacheKey],
+  );
+
+  const loadResults = useCallback(
+    async (targetPage = attemptsPage, signal?: AbortSignal) => {
+      const viewingNotStarted =
+        appliedFilters.statusFilter === "not_started" && appliedFilters.typeFilter !== "trial";
+      const cacheKey = resultsCacheKey(targetPage);
+      const cached = readPagePrefetchCache<ResultsPagePayload>(cacheKey);
+      if (cached) {
+        applyPayload(cached, viewingNotStarted);
+        setLoadError("");
+        setIsLoading(false);
+        const total = viewingNotStarted ? cached.notStartedTotal : cached.attemptsTotal;
+        if (targetPage * ATTEMPTS_PAGE_SIZE < total) void prefetchResultsPage(targetPage + 1);
+        return;
+      }
+
+      setIsLoading(true);
+      setLoadError("");
+      const data = await fetchResultsPage(appliedFilters, targetPage, signal);
+      if (signal?.aborted) return;
+      if (!data) {
+        setLoadError("Не удалось получить данные результатов. Попробуйте обновить страницу.");
+        setAttempts([]);
+        setNotStartedUsers([]);
+        setListTotal(0);
+        setIsLoading(false);
+        return;
+      }
+
+      applyPayload(data, viewingNotStarted);
+      writePagePrefetchCache(cacheKey, data);
+      const total = viewingNotStarted ? data.notStartedTotal : data.attemptsTotal;
+      if (targetPage * ATTEMPTS_PAGE_SIZE < total) void prefetchResultsPage(targetPage + 1);
+      setIsLoading(false);
+    },
+    [attemptsPage, appliedFilters, applyPayload, fetchResultsPage, prefetchResultsPage, resultsCacheKey],
   );
 
   useEffect(() => {
-    const isFirstLoad = prevFilterKeyRef.current === null;
-    const filtersChanged = !isFirstLoad && prevFilterKeyRef.current !== filterKey;
-    prevFilterKeyRef.current = filterKey;
+    clearPagePrefetchCache("admin-results");
+  }, [appliedFilterKey]);
 
-    if (filtersChanged && attemptsPage !== 1) {
-      setAttemptsPage(1);
-      return;
-    }
-
-    loadAbortRef.current?.abort();
-    statsAbortRef.current?.abort();
+  useEffect(() => {
     const controller = new AbortController();
-    const statsController = new AbortController();
-    loadAbortRef.current = controller;
-    statsAbortRef.current = statsController;
-    void load(filtersChanged ? 1 : attemptsPage, controller.signal, statsController.signal);
-    return () => {
-      controller.abort();
-      statsController.abort();
-    };
-  }, [filterKey, attemptsPage, load]);
+    void loadResults(attemptsPage, controller.signal);
+    return () => controller.abort();
+  }, [appliedFilterKey, attemptsPage, loadResults]);
 
-  useEffect(() => {
-    if (typeFilter === "trial" && statusFilter === "not_started") {
-      setStatusFilter("all");
-    }
-  }, [typeFilter, statusFilter]);
+  const applyFilters = () => {
+    setAppliedFilters(draftFilters);
+    setAttemptsPage(1);
+  };
 
-  useEffect(() => {
-    if (unitFilter !== "company_4") {
-      setRotaPlatoon("all");
-      setRotaSection("all");
-    }
-  }, [unitFilter]);
+  const resetFilters = () => {
+    setDraftFilters(DEFAULT_FILTERS);
+    setAppliedFilters(DEFAULT_FILTERS);
+    setAttemptsPage(1);
+  };
 
-  const visibleNotStarted = useMemo(() => {
-    if (statusFilter !== "not_started" || typeFilter === "trial") return [];
-    const query = searchTerm.trim().toLowerCase();
-    return summaries.filter((row) => {
-      if (row.status !== "not_started") return false;
-      if (!matchesResultsUnitFilter(unitFilter, rotaPlatoon, rotaSection, row)) return false;
-      if (!query) return true;
-      return row.name.toLowerCase().includes(query) || row.callsign.toLowerCase().includes(query);
+  const refreshResults = async () => {
+    clearPagePrefetchCache("admin-results");
+    await loadResults(attemptsPage);
+  };
+
+  const patchDraft = (patch: Partial<ResultsFilters>) => {
+    setDraftFilters((current) => {
+      const next = { ...current, ...patch };
+      if (patch.unitFilter && patch.unitFilter !== "company_4") {
+        next.rotaPlatoon = "all";
+        next.rotaSection = "all";
+      }
+      if (patch.typeFilter === "trial" && next.statusFilter === "not_started") {
+        next.statusFilter = "all";
+      }
+      return next;
     });
-  }, [summaries, statusFilter, typeFilter, unitFilter, rotaPlatoon, rotaSection, searchTerm]);
+  };
 
-  const attemptsPageCount = Math.max(1, Math.ceil(attemptsTotal / ATTEMPTS_PAGE_SIZE));
+  const attemptsPageCount = Math.max(1, Math.ceil(listTotal / ATTEMPTS_PAGE_SIZE));
+  const showNotStartedFilter = draftFilters.typeFilter !== "trial";
 
   const onDeleteAttempt = async (row: AttemptRow) => {
     if (!viewerCanReset || !row.canDeleteAttempt) return;
@@ -379,7 +352,7 @@ export default function AdminResultsPage() {
         throw new Error(payload.error || "delete_failed");
       }
       setResetMessage("Попытка удалена.");
-      await load();
+      await refreshResults();
     } catch {
       setResetMessage("Не удалось удалить попытку.");
     } finally {
@@ -404,7 +377,7 @@ export default function AdminResultsPage() {
         throw new Error(payload.error || "reset_failed");
       }
       setResetMessage("Попытки сброшены.");
-      await load();
+      await refreshResults();
     } catch {
       setResetMessage("Не удалось сбросить попытки.");
     } finally {
@@ -415,23 +388,23 @@ export default function AdminResultsPage() {
   const autoResetText = nextAutoResetAt
     ? formatDateTime(nextAutoResetAt)
     : `${FINAL_AUTO_RESET_DAY_UTC}-го числа следующего месяца`;
-  const showNotStartedFilter = typeFilter !== "trial";
-
-  const exportRowCount =
-    statusFilter === "not_started" ? visibleNotStarted.length : attemptsTotal;
 
   const onExportExcel = async () => {
     setExportExcelLoading(true);
     setExportExcelMsg("");
     try {
       await postResultsExportExcel({
-        ...buildResultsPeriodBody({ periodMode, dateFrom, dateTo }),
-        attemptType: typeFilter,
-        attemptStatus: statusFilter,
-        search: searchTerm.trim() || undefined,
-        unit: unitFilter,
-        rotaPlatoon,
-        rotaSection,
+        ...buildResultsPeriodBody({
+          periodMode: appliedFilters.periodMode,
+          dateFrom: appliedFilters.dateFrom,
+          dateTo: appliedFilters.dateTo,
+        }),
+        attemptType: appliedFilters.typeFilter,
+        attemptStatus: appliedFilters.statusFilter,
+        search: appliedFilters.searchTerm.trim() || undefined,
+        unit: appliedFilters.unitFilter,
+        rotaPlatoon: appliedFilters.rotaPlatoon,
+        rotaSection: appliedFilters.rotaSection,
       });
     } catch (error) {
       if (error instanceof Error && error.message === "empty_export") {
@@ -448,8 +421,8 @@ export default function AdminResultsPage() {
     }
   };
 
-  const showTrialTripleStreak =
-    typeFilter !== "final" && statusFilter !== "not_started" && trialTripleStreakStats != null;
+  const listEmpty = isNotStartedView ? notStartedUsers.length === 0 : attempts.length === 0;
+  const listLabel = isNotStartedView ? "человек" : "попыток";
 
   return (
     <section className="admin-results-page">
@@ -470,54 +443,31 @@ export default function AdminResultsPage() {
       )}
 
       <p className="page-subtitle">
-        Пробные и итоговые попытки. Фильтры по периоду, подразделению, типу теста и результату.
+        Пробные и итоговые попытки. Выставьте фильтры и нажмите «Применить».
       </p>
       <div className="selfcheck-hint" style={{ marginBottom: 10 }}>
         Сброс попыток доступен вручную (администратором или пользователем с правом сброса) и автоматически{" "}
         {FINAL_AUTO_RESET_DAY_UTC}-го числа каждого месяца. Следующий автосброс: {autoResetText}.
       </div>
-      {isLoading && (
-        <p className="page-subtitle">
-          {periodMode === "all" ? "Загружаем список попыток…" : "Загружаем результаты…"}
-        </p>
-      )}
-      {!isLoading && isStatsLoading && !loadError && (
-        <p className="page-subtitle">Считаем статистику…</p>
-      )}
+      {isLoading && <p className="page-subtitle">Загружаем результаты…</p>}
       {!isLoading && loadError && <p className="page-subtitle">{loadError}</p>}
       {!!resetMessage && <p className="page-subtitle">{resetMessage}</p>}
       {!!exportExcelMsg && <p className="page-subtitle">{exportExcelMsg}</p>}
-      {!isLoading && !loadError && exportRowCount > 0 && !showTrialTripleStreak && (
+      {!isLoading && !loadError && listTotal > 0 && (
         <p className="page-subtitle admin-results-export-meta">
-          {statusFilter === "not_started" ? (
-            <>
-              Не проходили итог: <strong>{exportRowCount}</strong>{" "}
-              {exportRowCount === 1 ? "человек" : exportRowCount >= 2 && exportRowCount <= 4 ? "человека" : "человек"}.
-            </>
-          ) : isStatsLoading ? (
-            <>По фильтрам: считаем…</>
+          {isNotStartedView ? (
+            <>Не проходили итог: {listTotal} чел.</>
           ) : (
             <>
-              По фильтрам: <strong>{filterPeopleStats?.passedPeople ?? 0}</strong> чел. сдали,{" "}
-              <strong>{filterPeopleStats?.failedPeople ?? 0}</strong> чел. не сдали (
-              <strong>{exportRowCount}</strong>{" "}
-              {exportRowCount === 1 ? "попытка" : exportRowCount >= 2 && exportRowCount <= 4 ? "попытки" : "попыток"}
-              ).
-            </>
-          )}
-        </p>
-      )}
-      {!isLoading && !loadError && (showTrialTripleStreak || (isStatsLoading && typeFilter !== "final" && statusFilter !== "not_started")) && (
-        <p className="page-subtitle admin-results-export-meta">
-          {isStatsLoading || !trialTripleStreakStats ? (
-            <>Считаем статистику по пробным…</>
-          ) : (
-            <>
-              В выборке <strong>{trialTripleStreakStats.cohortPeople}</strong> чел. За период:{" "}
-              <strong>{exportRowCount}</strong>{" "}
-              {exportRowCount === 1 ? "попытка" : exportRowCount >= 2 && exportRowCount <= 4 ? "попытки" : "попыток"}.{" "}
-              <strong>Сдали 3 пробных:</strong> {trialTripleStreakStats.passedPeople} чел.,{" "}
-              <strong>не сдали:</strong> {trialTripleStreakStats.failedPeople} чел.
+              Всего {listTotal}{" "}
+              {listTotal === 1 ? "попытка" : listTotal >= 2 && listTotal <= 4 ? "попытки" : "попыток"}
+              {listTotal > ATTEMPTS_PAGE_SIZE && (
+                <>
+                  {" "}
+                  · показано {(attemptsPage - 1) * ATTEMPTS_PAGE_SIZE + 1}–
+                  {Math.min(attemptsPage * ATTEMPTS_PAGE_SIZE, listTotal)}
+                </>
+              )}
             </>
           )}
         </p>
@@ -526,7 +476,7 @@ export default function AdminResultsPage() {
       <article className="card" style={{ marginTop: 12 }}>
         <div className="card-body personnel-filters admin-results-filters">
           <div
-            className={`personnel-filters__row admin-results-filters__row--primary${unitFilter === "company_4" ? " has-rota" : ""}`}
+            className={`personnel-filters__row admin-results-filters__row--primary${draftFilters.unitFilter === "company_4" ? " has-rota" : ""}`}
           >
             <div className="personnel-filters__field admin-results-filters__period">
               <p className="label">Период</p>
@@ -534,41 +484,39 @@ export default function AdminResultsPage() {
                 <input
                   className="input admin-results-period__date"
                   type="date"
-                  value={dateFrom}
+                  value={draftFilters.dateFrom}
                   onChange={(e) => {
-                    setDateFrom(e.target.value);
-                    setPeriodMode(e.target.value || dateTo ? "custom" : "all");
+                    const dateFrom = e.target.value;
+                    patchDraft({
+                      dateFrom,
+                      periodMode: dateFrom || draftFilters.dateTo ? "custom" : "all",
+                    });
                   }}
                 />
                 <span className="admin-results-period__sep">—</span>
                 <input
                   className="input admin-results-period__date"
                   type="date"
-                  value={dateTo}
+                  value={draftFilters.dateTo}
                   onChange={(e) => {
-                    setDateTo(e.target.value);
-                    setPeriodMode(e.target.value || dateFrom ? "custom" : "all");
+                    const dateTo = e.target.value;
+                    patchDraft({
+                      dateTo,
+                      periodMode: dateTo || draftFilters.dateFrom ? "custom" : "all",
+                    });
                   }}
                 />
                 <button
-                  className={`btn ${periodMode === "today" ? "btn-primary" : ""}`}
+                  className={`btn ${draftFilters.periodMode === "today" ? "btn-primary" : ""}`}
                   type="button"
-                  onClick={() => {
-                    setPeriodMode("today");
-                    setDateFrom("");
-                    setDateTo("");
-                  }}
+                  onClick={() => patchDraft({ periodMode: "today", dateFrom: "", dateTo: "" })}
                 >
                   Сегодня
                 </button>
                 <button
-                  className={`btn ${periodMode === "all" ? "btn-primary" : ""}`}
+                  className={`btn ${draftFilters.periodMode === "all" ? "btn-primary" : ""}`}
                   type="button"
-                  onClick={() => {
-                    setPeriodMode("all");
-                    setDateFrom("");
-                    setDateTo("");
-                  }}
+                  onClick={() => patchDraft({ periodMode: "all", dateFrom: "", dateTo: "" })}
                 >
                   Все
                 </button>
@@ -579,8 +527,8 @@ export default function AdminResultsPage() {
               <p className="label">Подразделение</p>
               <select
                 className="select"
-                value={unitFilter}
-                onChange={(e) => setUnitFilter(e.target.value as UnitAssignmentFilter)}
+                value={draftFilters.unitFilter}
+                onChange={(e) => patchDraft({ unitFilter: e.target.value as UnitAssignmentFilter })}
               >
                 <option value="all">Все подразделения</option>
                 <option value="unset">Не указано</option>
@@ -592,14 +540,14 @@ export default function AdminResultsPage() {
               </select>
             </div>
 
-            {unitFilter === "company_4" && (
+            {draftFilters.unitFilter === "company_4" && (
               <>
                 <div className="personnel-filters__field">
                   <p className="label">Взвод</p>
                   <select
                     className="select"
-                    value={rotaPlatoon}
-                    onChange={(e) => setRotaPlatoon(e.target.value as RotaPlatoonFilter)}
+                    value={draftFilters.rotaPlatoon}
+                    onChange={(e) => patchDraft({ rotaPlatoon: e.target.value as RotaPlatoonFilter })}
                   >
                     <option value="all">Все</option>
                     {ROTA_PLATOON_OPTIONS.map((value) => (
@@ -613,8 +561,8 @@ export default function AdminResultsPage() {
                   <p className="label">Отделение</p>
                   <select
                     className="select"
-                    value={rotaSection}
-                    onChange={(e) => setRotaSection(e.target.value as RotaSectionFilter)}
+                    value={draftFilters.rotaSection}
+                    onChange={(e) => patchDraft({ rotaSection: e.target.value as RotaSectionFilter })}
                   >
                     <option value="all">Все</option>
                     {ROTA_SECTION_OPTIONS.map((value) => (
@@ -635,8 +583,11 @@ export default function AdminResultsPage() {
                 className="input"
                 type="text"
                 placeholder="Имя или позывной"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                value={draftFilters.searchTerm}
+                onChange={(e) => patchDraft({ searchTerm: e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") applyFilters();
+                }}
               />
             </div>
 
@@ -644,14 +595,8 @@ export default function AdminResultsPage() {
               <p className="label">Тест</p>
               <select
                 className="select"
-                value={typeFilter}
-                onChange={(e) => {
-                  const next = e.target.value as TestTypeFilter;
-                  setTypeFilter(next);
-                  if (next === "trial" && statusFilter === "not_started") {
-                    setStatusFilter("all");
-                  }
-                }}
+                value={draftFilters.typeFilter}
+                onChange={(e) => patchDraft({ typeFilter: e.target.value as TestTypeFilter })}
               >
                 <option value="all">Все</option>
                 <option value="trial">Пробный</option>
@@ -663,8 +608,8 @@ export default function AdminResultsPage() {
               <p className="label">Результат</p>
               <select
                 className="select"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+                value={draftFilters.statusFilter}
+                onChange={(e) => patchDraft({ statusFilter: e.target.value as StatusFilter })}
               >
                 <option value="all">Все</option>
                 <option value="passed">Сдал</option>
@@ -672,181 +617,135 @@ export default function AdminResultsPage() {
                 {showNotStartedFilter && <option value="not_started">Не проходил итог</option>}
               </select>
             </div>
+
+            <div className="personnel-filters__field admin-results-filters__actions">
+              <p className="label">&nbsp;</p>
+              <div className="admin-results-filters__buttons">
+                <button className="btn btn-primary" type="button" onClick={applyFilters}>
+                  Применить
+                </button>
+                {(filtersDirty || appliedFilterKey !== filtersKey(DEFAULT_FILTERS)) && (
+                  <button className="btn" type="button" onClick={resetFilters}>
+                    Сбросить
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </article>
 
-      {!isLoading && !loadError && (
-        <div className="admin-results-summary">
-          <article className="admin-results-summary-card">
-            <span className="admin-results-summary-card__icon home-icon-wrap is-green" aria-hidden="true">
-              <svg viewBox="0 0 24 24" className="home-icon-svg">
-                <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="2" />
-                <path d="M8 12l2.5 2.5L16 9" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </span>
-            <div className="admin-results-summary-card__body">
-              <p className="label">Сдали итог</p>
-              <p className="admin-results-summary-card__value">
-                {isStatsLoading ? "…" : bannerStats.passedCount}
-              </p>
-              <p className="admin-results-summary-card__sub">
-                {isStatsLoading ? "Считаем…" : formatLastPersonLine(bannerStats.lastPassed)}
-              </p>
-            </div>
-          </article>
-          <article className="admin-results-summary-card">
-            <span className="admin-results-summary-card__icon home-icon-wrap is-red" aria-hidden="true">
-              <svg viewBox="0 0 24 24" className="home-icon-svg">
-                <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="2" />
-                <path d="M15 9l-6 6M9 9l6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-            </span>
-            <div className="admin-results-summary-card__body">
-              <p className="label">Не сдали итог</p>
-              <p className="admin-results-summary-card__value">
-                {isStatsLoading ? "…" : bannerStats.notPassedCount}
-              </p>
-              <p className="admin-results-summary-card__sub">
-                {isStatsLoading ? "Считаем…" : formatLastPersonLine(bannerStats.lastNotPassed)}
-              </p>
-            </div>
-          </article>
-          <article className="admin-results-summary-card">
-            <span className="admin-results-summary-card__icon home-icon-wrap is-orange" aria-hidden="true">
-              <svg viewBox="0 0 24 24" className="home-icon-svg">
-                <rect x="5" y="4" width="14" height="17" rx="2" />
-                <rect x="9" y="2.5" width="6" height="3.5" rx="1.2" />
-                <line x1="8" y1="11" x2="16" y2="11" />
-                <line x1="8" y1="15" x2="13" y2="15" />
-              </svg>
-            </span>
-            <div className="admin-results-summary-card__body">
-              <p className="label">Пробных попыток</p>
-              <p className="admin-results-summary-card__value">{bannerStats.trialAttemptsCount}</p>
-              <p className="admin-results-summary-card__sub">{formatLastPersonLine(bannerStats.lastTrial)}</p>
-            </div>
-          </article>
-          <article className="admin-results-summary-card">
-            <span className="admin-results-summary-card__icon home-icon-wrap is-blue" aria-hidden="true">
-              <svg viewBox="0 0 24 24" className="home-icon-svg">
-                <rect x="4" y="5" width="16" height="14" rx="2" />
-                <path d="M8 9h8M8 13h5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                <path d="M12 3v3" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-              </svg>
-            </span>
-            <div className="admin-results-summary-card__body">
-              <p className="label">Итоговых попыток</p>
-              <p className="admin-results-summary-card__value">{bannerStats.finalAttemptsCount}</p>
-              <p className="admin-results-summary-card__sub">{formatLastPersonLine(bannerStats.lastFinal)}</p>
-            </div>
-          </article>
-        </div>
+      {filtersDirty && !isLoading && (
+        <p className="page-subtitle">Фильтры изменены — нажмите «Применить».</p>
       )}
 
       <div className="admin-results-list">
-        {attempts.map((row) => (
-          <article
-            className={`card admin-results-card admin-results-row admin-results-card--${row.status}`}
-            key={row.id}
-          >
-            <div className="card-body admin-results-row__body">
-              <div className="admin-results-row__main">
-                <div className="admin-results-row__head">
-                  <h3 className="admin-results-row__name">
-                    <Link href={`/profile/${row.userId}`} prefetch={false} className="admin-users-profile-link">
-                      <ResultsUserName
-                        name={row.name}
-                        callsign={row.callsign}
-                        nameColor={row.nameColor}
-                        cosmetics={row.cosmetics}
-                      />
-                    </Link>
-                  </h3>
-                  <span className={`admin-users-position-badge ${getPositionBadgeClass(row.position || "")}`}>
-                    {row.position || "—"}
-                  </span>
-                </div>
-                <div className="admin-results-row__tags">
-                  <span className={`pill ${row.type === "trial" ? "pill-orange" : "pill-blue"}`}>
-                    {row.type === "trial" ? "Пробный" : "Итоговый"}
-                  </span>
-                  <span className={`pill ${row.status === "passed" ? "pill-green" : "pill-red"}`}>
-                    {row.status === "passed" ? "Сдал" : "Не сдал"}
-                  </span>
-                  {row.type === "final" && row.finalAttemptIndex != null && row.finalAttemptIndex > 0 && (
-                    <span className="admin-results-row__date">Попытка №{row.finalAttemptIndex}</span>
+        {!isNotStartedView &&
+          attempts.map((row) => (
+            <article
+              className={`card admin-results-card admin-results-row admin-results-card--${row.status}`}
+              key={row.id}
+            >
+              <div className="card-body admin-results-row__body">
+                <div className="admin-results-row__main">
+                  <div className="admin-results-row__head">
+                    <h3 className="admin-results-row__name">
+                      <Link href={`/profile/${row.userId}`} prefetch={false} className="admin-users-profile-link">
+                        <ResultsUserName
+                          name={row.name}
+                          callsign={row.callsign}
+                          nameColor={row.nameColor}
+                          cosmetics={row.cosmetics}
+                        />
+                      </Link>
+                    </h3>
+                    <span className={`admin-users-position-badge ${getPositionBadgeClass(row.position || "")}`}>
+                      {row.position || "—"}
+                    </span>
+                  </div>
+                  <div className="admin-results-row__tags">
+                    <span className={`pill ${row.type === "trial" ? "pill-orange" : "pill-blue"}`}>
+                      {row.type === "trial" ? "Пробный" : "Итоговый"}
+                    </span>
+                    <span className={`pill ${row.status === "passed" ? "pill-green" : "pill-red"}`}>
+                      {row.status === "passed" ? "Сдал" : "Не сдал"}
+                    </span>
+                  </div>
+                  {(row.canDeleteAttempt || row.showResetAttempts) && (
+                    <div className="admin-results-row__actions">
+                      {row.canDeleteAttempt && (
+                        <button
+                          className="btn btn-danger"
+                          type="button"
+                          disabled={deleteBusyId === row.id}
+                          onClick={() => void onDeleteAttempt(row)}
+                        >
+                          {deleteBusyId === row.id ? "Удаление…" : "Удалить из истории"}
+                        </button>
+                      )}
+                      {row.showResetAttempts && (
+                        <button
+                          className="btn"
+                          type="button"
+                          disabled={resetBusyId === row.userId}
+                          onClick={() => void onResetAttempts(row.userId)}
+                        >
+                          {resetBusyId === row.userId ? "Сброс…" : "Сбросить попытки итога"}
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
-                {(row.canDeleteAttempt || row.showResetAttempts) && (
-                  <div className="admin-results-row__actions">
-                    {row.canDeleteAttempt && (
-                      <button
-                        className="btn btn-danger"
-                        type="button"
-                        disabled={deleteBusyId === row.id}
-                        onClick={() => void onDeleteAttempt(row)}
-                      >
-                        {deleteBusyId === row.id ? "Удаление…" : "Удалить из истории"}
-                      </button>
-                    )}
-                    {row.showResetAttempts && (
-                      <button
-                        className="btn"
-                        type="button"
-                        disabled={resetBusyId === row.userId}
-                        onClick={() => void onResetAttempts(row.userId)}
-                      >
-                        {resetBusyId === row.userId ? "Сброс…" : "Сбросить попытки итога"}
-                      </button>
-                    )}
+                <div className="admin-results-row__meta">
+                  <span className="admin-results-row__score">{formatAttemptResult(row)}</span>
+                  <span className="admin-results-row__date">{row.createdAt ? formatDateTime(row.createdAt) : "—"}</span>
+                </div>
+              </div>
+            </article>
+          ))}
+
+        {isNotStartedView &&
+          notStartedUsers.map((row) => (
+            <article
+              className="card admin-results-card admin-results-row admin-results-card--not_started"
+              key={`ns-${row.userId}`}
+            >
+              <div className="card-body admin-results-row__body">
+                <div className="admin-results-row__main">
+                  <div className="admin-results-row__head">
+                    <h3 className="admin-results-row__name">
+                      <Link href={`/profile/${row.userId}`} prefetch={false} className="admin-users-profile-link">
+                        <ResultsUserName
+                          name={row.name}
+                          callsign={row.callsign}
+                          nameColor={row.nameColor}
+                          cosmetics={row.cosmetics}
+                        />
+                      </Link>
+                    </h3>
+                    <span className={`admin-users-position-badge ${getPositionBadgeClass(row.position || "")}`}>
+                      {row.position || "—"}
+                    </span>
                   </div>
-                )}
-              </div>
-              <div className="admin-results-row__meta">
-                <span className="admin-results-row__score">{formatAttemptResult(row)}</span>
-                <span className="admin-results-row__date">{row.createdAt ? formatDateTime(row.createdAt) : "—"}</span>
-              </div>
-            </div>
-          </article>
-        ))}
-
-        {visibleNotStarted.map((row) => (
-          <article className="card admin-results-card admin-results-row admin-results-card--not_started" key={`ns-${row.userId}`}>
-            <div className="card-body admin-results-row__body">
-              <div className="admin-results-row__main">
-                <div className="admin-results-row__head">
-                  <h3 className="admin-results-row__name">
-                    <Link href={`/profile/${row.userId}`} prefetch={false} className="admin-users-profile-link">
-                      <ResultsUserName
-                        name={row.name}
-                        callsign={row.callsign}
-                        nameColor={row.nameColor}
-                        cosmetics={row.cosmetics}
-                      />
-                    </Link>
-                  </h3>
-                  <span className={`admin-users-position-badge ${getPositionBadgeClass(row.position || "")}`}>
-                    {row.position || "—"}
-                  </span>
+                  <div className="admin-results-row__tags">
+                    <span className="pill pill-blue">Итоговый</span>
+                    <span className="pill pill-yellow">Не проходил</span>
+                  </div>
+                  <p className="admin-results-row__note">Итоговый тест ещё не сдавался в выбранном периоде.</p>
                 </div>
-                <div className="admin-results-row__tags">
-                  <span className="pill pill-blue">Итоговый</span>
-                  <span className="pill pill-yellow">Не проходил</span>
-                </div>
-                <p className="admin-results-row__note">Итоговый тест ещё не сдавался в выбранном периоде.</p>
               </div>
-            </div>
-          </article>
-        ))}
+            </article>
+          ))}
 
-        {!isLoading && !loadError && attempts.length === 0 && visibleNotStarted.length === 0 && (
+        {!isLoading && !loadError && listEmpty && (
           <p className="page-subtitle">Нет записей по выбранным фильтрам.</p>
         )}
 
-        {!isLoading && !loadError && statusFilter !== "not_started" && attemptsTotal > 0 && (
+        {!isLoading && !loadError && listTotal > 0 && (
           <div className="admin-results-footer">
-            <span className="admin-results-footer__total">Всего попыток: {attemptsTotal}</span>
+            <span className="admin-results-footer__total">
+              Всего {listLabel}: {listTotal}
+            </span>
             <div className="admin-users-pagination">
               <button
                 className="btn"
