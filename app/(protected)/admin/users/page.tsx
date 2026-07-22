@@ -13,6 +13,7 @@ import { POSITION_OPTIONS, getPositionBadgeClass } from "@/lib/position-ui";
 import { canManageUsers } from "@/lib/permissions";
 import type { ProfileNameColorId } from "@/lib/profile-name-color";
 import { dispatchIdentityCosmeticsUpdated } from "@/lib/user-identity-cosmetics";
+import { clearPagePrefetchCache, readPagePrefetchCache, writePagePrefetchCache } from "@/lib/page-prefetch-cache";
 import { fetchUsersPage, patchUser, removeUser } from "@/lib/users-repository";
 import type { DutyLocation, Position, Role, UnitAssignment, UserRecord } from "@/lib/types";
 import { UNIT_ASSIGNMENT_OPTIONS, unitAssignmentLabel, unitAssignmentLabelOrEmpty } from "@/lib/unit-assignment";
@@ -49,6 +50,11 @@ export default function AdminUsersPage() {
   const [unitFilter, setUnitFilter] = useState<"all" | "unset" | UnitAssignment>("all");
   const [pageSize, setPageSize] = useState(10);
   const [page, setPage] = useState(1);
+  const usersFilterKey = useMemo(
+    () => `${pageSize}|${query}|${positionFilter}|${dutyFilter}|${unitFilter}`,
+    [pageSize, query, positionFilter, dutyFilter, unitFilter],
+  );
+  const usersCacheKey = useCallback((targetPage: number) => `admin-users:${usersFilterKey}:p=${targetPage}`, [usersFilterKey]);
   const [info, setInfo] = useState("");
   const [permissionsTargetId, setPermissionsTargetId] = useState<string | null>(null);
   const [permissionDrafts, setPermissionDrafts] = useState<Record<string, UserRecord["permissions"]>>({});
@@ -64,24 +70,65 @@ export default function AdminUsersPage() {
     setIsHydrated(true);
   }, []);
 
+  type UsersPagePayload = { rows: UserRecord[]; total: number; page: number; pageSize: number };
+
+  const fetchUsersPagePayload = useCallback(
+    async (targetPage: number): Promise<UsersPagePayload | null> => {
+      try {
+        return await fetchUsersPage({
+          page: targetPage,
+          pageSize,
+          search: query,
+          position: positionFilter,
+          duty: dutyFilter,
+          unit: unitFilter,
+        });
+      } catch {
+        return null;
+      }
+    },
+    [pageSize, query, positionFilter, dutyFilter, unitFilter],
+  );
+
+  const prefetchUsersPage = useCallback(
+    async (targetPage: number) => {
+      const key = usersCacheKey(targetPage);
+      if (readPagePrefetchCache(key)) return;
+      const data = await fetchUsersPagePayload(targetPage);
+      if (data) writePagePrefetchCache(key, data);
+    },
+    [fetchUsersPagePayload, usersCacheKey],
+  );
+
   const loadUsers = useCallback(async (targetPage = page) => {
+    const cacheKey = usersCacheKey(targetPage);
+    const cached = readPagePrefetchCache<UsersPagePayload>(cacheKey);
+    if (cached) {
+      setUsers(cached.rows);
+      setUsersTotal(cached.total);
+      setPage(cached.page);
+      setIsLoadingUsers(false);
+      if (cached.page * cached.pageSize < cached.total) void prefetchUsersPage(cached.page + 1);
+      return;
+    }
+
     setIsLoadingUsers(true);
     try {
-      const result = await fetchUsersPage({
-        page: targetPage,
-        pageSize,
-        search: query,
-        position: positionFilter,
-        duty: dutyFilter,
-        unit: unitFilter,
-      });
+      const result = await fetchUsersPagePayload(targetPage);
+      if (!result) return;
       setUsers(result.rows);
       setUsersTotal(result.total);
       setPage(result.page);
+      writePagePrefetchCache(cacheKey, result);
+      if (result.page * result.pageSize < result.total) void prefetchUsersPage(result.page + 1);
     } finally {
       setIsLoadingUsers(false);
     }
-  }, [page, pageSize, query, positionFilter, dutyFilter, unitFilter]);
+  }, [fetchUsersPagePayload, page, prefetchUsersPage, usersCacheKey]);
+
+  useEffect(() => {
+    clearPagePrefetchCache("admin-users");
+  }, [usersFilterKey]);
 
   useEffect(() => {
     if (!isHydrated) return;
@@ -89,6 +136,7 @@ export default function AdminUsersPage() {
   }, [isHydrated, loadUsers]);
 
   const refresh = async (force = false) => {
+    clearPagePrefetchCache("admin-users");
     await loadUsers(force ? 1 : page);
     if (force) setPage(1);
   };

@@ -7,6 +7,7 @@ import { UserAvatar } from "@/components/profile/UserAvatar";
 import type { UserIdentityCosmetics } from "@/lib/user-identity-cosmetics";
 import type { ProfileNameColorId } from "@/lib/profile-name-color";
 import { withTimeout } from "@/lib/async-utils";
+import { clearPagePrefetchCache, readPagePrefetchCache, writePagePrefetchCache } from "@/lib/page-prefetch-cache";
 import { PersonnelPreviewBanner } from "@/components/personnel/PersonnelPreviewBanner";
 import { PersonnelTableDualScroll } from "@/components/personnel/PersonnelTableDualScroll";
 import {
@@ -170,33 +171,49 @@ export default function PersonnelListPage() {
   const loadSeqRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
 
-  const load = useCallback(async () => {
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-    const seq = ++loadSeqRef.current;
+  type RosterPagePayload = {
+    users: UserRow[];
+    total: number;
+    stats?: typeof stats;
+    tops?: typeof tops;
+    isPreview?: boolean;
+  };
 
-    setIsLoading(true);
-    setLoadError("");
-    try {
-      const q = new URLSearchParams();
-      q.set("page", String(rosterPage));
+  const rosterFilterKey = useMemo(() => {
+    const q = new URLSearchParams();
+    if (platoon !== "all") q.set("platoon", platoon);
+    if (section !== "all") q.set("section", section);
+    if (module !== "all") q.set("module", module);
+    if (debouncedSearch) q.set("search", debouncedSearch);
+    if (testDateFilter) q.set("testDate", testDateFilter);
+    q.set("examType", rosterFilters.examType);
+    q.set("examStatus", rosterFilters.examStatus);
+    q.set("license", rosterFilters.license);
+    q.set("trialTest", rosterFilters.trialTest);
+    q.set("finalTest", rosterFilters.finalTest);
+    q.set("hits", rosterFilters.hits);
+    q.set("premiums", rosterFilters.premiums);
+    q.set("dutyStatus", rosterFilters.dutyStatus);
+    return q.toString();
+  }, [platoon, section, module, debouncedSearch, testDateFilter, rosterFilters]);
+
+  const rosterCacheKey = useCallback((page: number) => `personnel:${rosterFilterKey}:p=${page}`, [rosterFilterKey]);
+
+  const applyRosterPayload = useCallback((payload: RosterPagePayload) => {
+    setUsers(payload.users);
+    setUsersTotal(payload.total);
+    if (payload.stats) setStats(payload.stats);
+    if (payload.tops) setTops(payload.tops);
+    setIsPreview(payload.isPreview === true);
+  }, []);
+
+  const fetchRosterPage = useCallback(
+    async (page: number, signal?: AbortSignal): Promise<RosterPagePayload | null> => {
+      const q = new URLSearchParams(rosterFilterKey);
+      q.set("page", String(page));
       q.set("pageSize", String(ROSTER_PAGE_SIZE));
-      if (platoon !== "all") q.set("platoon", platoon);
-      if (section !== "all") q.set("section", section);
-      if (module !== "all") q.set("module", module);
-      if (debouncedSearch) q.set("search", debouncedSearch);
-      if (testDateFilter) q.set("testDate", testDateFilter);
-      q.set("examType", rosterFilters.examType);
-      q.set("examStatus", rosterFilters.examStatus);
-      q.set("license", rosterFilters.license);
-      q.set("trialTest", rosterFilters.trialTest);
-      q.set("finalTest", rosterFilters.finalTest);
-      q.set("hits", rosterFilters.hits);
-      q.set("premiums", rosterFilters.premiums);
-      q.set("dutyStatus", rosterFilters.dutyStatus);
       const res = await withTimeout(
-        fetch(`/api/personnel/roster?${q.toString()}`, { cache: "no-store", signal: controller.signal }),
+        fetch(`/api/personnel/roster?${q.toString()}`, { cache: "no-store", signal }),
         ROSTER_FETCH_TIMEOUT_MS,
         "roster_timeout",
       );
@@ -209,16 +226,63 @@ export default function PersonnelListPage() {
         tops?: typeof tops;
         isPreview?: boolean;
       };
+      if (!res.ok || !payload.ok) return null;
+      return {
+        users: payload.users ?? [],
+        total: typeof payload.total === "number" ? payload.total : (payload.users?.length ?? 0),
+        stats: payload.stats,
+        tops: payload.tops,
+        isPreview: payload.isPreview,
+      };
+    },
+    [rosterFilterKey],
+  );
+
+  const prefetchRosterPage = useCallback(
+    async (page: number) => {
+      const key = rosterCacheKey(page);
+      if (readPagePrefetchCache(key)) return;
+      try {
+        const data = await fetchRosterPage(page);
+        if (data) writePagePrefetchCache(key, data);
+      } catch {
+        // фоновая подгрузка — ошибки не показываем
+      }
+    },
+    [fetchRosterPage, rosterCacheKey],
+  );
+
+  const load = useCallback(async () => {
+    const cacheKey = rosterCacheKey(rosterPage);
+    const cached = readPagePrefetchCache<RosterPagePayload>(cacheKey);
+
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const seq = ++loadSeqRef.current;
+
+    if (cached) {
+      applyRosterPayload(cached);
+      setLoadError("");
+      setIsLoading(false);
+      const pageCount = Math.max(1, Math.ceil(cached.total / ROSTER_PAGE_SIZE));
+      if (rosterPage < pageCount) void prefetchRosterPage(rosterPage + 1);
+      return;
+    }
+
+    setIsLoading(true);
+    setLoadError("");
+    try {
+      const data = await fetchRosterPage(rosterPage, controller.signal);
       if (seq !== loadSeqRef.current) return;
-      if (!res.ok || !payload.ok) {
-        setLoadError(payload.error || "Не удалось загрузить список.");
+      if (!data) {
+        setLoadError("Не удалось загрузить список.");
         return;
       }
-      setUsers(payload.users ?? []);
-      setUsersTotal(typeof payload.total === "number" ? payload.total : (payload.users?.length ?? 0));
-      if (payload.stats) setStats(payload.stats);
-      if (payload.tops) setTops(payload.tops);
-      setIsPreview(payload.isPreview === true);
+      applyRosterPayload(data);
+      writePagePrefetchCache(cacheKey, data);
+      const pageCount = Math.max(1, Math.ceil(data.total / ROSTER_PAGE_SIZE));
+      if (rosterPage < pageCount) void prefetchRosterPage(rosterPage + 1);
     } catch (error) {
       if (controller.signal.aborted || seq !== loadSeqRef.current) return;
       if (error instanceof Error && error.message === "roster_timeout") {
@@ -229,7 +293,7 @@ export default function PersonnelListPage() {
     } finally {
       if (seq === loadSeqRef.current) setIsLoading(false);
     }
-  }, [platoon, section, module, debouncedSearch, testDateFilter, rosterFilters, rosterPage]);
+  }, [applyRosterPayload, fetchRosterPage, prefetchRosterPage, rosterCacheKey, rosterPage]);
 
   const examMap = useMemo(() => {
     const m = new Map<string, Map<string, string>>();
@@ -251,6 +315,7 @@ export default function PersonnelListPage() {
   };
 
   useEffect(() => {
+    clearPagePrefetchCache("personnel");
     setRosterPage(1);
   }, [platoon, section, module, debouncedSearch, testDateFilter, rosterFilters]);
 
