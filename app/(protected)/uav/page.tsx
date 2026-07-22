@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Eye, EyeOff, Info, Pencil, Trash2 } from "lucide-react";
-import { readClientSession } from "@/lib/client-auth";
+import { useClientSession } from "@/hooks/useClientSession";
 import { splitCategoryLabels, uavBadgeStyle } from "@/lib/catalog-badges";
 import { canManageUav } from "@/lib/permissions";
 import { publicUploadDisplayUrl } from "@/lib/public-asset-url";
@@ -76,7 +76,8 @@ export default function UavPage() {
   const [draft, setDraft] = useState<InlineDraft | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
-  const canInlineEdit = canManageUav(readClientSession());
+  const { session, hydrated } = useClientSession();
+  const canInlineEdit = hydrated && canManageUav(session);
 
   const [hideTtx, setHideTtx] = useState(false);
   const [revealedKeys, setRevealedKeys] = useState<Record<string, true>>({});

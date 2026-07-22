@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Eye, EyeOff, Info, Pencil, Trash2 } from "lucide-react";
-import { readClientSession } from "@/lib/client-auth";
+import { useClientSession } from "@/hooks/useClientSession";
 import { counteractionBadgeStyle, specHasDisplayValue, splitCategoryLabels } from "@/lib/catalog-badges";
 import {
   buildCounteractionCategoryOptions,
@@ -88,7 +88,8 @@ export default function CounteractionPage() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [highlightCategory, setHighlightCategory] = useState<string | null>(null);
   const [customCategories, setCustomCategories] = useState<string[]>([]);
-  const canInlineEdit = canManageCounteraction(readClientSession());
+  const { session, hydrated } = useClientSession();
+  const canInlineEdit = hydrated && canManageCounteraction(session);
 
   const categoryOptions = useMemo(
     () => buildCounteractionCategoryOptions(customCategories),

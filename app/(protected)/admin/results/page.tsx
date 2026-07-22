@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { UserIdentityDisplay } from "@/components/profile/UserIdentityDisplay";
 import type { UserIdentityCosmetics } from "@/lib/user-identity-cosmetics";
 import type { ProfileNameColorId } from "@/lib/profile-name-color";
-import { readClientSession } from "@/lib/client-auth";
+import { useClientSession } from "@/hooks/useClientSession";
 import { canResetTestResults } from "@/lib/permissions";
 import { getPositionBadgeClass } from "@/lib/position-ui";
 import { formatDateTime } from "@/lib/format";
@@ -167,8 +167,8 @@ function formatAttemptResult(row: {
 const ATTEMPTS_PAGE_SIZE = 10;
 
 export default function AdminResultsPage() {
-  const session = readClientSession();
-  const viewerCanReset = session ? canResetTestResults(session) : false;
+  const { session, hydrated } = useClientSession();
+  const viewerCanReset = hydrated && session ? canResetTestResults(session) : false;
 
   const [periodMode, setPeriodMode] = useState<PeriodMode>("all");
   const [dateFrom, setDateFrom] = useState("");

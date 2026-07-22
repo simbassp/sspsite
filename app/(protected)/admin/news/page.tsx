@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { readClientSession } from "@/lib/client-auth";
+import { useClientSession } from "@/hooks/useClientSession";
 import { formatDate } from "@/lib/format";
 import {
   createNews,

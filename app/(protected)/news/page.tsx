@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { readClientSession } from "@/lib/client-auth";
 import { canManageNews } from "@/lib/permissions";
+import { useClientSession } from "@/hooks/useClientSession";
 import { applyMarkupToSelection } from "@/lib/news-text";
 import {
   createNews,
@@ -31,8 +31,8 @@ export default function NewsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
-  const session = readClientSession();
-  const canEditNews = canManageNews(session);
+  const { session, hydrated } = useClientSession();
+  const canEditNews = hydrated && canManageNews(session);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
