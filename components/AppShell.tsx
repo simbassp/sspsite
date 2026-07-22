@@ -21,7 +21,6 @@ import { AchievementUnlockBanner } from "@/components/achievements/AchievementUn
 import { UserIdentityDisplay } from "@/components/profile/UserIdentityDisplay";
 import { canAccessGameSection } from "@/lib/game-feature";
 import { HomeStatsBar } from "@/components/HomeStatsBar";
-import { SiteFooterStats } from "@/components/SiteFooterStats";
 import {
   PRESENCE_ANALYTICS_FLUSH_MS,
   PRESENCE_HEARTBEAT_MS,
@@ -679,7 +678,7 @@ export function AppShell({ session, children }: AppShellProps) {
 
         <div className="screen">{children}</div>
         <footer className="app-site-footer" aria-label="Информация о платформе">
-          {pathname === "/dashboard" ? <HomeStatsBar /> : <SiteFooterStats />}
+          {pathname === "/dashboard" ? <HomeStatsBar /> : null}
           <p className="app-site-footer__line">Закрытая обучающая платформа</p>
           <p className="app-site-footer__line">© 2026 ССП ПВО · Developed by Simba</p>
         </footer>
