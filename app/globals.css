@@ -161,7 +161,8 @@ a {
   }
 
   /* Одна строка + горизонтальный свайп; симметричные отступы слева и справа */
-  .uav-model-nav .chips {
+  .uav-model-nav .chips,
+  .uav-model-nav .chip-track {
     flex-wrap: nowrap;
     overflow-x: auto;
     overflow-y: hidden;
@@ -176,7 +177,8 @@ a {
       calc(16px + env(safe-area-inset-right, 0px));
   }
 
-  .uav-model-nav .chips::-webkit-scrollbar {
+  .uav-model-nav .chips::-webkit-scrollbar,
+  .uav-model-nav .chip-track::-webkit-scrollbar {
     display: none;
   }
 
@@ -1567,6 +1569,43 @@ html[data-theme="dark"] .profile-rota-badge {
   max-width: 100%;
   overflow-x: auto;
   padding-bottom: 4px;
+}
+
+.chip-track {
+  position: relative;
+}
+
+.chip-track__slider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 999px;
+  background: rgba(207, 46, 46, 0.15);
+  border: 1px solid rgba(255, 82, 82, 0.24);
+  transition: transform 0.22s ease, width 0.22s ease, opacity 0.15s ease;
+  pointer-events: none;
+  z-index: 0;
+}
+
+html[data-theme="dark"] .chip-track__slider {
+  border-color: rgba(255, 140, 140, 0.55);
+  background: rgba(230, 72, 72, 0.42);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+}
+
+.chip-track .chip {
+  position: relative;
+  z-index: 1;
+}
+
+.chip-track .chip.active {
+  background: transparent;
+  box-shadow: none;
+}
+
+.chip.chip-back {
+  border-style: dashed;
 }
 
 .chip {
@@ -5475,6 +5514,19 @@ html[data-theme="dark"] .final-review-answer--correct {
   font-size: 12px;
   font-weight: 700;
   color: var(--text);
+}
+
+.personnel-notify-compose__field {
+  display: grid;
+  gap: 4px;
+}
+
+.personnel-notify-compose__field-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .personnel-notify-compose__actions {

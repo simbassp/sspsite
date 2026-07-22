@@ -8,7 +8,7 @@ import {
   type UserIdentityCosmetics,
 } from "@/lib/user-identity-cosmetics";
 import { buildTopRankBadgeMapFromUsers, loadIdentityCosmeticsMap } from "@/lib/user-identity-cosmetics-server";
-import { normalizeUnitAssignment } from "@/lib/unit-assignment";
+import { normalizeUnitAssignment, matchesUnitFilter, type UnitAssignmentFilter } from "@/lib/unit-assignment";
 import type { DutyLocation, Position, UnitAssignment } from "@/lib/types";
 import {
   formatNotificationBody,
@@ -1285,23 +1285,42 @@ async function sendAdminBroadcastLegacy(
   normalizedBody: string,
   href: string | null,
   sender?: NotificationSender | null,
+  unitFilter: UnitAssignmentFilter = "all",
 ) {
   const supabase = getServerSupabaseServiceClient();
-  const usersRes = await supabase.from("app_users").select("id").eq("status", "active").limit(5000);
-  if (usersRes.error) return { ok: false as const, error: usersRes.error.message };
 
-  const rows = (usersRes.data ?? [])
-    .map((row) => String((row as { id?: string }).id ?? "").trim())
-    .filter(Boolean)
-    .map((user_id) => ({
-      user_id,
-      kind: "admin_broadcast",
-      title: normalizedTitle,
-      body: normalizedBody,
-      href,
-      sender_id: sender?.id ?? null,
-      sender_label: sender?.label ?? null,
+  const primary = await supabase.from("app_users").select("id,unit_assignment").eq("status", "active").limit(5000);
+  let userRows: Array<{ id: string; unit_assignment?: unknown }> = [];
+
+  if (primary.error && isMissingColumnError(primary.error.message)) {
+    if (unitFilter !== "all") {
+      return { ok: false as const, error: "Колонка unit_assignment отсутствует. Фильтр по подразделению недоступен." };
+    }
+    const fallback = await supabase.from("app_users").select("id").eq("status", "active").limit(5000);
+    if (fallback.error) return { ok: false as const, error: fallback.error.message };
+    userRows = (fallback.data ?? []).map((row) => ({ id: String((row as { id?: string }).id ?? "") }));
+  } else if (primary.error) {
+    return { ok: false as const, error: primary.error.message };
+  } else {
+    userRows = (primary.data ?? []).map((row) => ({
+      id: String((row as { id?: string }).id ?? ""),
+      unit_assignment: (row as { unit_assignment?: unknown }).unit_assignment,
     }));
+  }
+
+  const userIds = userRows
+    .filter((row) => row.id && matchesUnitFilter(unitFilter, normalizeUnitAssignment(row.unit_assignment)))
+    .map((row) => row.id);
+
+  const rows = userIds.map((user_id) => ({
+    user_id,
+    kind: "admin_broadcast",
+    title: normalizedTitle,
+    body: normalizedBody,
+    href,
+    sender_id: sender?.id ?? null,
+    sender_label: sender?.label ?? null,
+  }));
 
   if (!rows.length) return { ok: true as const, sent: 0 };
 
@@ -1320,12 +1339,18 @@ export async function sendAdminBroadcast(
   body: string,
   href?: string | null,
   sender?: NotificationSender | null,
+  unitFilter: UnitAssignmentFilter = "all",
 ) {
   const normalizedTitle = title.trim();
   const normalizedBody = formatNotificationBody(body.trim());
   if (!normalizedTitle) return { ok: false as const, error: "title_required" };
 
   const normalizedHref = href?.trim() || null;
+
+  if (unitFilter !== "all") {
+    return sendAdminBroadcastLegacy(normalizedTitle, normalizedBody, normalizedHref, sender, unitFilter);
+  }
+
   const supabase = getServerSupabaseServiceClient();
   const rpc = await supabase.rpc("broadcast_app_notification", {
     p_title: normalizedTitle,

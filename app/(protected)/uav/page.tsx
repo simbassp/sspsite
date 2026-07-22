@@ -10,6 +10,7 @@ import { buildUavCategoryOptions, findCanonicalUavCategory, isBuiltinUavCategory
 import { UAV_ENGINE_TYPES, UavEngineType, appendEngineSpec, detectEngineType } from "@/lib/uav-engine";
 import { deleteUavItem, fetchUavItems, saveUavItem } from "@/lib/uav-repository";
 import { CatalogItem } from "@/lib/types";
+import { CatalogChipTrack } from "@/components/CatalogChipTrack";
 
 function specsToText(specs: CatalogItem["specs"]) {
   const lines = specs
@@ -82,6 +83,7 @@ export default function UavPage() {
   const [activeChipId, setActiveChipId] = useState<string | "all">("all");
   /** null — список категорий; иначе выбранная категория и чипы моделей внутри неё */
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [highlightCategory, setHighlightCategory] = useState<string | null>(null);
   const [customCategories, setCustomCategories] = useState<string[]>([]);
 
   const categoryOptions = useMemo(() => {
@@ -234,6 +236,7 @@ export default function UavPage() {
   };
 
   const onSelectCategory = (category: string) => {
+    setHighlightCategory(category);
     setSelectedCategory(category);
     setActiveChipId("all");
     scrollToListTop();
@@ -328,6 +331,15 @@ export default function UavPage() {
     }
   };
 
+  const chipTrackActiveId = useMemo(() => {
+    if (!selectedCategory) {
+      return highlightCategory ? `cat:${highlightCategory}` : null;
+    }
+    return activeChipId;
+  }, [selectedCategory, highlightCategory, activeChipId]);
+
+  const categoryChipId = (category: string) => `cat:${category}`;
+
   const revealOne = (key: string) => {
     setRevealedKeys((prev) => ({ ...prev, [key]: true }));
   };
@@ -399,7 +411,7 @@ export default function UavPage() {
 
       {!!items.length && (
         <div className="uav-model-nav">
-          <div className="chips">
+          <CatalogChipTrack activeId={chipTrackActiveId}>
             {!selectedCategory ? (
               <>
                 {categoryOptions.map((category) => {
@@ -408,7 +420,8 @@ export default function UavPage() {
                     <button
                       key={category}
                       type="button"
-                      className="chip"
+                      data-chip-id={categoryChipId(category)}
+                      className={`chip${highlightCategory === category ? " active" : ""}`}
                       onClick={() => onSelectCategory(category)}
                       disabled={count === 0}
                       title={count === 0 ? "Пока нет карточек в этой категории" : undefined}
@@ -421,11 +434,12 @@ export default function UavPage() {
               </>
             ) : (
               <>
-                <button type="button" className="chip active" onClick={onBackToCategories}>
+                <button type="button" className="chip chip-back" onClick={onBackToCategories}>
                   ← Категории
                 </button>
                 <button
                   type="button"
+                  data-chip-id="all"
                   className={`chip${activeChipId === "all" ? " active" : ""}`}
                   onClick={() => onChipNavigate("all")}
                 >
@@ -435,6 +449,7 @@ export default function UavPage() {
                   <button
                     key={item.id}
                     type="button"
+                    data-chip-id={item.id}
                     className={`chip${activeChipId === item.id ? " active" : ""}`}
                     onClick={() => onChipNavigate(item.id)}
                   >
@@ -443,7 +458,7 @@ export default function UavPage() {
                 ))}
               </>
             )}
-          </div>
+          </CatalogChipTrack>
         </div>
       )}
 

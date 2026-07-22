@@ -4,6 +4,12 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { groupNotificationsByDay } from "@/lib/notification-groups";
+import {
+  UNIT_ASSIGNMENT_OPTIONS,
+  broadcastUnitFilterLabel,
+  unitAssignmentLabel,
+  type UnitAssignmentFilter,
+} from "@/lib/unit-assignment";
 
 type NotificationItem = {
   id: string;
@@ -47,6 +53,7 @@ export function PersonnelNotificationsBell({ compact = false }: PersonnelNotific
   const [broadcastTitle, setBroadcastTitle] = useState("");
   const [broadcastBody, setBroadcastBody] = useState("");
   const [broadcastHref, setBroadcastHref] = useState("");
+  const [broadcastUnitFilter, setBroadcastUnitFilter] = useState<UnitAssignmentFilter>("all");
   const [sendState, setSendState] = useState<"idle" | "sending" | "done" | "error">("idle");
   const [sendMessage, setSendMessage] = useState("");
   const [portalReady, setPortalReady] = useState(false);
@@ -102,6 +109,7 @@ export function PersonnelNotificationsBell({ compact = false }: PersonnelNotific
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           target: "all",
+          unitFilter: broadcastUnitFilter,
           title,
           body: text,
           href: broadcastHref.trim() || null,
@@ -122,12 +130,14 @@ export function PersonnelNotificationsBell({ compact = false }: PersonnelNotific
         );
         return;
       }
+      const audience = broadcastUnitFilterLabel(broadcastUnitFilter);
       setBroadcastTitle("");
       setBroadcastBody("");
       setBroadcastHref("");
+      setBroadcastUnitFilter("all");
       setComposeOpen(false);
       setSendState("done");
-      setSendMessage(`Отправлено ${payload.sent ?? 0} пользователям.`);
+      setSendMessage(`Отправлено ${payload.sent ?? 0} пользователям (${audience}).`);
       await load();
     } catch {
       setSendState("error");
@@ -169,6 +179,9 @@ export function PersonnelNotificationsBell({ compact = false }: PersonnelNotific
   }, [open]);
 
   const notificationGroups = useMemo(() => groupNotificationsByDay(items), [items]);
+  const broadcastAudienceLabel = broadcastUnitFilterLabel(broadcastUnitFilter);
+  const broadcastSubmitLabel =
+    broadcastUnitFilter === "all" ? "Отправить всем" : `Отправить: ${broadcastAudienceLabel}`;
 
   const renderNotificationContent = (item: NotificationItem) => (
     <>
@@ -197,11 +210,27 @@ export function PersonnelNotificationsBell({ compact = false }: PersonnelNotific
           <div className="personnel-notify-compose personnel-notify-compose--top">
             {!composeOpen ? (
               <button type="button" className="btn btn-primary personnel-notify-compose__toggle" onClick={() => setComposeOpen(true)}>
-                Отправить сообщение всем
+                Отправить сообщение
               </button>
             ) : (
               <div className="personnel-notify-compose__form">
-                <p className="personnel-notify-compose__label">Сообщение всем пользователям</p>
+                <p className="personnel-notify-compose__label">Сообщение пользователям</p>
+                <label className="personnel-notify-compose__field">
+                  <span className="personnel-notify-compose__field-label">Подразделение</span>
+                  <select
+                    className="select"
+                    value={broadcastUnitFilter}
+                    onChange={(e) => setBroadcastUnitFilter(e.target.value as UnitAssignmentFilter)}
+                  >
+                    <option value="all">Все пользователи</option>
+                    <option value="unset">Без подразделения</option>
+                    {UNIT_ASSIGNMENT_OPTIONS.map((unit) => (
+                      <option key={unit} value={unit}>
+                        {unitAssignmentLabel[unit]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <input
                   className="input"
                   value={broadcastTitle}
@@ -231,7 +260,7 @@ export function PersonnelNotificationsBell({ compact = false }: PersonnelNotific
                     disabled={sendState === "sending"}
                     onClick={() => void sendBroadcast()}
                   >
-                    {sendState === "sending" ? "Отправка…" : "Отправить всем"}
+                    {sendState === "sending" ? "Отправка…" : broadcastSubmitLabel}
                   </button>
                   <button
                     type="button"
@@ -239,6 +268,7 @@ export function PersonnelNotificationsBell({ compact = false }: PersonnelNotific
                     disabled={sendState === "sending"}
                     onClick={() => {
                       setComposeOpen(false);
+                      setBroadcastUnitFilter("all");
                       setSendState("idle");
                       setSendMessage("");
                     }}

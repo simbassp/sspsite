@@ -1,5 +1,6 @@
 import { formatNotificationSenderLabel, sendAdminBroadcast, sendAdminMessage } from "@/lib/personnel-server";
 import { getServerSession } from "@/lib/server-auth";
+import { normalizeBroadcastUnitFilter } from "@/lib/unit-assignment";
 
 export const runtime = "nodejs";
 
@@ -19,6 +20,8 @@ export async function POST(req: Request) {
       title?: unknown;
       body?: unknown;
       href?: unknown;
+      unitAssignment?: unknown;
+      unitFilter?: unknown;
     };
 
     const title = String(body.title ?? "").trim();
@@ -42,7 +45,8 @@ export async function POST(req: Request) {
 
     const target = String(body.target ?? body.userId ?? "").trim();
     if (target === "all") {
-      const result = await sendAdminBroadcast(title, text, href, sender);
+      const unitFilter = normalizeBroadcastUnitFilter(body.unitAssignment ?? body.unitFilter);
+      const result = await sendAdminBroadcast(title, text, href, sender, unitFilter);
       if (!result.ok) return Response.json({ ok: false, error: result.error }, { status: 500 });
       return Response.json({ ok: true, sent: result.sent });
     }

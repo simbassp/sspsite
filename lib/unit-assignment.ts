@@ -53,6 +53,19 @@ export function matchesUnitFilter(filter: UnitAssignmentFilter, unit: UnitAssign
   return unit === filter;
 }
 
+export function normalizeBroadcastUnitFilter(raw: unknown): UnitAssignmentFilter {
+  if (raw === null || raw === undefined || raw === "" || raw === "all") return "all";
+  if (raw === "unset" || raw === "none" || raw === "not_set") return "unset";
+  const unit = normalizeUnitAssignment(raw);
+  return unit ?? "all";
+}
+
+export function broadcastUnitFilterLabel(filter: UnitAssignmentFilter): string {
+  if (filter === "all") return "всем пользователям";
+  if (filter === "unset") return "без указанного подразделения";
+  return unitAssignmentLabel[filter];
+}
+
 export type RotaPlatoonFilter = "all" | "1" | "2";
 export type RotaSectionFilter = "all" | "1" | "2" | "3" | "4";
 

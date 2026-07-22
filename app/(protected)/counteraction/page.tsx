@@ -14,6 +14,7 @@ import { canManageCounteraction } from "@/lib/permissions";
 import { publicUploadDisplayUrl } from "@/lib/public-asset-url";
 import { deleteCounteractionItem, fetchCounteractionItems, saveCounteractionItem } from "@/lib/uav-repository";
 import { CatalogItem } from "@/lib/types";
+import { CatalogChipTrack } from "@/components/CatalogChipTrack";
 
 function parseImages(value: string) {
   return value
@@ -85,6 +86,7 @@ export default function CounteractionPage() {
   const [hideTtx, setHideTtx] = useState(false);
   const [revealedKeys, setRevealedKeys] = useState<Record<string, true>>({});
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [highlightCategory, setHighlightCategory] = useState<string | null>(null);
   const [customCategories, setCustomCategories] = useState<string[]>([]);
   const canInlineEdit = canManageCounteraction(readClientSession());
 
@@ -174,6 +176,7 @@ export default function CounteractionPage() {
   };
 
   const onSelectCategory = (category: string) => {
+    setHighlightCategory(category);
     setSelectedCategory(category);
     setActiveChipId("all");
     scrollToListTop();
@@ -335,6 +338,15 @@ export default function CounteractionPage() {
     setRevealedKeys((prev) => ({ ...prev, [key]: true }));
   };
 
+  const chipTrackActiveId = useMemo(() => {
+    if (showCategoryNav && !selectedCategory) {
+      return highlightCategory ? `cat:${highlightCategory}` : null;
+    }
+    return activeChipId;
+  }, [showCategoryNav, selectedCategory, highlightCategory, activeChipId]);
+
+  const categoryChipId = (category: string) => `cat:${category}`;
+
   return (
     <section style={{ minWidth: 0 }}>
       <div className="uav-page__head">
@@ -389,11 +401,12 @@ export default function CounteractionPage() {
 
       {!!items.length && (
         <div className="uav-model-nav">
-          <div className="chips">
+          <CatalogChipTrack activeId={chipTrackActiveId}>
             {!showCategoryNav ? (
               <>
                 <button
                   type="button"
+                  data-chip-id="all"
                   className={`chip${activeChipId === "all" ? " active" : ""}`}
                   onClick={() => onChipNavigate("all")}
                 >
@@ -403,6 +416,7 @@ export default function CounteractionPage() {
                   <button
                     key={item.id}
                     type="button"
+                    data-chip-id={item.id}
                     className={`chip${activeChipId === item.id ? " active" : ""}`}
                     onClick={() => onChipNavigate(item.id)}
                   >
@@ -418,7 +432,8 @@ export default function CounteractionPage() {
                     <button
                       key={category}
                       type="button"
-                      className="chip"
+                      data-chip-id={categoryChipId(category)}
+                      className={`chip${highlightCategory === category ? " active" : ""}`}
                       onClick={() => onSelectCategory(category)}
                       disabled={count === 0}
                       title={count === 0 ? "Пока нет карточек в этой категории" : undefined}
@@ -431,11 +446,12 @@ export default function CounteractionPage() {
               </>
             ) : (
               <>
-                <button type="button" className="chip active" onClick={onBackToCategories}>
+                <button type="button" className="chip chip-back" onClick={onBackToCategories}>
                   ← Категории
                 </button>
                 <button
                   type="button"
+                  data-chip-id="all"
                   className={`chip${activeChipId === "all" ? " active" : ""}`}
                   onClick={() => onChipNavigate("all")}
                 >
@@ -445,6 +461,7 @@ export default function CounteractionPage() {
                   <button
                     key={item.id}
                     type="button"
+                    data-chip-id={item.id}
                     className={`chip${activeChipId === item.id ? " active" : ""}`}
                     onClick={() => onChipNavigate(item.id)}
                   >
@@ -453,7 +470,7 @@ export default function CounteractionPage() {
                 ))}
               </>
             )}
-          </div>
+          </CatalogChipTrack>
         </div>
       )}
 
