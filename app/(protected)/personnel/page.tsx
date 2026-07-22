@@ -36,31 +36,14 @@ import type { PersonnelExamType, PersonnelLicenseCategory, PersonnelRosterTops }
 import { PersonnelTopGrid } from "@/components/personnel/PersonnelTopGrid";
 import type { Position } from "@/lib/types";
 
-type ExamFilterStatus = "all" | "passed" | "failed";
-type TriState = "all" | "yes" | "no";
-type TestFilter = "all" | "passed" | "failed";
-
-type RosterFilters = {
-  examType: "all" | PersonnelExamType;
-  examStatus: ExamFilterStatus;
-  license: "all" | PersonnelLicenseCategory;
-  trialTest: TestFilter;
-  finalTest: TestFilter;
-  hits: TriState;
-  premiums: TriState;
-  dutyStatus: "all" | "base" | "deployment";
-};
-
-const EMPTY_ROSTER_FILTERS: RosterFilters = {
-  examType: "all",
-  examStatus: "all",
-  license: "all",
-  trialTest: "all",
-  finalTest: "all",
-  hits: "all",
-  premiums: "all",
-  dutyStatus: "all",
-};
+import {
+  EMPTY_ROSTER_FILTER_PARAMS,
+  hasActiveRosterFilters as hasActiveRosterFilterParams,
+  type ExamFilterStatus,
+  type RosterFilterParams,
+  type TestFilter,
+  type TriState,
+} from "@/lib/personnel-roster-filters";
 
 const EMPTY_TEST_STATS: PersonnelTestRosterStats = {
   trialPassed: 0,
@@ -74,51 +57,11 @@ function resolveUserTestStats(user: UserRow, testDate: string) {
   return user.testStats ?? EMPTY_TEST_STATS;
 }
 
+type RosterFilters = RosterFilterParams;
+const EMPTY_ROSTER_FILTERS = EMPTY_ROSTER_FILTER_PARAMS;
+
 function hasActiveRosterFilters(filters: RosterFilters, testDate: string) {
-  return (
-    testDate !== "" ||
-    filters.examType !== "all" ||
-    filters.examStatus !== "all" ||
-    filters.license !== "all" ||
-    filters.trialTest !== "all" ||
-    filters.finalTest !== "all" ||
-    filters.hits !== "all" ||
-    filters.premiums !== "all" ||
-    filters.dutyStatus !== "all"
-  );
-}
-
-function userMatchesRosterFilters(
-  user: UserRow,
-  filters: RosterFilters,
-  examMap: Map<string, Map<string, string>>,
-  testDate: string,
-) {
-  if (filters.examType !== "all" && filters.examStatus !== "all") {
-    const passed = examMap.get(user.id)?.get(filters.examType) === "passed";
-    if (filters.examStatus === "passed" && !passed) return false;
-    if (filters.examStatus === "failed" && passed) return false;
-  }
-
-  if (filters.license !== "all" && !user.licenseCategories.includes(filters.license)) return false;
-
-  const ts = resolveUserTestStats(user, testDate);
-  if (filters.trialTest === "passed" && ts.trialPassed === 0) return false;
-  if (filters.trialTest === "failed") {
-    if (testDate ? ts.trialFailed === 0 : ts.trialPassed > 0) return false;
-  }
-  if (filters.finalTest === "passed" && ts.finalPassed === 0) return false;
-  if (filters.finalTest === "failed") {
-    if (testDate ? ts.finalFailed === 0 : ts.finalPassed > 0) return false;
-  }
-
-  if (filters.hits === "yes" && user.uavHitsTotal === 0) return false;
-  if (filters.hits === "no" && user.uavHitsTotal > 0) return false;
-  if (filters.premiums === "yes" && user.premiumsTotal === 0) return false;
-  if (filters.premiums === "no" && user.premiumsTotal > 0) return false;
-  if (filters.dutyStatus !== "all" && user.dutyLocation !== filters.dutyStatus) return false;
-
-  return true;
+  return hasActiveRosterFilterParams(filters, testDate);
 }
 
 function formatFilterDateLabel(iso: string) {
@@ -162,24 +105,6 @@ function buildExportFilterLines(input: {
   return lines;
 }
 
-function calcFilteredStats(list: UserRow[]) {
-  const totals = list.reduce(
-    (acc, user) => {
-      acc.totalEmployees += 1;
-      if (user.dutyLocation === "deployment") acc.deployedNow += 1;
-      acc.totalDays += user.deploymentDays;
-      acc.totalHits += user.uavHitsTotal;
-      acc.totalPremiums += user.premiumsTotal;
-      return acc;
-    },
-    { totalEmployees: 0, deployedNow: 0, totalDays: 0, totalHits: 0, totalPremiums: 0 },
-  );
-  return {
-    ...totals,
-    avgDays: totals.totalEmployees ? Math.round(totals.totalDays / totals.totalEmployees) : 0,
-  };
-}
-
 type UserRow = {
   id: string;
   name: string;
@@ -220,7 +145,8 @@ export default function PersonnelListPage() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [testDateFilter, setTestDateFilter] = useState("");
   const [users, setUsers] = useState<UserRow[]>([]);
-  const [stats, setStats] = useState({ totalEmployees: 0, deployedNow: 0, avgDays: 0, totalHits: 0, totalPremiums: 0 });
+  const [usersTotal, setUsersTotal] = useState(0);
+  const [stats, setStats] = useState({ totalEmployees: 0, deployedNow: 0, avgDays: 0, totalDays: 0, totalHits: 0, totalPremiums: 0 });
   const [tops, setTops] = useState<PersonnelRosterTops<UserRow>>({
     hits: [],
     trialTests: [],
@@ -254,11 +180,21 @@ export default function PersonnelListPage() {
     setLoadError("");
     try {
       const q = new URLSearchParams();
+      q.set("page", String(rosterPage));
+      q.set("pageSize", String(ROSTER_PAGE_SIZE));
       if (platoon !== "all") q.set("platoon", platoon);
       if (section !== "all") q.set("section", section);
       if (module !== "all") q.set("module", module);
       if (debouncedSearch) q.set("search", debouncedSearch);
       if (testDateFilter) q.set("testDate", testDateFilter);
+      q.set("examType", rosterFilters.examType);
+      q.set("examStatus", rosterFilters.examStatus);
+      q.set("license", rosterFilters.license);
+      q.set("trialTest", rosterFilters.trialTest);
+      q.set("finalTest", rosterFilters.finalTest);
+      q.set("hits", rosterFilters.hits);
+      q.set("premiums", rosterFilters.premiums);
+      q.set("dutyStatus", rosterFilters.dutyStatus);
       const res = await withTimeout(
         fetch(`/api/personnel/roster?${q.toString()}`, { cache: "no-store", signal: controller.signal }),
         ROSTER_FETCH_TIMEOUT_MS,
@@ -268,6 +204,7 @@ export default function PersonnelListPage() {
         ok?: boolean;
         error?: string;
         users?: UserRow[];
+        total?: number;
         stats?: typeof stats;
         tops?: typeof tops;
         isPreview?: boolean;
@@ -278,6 +215,7 @@ export default function PersonnelListPage() {
         return;
       }
       setUsers(payload.users ?? []);
+      setUsersTotal(typeof payload.total === "number" ? payload.total : (payload.users?.length ?? 0));
       if (payload.stats) setStats(payload.stats);
       if (payload.tops) setTops(payload.tops);
       setIsPreview(payload.isPreview === true);
@@ -291,7 +229,7 @@ export default function PersonnelListPage() {
     } finally {
       if (seq === loadSeqRef.current) setIsLoading(false);
     }
-  }, [platoon, section, module, debouncedSearch, testDateFilter]);
+  }, [platoon, section, module, debouncedSearch, testDateFilter, rosterFilters, rosterPage]);
 
   const examMap = useMemo(() => {
     const m = new Map<string, Map<string, string>>();
@@ -303,20 +241,8 @@ export default function PersonnelListPage() {
     return m;
   }, [users]);
 
-  const filteredUsers = useMemo(
-    () => users.filter((user) => userMatchesRosterFilters(user, rosterFilters, examMap, testDateFilter)),
-    [users, rosterFilters, examMap, testDateFilter],
-  );
-
-  const rosterPageCount = Math.max(1, Math.ceil(filteredUsers.length / ROSTER_PAGE_SIZE));
-
-  const paginatedUsers = useMemo(() => {
-    const from = (rosterPage - 1) * ROSTER_PAGE_SIZE;
-    return filteredUsers.slice(from, from + ROSTER_PAGE_SIZE);
-  }, [filteredUsers, rosterPage]);
-
-  const tableStats = useMemo(() => calcFilteredStats(filteredUsers), [filteredUsers]);
-  const displayStats = users.length === 0 && isLoading ? stats : tableStats;
+  const rosterPageCount = Math.max(1, Math.ceil(usersTotal / ROSTER_PAGE_SIZE));
+  const displayStats = stats;
   const rosterFiltersActive = hasActiveRosterFilters(rosterFilters, testDateFilter);
   const displayTestStats = (user: UserRow) => resolveUserTestStats(user, testDateFilter);
 
@@ -365,7 +291,10 @@ export default function PersonnelListPage() {
       } else {
         await postPersonnelExportExcel({
           scope: "filter",
-          userIds: filteredUsers.map((user) => user.id),
+          platoon,
+          section,
+          module,
+          search: debouncedSearch,
           testDate: testDateFilter || undefined,
           examType: rosterFilters.examType,
           examStatus: rosterFilters.examStatus,
@@ -674,7 +603,7 @@ export default function PersonnelListPage() {
 
           {rosterFiltersActive && !isLoading && (
             <p className="page-subtitle personnel-table-filter-meta">
-              Найдено {filteredUsers.length} из {users.length}
+              Найдено {usersTotal}
               {" · "}
               <button
                 type="button"
@@ -689,10 +618,10 @@ export default function PersonnelListPage() {
             </p>
           )}
 
-          {!isLoading && filteredUsers.length > 0 && (
+          {!isLoading && usersTotal > 0 && (
             <p className="page-subtitle personnel-table-filter-meta">
               Показано {(rosterPage - 1) * ROSTER_PAGE_SIZE + 1}–
-              {Math.min(rosterPage * ROSTER_PAGE_SIZE, filteredUsers.length)} из {filteredUsers.length}
+              {Math.min(rosterPage * ROSTER_PAGE_SIZE, usersTotal)} из {usersTotal}
             </p>
           )}
 
@@ -726,7 +655,7 @@ export default function PersonnelListPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedUsers.map((u) => (
+                  {users.map((u) => (
                     <tr key={u.id}>
                       <td className="personnel-table__sticky">
                         <Link href={profilePath(u.id)} className="personnel-roster-person">
@@ -800,7 +729,7 @@ export default function PersonnelListPage() {
                       </td>
                     </tr>
                   )}
-                  {!isLoading && filteredUsers.length === 0 && (
+                  {!isLoading && usersTotal === 0 && (
                     <tr>
                       <td colSpan={9} className="personnel-table__empty">
                         {users.length === 0 ? "Сотрудники не найдены" : "Нет сотрудников по выбранным фильтрам"}
@@ -813,12 +742,12 @@ export default function PersonnelListPage() {
             </div>
             <div className="card-body personnel-mobile-cards">
               {isLoading && users.length === 0 && <p className="personnel-mobile-empty">Загрузка…</p>}
-              {!isLoading && filteredUsers.length === 0 && (
+              {!isLoading && usersTotal === 0 && (
                 <p className="personnel-mobile-empty">
                   {users.length === 0 ? "Сотрудники не найдены" : "Нет сотрудников по выбранным фильтрам"}
                 </p>
               )}
-              {paginatedUsers.map((u) => (
+              {users.map((u) => (
                 <article key={u.id} className="personnel-mobile-card">
                   <div className="personnel-mobile-card__head">
                     <div className="personnel-mobile-card__person">
@@ -894,9 +823,9 @@ export default function PersonnelListPage() {
                 </article>
               ))}
             </div>
-            {!isLoading && filteredUsers.length > 0 && (
+            {!isLoading && usersTotal > 0 && (
               <div className="personnel-roster-footer">
-                <span className="personnel-roster-footer__total">Всего: {filteredUsers.length}</span>
+                <span className="personnel-roster-footer__total">Всего: {usersTotal}</span>
                 <div className="admin-users-pagination">
                   <button
                     className="btn"
@@ -931,7 +860,7 @@ export default function PersonnelListPage() {
         saving={resetExamsSaving}
         mode="bulk"
         bulkScope={resetExamsModal.bulkScope}
-        filteredCount={users.length}
+        filteredCount={usersTotal}
         onBulkScopeChange={resetExamsModal.setBulkScope}
         onClose={() => resetExamsModal.setOpen(false)}
         onConfirm={() => void onResetExamsBulk()}
@@ -941,7 +870,7 @@ export default function PersonnelListPage() {
         open={exportExcelModal.open}
         loading={exportExcelLoading}
         bulkScope={exportExcelModal.bulkScope}
-        filteredCount={filteredUsers.length}
+        filteredCount={usersTotal}
         onBulkScopeChange={exportExcelModal.setBulkScope}
         onClose={() => exportExcelModal.setOpen(false)}
         onConfirm={() => void onExportExcel()}

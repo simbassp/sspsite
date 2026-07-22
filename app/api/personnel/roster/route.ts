@@ -1,5 +1,5 @@
 import { getPersonnelContext } from "@/lib/personnel-api-guard";
-import { buildPersonnelRosterTops } from "@/lib/personnel-catalog";
+import { parseRosterFilterParams } from "@/lib/personnel-roster-filters";
 import { loadPersonnelRoster } from "@/lib/personnel-server";
 
 export const runtime = "nodejs";
@@ -17,35 +17,35 @@ export async function GET(req: Request) {
   const search = url.searchParams.get("search") ?? "";
   const testDateRaw = url.searchParams.get("testDate") ?? "";
   const testDate = /^\d{4}-\d{2}-\d{2}$/.test(testDateRaw.trim()) ? testDateRaw.trim() : undefined;
+  const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
+  const pageSize = Math.min(50, Math.max(1, Number(url.searchParams.get("pageSize") || 10) || 10));
 
   const platoon = platoonRaw && platoonRaw !== "all" ? Number(platoonRaw) : ("all" as const);
   const section = sectionRaw && sectionRaw !== "all" ? Number(sectionRaw) : ("all" as const);
   const module = moduleRaw && moduleRaw !== "all" ? Number(moduleRaw) : ("all" as const);
 
-  const roster = await loadPersonnelRoster({ platoon, section, module, search, testDate });
+  const roster = await loadPersonnelRoster({
+    platoon,
+    section,
+    module,
+    search,
+    testDate,
+    page,
+    pageSize,
+    rosterFilters: parseRosterFilterParams(url.searchParams),
+  });
   if (!roster.ok) {
-    return Response.json({ ok: false, error: roster.error, users: [] }, { status: 500 });
+    return Response.json({ ok: false, error: roster.error, users: [], total: 0 }, { status: 500 });
   }
-
-  const users = roster.users;
-  const totals = users.reduce(
-    (acc, u) => {
-      acc.totalEmployees += 1;
-      if (u.dutyLocation === "deployment") acc.deployedNow += 1;
-      acc.totalDays += u.deploymentDays;
-      acc.totalHits += u.uavHitsTotal;
-      acc.totalPremiums += u.premiumsTotal;
-      return acc;
-    },
-    { totalEmployees: 0, deployedNow: 0, totalDays: 0, totalHits: 0, totalPremiums: 0 },
-  );
-  const avgDays = totals.totalEmployees ? Math.round(totals.totalDays / totals.totalEmployees) : 0;
 
   return Response.json({
     ok: true,
     isPreview: ctx.access.isPreview,
-    users,
-    stats: { ...totals, avgDays },
-    tops: buildPersonnelRosterTops(users),
+    users: roster.users,
+    total: roster.total,
+    page,
+    pageSize,
+    stats: roster.stats,
+    tops: roster.tops,
   });
 }

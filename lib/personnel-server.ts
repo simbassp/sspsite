@@ -11,6 +11,7 @@ import { buildTopRankBadgeMapFromUsers, loadIdentityCosmeticsMap } from "@/lib/u
 import { normalizeUnitAssignment, matchesUnitFilter, type UnitAssignmentFilter } from "@/lib/unit-assignment";
 import type { DutyLocation, Position, UnitAssignment } from "@/lib/types";
 import {
+  buildPersonnelRosterTops,
   formatNotificationBody,
   PERSONNEL_DEPLOYMENT_PREMIUM_TITLE,
   PERSONNEL_EXAM_TYPES,
@@ -21,6 +22,13 @@ import {
 import { resolveBulkLinkedUserIds, resolveFinalUserContext } from "@/lib/server-final-user-context";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 import { employmentDaysSince } from "@/lib/employment-date";
+import {
+  calcRosterStats,
+  hasAdvancedRosterFilters,
+  userMatchesRosterFilters,
+  type RosterFilterParams,
+  EMPTY_ROSTER_FILTER_PARAMS,
+} from "@/lib/personnel-roster-filters";
 
 export type PersonnelModuleSettings = {
   moduleEnabled: boolean;
@@ -831,17 +839,30 @@ export async function loadPersonnelRoster(filters?: {
   module?: number | "all";
   search?: string;
   testDate?: string;
+  page?: number;
+  pageSize?: number;
+  rosterFilters?: RosterFilterParams;
+  mode?: "list" | "export";
 }) {
   const supabase = getServerSupabaseServiceClient();
+  const page = Math.max(1, filters?.page ?? 1);
+  const pageSize = Math.min(50, Math.max(1, filters?.pageSize ?? 10));
+  const exportMode = filters?.mode === "export";
+  const effectivePageSize = exportMode ? 500 : pageSize;
+  const rosterFilters = filters?.rosterFilters ?? EMPTY_ROSTER_FILTER_PARAMS;
+  const testDate =
+    typeof filters?.testDate === "string" && isValidDateIso(filters.testDate.trim())
+      ? filters.testDate.trim()
+      : "";
+  const advanced = hasAdvancedRosterFilters(rosterFilters, testDate);
 
-  const buildRosterQuery = (select: string) => {
+  const buildRosterQuery = (select: string, withRange = false) => {
     let q = supabase
       .from("app_users")
-      .select(select)
+      .select(select, withRange ? { count: "exact" } : undefined)
       .eq("unit_assignment", "company_4")
       .eq("status", "active")
-      .order("name", { ascending: true })
-      .limit(500);
+      .order("name", { ascending: true });
 
     if (filters?.platoon && filters.platoon !== "all") {
       q = q.eq("rota_platoon", filters.platoon);
@@ -852,79 +873,185 @@ export async function loadPersonnelRoster(filters?: {
     if (filters?.module && filters.module !== "all") {
       q = q.eq("rota_module", filters.module);
     }
+    if (rosterFilters.dutyStatus === "base") {
+      q = q.eq("duty_location", "base");
+    } else if (rosterFilters.dutyStatus === "deployment") {
+      q = q.eq("duty_location", "deployment");
+    }
+    const search = (filters?.search ?? "").trim();
+    if (search) {
+      const escaped = search.replace(/[%_\\]/g, (ch) => `\\${ch}`);
+      q = q.or(`name.ilike.%${escaped}%,callsign.ilike.%${escaped}%`);
+    }
     return q;
   };
 
-  let usersRes = await buildRosterQuery(ROSTER_USER_SELECT);
-  if (usersRes.error && isMissingColumnError(usersRes.error.message)) {
-    usersRes = await buildRosterQuery(ROSTER_USER_SELECT_FALLBACK);
-  }
+  const enrichRows = async (rows: Array<Record<string, unknown>>) => {
+    const userIds = rows.map((r) => String(r.id));
+    const cosmeticsMap = userIds.length ? await loadIdentityCosmeticsMap(userIds) : new Map<string, UserIdentityCosmetics>();
+    const [examsMap, depMap, medalsMap, licensesMap, premiumMap, testStatsMap, testStatsOnDateMap] =
+      await Promise.all([
+        loadExamsForUsers(userIds),
+        loadDeploymentStats(userIds),
+        loadMedalsCount(userIds),
+        loadLicenses(userIds),
+        loadPremiumTotals(userIds),
+        loadTestStatsForUsers(userIds),
+        testDate ? loadTestStatsForUsersOnDate(userIds, testDate) : Promise.resolve(new Map<string, PersonnelTestRosterStats>()),
+      ]);
 
-  if (usersRes.error) {
-    if (isMissingColumnError(usersRes.error.message)) {
-      return { ok: false as const, error: "missing_columns", users: [] as PersonnelUserCard[] };
-    }
-    return { ok: false as const, error: usersRes.error.message, users: [] as PersonnelUserCard[] };
-  }
-
-  let rows = (usersRes.data ?? []) as unknown as Array<Record<string, unknown>>;
-  const search = (filters?.search ?? "").trim().toLowerCase();
-  if (search) {
-    rows = rows.filter((r) => {
-      const name = String(r.name ?? "").toLowerCase();
-      const callsign = String(r.callsign ?? "").toLowerCase();
-      return name.includes(search) || callsign.includes(search);
+    const users: PersonnelUserCard[] = rows.map((u) => {
+      const id = String(u.id);
+      const dep = depMap.get(id) ?? { count: 0, days: 0, hits: 0, premiums: 0 };
+      const standalonePremiums = premiumMap.get(id) ?? 0;
+      return mapPersonnelUserCardRow(
+        u,
+        {
+          exams: examsMap.get(id) ?? [],
+          deploymentsCount: dep.count,
+          deploymentDays: dep.days,
+          uavHitsTotal: dep.hits,
+          premiumsTotal: dep.premiums + standalonePremiums,
+          medalsCount: medalsMap.get(id) ?? 0,
+          licenseCategories: licensesMap.get(id) ?? [],
+          testStats: testStatsMap.get(id) ?? emptyTestRosterStats(),
+          testStatsOnDate: testDate ? testStatsOnDateMap.get(id) ?? emptyTestRosterStats() : null,
+        },
+        null,
+        cosmeticsMap.get(id) ?? null,
+      );
     });
+
+    const topRankMap = buildTopRankBadgeMapFromUsers(users);
+    for (const user of users) {
+      const badge = topRankMap.get(user.id) ?? null;
+      if (badge) {
+        user.cosmetics = { ...(user.cosmetics ?? {}), topRankBadge: badge };
+      }
+    }
+    return users;
+  };
+
+  const buildStatsForUsers = (users: PersonnelUserCard[]) =>
+    calcRosterStats(
+      users.map((user) => ({
+        dutyLocation: user.dutyLocation,
+        deploymentDays: user.deploymentDays,
+        uavHitsTotal: user.uavHitsTotal,
+        premiumsTotal: user.premiumsTotal,
+      })),
+    );
+
+  if (advanced) {
+    let usersRes = await buildRosterQuery(ROSTER_USER_SELECT).limit(500);
+    if (usersRes.error && isMissingColumnError(usersRes.error.message)) {
+      usersRes = await buildRosterQuery(ROSTER_USER_SELECT_FALLBACK).limit(500);
+    }
+    if (usersRes.error) {
+      if (isMissingColumnError(usersRes.error.message)) {
+        return { ok: false as const, error: "missing_columns", users: [] as PersonnelUserCard[], total: 0 };
+      }
+      return { ok: false as const, error: usersRes.error.message, users: [] as PersonnelUserCard[], total: 0 };
+    }
+
+    const allUsers = await enrichRows((usersRes.data ?? []) as unknown as Array<Record<string, unknown>>);
+    const examMap = new Map<string, Map<string, string>>();
+    for (const user of allUsers) {
+      const inner = new Map<string, string>();
+      for (const exam of user.exams) inner.set(exam.examType, exam.status);
+      examMap.set(user.id, inner);
+    }
+    const filtered = allUsers.filter((user) => userMatchesRosterFilters(user, rosterFilters, examMap, testDate));
+    const total = filtered.length;
+    const pageUsers = exportMode ? filtered : filtered.slice((page - 1) * pageSize, page * pageSize);
+    return {
+      ok: true as const,
+      users: pageUsers,
+      total,
+      stats: buildStatsForUsers(filtered),
+      tops: buildPersonnelRosterTops(filtered),
+    };
   }
 
-  const userIds = rows.map((r) => String(r.id));
-  const cosmeticsMap = userIds.length ? await loadIdentityCosmeticsMap(userIds) : new Map<string, UserIdentityCosmetics>();
-  const testDate =
-    typeof filters?.testDate === "string" && isValidDateIso(filters.testDate.trim())
-      ? filters.testDate.trim()
-      : null;
-  const [examsMap, depMap, medalsMap, licensesMap, premiumMap, testStatsMap, testStatsOnDateMap] =
-    await Promise.all([
-    loadExamsForUsers(userIds),
-    loadDeploymentStats(userIds),
-    loadMedalsCount(userIds),
-    loadLicenses(userIds),
-    loadPremiumTotals(userIds),
-    loadTestStatsForUsers(userIds),
-    testDate ? loadTestStatsForUsersOnDate(userIds, testDate) : Promise.resolve(new Map<string, PersonnelTestRosterStats>()),
-  ]);
+  let countRes = await buildRosterQuery("id", true).limit(0);
+  if (countRes.error && isMissingColumnError(countRes.error.message)) {
+    countRes = await buildRosterQuery("id", true).limit(0);
+  }
+  if (countRes.error) {
+    if (isMissingColumnError(countRes.error.message)) {
+      return { ok: false as const, error: "missing_columns", users: [] as PersonnelUserCard[], total: 0 };
+    }
+    return { ok: false as const, error: countRes.error.message, users: [] as PersonnelUserCard[], total: 0 };
+  }
 
-  const users: PersonnelUserCard[] = rows.map((u) => {
-    const id = String(u.id);
-    const dep = depMap.get(id) ?? { count: 0, days: 0, hits: 0, premiums: 0 };
-    const standalonePremiums = premiumMap.get(id) ?? 0;
-    return mapPersonnelUserCardRow(
-      u,
-      {
-      exams: examsMap.get(id) ?? [],
-      deploymentsCount: dep.count,
-      deploymentDays: dep.days,
-      uavHitsTotal: dep.hits,
-      premiumsTotal: dep.premiums + standalonePremiums,
-      medalsCount: medalsMap.get(id) ?? 0,
-      licenseCategories: licensesMap.get(id) ?? [],
-      testStats: testStatsMap.get(id) ?? emptyTestRosterStats(),
-      testStatsOnDate: testDate ? testStatsOnDateMap.get(id) ?? emptyTestRosterStats() : null,
-      },
-      null,
-      cosmeticsMap.get(id) ?? null,
-    );
-  });
+  const total = countRes.count ?? 0;
+  if (total === 0) {
+    return {
+      ok: true as const,
+      users: [] as PersonnelUserCard[],
+      total: 0,
+      stats: calcRosterStats([]),
+      tops: undefined,
+    };
+  }
+  const from = exportMode ? 0 : (page - 1) * pageSize;
+  const to = exportMode ? Math.min(total, effectivePageSize) - 1 : from + pageSize - 1;
 
-  const topRankMap = buildTopRankBadgeMapFromUsers(users);
-  for (const user of users) {
-    const badge = topRankMap.get(user.id) ?? null;
-    if (badge) {
-      user.cosmetics = { ...(user.cosmetics ?? {}), topRankBadge: badge };
+  let pageRes = await buildRosterQuery(ROSTER_USER_SELECT, true).range(from, to);
+  if (pageRes.error && isMissingColumnError(pageRes.error.message)) {
+    pageRes = await buildRosterQuery(ROSTER_USER_SELECT_FALLBACK, true).range(from, to);
+  }
+  if (pageRes.error) {
+    return { ok: false as const, error: pageRes.error.message, users: [] as PersonnelUserCard[], total: 0 };
+  }
+
+  const pageUsers = await enrichRows((pageRes.data ?? []) as unknown as Array<Record<string, unknown>>);
+
+  let stats = buildStatsForUsers(pageUsers);
+  if (total > 0) {
+    const statsRes = await buildRosterQuery("id,duty_location").limit(500);
+    const statsRows = (statsRes.data ?? []) as unknown as Array<{ id: string; duty_location?: string | null }>;
+    const statsIds = statsRows.map((row) => String(row.id));
+    if (statsIds.length) {
+      const [depMap, premiumMap] = await Promise.all([loadDeploymentStats(statsIds), loadPremiumTotals(statsIds)]);
+      stats = calcRosterStats(
+        statsRows.map((row) => {
+          const id = String(row.id);
+          const dep = depMap.get(id) ?? { count: 0, days: 0, hits: 0, premiums: 0 };
+          const standalonePremiums = premiumMap.get(id) ?? 0;
+          return {
+            dutyLocation:
+              typeof row.duty_location === "string" && row.duty_location.trim().toLowerCase() === "deployment"
+                ? "deployment"
+                : "base",
+            deploymentDays: dep.days,
+            uavHitsTotal: dep.hits,
+            premiumsTotal: dep.premiums + standalonePremiums,
+          };
+        }),
+      );
     }
   }
 
-  return { ok: true as const, users };
+  let tops: ReturnType<typeof buildPersonnelRosterTops> | undefined;
+  if (!exportMode && page === 1) {
+    let topsRes = await buildRosterQuery(ROSTER_USER_SELECT).limit(500);
+    if (topsRes.error && isMissingColumnError(topsRes.error.message)) {
+      topsRes = await buildRosterQuery(ROSTER_USER_SELECT_FALLBACK).limit(500);
+    }
+    if (!topsRes.error) {
+      const topsUsers = await enrichRows((topsRes.data ?? []) as unknown as Array<Record<string, unknown>>);
+      tops = buildPersonnelRosterTops(topsUsers);
+    }
+  }
+
+  return {
+    ok: true as const,
+    users: pageUsers,
+    total,
+    stats,
+    tops,
+  };
 }
 
 export async function loadPersonnelRosterCardsByIds(userIds: string[], testDate?: string | null) {

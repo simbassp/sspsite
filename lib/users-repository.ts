@@ -1321,35 +1321,110 @@ export async function removeInviteCode(code: string): Promise<{ ok: true } | { o
 }
 
 export async function fetchUsers() {
+  const page = await fetchUsersPage({ page: 1, pageSize: 50 });
+  return page.rows;
+}
+
+export type FetchUsersPageParams = {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  position?: "all" | Position;
+  duty?: "all" | DutyLocation;
+  unit?: "all" | "unset" | UnitAssignment;
+};
+
+export async function fetchUsersPage(params: FetchUsersPageParams = {}) {
   if (!isSupabaseConfigured) {
-    return listUsers();
+    const all = listUsers();
+    const search = (params.search ?? "").trim().toLowerCase();
+    const filtered = all.filter((item) => {
+      const matchesText = !search
+        || `${item.name} ${item.callsign} ${item.login} ${item.position}`.toLowerCase().includes(search);
+      const matchesPosition = !params.position || params.position === "all" ? true : item.position === params.position;
+      const matchesDuty = !params.duty || params.duty === "all" ? true : item.dutyLocation === params.duty;
+      const matchesUnit =
+        !params.unit || params.unit === "all"
+          ? true
+          : params.unit === "unset"
+            ? !item.unitAssignment
+            : item.unitAssignment === params.unit;
+      return matchesText && matchesPosition && matchesDuty && matchesUnit;
+    });
+    const page = Math.max(1, params.page ?? 1);
+    const pageSize = Math.min(50, Math.max(1, params.pageSize ?? 10));
+    const from = (page - 1) * pageSize;
+    const rows = filtered.slice(from, from + pageSize);
+    return { rows, total: filtered.length, page, pageSize };
   }
 
   try {
+    const q = new URLSearchParams();
+    q.set("page", String(Math.max(1, params.page ?? 1)));
+    q.set("pageSize", String(Math.min(50, Math.max(1, params.pageSize ?? 10))));
+    if (params.search?.trim()) q.set("search", params.search.trim());
+    if (params.position && params.position !== "all") q.set("position", params.position);
+    if (params.duty && params.duty !== "all") q.set("duty", params.duty);
+    if (params.unit && params.unit !== "all") q.set("unit", params.unit);
+
     const api = await withTimeoutAndRetry(
       () =>
-        fetch("/api/admin/users/list", {
+        fetch(`/api/admin/users/list?${q.toString()}`, {
           method: "GET",
           cache: "no-store",
           headers: { "cache-control": "no-store" },
         }),
-      7000,
+      15000,
       1,
-      "fetch_users_timeout",
+      "fetch_users_page_timeout",
     );
     if (!api.ok) {
-      return listUsers();
+      const fallback = await fetchUsersPageLocalFallback(params);
+      return fallback;
     }
-    const payload = (await api.json()) as { ok?: boolean; rows?: UserRow[] };
+    const payload = (await api.json()) as {
+      ok?: boolean;
+      rows?: UserRow[];
+      total?: number;
+      page?: number;
+      pageSize?: number;
+    };
     if (!payload.ok || !Array.isArray(payload.rows)) {
-      return listUsers();
+      return fetchUsersPageLocalFallback(params);
     }
-    const list = payload.rows.map(toUserRecord);
-    replaceAllUsersInLocalCache(list);
-    return list;
+    const rows = payload.rows.map(toUserRecord);
+    replaceAllUsersInLocalCache(rows);
+    return {
+      rows,
+      total: typeof payload.total === "number" ? payload.total : rows.length,
+      page: typeof payload.page === "number" ? payload.page : (params.page ?? 1),
+      pageSize: typeof payload.pageSize === "number" ? payload.pageSize : (params.pageSize ?? 10),
+    };
   } catch {
-    return listUsers();
+    return fetchUsersPageLocalFallback(params);
   }
+}
+
+async function fetchUsersPageLocalFallback(params: FetchUsersPageParams) {
+  const all = listUsers();
+  const search = (params.search ?? "").trim().toLowerCase();
+  const filtered = all.filter((item) => {
+    const matchesText = !search
+      || `${item.name} ${item.callsign} ${item.login} ${item.position}`.toLowerCase().includes(search);
+    const matchesPosition = !params.position || params.position === "all" ? true : item.position === params.position;
+    const matchesDuty = !params.duty || params.duty === "all" ? true : item.dutyLocation === params.duty;
+    const matchesUnit =
+      !params.unit || params.unit === "all"
+        ? true
+        : params.unit === "unset"
+          ? !item.unitAssignment
+          : item.unitAssignment === params.unit;
+    return matchesText && matchesPosition && matchesDuty && matchesUnit;
+  });
+  const page = Math.max(1, params.page ?? 1);
+  const pageSize = Math.min(50, Math.max(1, params.pageSize ?? 10));
+  const from = (page - 1) * pageSize;
+  return { rows: filtered.slice(from, from + pageSize), total: filtered.length, page, pageSize };
 }
 
 export async function patchUser(

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AdminPermissionPicker } from "@/components/admin/AdminPermissionPicker";
 import { ProfileNameColorPicker } from "@/components/admin/ProfileNameColorPicker";
 import { UserIdentityDisplay } from "@/components/profile/UserIdentityDisplay";
@@ -13,9 +13,9 @@ import { POSITION_OPTIONS, getPositionBadgeClass } from "@/lib/position-ui";
 import { canManageUsers } from "@/lib/permissions";
 import type { ProfileNameColorId } from "@/lib/profile-name-color";
 import { dispatchIdentityCosmeticsUpdated } from "@/lib/user-identity-cosmetics";
-import { fetchUsers, patchUser, removeUser } from "@/lib/users-repository";
+import { fetchUsersPage, patchUser, removeUser } from "@/lib/users-repository";
 import type { DutyLocation, Position, Role, UnitAssignment, UserRecord } from "@/lib/types";
-import { UNIT_ASSIGNMENT_OPTIONS, unitAssignmentLabel, unitAssignmentLabelOrEmpty, matchesUnitFilter } from "@/lib/unit-assignment";
+import { UNIT_ASSIGNMENT_OPTIONS, unitAssignmentLabel, unitAssignmentLabelOrEmpty } from "@/lib/unit-assignment";
 
 const permissionOptions = ADMIN_PERMISSION_OPTIONS;
 
@@ -41,6 +41,8 @@ export default function AdminUsersPage() {
   const canGrantAdminRole = session?.role === "admin";
   const canPickNameColor = session?.role === "admin";
   const [users, setUsers] = useState<UserRecord[]>([]);
+  const [usersTotal, setUsersTotal] = useState(0);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [query, setQuery] = useState("");
   const [positionFilter, setPositionFilter] = useState<"all" | Position>("all");
   const [dutyFilter, setDutyFilter] = useState<"all" | DutyLocation>("all");
@@ -62,14 +64,32 @@ export default function AdminUsersPage() {
     setIsHydrated(true);
   }, []);
 
+  const loadUsers = useCallback(async (targetPage = page) => {
+    setIsLoadingUsers(true);
+    try {
+      const result = await fetchUsersPage({
+        page: targetPage,
+        pageSize,
+        search: query,
+        position: positionFilter,
+        duty: dutyFilter,
+        unit: unitFilter,
+      });
+      setUsers(result.rows);
+      setUsersTotal(result.total);
+      setPage(result.page);
+    } finally {
+      setIsLoadingUsers(false);
+    }
+  }, [page, pageSize, query, positionFilter, dutyFilter, unitFilter]);
+
   useEffect(() => {
     if (!isHydrated) return;
-    void fetchUsers().then((next) => setUsers(next));
-  }, [isHydrated]);
+    void loadUsers(page);
+  }, [isHydrated, loadUsers]);
 
   const refresh = async (force = false) => {
-    const next = await fetchUsers();
-    setUsers(next);
+    await loadUsers(force ? 1 : page);
     if (force) setPage(1);
   };
 
@@ -269,18 +289,8 @@ export default function AdminUsersPage() {
     return `${labels.slice(0, 2).join(", ")} +${labels.length - 2}`;
   };
 
-  const visible = users.filter((item) => {
-    const matchesText = `${item.name} ${item.callsign} ${item.login} ${item.position}`
-      .toLowerCase()
-      .includes(query.toLowerCase().trim());
-    const matchesPosition = positionFilter === "all" ? true : item.position === positionFilter;
-    const matchesDuty = dutyFilter === "all" ? true : item.dutyLocation === dutyFilter;
-    const matchesUnit = matchesUnitFilter(unitFilter, item.unitAssignment);
-    return matchesText && matchesPosition && matchesDuty && matchesUnit;
-  });
-  const pages = Math.max(1, Math.ceil(visible.length / pageSize));
+  const pages = Math.max(1, Math.ceil(usersTotal / pageSize));
   const currentPage = Math.min(page, pages);
-  const pagedUsers = visible.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const permissionsTargetUser = permissionsTargetId ? users.find((item) => item.id === permissionsTargetId) ?? null : null;
 
   useEffect(() => {
@@ -308,6 +318,8 @@ export default function AdminUsersPage() {
       {!isHydrated ? (
         <p className="page-subtitle">Загрузка...</p>
       ) : (
+      <>
+      {isLoadingUsers && <p className="page-subtitle">Загрузка...</p>}
       <div className="grid grid-two admin-users-page__filters">
         <input
           className="input"
@@ -362,7 +374,6 @@ export default function AdminUsersPage() {
           ))}
         </select>
       </div>
-      )}
       {isHydrated && (
         <p className="page-subtitle" style={{ marginBottom: 10 }}>
           Фильтрация по должности, месту положения и подразделению (взвод / рота).
@@ -429,7 +440,6 @@ export default function AdminUsersPage() {
         </div>
       )}
 
-      {isHydrated && (
       <div className="admin-users-table-wrap card">
         <div className="card-body">
           <table className="admin-users-table">
@@ -444,7 +454,7 @@ export default function AdminUsersPage() {
               </tr>
             </thead>
             <tbody>
-              {pagedUsers.map((user) => (
+              {users.map((user) => (
                 <tr key={user.id}>
                   <td>
                     <Link href={`/profile/${user.id}`} prefetch={false} className="admin-users-profile-link">
@@ -542,7 +552,7 @@ export default function AdminUsersPage() {
           </table>
 
           <div className="admin-users-mobile-list">
-            {pagedUsers.map((user) => (
+            {users.map((user) => (
               <article className="card admin-users-mobile-card" key={`mobile-${user.id}`}>
                 <div className="card-body">
                   <Link href={`/profile/${user.id}`} prefetch={false} className="admin-users-profile-link">
@@ -629,7 +639,7 @@ export default function AdminUsersPage() {
           </div>
 
           <div className="admin-users-footer">
-            <span>Всего: {visible.length}</span>
+            <span>Всего: {usersTotal}</span>
             <div className="admin-users-pagination">
               <button className="btn" type="button" disabled={currentPage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
                 ‹
@@ -647,6 +657,7 @@ export default function AdminUsersPage() {
           </div>
         </div>
       </div>
+      </>
       )}
 
       {isHydrated && positionEditUser && (

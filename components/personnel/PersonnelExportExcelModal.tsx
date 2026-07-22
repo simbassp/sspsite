@@ -18,6 +18,7 @@ export async function postPersonnelExportExcel(body: {
   scope: PersonnelExcelExportScope;
   platoon?: "all" | "1" | "2";
   section?: "all" | "1" | "2" | "3" | "4";
+  module?: string;
   search?: string;
   userIds?: string[];
   testDate?: string;

@@ -3,6 +3,7 @@ import { dutyLocationLabel } from "@/lib/duty-location";
 import { rotaUnitLabelCompact } from "@/lib/personnel-catalog";
 import {
   loadActiveCompany4UserIds,
+  loadPersonnelRoster,
   loadPersonnelRosterCardsByIds,
   resolvePersonnelExportUserIds,
 } from "@/lib/personnel-server";
@@ -25,6 +26,7 @@ import {
   type RosterExportFilterConfig,
 } from "@/lib/personnel-roster-export";
 import { getServerSession } from "@/lib/server-auth";
+import type { RosterFilterParams } from "@/lib/personnel-roster-filters";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -150,6 +152,7 @@ export async function POST(request: Request) {
     scope?: unknown;
     platoon?: unknown;
     section?: unknown;
+    module?: unknown;
     search?: unknown;
     userIds?: unknown;
     testDate?: unknown;
@@ -212,18 +215,35 @@ export async function POST(request: Request) {
         }
         userIds = resolved.userIds;
       } else {
-        if (platoon === null || section === null) {
-          return Response.json({ ok: false, error: "invalid_filter" }, { status: 400 });
-        }
-        const idsResult = await loadActiveCompany4UserIds({
+        const moduleRaw = raw.module;
+        const module =
+          moduleRaw === "all" || moduleRaw === null || moduleRaw === undefined || moduleRaw === ""
+            ? ("all" as const)
+            : Number.isFinite(Number(moduleRaw))
+              ? Number(moduleRaw)
+              : ("all" as const);
+        const roster = await loadPersonnelRoster({
           platoon: platoon ?? "all",
           section: section ?? "all",
+          module,
           search: typeof raw.search === "string" ? raw.search : "",
+          testDate: exportConfig.testDate ?? undefined,
+          mode: "export",
+          rosterFilters: {
+            examType: exportConfig.examType as RosterFilterParams["examType"],
+            examStatus: exportConfig.examStatus,
+            license: exportConfig.license as RosterFilterParams["license"],
+            trialTest: exportConfig.trialTest,
+            finalTest: exportConfig.finalTest,
+            hits: exportConfig.hits,
+            premiums: exportConfig.premiums,
+            dutyStatus: exportConfig.dutyStatus,
+          },
         });
-        if (!idsResult.ok) {
-          return Response.json({ ok: false, error: idsResult.error }, { status: 400 });
+        if (!roster.ok) {
+          return Response.json({ ok: false, error: roster.error }, { status: 400 });
         }
-        userIds = idsResult.userIds;
+        userIds = roster.users.map((user) => user.id);
       }
     }
 
