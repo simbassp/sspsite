@@ -278,7 +278,7 @@ export async function fetchAttemptsForPeopleStats(
 }
 
 const ATTEMPT_SELECT_FULL =
-  "id,user_id,type,status,score,created_at,questions_total,questions_correct,final_attempt_index";
+  "id,user_id,type,status,score,created_at,questions_total,questions_correct";
 const ATTEMPT_SELECT_MID = "id,user_id,type,status,score,created_at";
 const EXPORT_BATCH_SIZE = 1000;
 

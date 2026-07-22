@@ -1,3 +1,4 @@
+import { buildFinalAttemptIndexLookup } from "@/lib/final-attempt-index";
 import { effectiveFinalCountingFromUtc, nextAutoResetUtcIso } from "@/lib/final-effective-counting";
 import { FINAL_TEST_MAX_ATTEMPTS } from "@/lib/final-test-constants";
 import {
@@ -46,7 +47,7 @@ async function fetchFinalResultsForSummaries(
   endIso: string | null,
 ): Promise<Array<Record<string, unknown>>> {
   const selectFull =
-    "id,user_id,type,status,score,created_at,questions_total,questions_correct,final_attempt_index";
+    "id,user_id,type,status,score,created_at,questions_total,questions_correct";
   const selectMid = "id,user_id,type,status,score,created_at";
 
   const full = await applyCreatedAtRange(
@@ -132,7 +133,6 @@ export async function GET(req: Request) {
       created_at: string;
       questions_total: number | null;
       questions_correct: number | null;
-      final_attempt_index: number | null;
     };
 
     const finalRows: NormalizedResult[] = finalResultsRaw.map((r) => ({
@@ -144,11 +144,12 @@ export async function GET(req: Request) {
       created_at: String(r.created_at ?? ""),
       questions_total: r.questions_total != null ? Number(r.questions_total) : null,
       questions_correct: r.questions_correct != null ? Number(r.questions_correct) : null,
-      final_attempt_index:
-        r.final_attempt_index != null && Number.isFinite(Number(r.final_attempt_index))
-          ? Number(r.final_attempt_index)
-          : null,
     }));
+    const countingFromByUser = new Map(users.map((u) => [u.id, u.final_test_counting_from ?? null]));
+    const finalAttemptIndexById = buildFinalAttemptIndexLookup(
+      finalRows.map((r) => ({ id: r.id, user_id: r.user_id, created_at: r.created_at })),
+      countingFromByUser,
+    );
     const finalsByUser = new Map<string, NormalizedResult[]>();
     for (const row of finalRows) {
       const list = finalsByUser.get(row.user_id) ?? [];
@@ -419,9 +420,7 @@ export async function GET(req: Request) {
           questionsTotal: row.questions_total != null ? Number(row.questions_total) : null,
           createdAt,
           finalAttemptIndex:
-            row.final_attempt_index != null && Number.isFinite(Number(row.final_attempt_index))
-              ? Number(row.final_attempt_index)
-              : null,
+            type === "final" ? finalAttemptIndexById.get(String(row.id)) ?? null : null,
           showResetAttempts:
             viewerCanResetAttempts && type === "final" && !!latestFinalAt && createdAt === latestFinalAt,
           canDeleteAttempt: viewerCanResetAttempts,

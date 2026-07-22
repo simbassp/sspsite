@@ -1,3 +1,4 @@
+import { buildFinalAttemptIndexLookup } from "@/lib/final-attempt-index";
 import { effectiveFinalCountingFromUtc } from "@/lib/final-effective-counting";
 import { FINAL_TEST_MAX_ATTEMPTS } from "@/lib/final-test-constants";
 import {
@@ -32,7 +33,7 @@ type AppUserListRow = {
 
 async function fetchFinalResultsForSummaries(supabase: ReturnType<typeof getServerSupabaseServiceClient>) {
   const selectFull =
-    "id,user_id,type,status,score,created_at,questions_total,questions_correct,final_attempt_index";
+    "id,user_id,type,status,score,created_at,questions_total,questions_correct";
   const selectMid = "id,user_id,type,status,score,created_at";
 
   const full = await supabase
@@ -240,6 +241,19 @@ export async function loadResultsExportData(body: Record<string, unknown>) {
     endIso,
   });
 
+  const countingFromByUser = new Map(rosterUsers.map((u) => [u.id, u.final_test_counting_from ?? null]));
+  const finalAttemptIndexById =
+    filters.typeFilter === "trial"
+      ? new Map<string, number>()
+      : buildFinalAttemptIndexLookup(
+          ((await fetchFinalResultsForSummaries(supabase)) as Array<Record<string, unknown>>).map((r) => ({
+            id: String(r.id),
+            user_id: String(r.user_id),
+            created_at: String(r.created_at ?? ""),
+          })),
+          countingFromByUser,
+        );
+
   const attemptRows: ResultsAttemptExportRow[] = attemptsData.rows
     .map((row) => {
       const userId = String(row.user_id);
@@ -261,9 +275,7 @@ export async function loadResultsExportData(body: Record<string, unknown>) {
         questionsTotal: row.questions_total != null ? Number(row.questions_total) : null,
         createdAt: String(row.created_at ?? ""),
         finalAttemptIndex:
-          row.final_attempt_index != null && Number.isFinite(Number(row.final_attempt_index))
-            ? Number(row.final_attempt_index)
-            : null,
+          type === "final" ? finalAttemptIndexById.get(String(row.id)) ?? null : null,
       };
     })
     .filter((row): row is ResultsAttemptExportRow => Boolean(row));
