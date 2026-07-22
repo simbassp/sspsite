@@ -596,15 +596,10 @@ export async function loginUser(login: string, password: string) {
   } else {
     const localStyleEmail = `${loginTrim}@ssp.local`;
     const cachedEmail = getCachedEmailForLogin(loginTrim);
-    if (cachedEmail) {
-      emailsToTry.push(cachedEmail);
-    } else {
-      const resolved = await resolveEmailByLogin(loginTrim);
-      if (resolved) {
-        emailsToTry.push(resolved);
-      }
-    }
-    if (!emailsToTry.includes(localStyleEmail)) {
+    const resolved = cachedEmail || (await resolveEmailByLogin(loginTrim));
+    if (resolved) emailsToTry.push(resolved);
+    if (!resolved) emailsToTry.push(localStyleEmail);
+    else if (resolved.toLowerCase() === localStyleEmail.toLowerCase() && !emailsToTry.includes(localStyleEmail)) {
       emailsToTry.push(localStyleEmail);
     }
   }
@@ -628,6 +623,7 @@ export async function loginUser(login: string, password: string) {
       break;
     }
     lastError = error?.message ?? lastError;
+    if (email !== `${loginTrim}@ssp.local`) break;
   }
 
   if (!authUserId) {

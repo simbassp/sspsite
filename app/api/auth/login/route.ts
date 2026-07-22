@@ -120,6 +120,28 @@ function canLinkProfileToAuthUser(profile: ProfileRow, authUserId: string) {
   return profile.id === authUserId || !profile.auth_user_id;
 }
 
+async function signInWithLogin(baseUrl: string, anonKey: string, login: string, password: string) {
+  const fakeEmail = `${login}@ssp.local`.toLowerCase();
+  const resolvedTrim = (await resolveEmail(baseUrl, anonKey, login)).trim();
+  const emailsToTry: string[] = [];
+
+  if (resolvedTrim) emailsToTry.push(resolvedTrim);
+  if (!emailsToTry.some((email) => email.toLowerCase() === fakeEmail)) {
+    emailsToTry.push(`${login}@ssp.local`);
+  }
+
+  let lastError = "Неверный логин/пароль.";
+  for (const email of emailsToTry) {
+    const signIn = await signInWithEmail(baseUrl, anonKey, email, password);
+    if (signIn.ok) return signIn;
+    lastError = signIn.error;
+    // Real email resolved but password wrong — @ssp.local won't help.
+    if (resolvedTrim && email.toLowerCase() === resolvedTrim.toLowerCase()) break;
+  }
+
+  return { ok: false as const, error: lastError };
+}
+
 async function fetchProfileViaServiceRole(authUserId: string, loginHint: string) {
   try {
     const supabase = getServerSupabaseServiceClient();
@@ -229,30 +251,13 @@ export async function POST(request: Request) {
     accessToken = signIn.data.access_token;
     refreshToken = signIn.data.refresh_token;
   } else {
-    const fakeEmail = `${login}@ssp.local`;
-    const [resolvedRaw, signInFake] = await Promise.all([
-      resolveEmail(baseUrl, supabaseAnonKey, login),
-      signInWithEmail(baseUrl, supabaseAnonKey, fakeEmail, password),
-    ]);
-
-    if (signInFake.ok) {
-      authUserId = signInFake.data.user?.id ?? "";
-      accessToken = signInFake.data.access_token;
-      refreshToken = signInFake.data.refresh_token;
-    } else {
-      lastError = signInFake.error;
-      const resolvedTrim = typeof resolvedRaw === "string" ? resolvedRaw.trim() : "";
-      if (resolvedTrim && resolvedTrim.toLowerCase() !== fakeEmail.toLowerCase()) {
-        const signInResolved = await signInWithEmail(baseUrl, supabaseAnonKey, resolvedTrim, password);
-        if (signInResolved.ok) {
-          authUserId = signInResolved.data.user?.id ?? "";
-          accessToken = signInResolved.data.access_token;
-          refreshToken = signInResolved.data.refresh_token;
-        } else {
-          lastError = signInResolved.error;
-        }
-      }
+    const signIn = await signInWithLogin(baseUrl, supabaseAnonKey, login, password);
+    if (!signIn.ok) {
+      return NextResponse.json({ ok: false, error: signIn.error }, { status: 401 });
     }
+    authUserId = signIn.data.user?.id ?? "";
+    accessToken = signIn.data.access_token;
+    refreshToken = signIn.data.refresh_token;
   }
 
   if (!authUserId || !accessToken || !refreshToken) {
