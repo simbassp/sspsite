@@ -124,6 +124,55 @@ export function parseResultsFiltersFromBody(body: Record<string, unknown>): Resu
   };
 }
 
+const ATTEMPT_SELECT_STATS = "user_id,type,status";
+const ATTEMPT_SELECT_STATS_LEGACY = "user_id,test_type,status";
+
+export type AttemptPeopleStats = {
+  passedPeople: number;
+  failedPeople: number;
+};
+
+export function calcAttemptPeopleStats(
+  rows: Array<{ userId: string; status: "passed" | "failed" }>,
+): AttemptPeopleStats {
+  const passedPeople = new Set<string>();
+  const failedPeople = new Set<string>();
+  for (const row of rows) {
+    if (row.status === "passed") passedPeople.add(row.userId);
+    else failedPeople.add(row.userId);
+  }
+  return {
+    passedPeople: passedPeople.size,
+    failedPeople: failedPeople.size,
+  };
+}
+
+export async function fetchAttemptsForPeopleStats(
+  supabase: { from: (table: string) => unknown },
+  query: AttemptListQuery,
+  maxRows = 10000,
+) {
+  if (query.statusFilter === "not_started") {
+    return [] as Array<{ userId: string; status: "passed" | "failed" }>;
+  }
+  if (query.allowedUserIds && query.allowedUserIds.length === 0) {
+    return [] as Array<{ userId: string; status: "passed" | "failed" }>;
+  }
+
+  let res = await runAttemptsQuery(supabase, query, ATTEMPT_SELECT_STATS, "type", { limit: maxRows });
+  if (res.error && isMissingColumnError(res.error.message)) {
+    res = await runAttemptsQuery(supabase, query, ATTEMPT_SELECT_STATS_LEGACY, "test_type", { limit: maxRows });
+  }
+  if (res.error) throw new Error(res.error.message);
+
+  return ((res.data ?? []) as Array<Record<string, unknown>>)
+    .map((row) => ({
+      userId: String(row.user_id),
+      status: row.status === "passed" ? ("passed" as const) : ("failed" as const),
+    }))
+    .filter((row) => row.userId);
+}
+
 const ATTEMPT_SELECT_FULL =
   "id,user_id,type,status,score,created_at,questions_total,questions_correct,final_attempt_index";
 const ATTEMPT_SELECT_MID = "id,user_id,type,status,score,created_at";

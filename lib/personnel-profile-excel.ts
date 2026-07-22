@@ -283,7 +283,7 @@ function addOverviewSheet(workbook: ExcelJS.Workbook, bundle: PersonnelProfileEx
 
   addSection("Основные данные");
   addPairs([
-    ["ФИО", bundle.user.name || "—"],
+    ["Имя", bundle.user.name || "—"],
     ["Позывной", bundle.user.callsign || "—"],
     ["Должность", bundle.user.position || "—"],
     ["Подразделение", bundle.user.unitAssignment || "—"],
@@ -786,7 +786,7 @@ function addSummarySheet(
   });
 
   const header = sheet.addRow([
-    "ФИО",
+    "Имя",
     "Позывной",
     "Должность",
     "Взвод/Отдел/Мод",

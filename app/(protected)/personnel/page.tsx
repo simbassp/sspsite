@@ -700,7 +700,7 @@ export default function PersonnelListPage() {
               <table className="personnel-table">
                 <thead>
                   <tr>
-                    <th className="personnel-table__sticky">Сотрудник</th>
+                    <th className="personnel-table__sticky">Имя</th>
                     <th className="personnel-table__compact" title="Взвод / отделение / модуль">
                       Взвод/Отдел/Мод
                     </th>

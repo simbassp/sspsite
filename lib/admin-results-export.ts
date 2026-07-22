@@ -1,3 +1,4 @@
+import { calcAttemptPeopleStats } from "@/lib/admin-results-query";
 import { rotaUnitLabelCompact } from "@/lib/personnel-catalog";
 import { formatTestResultForType } from "@/lib/test-pass-rules";
 import { unitAssignmentLabel, type RotaPlatoonFilter, type RotaSectionFilter, type UnitAssignmentFilter } from "@/lib/unit-assignment";
@@ -36,6 +37,7 @@ export type ResultsExportColumn = {
 };
 
 export type ResultsAttemptExportRow = {
+  userId: string;
   name: string;
   callsign: string;
   position: string;
@@ -69,7 +71,7 @@ export function exportShowsRotaUnit(config: ResultsExportFilterConfig) {
 export function resolveResultsExportColumns(config: ResultsExportFilterConfig): ResultsExportColumn[] {
   if (config.statusFilter === "not_started") {
     const columns: ResultsExportColumn[] = [
-      { key: "name", header: "ФИО", width: 24 },
+      { key: "name", header: "Имя", width: 24 },
       { key: "callsign", header: "Позывной", width: 16 },
       { key: "position", header: "Должность", width: 18 },
       { key: "unit", header: "Подразделение", width: 18 },
@@ -86,7 +88,7 @@ export function resolveResultsExportColumns(config: ResultsExportFilterConfig): 
   }
 
   const columns: ResultsExportColumn[] = [
-    { key: "name", header: "ФИО", width: 24 },
+    { key: "name", header: "Имя", width: 24 },
     { key: "callsign", header: "Позывной", width: 16 },
     { key: "position", header: "Должность", width: 18 },
     { key: "unit", header: "Подразделение", width: 18 },
@@ -247,13 +249,17 @@ export function buildResultsExportSummaryLines(input: {
 
   lines.push(["Попыток в выгрузке", input.attemptRows.length]);
   if (input.attemptsTotal > input.attemptRows.length) {
-    lines.push(["Всего по фильтру", input.attemptsTotal]);
+    lines.push(["Всего попыток по фильтру", input.attemptsTotal]);
   }
 
-  const passed = input.attemptRows.filter((row) => row.status === "passed").length;
-  const failed = input.attemptRows.filter((row) => row.status === "failed").length;
-  lines.push(["Сдал", passed]);
-  lines.push(["Не сдал", failed]);
+  const passedAttempts = input.attemptRows.filter((row) => row.status === "passed").length;
+  const failedAttempts = input.attemptRows.filter((row) => row.status === "failed").length;
+  const peopleStats = calcAttemptPeopleStats(input.attemptRows);
+
+  lines.push(["Сдал (попыток)", passedAttempts]);
+  lines.push(["Не сдал (попыток)", failedAttempts]);
+  lines.push(["Сдали (людей)", peopleStats.passedPeople]);
+  lines.push(["Не сдали (людей)", peopleStats.failedPeople]);
 
   if (input.config.typeFilter === "all" || input.config.typeFilter === "trial") {
     lines.push(["Пробных попыток", input.attemptRows.filter((row) => row.type === "trial").length]);

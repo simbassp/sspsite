@@ -68,7 +68,7 @@ export function exportIncludesTestStats(config: RosterExportFilterConfig) {
 
 export function resolveRosterExportColumns(config: RosterExportFilterConfig): RosterExportColumn[] {
   const columns: RosterExportColumn[] = [
-    { key: "name", header: "ФИО", width: 24 },
+    { key: "name", header: "Имя", width: 24 },
     { key: "callsign", header: "Позывной", width: 16 },
     { key: "rotaUnit", header: "Взвод/отдел", width: 18 },
   ];

@@ -254,6 +254,7 @@ export async function loadResultsExportData(body: Record<string, unknown>) {
       if (!user) return null;
       const type = (row.type ?? row.test_type) === "final" ? ("final" as const) : ("trial" as const);
       return {
+        userId,
         name: user.name,
         callsign: user.callsign,
         position: user.position,

@@ -98,6 +98,7 @@ type BootstrapPayload = {
   attemptsTotal?: number;
   attemptsPage?: number;
   attemptsPageSize?: number;
+  filterPeopleStats?: { passedPeople: number; failedPeople: number };
   bannerStats?: BannerStats;
   lastResetAudit?: {
     created_at: string;
@@ -184,6 +185,9 @@ export default function AdminResultsPage() {
   const [attempts, setAttempts] = useState<AttemptRow[]>([]);
   const [attemptsTotal, setAttemptsTotal] = useState(0);
   const [attemptsPage, setAttemptsPage] = useState(1);
+  const [filterPeopleStats, setFilterPeopleStats] = useState<{ passedPeople: number; failedPeople: number } | null>(
+    null,
+  );
   const [bannerStats, setBannerStats] = useState<BannerStats>(emptyBannerStats);
   const [lastResetAudit, setLastResetAudit] = useState<BootstrapPayload["lastResetAudit"]>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -225,6 +229,7 @@ export default function AdminResultsPage() {
       setSummaries(Array.isArray(payload.summaries) ? payload.summaries : []);
       setAttempts(Array.isArray(payload.attempts) ? payload.attempts : []);
       setAttemptsTotal(typeof payload.attemptsTotal === "number" ? payload.attemptsTotal : 0);
+      setFilterPeopleStats(payload.filterPeopleStats ?? null);
       setBannerStats(payload.bannerStats ?? emptyBannerStats);
       setLastResetAudit(payload.lastResetAudit ?? null);
       setNextAutoResetAt(payload.nextAutoResetAt ?? null);
@@ -233,6 +238,7 @@ export default function AdminResultsPage() {
       setSummaries([]);
       setAttempts([]);
       setAttemptsTotal(0);
+      setFilterPeopleStats(null);
       setBannerStats(emptyBannerStats);
       setNextAutoResetAt(null);
     } finally {
@@ -405,11 +411,20 @@ export default function AdminResultsPage() {
       {!!exportExcelMsg && <p className="page-subtitle">{exportExcelMsg}</p>}
       {!isLoading && !loadError && exportRowCount > 0 && (
         <p className="page-subtitle admin-results-export-meta">
-          В Excel попадёт {exportRowCount}{" "}
-          {statusFilter === "not_started"
-            ? `сотрудник${exportRowCount === 1 ? "" : exportRowCount >= 2 && exportRowCount <= 4 ? "а" : "ов"}`
-            : `попыт${exportRowCount === 1 ? "ка" : exportRowCount >= 2 && exportRowCount <= 4 ? "ки" : "ок"}`}{" "}
-          по текущим фильтрам.
+          {statusFilter === "not_started" ? (
+            <>
+              Не проходили итог: <strong>{exportRowCount}</strong>{" "}
+              {exportRowCount === 1 ? "человек" : exportRowCount >= 2 && exportRowCount <= 4 ? "человека" : "человек"}.
+            </>
+          ) : (
+            <>
+              По фильтрам: <strong>{filterPeopleStats?.passedPeople ?? 0}</strong> чел. сдали,{" "}
+              <strong>{filterPeopleStats?.failedPeople ?? 0}</strong> чел. не сдали (
+              <strong>{exportRowCount}</strong>{" "}
+              {exportRowCount === 1 ? "попытка" : exportRowCount >= 2 && exportRowCount <= 4 ? "попытки" : "попыток"}
+              ).
+            </>
+          )}
         </p>
       )}
 

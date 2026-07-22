@@ -2,6 +2,8 @@ import { effectiveFinalCountingFromUtc, nextAutoResetUtcIso } from "@/lib/final-
 import { FINAL_TEST_MAX_ATTEMPTS } from "@/lib/final-test-constants";
 import {
   applyCreatedAtRange,
+  calcAttemptPeopleStats,
+  fetchAttemptsForPeopleStats,
   fetchAttemptsPage,
   isMissingColumnError,
   parseAttemptsQuery,
@@ -325,6 +327,20 @@ export async function GET(req: Request) {
       endIso,
     });
 
+    const peopleStatsRows =
+      attemptsQuery.statusFilter === "not_started"
+        ? []
+        : await fetchAttemptsForPeopleStats(supabase, {
+            page: 1,
+            pageSize: 10000,
+            typeFilter: attemptsQuery.typeFilter,
+            statusFilter: attemptsQuery.statusFilter,
+            allowedUserIds: hasUserFilter ? filteredUserIds : null,
+            startIso,
+            endIso,
+          });
+    const filterPeopleStats = calcAttemptPeopleStats(peopleStatsRows);
+
     const attempts = (attemptsPageData.rows as Array<Record<string, unknown>>)
       .map((row) => {
         const userId = String(row.user_id);
@@ -518,6 +534,7 @@ export async function GET(req: Request) {
       attemptsTotal,
       attemptsPage,
       attemptsPageSize,
+      filterPeopleStats,
       lastResetAudit,
       bannerStats,
     });
