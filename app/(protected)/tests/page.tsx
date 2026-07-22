@@ -489,11 +489,6 @@ export default function TestsPage() {
     };
   }, [session, reloadFinalSummary]);
 
-  useEffect(() => {
-    if (!session || isBootstrapping || !isConfigLoaded || questionPool.length > 0 || isPoolLoading) return;
-    void loadQuestionPool();
-  }, [session, isBootstrapping, isConfigLoaded, questionPool.length, isPoolLoading]);
-
   const activeQuestions = selectedQuestions;
   const currentQuestion = activeQuestions[questionIndex];
 
@@ -1055,10 +1050,10 @@ export default function TestsPage() {
                 type="button"
                 onClick={onTrial}
                 disabled={
-                  isBootstrapping || isPoolLoading || !isConfigLoaded || activeTest != null || isStartingTest
+                  isBootstrapping || !isConfigLoaded || activeTest != null || isStartingTest
                 }
               >
-                {(startingTest === "trial" || (isPoolLoading && !activeTest)) ? "Загружаю…" : "Начать пробный тест"}
+                {startingTest === "trial" ? "Загружаю…" : "Начать пробный тест"}
               </button>
             </article>
 
@@ -1085,10 +1080,10 @@ export default function TestsPage() {
                 type="button"
                 onClick={onBank}
                 disabled={
-                  isBootstrapping || isPoolLoading || !isConfigLoaded || activeTest != null || isStartingTest
+                  isBootstrapping || !isConfigLoaded || activeTest != null || isStartingTest
                 }
               >
-                {(startingTest === "bank" || (isPoolLoading && !activeTest)) ? "Загружаю…" : "Начать по всему банку"}
+                {startingTest === "bank" ? "Загружаю…" : "Начать по всему банку"}
               </button>
             </article>
 
@@ -1118,7 +1113,6 @@ export default function TestsPage() {
                   onClick={startFinal}
                   disabled={
                     isBootstrapping ||
-                    isPoolLoading ||
                     !isConfigLoaded ||
                     activeTest != null ||
                     isStartingTest ||
@@ -1133,7 +1127,7 @@ export default function TestsPage() {
                         : undefined
                   }
                 >
-                  {(startingTest === "final" || (isPoolLoading && !activeTest)) ? "Загружаю…" : "Начать итоговый тест"}
+                  {startingTest === "final" ? "Загружаю…" : "Начать итоговый тест"}
                 </button>
               )}
             </article>
@@ -1184,7 +1178,6 @@ export default function TestsPage() {
 
       {isBootstrapping && <p className="page-subtitle" style={{ marginTop: 10 }}>Загрузка тестовых данных...</p>}
       {!isBootstrapping && !!bootstrapError && <p className="page-subtitle">{bootstrapError}</p>}
-      {isPoolLoading && <p className="page-subtitle">Подготавливаем вопросы для запуска теста...</p>}
 
       {activeTest && currentQuestion && (
         <article className="card" style={{ marginTop: 12 }} ref={testCardRef}>

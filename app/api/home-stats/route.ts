@@ -114,13 +114,24 @@ export async function GET() {
     } | null = null;
     let siteAnalytics: { totalVisits: number; totalActiveSeconds: number } | null = null;
 
-    const onlineStrictQ = supabase.from("app_users").select(ONLINE_USER_CORE_COLUMNS).eq("status", "active");
+    const staleBefore = onlineStaleBeforeIso();
+    const onlineStrictQ = supabase
+      .from("app_users")
+      .select(ONLINE_USER_CORE_COLUMNS)
+      .eq("status", "active")
+      .eq("is_online", true)
+      .gte("last_seen_at", staleBefore);
+    const totalUsersQ = supabase.from("app_users").select("id", { count: "exact", head: true }).eq("status", "active");
     const analyticsQ = supabase
       .from("site_settings")
       .select("key,value")
       .in("key", ["site_total_visits", "site_total_active_seconds"]);
 
-    const [onlineStrictRes, analyticsRes] = await Promise.all([onlineStrictQ, analyticsQ]);
+    const [onlineStrictRes, totalUsersRes, analyticsRes] = await Promise.all([
+      onlineStrictQ,
+      totalUsersQ,
+      analyticsQ,
+    ]);
 
     void supabase
       .from("app_users")
@@ -155,9 +166,10 @@ export async function GET() {
 
       const onlineIds = onlineRows.map((row) => String(row.id || "")).filter(Boolean);
       const cosmeticsById = onlineIds.length ? await loadIdentityCosmeticsMap(onlineIds) : new Map<string, UserIdentityCosmetics>();
+      const totalUsers = typeof totalUsersRes.count === "number" ? totalUsersRes.count : rows.length;
 
       usersSummary = {
-        totalUsers: rows.length,
+        totalUsers,
         onlineUsers: onlineRows.map((row) => {
           const record = row as Record<string, unknown>;
           const id = String(record.id || "");
