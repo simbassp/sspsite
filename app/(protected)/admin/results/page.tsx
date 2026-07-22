@@ -198,6 +198,7 @@ export default function AdminResultsPage() {
   const [bannerStats, setBannerStats] = useState<BannerStats>(emptyBannerStats);
   const [lastResetAudit, setLastResetAudit] = useState<BootstrapPayload["lastResetAudit"]>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isStatsLoading, setIsStatsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [resetBusyId, setResetBusyId] = useState<string | null>(null);
   const [deleteBusyId, setDeleteBusyId] = useState<string | null>(null);
@@ -223,41 +224,53 @@ export default function AdminResultsPage() {
   );
   const prevFilterKeyRef = useRef<string | null>(null);
   const loadAbortRef = useRef<AbortController | null>(null);
+  const statsAbortRef = useRef<AbortController | null>(null);
+
+  const buildBootstrapParams = useCallback(
+    (page: number) => {
+      const params = new URLSearchParams();
+      appendResultsPeriodParams(params, { periodMode, dateFrom, dateTo });
+      params.set("page", String(page));
+      params.set("pageSize", String(ATTEMPTS_PAGE_SIZE));
+      params.set("attemptType", typeFilter);
+      params.set("attemptStatus", statusFilter);
+      if (searchTerm.trim()) params.set("search", searchTerm.trim());
+      if (unitFilter !== "all") params.set("unit", unitFilter);
+      if (rotaPlatoon !== "all") params.set("rotaPlatoon", rotaPlatoon);
+      if (rotaSection !== "all") params.set("rotaSection", rotaSection);
+      return params;
+    },
+    [periodMode, dateFrom, dateTo, typeFilter, statusFilter, searchTerm, unitFilter, rotaPlatoon, rotaSection],
+  );
 
   const load = useCallback(
-    async (pageOverride?: number, signal?: AbortSignal) => {
+    async (pageOverride?: number, signal?: AbortSignal, statsSignal?: AbortSignal) => {
       setIsLoading(true);
+      setIsStatsLoading(true);
       setLoadError("");
-      try {
-        const page = pageOverride ?? attemptsPage;
-        const params = new URLSearchParams();
-        appendResultsPeriodParams(params, { periodMode, dateFrom, dateTo });
-        params.set("page", String(page));
-        params.set("pageSize", String(ATTEMPTS_PAGE_SIZE));
-        params.set("attemptType", typeFilter);
-        params.set("attemptStatus", statusFilter);
-        if (searchTerm.trim()) params.set("search", searchTerm.trim());
-        if (unitFilter !== "all") params.set("unit", unitFilter);
-        if (rotaPlatoon !== "all") params.set("rotaPlatoon", rotaPlatoon);
-        if (rotaSection !== "all") params.set("rotaSection", rotaSection);
+      setSummaries([]);
+      setFilterPeopleStats(null);
+      setTrialTripleStreakStats(null);
 
-        const response = await fetch(`/api/admin/results/bootstrap?${params.toString()}`, {
+      const page = pageOverride ?? attemptsPage;
+      const params = buildBootstrapParams(page);
+
+      try {
+        const fastResponse = await fetch(`/api/admin/results/bootstrap?${params.toString()}`, {
           cache: "no-store",
           signal,
         });
         if (signal?.aborted) return;
-        const payload = (await response.json()) as BootstrapPayload;
-        if (!response.ok || !payload.ok) {
-          throw new Error(payload.error || "admin_results_bootstrap_failed");
+        const fastPayload = (await fastResponse.json()) as BootstrapPayload;
+        if (!fastResponse.ok || !fastPayload.ok) {
+          throw new Error(fastPayload.error || "admin_results_bootstrap_failed");
         }
-        setSummaries(Array.isArray(payload.summaries) ? payload.summaries : []);
-        setAttempts(Array.isArray(payload.attempts) ? payload.attempts : []);
-        setAttemptsTotal(typeof payload.attemptsTotal === "number" ? payload.attemptsTotal : 0);
-        setFilterPeopleStats(payload.filterPeopleStats ?? null);
-        setTrialTripleStreakStats(payload.trialTripleStreakStats ?? null);
-        setBannerStats(payload.bannerStats ?? emptyBannerStats);
-        setLastResetAudit(payload.lastResetAudit ?? null);
-        setNextAutoResetAt(payload.nextAutoResetAt ?? null);
+
+        setAttempts(Array.isArray(fastPayload.attempts) ? fastPayload.attempts : []);
+        setAttemptsTotal(typeof fastPayload.attemptsTotal === "number" ? fastPayload.attemptsTotal : 0);
+        setBannerStats(fastPayload.bannerStats ?? emptyBannerStats);
+        setLastResetAudit(fastPayload.lastResetAudit ?? null);
+        setNextAutoResetAt(fastPayload.nextAutoResetAt ?? null);
       } catch (err) {
         if (signal?.aborted || (err instanceof DOMException && err.name === "AbortError")) return;
         setLoadError("Не удалось получить данные результатов. Попробуйте обновить страницу.");
@@ -268,22 +281,35 @@ export default function AdminResultsPage() {
         setTrialTripleStreakStats(null);
         setBannerStats(emptyBannerStats);
         setNextAutoResetAt(null);
+        return;
       } finally {
         if (!signal?.aborted) setIsLoading(false);
       }
+
+      try {
+        const statsParams = new URLSearchParams(params);
+        statsParams.set("part", "stats");
+        const statsResponse = await fetch(`/api/admin/results/bootstrap?${statsParams.toString()}`, {
+          cache: "no-store",
+          signal: statsSignal,
+        });
+        if (statsSignal?.aborted) return;
+        const statsPayload = (await statsResponse.json()) as BootstrapPayload;
+        if (!statsResponse.ok || !statsPayload.ok) {
+          throw new Error(statsPayload.error || "admin_results_stats_failed");
+        }
+
+        setSummaries(Array.isArray(statsPayload.summaries) ? statsPayload.summaries : []);
+        setFilterPeopleStats(statsPayload.filterPeopleStats ?? null);
+        setTrialTripleStreakStats(statsPayload.trialTripleStreakStats ?? null);
+        if (statsPayload.bannerStats) setBannerStats(statsPayload.bannerStats);
+      } catch (err) {
+        if (statsSignal?.aborted || (err instanceof DOMException && err.name === "AbortError")) return;
+      } finally {
+        if (!statsSignal?.aborted) setIsStatsLoading(false);
+      }
     },
-    [
-      periodMode,
-      dateFrom,
-      dateTo,
-      attemptsPage,
-      typeFilter,
-      statusFilter,
-      searchTerm,
-      unitFilter,
-      rotaPlatoon,
-      rotaSection,
-    ],
+    [attemptsPage, buildBootstrapParams],
   );
 
   useEffect(() => {
@@ -297,10 +323,16 @@ export default function AdminResultsPage() {
     }
 
     loadAbortRef.current?.abort();
+    statsAbortRef.current?.abort();
     const controller = new AbortController();
+    const statsController = new AbortController();
     loadAbortRef.current = controller;
-    void load(filtersChanged ? 1 : attemptsPage, controller.signal);
-    return () => controller.abort();
+    statsAbortRef.current = statsController;
+    void load(filtersChanged ? 1 : attemptsPage, controller.signal, statsController.signal);
+    return () => {
+      controller.abort();
+      statsController.abort();
+    };
   }, [filterKey, attemptsPage, load]);
 
   useEffect(() => {
@@ -446,8 +478,11 @@ export default function AdminResultsPage() {
       </div>
       {isLoading && (
         <p className="page-subtitle">
-          {periodMode === "all" ? "Загружаем все результаты, это может занять до минуты…" : "Загружаем результаты…"}
+          {periodMode === "all" ? "Загружаем список попыток…" : "Загружаем результаты…"}
         </p>
+      )}
+      {!isLoading && isStatsLoading && !loadError && (
+        <p className="page-subtitle">Считаем статистику…</p>
       )}
       {!isLoading && loadError && <p className="page-subtitle">{loadError}</p>}
       {!!resetMessage && <p className="page-subtitle">{resetMessage}</p>}
@@ -459,6 +494,8 @@ export default function AdminResultsPage() {
               Не проходили итог: <strong>{exportRowCount}</strong>{" "}
               {exportRowCount === 1 ? "человек" : exportRowCount >= 2 && exportRowCount <= 4 ? "человека" : "человек"}.
             </>
+          ) : isStatsLoading ? (
+            <>По фильтрам: считаем…</>
           ) : (
             <>
               По фильтрам: <strong>{filterPeopleStats?.passedPeople ?? 0}</strong> чел. сдали,{" "}
@@ -470,13 +507,19 @@ export default function AdminResultsPage() {
           )}
         </p>
       )}
-      {!isLoading && !loadError && showTrialTripleStreak && (
+      {!isLoading && !loadError && (showTrialTripleStreak || (isStatsLoading && typeFilter !== "final" && statusFilter !== "not_started")) && (
         <p className="page-subtitle admin-results-export-meta">
-          В выборке <strong>{trialTripleStreakStats.cohortPeople}</strong> чел. За период:{" "}
-          <strong>{exportRowCount}</strong>{" "}
-          {exportRowCount === 1 ? "попытка" : exportRowCount >= 2 && exportRowCount <= 4 ? "попытки" : "попыток"}.{" "}
-          <strong>Сдали 3 пробных:</strong> {trialTripleStreakStats.passedPeople} чел.,{" "}
-          <strong>не сдали:</strong> {trialTripleStreakStats.failedPeople} чел.
+          {isStatsLoading || !trialTripleStreakStats ? (
+            <>Считаем статистику по пробным…</>
+          ) : (
+            <>
+              В выборке <strong>{trialTripleStreakStats.cohortPeople}</strong> чел. За период:{" "}
+              <strong>{exportRowCount}</strong>{" "}
+              {exportRowCount === 1 ? "попытка" : exportRowCount >= 2 && exportRowCount <= 4 ? "попытки" : "попыток"}.{" "}
+              <strong>Сдали 3 пробных:</strong> {trialTripleStreakStats.passedPeople} чел.,{" "}
+              <strong>не сдали:</strong> {trialTripleStreakStats.failedPeople} чел.
+            </>
+          )}
         </p>
       )}
 
@@ -644,8 +687,12 @@ export default function AdminResultsPage() {
             </span>
             <div className="admin-results-summary-card__body">
               <p className="label">Сдали итог</p>
-              <p className="admin-results-summary-card__value">{bannerStats.passedCount}</p>
-              <p className="admin-results-summary-card__sub">{formatLastPersonLine(bannerStats.lastPassed)}</p>
+              <p className="admin-results-summary-card__value">
+                {isStatsLoading ? "…" : bannerStats.passedCount}
+              </p>
+              <p className="admin-results-summary-card__sub">
+                {isStatsLoading ? "Считаем…" : formatLastPersonLine(bannerStats.lastPassed)}
+              </p>
             </div>
           </article>
           <article className="admin-results-summary-card">
@@ -657,8 +704,12 @@ export default function AdminResultsPage() {
             </span>
             <div className="admin-results-summary-card__body">
               <p className="label">Не сдали итог</p>
-              <p className="admin-results-summary-card__value">{bannerStats.notPassedCount}</p>
-              <p className="admin-results-summary-card__sub">{formatLastPersonLine(bannerStats.lastNotPassed)}</p>
+              <p className="admin-results-summary-card__value">
+                {isStatsLoading ? "…" : bannerStats.notPassedCount}
+              </p>
+              <p className="admin-results-summary-card__sub">
+                {isStatsLoading ? "Считаем…" : formatLastPersonLine(bannerStats.lastNotPassed)}
+              </p>
             </div>
           </article>
           <article className="admin-results-summary-card">
