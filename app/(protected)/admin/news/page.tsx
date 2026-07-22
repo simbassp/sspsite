@@ -18,7 +18,7 @@ import { getPositionBadgeClass } from "@/lib/position-ui";
 import { NewsItem } from "@/lib/types";
 
 export default function AdminNewsPage() {
-  const session = readClientSession();
+  const { session } = useClientSession();
   const [news, setNews] = useState<NewsItem[]>([]);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
