@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import type { CSSProperties } from "react";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { AuthPasswordInput } from "@/components/AuthPasswordInput";
@@ -49,7 +48,6 @@ const spinnerStyle: CSSProperties = {
 };
 
 export default function LoginPage() {
-  const router = useRouter();
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -157,10 +155,12 @@ export default function LoginPage() {
         return;
       }
 
-      setInfo("Загружаем профиль...");
       clearProgressTimer();
       persistSession(result.session);
-      router.push("/dashboard");
+      setInfo("Переходим в приложение...");
+      // Полная перезагрузка: cookie из Set-Cookie и document.cookie гарантированно попадут на сервер.
+      window.location.assign("/dashboard");
+      return;
     } catch (err) {
       clearProgressTimer();
       setInfo("");

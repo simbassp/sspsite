@@ -8,6 +8,7 @@ import { normalizeAvatarStoragePath } from "@/lib/avatar-display";
 import { loadIdentityCosmeticsForUser } from "@/lib/user-identity-cosmetics-server";
 import { normalizeUnitAssignment } from "@/lib/unit-assignment";
 import { canInspectOtherUserProfile, canManageUsers } from "@/lib/permissions";
+import { resolvePersonnelProfileViewAccess } from "@/lib/personnel-profile-access";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 
@@ -75,12 +76,14 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
         : "base";
 
     const unitAssignment = unitFromDb ? normalizeUnitAssignment(userRow.unit_assignment) : null;
+    const personnelProfileView = await resolvePersonnelProfileViewAccess(session, userId);
+    const personnelProfileShow = personnelProfileView.show;
     const rotaPlatoon = userRow.rota_platoon != null ? Number(userRow.rota_platoon) : null;
     const rotaSection = userRow.rota_section != null ? Number(userRow.rota_section) : null;
     const rotaModule = userRow.rota_module != null ? Number(userRow.rota_module) : null;
     const employmentDate = userRow.employment_date ? String(userRow.employment_date).slice(0, 10) : null;
     const personnelMeta =
-      unitAssignment === "company_4"
+      personnelProfileShow && unitAssignment === "company_4"
         ? await loadProfilePersonnelMeta(userId)
         : { licenseCategories: [], bloodGroup: null };
 
@@ -118,6 +121,7 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
       },
       results: resultsRows,
       trialStats,
+      personnelProfileShow,
     });
   } catch (error) {
     return Response.json(

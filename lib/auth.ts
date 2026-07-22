@@ -45,8 +45,12 @@ function decode(value: string): SessionUser | null {
   }
 }
 
-export function serializeSessionCookie(user: SessionUser) {
-  return `${SESSION_COOKIE}=${encode(user)}; Path=/; Max-Age=2592000; SameSite=Lax`;
+export function serializeSessionCookie(user: SessionUser, options?: { secure?: boolean }) {
+  const secure =
+    options?.secure ??
+    (typeof process !== "undefined" && process.env.NODE_ENV === "production");
+  const base = `${SESSION_COOKIE}=${encode(user)}; Path=/; Max-Age=2592000; SameSite=Lax`;
+  return secure ? `${base}; Secure` : base;
 }
 
 export function clearSessionCookie() {

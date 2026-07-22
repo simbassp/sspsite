@@ -134,6 +134,7 @@ export default function ProfilePage() {
   const [personnelActivity, setPersonnelActivity] = useState<PersonnelActivityData | null>(null);
   const [personnelReloadToken, setPersonnelReloadToken] = useState(0);
   const [personnelInitialPayload, setPersonnelInitialPayload] = useState<PersonnelProfileInitialPayload | null>(null);
+  const [showPersonnelProfile, setShowPersonnelProfile] = useState(false);
   const [displayNameColor, setDisplayNameColor] = useState<ProfileNameColorId | null>(null);
   const [achievementUnlockedIds, setAchievementUnlockedIds] = useState<string[]>([]);
   const [achievementNotifications, setAchievementNotifications] = useState<
@@ -226,6 +227,7 @@ export default function ProfilePage() {
           results?: Array<Record<string, unknown>>;
           trialStats?: TrialProfileStatsPayload;
           inviteCodes?: Array<Record<string, unknown>>;
+          personnelProfileShow?: boolean;
           personnelProfile?: PersonnelProfileInitialPayload | null;
           nameColor?: ProfileNameColorId | null;
           position?: Position | null;
@@ -269,8 +271,11 @@ export default function ProfilePage() {
         const nextAvatarUrl =
           typeof payload.avatarUrl === "string" && payload.avatarUrl.trim() ? payload.avatarUrl.trim() : null;
         setAvatarUrl(nextAvatarUrl);
+        setShowPersonnelProfile(payload.personnelProfileShow === true);
         if (payload.personnelProfile) {
           setPersonnelInitialPayload(payload.personnelProfile);
+        } else {
+          setPersonnelInitialPayload(null);
         }
         if ("nameColor" in payload) {
           setDisplayNameColor(payload.nameColor ?? null);
@@ -1062,7 +1067,7 @@ export default function ProfilePage() {
                   </div>
                 ) : null}
               </div>
-              {session?.id && unitAssignment === "company_4" ? (
+              {session?.id && showPersonnelProfile ? (
                 <ProfilePersonnelMetaFields
                   userId={session.id}
                   canEdit
@@ -1156,7 +1161,7 @@ export default function ProfilePage() {
         </div>
       </article>
 
-      {session?.id ? (
+      {session?.id && showPersonnelProfile ? (
         <PersonnelProfileStats
           userId={session.id}
           onActivityData={setPersonnelActivity}

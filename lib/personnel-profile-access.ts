@@ -1,4 +1,4 @@
-import { canInspectOtherUserProfile, canModeratePersonnel } from "@/lib/permissions";
+import { canModeratePersonnel } from "@/lib/permissions";
 import { resolvePersonnelAccess } from "@/lib/personnel-access";
 import { loadPersonnelModuleSettings, loadPersonnelUserBasics } from "@/lib/personnel-server";
 import type { SessionUser } from "@/lib/types";
@@ -28,7 +28,6 @@ export async function resolvePersonnelProfileViewAccess(
 
   const access = resolvePersonnelAccess({ session, unitAssignment: viewerUnit, settings });
   const isAdminOrMod = session.role === "admin" || canModeratePersonnel(session);
-  const canInspectOthers = canInspectOtherUserProfile(session);
 
   if (isAdminOrMod) {
     return {
@@ -36,15 +35,6 @@ export async function resolvePersonnelProfileViewAccess(
       isPreview: !settings.moduleEnabled,
       canEditOwn: session.id === targetUserId,
       canModerate: true,
-    };
-  }
-
-  if (canInspectOthers) {
-    return {
-      show: true,
-      isPreview: !settings.moduleEnabled,
-      canEditOwn: session.id === targetUserId,
-      canModerate: false,
     };
   }
 

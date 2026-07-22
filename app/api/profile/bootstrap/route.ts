@@ -92,30 +92,37 @@ export async function GET() {
         : Promise.resolve({ data: [] as Array<Record<string, unknown>>, error: null });
     const personnelViewPromise = resolvePersonnelProfileViewAccess(session, session.id);
     const personnelProfileBundlePromise = personnelViewPromise.then(async (personnelView) => {
-      if (!personnelView.show) return null;
+      if (!personnelView.show) {
+        return { show: false as const, bundle: null };
+      }
       const profile = await loadPersonnelProfile(session.id);
-      if (!profile) return null;
+      if (!profile) {
+        return { show: false as const, bundle: null };
+      }
       return {
-        profile,
-        isPreview: personnelView.isPreview,
-        canEditOwn: personnelView.canEditOwn,
-        canModerate: personnelView.canModerate,
+        show: true as const,
+        bundle: {
+          profile,
+          isPreview: personnelView.isPreview,
+          canEditOwn: personnelView.canEditOwn,
+          canModerate: personnelView.canModerate,
+        },
       };
     });
     const authEmailPromise = authUserId
       ? supabase.auth.admin.getUserById(authUserId).catch(() => ({ data: { user: null } }))
       : Promise.resolve({ data: { user: null } });
-    const personnelMetaPromise =
-      unitAssignment === "company_4"
-        ? loadProfilePersonnelMeta(session.id)
-        : Promise.resolve({ licenseCategories: [] as string[], bloodGroup: null });
-
-    const [authInfo, invitesQ, personnelMeta, personnelProfile] = await Promise.all([
+    const [authInfo, invitesQ, personnelProfileResult] = await Promise.all([
       authEmailPromise,
       invitesPromise,
-      personnelMetaPromise,
       personnelProfileBundlePromise,
     ]);
+    const personnelProfileShow = personnelProfileResult.show;
+    const personnelProfile = personnelProfileResult.bundle;
+    const personnelMeta =
+      personnelProfileShow && unitAssignment === "company_4"
+        ? await loadProfilePersonnelMeta(session.id)
+        : { licenseCategories: [] as string[], bloodGroup: null };
 
     const email = authInfo.data.user?.email || "";
     let inviteCodes: Array<Record<string, unknown>> = [];
@@ -140,6 +147,7 @@ export async function GET() {
       results: resultsRows,
       trialStats,
       inviteCodes,
+      personnelProfileShow,
       personnelProfile,
     });
   } catch (error) {

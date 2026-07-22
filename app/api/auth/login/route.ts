@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import { serializeSessionCookie } from "@/lib/auth";
 import { normalizeProfileNameColor } from "@/lib/profile-name-color";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
+import type { SessionUser } from "@/lib/types";
 
 export const runtime = "nodejs";
 
@@ -343,23 +345,27 @@ export async function POST(request: Request) {
       ? unitRaw
       : null;
 
-  return NextResponse.json({
+  const session: SessionUser = {
+    id: profile.id,
+    role: profile.role,
+    name: profile.name,
+    callsign: profile.callsign,
+    position: profile.position as SessionUser["position"],
+    canManageContent: permissions.news || permissions.tests || permissions.uav || permissions.counteraction,
+    permissions,
+    unitAssignment,
+    avatarUrl: typeof profile.avatar_url === "string" && profile.avatar_url.trim() ? profile.avatar_url.trim() : null,
+    nameColor: normalizeProfileNameColor(profile.profile_name_color),
+  };
+
+  const response = NextResponse.json({
     ok: true,
-    session: {
-      id: profile.id,
-      role: profile.role,
-      name: profile.name,
-      callsign: profile.callsign,
-      position: profile.position,
-      canManageContent: permissions.news || permissions.tests || permissions.uav || permissions.counteraction,
-      permissions,
-      unitAssignment,
-      avatarUrl: typeof profile.avatar_url === "string" && profile.avatar_url.trim() ? profile.avatar_url.trim() : null,
-      nameColor: normalizeProfileNameColor(profile.profile_name_color),
-    },
+    session,
     auth: {
       accessToken,
       refreshToken,
     },
   });
+  response.headers.append("Set-Cookie", serializeSessionCookie(session));
+  return response;
 }

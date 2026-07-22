@@ -1,5 +1,5 @@
-import { canModeratePersonnel } from "@/lib/permissions";
 import { resolvePersonnelAccess } from "@/lib/personnel-access";
+import { resolvePersonnelProfileViewAccess } from "@/lib/personnel-profile-access";
 import { loadPersonnelModuleSettings, loadPersonnelUserBasics } from "@/lib/personnel-server";
 import { getServerSession } from "@/lib/server-auth";
 import { normalizeUnitAssignment } from "@/lib/unit-assignment";
@@ -31,12 +31,8 @@ export async function getPersonnelContext() {
 }
 
 export async function canViewPersonnelUser(session: SessionUser, targetUserId: string) {
-  const ctx = await getPersonnelContext();
-  if (!ctx.ok) return false;
-  if (ctx.session.role === "admin" || canModeratePersonnel(ctx.session)) return true;
-  if (ctx.session.id === targetUserId && ctx.access.isCompany4) return true;
-  const target = await loadPersonnelUserBasics(targetUserId);
-  return target?.unitAssignment === "company_4";
+  const view = await resolvePersonnelProfileViewAccess(session, targetUserId);
+  return view.show;
 }
 
 export function normalizeSessionUnit(raw: unknown): UnitAssignment | null {

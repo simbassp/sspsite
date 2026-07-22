@@ -143,10 +143,7 @@ export default function ProfileUserInspectPage() {
   const [employmentSaveError, setEmploymentSaveError] = useState("");
   const [licenseCategories, setLicenseCategories] = useState<PersonnelLicenseCategory[]>([]);
   const [bloodGroup, setBloodGroup] = useState<PersonnelBloodGroup | null>(null);
-  const showPersonnelStats = useMemo(
-    () => normalizeUnitAssignment(inspectUser?.unit_assignment) === "company_4",
-    [inspectUser?.unit_assignment],
-  );
+  const [showPersonnelStats, setShowPersonnelStats] = useState(false);
 
   useEffect(() => {
     if (!session || !userId || !canOpen) return;
@@ -168,6 +165,7 @@ export default function ProfileUserInspectPage() {
           user?: InspectUser & { duty_location?: string; unit_assignment?: UnitAssignment | null };
           results?: Array<Record<string, unknown>>;
           trialStats?: TrialProfileStatsPayload;
+          personnelProfileShow?: boolean;
         };
         if (cancelled) return;
         if (!response.ok || !payload.ok || !payload.user) {
@@ -190,6 +188,7 @@ export default function ProfileUserInspectPage() {
         setEmploymentDateStored(typeof u.employment_date === "string" && u.employment_date ? u.employment_date : null);
         setLicenseCategories(normalizePersonnelLicenseCategories(u.licenseCategories));
         setBloodGroup(normalizePersonnelBloodGroup(u.bloodGroup));
+        setShowPersonnelStats(payload.personnelProfileShow === true);
         setRows(mapRows({ results: payload.results }).sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)));
         setTrialStatsFromApi(deserializeTrialProfileStats(payload.trialStats));
       } catch {
@@ -797,7 +796,7 @@ export default function ProfileUserInspectPage() {
                       </div>
                     ) : null}
                   </div>
-                  {inspectUser.unit_assignment === "company_4" ? (
+                  {showPersonnelStats ? (
                     <ProfilePersonnelMetaFields
                       userId={inspectUser.id}
                       canEdit={canEditPersonnelMeta}
