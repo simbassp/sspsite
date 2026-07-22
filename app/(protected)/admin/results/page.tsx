@@ -22,6 +22,7 @@ import {
 import type { UnitAssignment } from "@/lib/types";
 import { ROTA_PLATOON_OPTIONS, ROTA_SECTION_OPTIONS } from "@/lib/personnel-catalog";
 import { FINAL_AUTO_RESET_DAY_UTC } from "@/lib/final-effective-counting";
+import { appendResultsPeriodParams, buildResultsPeriodBody } from "@/lib/admin-results-query";
 
 type PeriodMode = "all" | "today" | "custom";
 type TestTypeFilter = "all" | "trial" | "final";
@@ -230,12 +231,7 @@ export default function AdminResultsPage() {
       try {
         const page = pageOverride ?? attemptsPage;
         const params = new URLSearchParams();
-        if (periodMode === "today") {
-          params.set("range", "today");
-        } else if (periodMode === "custom") {
-          if (dateFrom) params.set("dateFrom", dateFrom);
-          if (dateTo) params.set("dateTo", dateTo);
-        }
+        appendResultsPeriodParams(params, { periodMode, dateFrom, dateTo });
         params.set("page", String(page));
         params.set("pageSize", String(ATTEMPTS_PAGE_SIZE));
         params.set("attemptType", typeFilter);
@@ -397,9 +393,7 @@ export default function AdminResultsPage() {
     setExportExcelMsg("");
     try {
       await postResultsExportExcel({
-        ...(periodMode === "today" ? { range: "today" as const } : {}),
-        ...(periodMode === "custom" && dateFrom ? { dateFrom } : {}),
-        ...(periodMode === "custom" && dateTo ? { dateTo } : {}),
+        ...buildResultsPeriodBody({ periodMode, dateFrom, dateTo }),
         attemptType: typeFilter,
         attemptStatus: statusFilter,
         search: searchTerm.trim() || undefined,

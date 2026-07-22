@@ -14,8 +14,19 @@ export function parseDateParam(raw: string | null): Date | null {
 }
 
 export function resolveDateRange(searchParams: URLSearchParams) {
-  const range = searchParams.get("range") || "all";
-  if (range === "today") {
+  const rangeParam = searchParams.get("range");
+
+  if (rangeParam === "all") {
+    return {
+      range: "all" as const,
+      dateFrom: null as string | null,
+      dateTo: null as string | null,
+      startMs: null as number | null,
+      endMs: null as number | null,
+    };
+  }
+
+  if (rangeParam === "today") {
     const now = new Date();
     const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
     return {
@@ -53,10 +64,42 @@ export function resolveDateRange(searchParams: URLSearchParams) {
 
 export function resolveDateRangeFromBody(body: Record<string, unknown>) {
   const params = new URLSearchParams();
-  if (body.range === "today") params.set("range", "today");
-  if (typeof body.dateFrom === "string" && body.dateFrom) params.set("dateFrom", body.dateFrom);
-  if (typeof body.dateTo === "string" && body.dateTo) params.set("dateTo", body.dateTo);
+  if (body.range === "today" || body.range === "all") {
+    params.set("range", body.range);
+  } else {
+    if (typeof body.dateFrom === "string" && body.dateFrom) params.set("dateFrom", body.dateFrom);
+    if (typeof body.dateTo === "string" && body.dateTo) params.set("dateTo", body.dateTo);
+  }
   return resolveDateRange(params);
+}
+
+export function buildResultsPeriodBody(input: {
+  periodMode: "all" | "today" | "custom";
+  dateFrom?: string;
+  dateTo?: string;
+}) {
+  if (input.periodMode === "today") return { range: "today" as const };
+  if (input.periodMode === "all") return { range: "all" as const };
+  return {
+    ...(input.dateFrom ? { dateFrom: input.dateFrom } : {}),
+    ...(input.dateTo ? { dateTo: input.dateTo } : {}),
+  };
+}
+
+export function appendResultsPeriodParams(
+  params: URLSearchParams,
+  input: { periodMode: "all" | "today" | "custom"; dateFrom?: string; dateTo?: string },
+) {
+  if (input.periodMode === "today") {
+    params.set("range", "today");
+    return;
+  }
+  if (input.periodMode === "all") {
+    params.set("range", "all");
+    return;
+  }
+  if (input.dateFrom) params.set("dateFrom", input.dateFrom);
+  if (input.dateTo) params.set("dateTo", input.dateTo);
 }
 
 export function timestampInRange(timestamp: string, startMs: number | null, endMs: number | null) {

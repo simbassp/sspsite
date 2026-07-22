@@ -1,7 +1,7 @@
 "use client";
 
 export type ResultsExportExcelBody = {
-  range?: "today";
+  range?: "all" | "today";
   dateFrom?: string;
   dateTo?: string;
   attemptType?: "all" | "trial" | "final";
