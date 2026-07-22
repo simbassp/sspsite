@@ -242,7 +242,7 @@ export default function ProfileUserInspectPage() {
           /* ignore */
         }
       })();
-    }, 20000);
+    }, 60_000);
 
     return () => {
       cancelled = true;

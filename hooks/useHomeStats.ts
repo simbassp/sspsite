@@ -132,7 +132,7 @@ function startPolling(pollMs: number) {
   };
 }
 
-export function useHomeStats(pollMs = 45_000) {
+export function useHomeStats(pollMs = 90_000) {
   const storeSnapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
   useEffect(() => startPolling(pollMs), [pollMs]);

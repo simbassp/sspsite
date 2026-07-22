@@ -1,6 +1,7 @@
 import { isMissingColumnError } from "@/lib/server-final-user-context";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
+import { scheduleStaleOnlineCleanup } from "@/lib/presence-stale-cleanup";
 
 export const runtime = "nodejs";
 
@@ -77,6 +78,8 @@ export async function POST(request: Request) {
       console.error("[presence] update failed:", q.error.message);
       return Response.json({ ok: false, error: q.error.message || "presence_update_failed" }, { status: 500 });
     }
+
+    scheduleStaleOnlineCleanup(supabase);
 
     if (newSession || elapsedSeconds > 0) {
       const analytics = await supabase.rpc("record_site_analytics", {

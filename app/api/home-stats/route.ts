@@ -5,9 +5,12 @@ import { effectiveOnlineStrict, onlineStaleBeforeIso } from "@/lib/presence-onli
 import { normalizeProfileNameColor, type ProfileNameColorId } from "@/lib/profile-name-color";
 import { mapIdentityCosmeticsFromRow, type UserIdentityCosmetics } from "@/lib/user-identity-cosmetics";
 import { loadIdentityCosmeticsMap } from "@/lib/user-identity-cosmetics-server";
+import { createRouteCache } from "@/lib/server-route-cache";
 import { UNIT_COMMANDERS, unitAssignmentLabel } from "@/lib/unit-assignment";
 
 export const runtime = "nodejs";
+
+const HOME_STATS_CACHE_MS = 30_000;
 
 const ONLINE_USER_CORE_COLUMNS = "id,name,callsign,is_online,last_seen_at,status,profile_name_color";
 
@@ -56,12 +59,26 @@ function cosmeticsFromRow(row: Record<string, unknown>): UserIdentityCosmetics {
   return mapIdentityCosmeticsFromRow(row);
 }
 
-export async function GET() {
-  const session = await getServerSession();
-  if (!session) return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
+type HomeStatsBody = {
+  ok: true;
+  events: unknown[];
+  usersSummary: {
+    totalUsers: number;
+    onlineUsers: Array<{
+      id: string;
+      name: string;
+      callsign: string;
+      nameColor: ProfileNameColorId | null;
+      cosmetics: UserIdentityCosmetics;
+    }>;
+  } | null;
+  siteAnalytics: { totalVisits: number; totalActiveSeconds: number } | null;
+};
 
-  try {
-    const supabase = getServerSupabaseServiceClient();
+const homeStatsCache = createRouteCache<HomeStatsBody>(HOME_STATS_CACHE_MS);
+
+async function buildHomeStats(): Promise<HomeStatsBody> {
+  const supabase = getServerSupabaseServiceClient();
     const [newestQ, leftQ, promotedQ] = await Promise.all([
       supabase
         .from("app_users")
@@ -132,13 +149,6 @@ export async function GET() {
       totalUsersQ,
       analyticsQ,
     ]);
-
-    void supabase
-      .from("app_users")
-      .update({ is_online: false })
-      .eq("is_online", true)
-      .or(`last_seen_at.is.null,last_seen_at.lt.${onlineStaleBeforeIso()}`)
-      .then(() => undefined);
 
     if (onlineStrictRes.error && isMissingColumnError(onlineStrictRes.error.message)) {
       const fallbackQ = await supabase.from("app_users").select("id,name,callsign,is_online,status");
@@ -271,12 +281,21 @@ export async function GET() {
       })
       .slice(0, 8);
 
-    return Response.json({
-      ok: true,
-      events,
-      usersSummary,
-      siteAnalytics,
-    });
+  return {
+    ok: true,
+    events,
+    usersSummary,
+    siteAnalytics,
+  };
+}
+
+export async function GET() {
+  const session = await getServerSession();
+  if (!session) return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
+
+  try {
+    const body = await homeStatsCache.getOrLoad(buildHomeStats);
+    return Response.json(body);
   } catch (error) {
     return Response.json(
       { ok: false, error: error instanceof Error ? error.message : "home_stats_exception" },

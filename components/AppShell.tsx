@@ -23,6 +23,7 @@ import { canAccessGameSection } from "@/lib/game-feature";
 import { HomeStatsBar } from "@/components/HomeStatsBar";
 import { SiteFooterStats } from "@/components/SiteFooterStats";
 import {
+  PRESENCE_ANALYTICS_FLUSH_MS,
   PRESENCE_HEARTBEAT_MS,
   PRESENCE_HIDDEN_OFFLINE_DELAY_MS,
 } from "@/lib/presence-constants";
@@ -323,8 +324,11 @@ export function AppShell({ session, children }: AppShellProps) {
           sessionCountedRef.current = true;
           lastAnalyticsPingRef.current = now;
         } else {
-          elapsedSeconds = Math.round((now - lastAnalyticsPingRef.current) / 1000);
-          lastAnalyticsPingRef.current = now;
+          const sinceLast = now - lastAnalyticsPingRef.current;
+          if (sinceLast >= PRESENCE_ANALYTICS_FLUSH_MS) {
+            elapsedSeconds = Math.round(sinceLast / 1000);
+            lastAnalyticsPingRef.current = now;
+          }
         }
       } else if (sessionCountedRef.current) {
         elapsedSeconds = Math.round((now - lastAnalyticsPingRef.current) / 1000);

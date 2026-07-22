@@ -61,7 +61,20 @@ export function PersonnelNotificationsBell({ compact = false }: PersonnelNotific
   const ref = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
 
-  const load = async () => {
+  const loadNav = async () => {
+    try {
+      const navRes = await fetch("/api/notifications/nav", { cache: "no-store" });
+      const nav = (await navRes.json()) as { unreadNotifications?: number; canSendNotifications?: boolean };
+      if (navRes.ok) {
+        setUnread(nav.unreadNotifications ?? 0);
+        setCanSend(nav.canSendNotifications === true);
+      }
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const loadFull = async () => {
     try {
       const [navRes, listRes] = await Promise.all([
         fetch("/api/notifications/nav", { cache: "no-store" }),
@@ -78,6 +91,8 @@ export function PersonnelNotificationsBell({ compact = false }: PersonnelNotific
       /* ignore */
     }
   };
+
+  const load = loadFull;
 
   const markAllRead = async () => {
     try {
@@ -147,10 +162,15 @@ export function PersonnelNotificationsBell({ compact = false }: PersonnelNotific
 
   useEffect(() => {
     setPortalReady(true);
-    void load();
-    const t = setInterval(() => void load(), 60000);
+    void loadNav();
+    const t = setInterval(() => void loadNav(), 90_000);
     return () => clearInterval(t);
   }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    void loadFull();
+  }, [open]);
 
   useEffect(() => {
     if (!open || !ref.current) return;
