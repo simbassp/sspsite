@@ -8,7 +8,7 @@ import { canManageUav } from "@/lib/permissions";
 import { publicUploadDisplayUrl } from "@/lib/public-asset-url";
 import { buildUavCategoryOptions, findCanonicalUavCategory, isBuiltinUavCategory, itemMatchesUavCategory } from "@/lib/uav-categories";
 import { UAV_ENGINE_TYPES, UavEngineType, appendEngineSpec, detectEngineType } from "@/lib/uav-engine";
-import { deleteUavItem, fetchUavItems, saveUavItem } from "@/lib/uav-repository";
+import { deleteUavItem, fetchUavItems, peekCatalogCache, saveUavItem } from "@/lib/uav-repository";
 import { CatalogItem } from "@/lib/types";
 import { CatalogChipTrack } from "@/components/CatalogChipTrack";
 
@@ -116,27 +116,41 @@ export default function UavPage() {
     setCustomCategories(readLocalCustomCategories().filter((c) => !isBuiltinUavCategory(c)));
   }, []);
 
-  const load = async () => {
-    setLoading(true);
+  const load = async (forceRefresh = false) => {
+    const cached = !forceRefresh ? peekCatalogCache("uav") : null;
+    if (cached?.items.length) {
+      setItems(cached.items);
+      setLoading(false);
+      setLoadError("");
+      if (cached.fresh && !forceRefresh) {
+        void refreshCustomCategories();
+        return;
+      }
+    } else {
+      setLoading(true);
+    }
+
     setLoadError("");
     try {
-      const rows = await fetchUavItems();
+      const rows = await fetchUavItems(forceRefresh);
       setItems(rows);
       await refreshCustomCategories();
     } catch {
-      setLoadError("Не удалось загрузить карточки БПЛА. Проверьте интернет и повторите попытку.");
-      setItems([]);
+      if (!cached?.items.length) {
+        setLoadError("Не удалось загрузить карточки БПЛА. Проверьте интернет и повторите попытку.");
+        setItems([]);
+      }
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    void load();
+    void load(false);
   }, []);
 
   const refresh = async () => {
-    await load();
+    await load(true);
   };
 
   useEffect(() => {
@@ -398,7 +412,7 @@ export default function UavPage() {
       {!loading && !!loadError && (
         <div className="form" style={{ marginBottom: 12 }}>
           <p className="page-subtitle">{loadError}</p>
-          <button className="btn" type="button" onClick={() => void load()}>
+          <button className="btn" type="button" onClick={() => void load(true)}>
             Повторить
           </button>
         </div>

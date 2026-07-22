@@ -13,6 +13,130 @@ import {
 } from "@/lib/storage";
 import { CatalogItem } from "@/lib/types";
 
+type CatalogKind = "uav" | "counteraction";
+
+const CATALOG_CACHE_TTL_MS = 5 * 60 * 1000;
+const CATALOG_CACHE_KEYS: Record<CatalogKind, string> = {
+  uav: "ssp_catalog_cache_uav_v1",
+  counteraction: "ssp_catalog_cache_counteraction_v1",
+};
+const catalogMemoryCache: Partial<Record<CatalogKind, { ts: number; items: CatalogItem[] }>> = {};
+
+function readCatalogCache(kind: CatalogKind, options?: { ignoreExpiry?: boolean }) {
+  const now = Date.now();
+  const ignoreExpiry = options?.ignoreExpiry === true;
+
+  const pickItems = (ts: number, items: CatalogItem[]) => {
+    if (!ignoreExpiry && now - ts >= CATALOG_CACHE_TTL_MS) return null;
+    return items;
+  };
+
+  const memory = catalogMemoryCache[kind];
+  if (memory) {
+    const items = pickItems(memory.ts, memory.items);
+    if (items) return items;
+  }
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(CATALOG_CACHE_KEYS[kind]);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { ts?: number; items?: CatalogItem[] };
+    if (!parsed.ts || !Array.isArray(parsed.items)) return null;
+    const items = pickItems(parsed.ts, parsed.items);
+    if (!items) return null;
+    catalogMemoryCache[kind] = { ts: parsed.ts, items: parsed.items };
+    return items;
+  } catch {
+    return null;
+  }
+}
+
+export function peekCatalogCache(kind: CatalogKind) {
+  const items = readCatalogCache(kind, { ignoreExpiry: true });
+  const memory = catalogMemoryCache[kind];
+  if (!items || !memory) return null;
+  return {
+    items,
+    ts: memory.ts,
+    fresh: Date.now() - memory.ts < CATALOG_CACHE_TTL_MS,
+  };
+}
+
+function isCatalogCacheFresh(kind: CatalogKind) {
+  const memory = catalogMemoryCache[kind];
+  if (!memory) return false;
+  return Date.now() - memory.ts < CATALOG_CACHE_TTL_MS;
+}
+
+function writeCatalogCache(kind: CatalogKind, items: CatalogItem[]) {
+  const payload = { ts: Date.now(), items };
+  catalogMemoryCache[kind] = payload;
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(CATALOG_CACHE_KEYS[kind], JSON.stringify(payload));
+  } catch {}
+}
+
+export function invalidateCatalogCache(kind: CatalogKind) {
+  delete catalogMemoryCache[kind];
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(CATALOG_CACHE_KEYS[kind]);
+  } catch {}
+}
+
+async function fetchCatalogItemsFromApi(kind: CatalogKind): Promise<CatalogItem[]> {
+  const path = kind === "uav" ? "/api/uav" : "/api/counteraction";
+  const response = await withTimeoutAndRetry(
+    () =>
+      fetch(path, {
+        cache: "no-store",
+        headers: { "cache-control": "no-store" },
+      }),
+    20_000,
+    1,
+    kind === "uav" ? "fetch_uav_items_timeout" : "fetch_counteraction_items_timeout",
+  );
+  if (!response.ok) {
+    throw new Error(`catalog_fetch_failed_${response.status}`);
+  }
+  const payload = (await response.json()) as { ok?: boolean; items?: CatalogItem[] };
+  if (kind === "counteraction" && (!payload.ok || !Array.isArray(payload.items))) {
+    throw new Error("catalog_fetch_invalid_response");
+  }
+  if (!Array.isArray(payload.items)) {
+    return [];
+  }
+  return payload.items;
+}
+
+async function fetchCachedCatalogItems(
+  kind: CatalogKind,
+  forceRefresh = false,
+  localFallback?: () => CatalogItem[],
+): Promise<CatalogItem[]> {
+  if (!forceRefresh && isCatalogCacheFresh(kind)) {
+    const cached = readCatalogCache(kind);
+    if (cached) return cached;
+  }
+
+  try {
+    const items = await fetchCatalogItemsFromApi(kind);
+    writeCatalogCache(kind, items);
+    return items;
+  } catch (error) {
+    const stale = readCatalogCache(kind, { ignoreExpiry: true });
+    if (stale?.length) return stale;
+    if (localFallback && shouldUseLocalFallback(kind === "counteraction")) {
+      const local = localFallback();
+      writeCatalogCache(kind, local);
+      return local;
+    }
+    if (kind === "uav") return [];
+    throw error instanceof Error ? error : new Error("catalog_fetch_failed");
+  }
+}
+
 type CatalogRow = {
   id: string;
   slug: string;
@@ -244,6 +368,7 @@ export async function reorderUavItems(orderedIds: string[]) {
   if (!response.ok || !payload.ok) {
     throw new Error(payload.message || payload.error || "reorder_failed");
   }
+  invalidateCatalogCache("uav");
 }
 
 export async function reorderCounteractionItems(orderedIds: string[]) {
@@ -256,6 +381,7 @@ export async function reorderCounteractionItems(orderedIds: string[]) {
   if (!response.ok || !payload.ok) {
     throw new Error(payload.message || payload.error || "reorder_failed");
   }
+  invalidateCatalogCache("counteraction");
 }
 
 async function deleteCatalogItem(
@@ -277,24 +403,8 @@ async function deleteCatalogItem(
   }
 }
 
-export async function fetchUavItems() {
-  try {
-    const response = await withTimeoutAndRetry(
-      () =>
-        fetch("/api/uav", {
-          cache: "no-store",
-          headers: { "cache-control": "no-store" },
-        }),
-      7000,
-      1,
-      "fetch_uav_items_timeout",
-    );
-    if (!response.ok) return [];
-    const payload = (await response.json()) as { ok?: boolean; items?: CatalogItem[] };
-    return Array.isArray(payload.items) ? payload.items : [];
-  } catch {
-    return [];
-  }
+export async function fetchUavItems(forceRefresh = false) {
+  return fetchCachedCatalogItems("uav", forceRefresh);
 }
 
 export async function fetchUavById(itemId: string) {
@@ -302,32 +412,18 @@ export async function fetchUavById(itemId: string) {
 }
 
 export async function saveUavItem(input: Omit<CatalogItem, "id"> & { id?: string }) {
-  return saveCatalogItem("uav", input, upsertUavItem, false);
+  const saved = await saveCatalogItem("uav", input, upsertUavItem, false);
+  invalidateCatalogCache("uav");
+  return saved;
 }
 
 export async function deleteUavItem(itemId: string) {
-  return deleteCatalogItem("uav", itemId, removeUavItem, false);
+  await deleteCatalogItem("uav", itemId, removeUavItem, false);
+  invalidateCatalogCache("uav");
 }
 
-export async function fetchCounteractionItems() {
-  try {
-    const response = await withTimeoutAndRetry(
-      () =>
-        fetch("/api/counteraction", {
-          cache: "no-store",
-          headers: { "cache-control": "no-store" },
-        }),
-      7000,
-      1,
-      "fetch_counteraction_items_timeout",
-    );
-    if (!response.ok) return fetchCatalogItems("counteraction", listCounteraction);
-    const payload = (await response.json()) as { ok?: boolean; items?: CatalogItem[] };
-    if (!payload.ok || !Array.isArray(payload.items)) return fetchCatalogItems("counteraction", listCounteraction);
-    return payload.items;
-  } catch {
-    return fetchCatalogItems("counteraction", listCounteraction);
-  }
+export async function fetchCounteractionItems(forceRefresh = false) {
+  return fetchCachedCatalogItems("counteraction", forceRefresh, listCounteraction);
 }
 
 export async function fetchCounteractionById(itemId: string) {
@@ -335,9 +431,12 @@ export async function fetchCounteractionById(itemId: string) {
 }
 
 export async function saveCounteractionItem(input: Omit<CatalogItem, "id"> & { id?: string }) {
-  return saveCatalogItem("counteraction", input, upsertCounteractionItem);
+  const saved = await saveCatalogItem("counteraction", input, upsertCounteractionItem);
+  invalidateCatalogCache("counteraction");
+  return saved;
 }
 
 export async function deleteCounteractionItem(itemId: string) {
-  return deleteCatalogItem("counteraction", itemId, removeCounteractionItem);
+  await deleteCatalogItem("counteraction", itemId, removeCounteractionItem);
+  invalidateCatalogCache("counteraction");
 }

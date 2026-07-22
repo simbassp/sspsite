@@ -12,7 +12,7 @@ import {
 } from "@/lib/counteraction-categories";
 import { canManageCounteraction } from "@/lib/permissions";
 import { publicUploadDisplayUrl } from "@/lib/public-asset-url";
-import { deleteCounteractionItem, fetchCounteractionItems, saveCounteractionItem } from "@/lib/uav-repository";
+import { deleteCounteractionItem, fetchCounteractionItems, peekCatalogCache, saveCounteractionItem } from "@/lib/uav-repository";
 import { CatalogItem } from "@/lib/types";
 import { CatalogChipTrack } from "@/components/CatalogChipTrack";
 
@@ -121,24 +121,38 @@ export default function CounteractionPage() {
     setCustomCategories(readLocalCustomCategories().filter((c) => !isBuiltinCounteractionCategory(c)));
   }, []);
 
-  const refresh = async () => {
-    setIsLoading(true);
+  const refresh = async (forceRefresh = false) => {
+    const cached = !forceRefresh ? peekCatalogCache("counteraction") : null;
+    if (cached?.items.length) {
+      setItems(cached.items);
+      setIsLoading(false);
+      setMessage("");
+      if (cached.fresh && !forceRefresh) {
+        void refreshCustomCategories();
+        return;
+      }
+    } else {
+      setIsLoading(true);
+    }
+
     try {
-      const rows = await fetchCounteractionItems();
+      const rows = await fetchCounteractionItems(forceRefresh);
       setItems(rows);
       await refreshCustomCategories();
-      if (!rows.length) {
+      if (!rows.length && !cached?.items.length) {
         setMessage((prev) => prev || "Данные временно недоступны или ещё не добавлены.");
       }
     } catch {
-      setMessage("Не удалось загрузить каталог. Проверьте интернет и повторите попытку.");
+      if (!cached?.items.length) {
+        setMessage("Не удалось загрузить каталог. Проверьте интернет и повторите попытку.");
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    void refresh();
+    void refresh(false);
   }, []);
 
   useEffect(() => {
