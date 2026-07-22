@@ -74,6 +74,7 @@ function resolveBankTimeFromQuestions(questions: TestQuestion[]) {
   return winner;
 }
 
+type StartingTestMode = "trial" | "bank" | "final";
 type TrialFeedback = { chosen: number | null; correct: number };
 type FinalTransition = { chosen: number | null };
 
@@ -156,6 +157,7 @@ export default function TestsPage() {
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState("");
   const [isPoolLoading, setIsPoolLoading] = useState(false);
+  const [startingTest, setStartingTest] = useState<StartingTestMode | null>(null);
   const [isTestStarted, setIsTestStarted] = useState(false);
   const [startCountdown, setStartCountdown] = useState<number | null>(null);
   const [finalTest, setFinalTest] = useState<FinalTestSummary | null>(null);
@@ -802,76 +804,89 @@ export default function TestsPage() {
   };
 
   const onTrial = async () => {
+    if (startingTest) return;
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
-    const pool = questionPool.length > 0 ? questionPool : await loadQuestionPool();
-    if (!pool) {
-      setMessage("Не удалось подготовить вопросы. Проверьте интернет.");
-      return;
+    setStartingTest("trial");
+    try {
+      const pool = questionPool.length > 0 ? questionPool : await loadQuestionPool();
+      if (!pool) {
+        setMessage("Не удалось подготовить вопросы. Проверьте интернет.");
+        return;
+      }
+      if (pool.length === 0) {
+        setMessage(
+          testConfig.uavAutoGeneration
+            ? "Нет карточек БПЛА с ТТХ и нет активных вопросов в банке. Заполните справочник БПЛА или добавьте вопросы в админке."
+            : "Нет активных вопросов в банке. Добавьте их в разделе «Админ / Тесты».",
+        );
+        return;
+      }
+      const recentIds = session ? loadRecentQuestionIds(session.id) : [];
+      const randomQuestions = pickTestQuestions(pool, testConfig.trialQuestionCount, recentIds);
+      if (session) rememberQuestionIds(session.id, randomQuestions.map((q) => q.id));
+      const first = randomQuestions[0];
+      expireHandledForQuestionIdRef.current = null;
+      setTrialFeedback(null);
+      setFinalTransition(null);
+      setFinalReview(null);
+      setActiveTest("trial");
+      setIsTestStarted(false);
+      setSelectedQuestions(randomQuestions);
+      setQuestionIndex(0);
+      setAnswers({});
+      answersRef.current = {};
+      if (first) setTimeLeft(Math.max(1, first.timeLimitSec));
+      testStartedAtRef.current = null;
+      setMessage(`Пробный тест запущен: ${randomQuestions.length} случайных вопросов.`);
+    } finally {
+      setStartingTest(null);
     }
-    if (pool.length === 0) {
-      setMessage(
-        testConfig.uavAutoGeneration
-          ? "Нет карточек БПЛА с ТТХ и нет активных вопросов в банке. Заполните справочник БПЛА или добавьте вопросы в админке."
-          : "Нет активных вопросов в банке. Добавьте их в разделе «Админ / Тесты».",
-      );
-      return;
-    }
-    const recentIds = session ? loadRecentQuestionIds(session.id) : [];
-    const randomQuestions = pickTestQuestions(pool, testConfig.trialQuestionCount, recentIds);
-    if (session) rememberQuestionIds(session.id, randomQuestions.map((q) => q.id));
-    const first = randomQuestions[0];
-    expireHandledForQuestionIdRef.current = null;
-    setTrialFeedback(null);
-    setFinalTransition(null);
-    setFinalReview(null);
-    setActiveTest("trial");
-    setIsTestStarted(false);
-    setSelectedQuestions(randomQuestions);
-    setQuestionIndex(0);
-    setAnswers({});
-    answersRef.current = {};
-    if (first) setTimeLeft(Math.max(1, first.timeLimitSec));
-    testStartedAtRef.current = null;
-    setMessage(`Пробный тест запущен: ${randomQuestions.length} случайных вопросов.`);
   };
 
   const onBank = async () => {
+    if (startingTest) return;
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
-    const pool = questionPool.length > 0 ? questionPool : await loadQuestionPool();
-    if (!pool) {
-      setMessage("Не удалось подготовить вопросы. Проверьте интернет.");
-      return;
+    setStartingTest("bank");
+    try {
+      const pool = questionPool.length > 0 ? questionPool : await loadQuestionPool();
+      if (!pool) {
+        setMessage("Не удалось подготовить вопросы. Проверьте интернет.");
+        return;
+      }
+      if (pool.length === 0) {
+        setMessage(
+          testConfig.uavAutoGeneration
+            ? "Нет карточек БПЛА с ТТХ и нет активных вопросов в банке. Заполните справочник БПЛА или добавьте вопросы в админке."
+            : "Нет активных вопросов в банке. Добавьте их в разделе «Админ / Тесты».",
+        );
+        return;
+      }
+      const allQuestions = shuffleQuestions(pool);
+      expireHandledForQuestionIdRef.current = null;
+      setTrialFeedback(null);
+      setFinalTransition(null);
+      setFinalReview(null);
+      setActiveTest("bank");
+      setIsTestStarted(true);
+      setStartCountdown(null);
+      setSelectedQuestions(allQuestions);
+      setQuestionIndex(0);
+      setAnswers({});
+      answersRef.current = {};
+      setTimeLeft(0);
+      testStartedAtRef.current = new Date().toISOString();
+      setMessage(`Тест по всему банку: ${allQuestions.length} вопросов. Порядок случайный, без ограничения по времени.`);
+    } finally {
+      setStartingTest(null);
     }
-    if (pool.length === 0) {
-      setMessage(
-        testConfig.uavAutoGeneration
-          ? "Нет карточек БПЛА с ТТХ и нет активных вопросов в банке. Заполните справочник БПЛА или добавьте вопросы в админке."
-          : "Нет активных вопросов в банке. Добавьте их в разделе «Админ / Тесты».",
-      );
-      return;
-    }
-    const allQuestions = shuffleQuestions(pool);
-    expireHandledForQuestionIdRef.current = null;
-    setTrialFeedback(null);
-    setFinalTransition(null);
-    setFinalReview(null);
-    setActiveTest("bank");
-    setIsTestStarted(true);
-    setStartCountdown(null);
-    setSelectedQuestions(allQuestions);
-    setQuestionIndex(0);
-    setAnswers({});
-    answersRef.current = {};
-    setTimeLeft(0);
-    testStartedAtRef.current = new Date().toISOString();
-    setMessage(`Тест по всему банку: ${allQuestions.length} вопросов. Порядок случайный, без ограничения по времени.`);
   };
 
   const startFinal = async () => {
+    if (startingTest) return;
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
@@ -889,37 +904,42 @@ export default function TestsPage() {
       `Запустить итоговый тест?\n\nСтрогий режим: время на каждый вопрос ограничено, подсказок нет.\nБудет использована 1 попытка (осталось ${remainingAttempts} из ${finalTest?.maxAttempts ?? FINAL_TEST_MAX_ATTEMPTS}).\n\nСлучайное нажатие тоже засчитывается как попытка.${passedHint}`,
     );
     if (!confirmed) return;
-    const pool = questionPool.length > 0 ? questionPool : await loadQuestionPool();
-    if (!pool) {
-      setMessage("Не удалось подготовить вопросы. Проверьте интернет.");
-      return;
+    setStartingTest("final");
+    try {
+      const pool = questionPool.length > 0 ? questionPool : await loadQuestionPool();
+      if (!pool) {
+        setMessage("Не удалось подготовить вопросы. Проверьте интернет.");
+        return;
+      }
+      if (pool.length === 0) {
+        setMessage(
+          testConfig.uavAutoGeneration
+            ? "Нет карточек БПЛА с ТТХ и нет активных вопросов в банке. Заполните справочник БПЛА или добавьте вопросы в админке."
+            : "Нет активных вопросов в банке. Добавьте их в разделе «Админ / Тесты».",
+        );
+        return;
+      }
+      const recentIds = session ? loadRecentQuestionIds(session.id) : [];
+      const randomQuestions = pickTestQuestions(pool, testConfig.finalQuestionCount, recentIds);
+      if (session) rememberQuestionIds(session.id, randomQuestions.map((q) => q.id));
+      const first = randomQuestions[0];
+      await beginFinalAttempt(session.id);
+      expireHandledForQuestionIdRef.current = null;
+      setTrialFeedback(null);
+      setFinalTransition(null);
+      setFinalReview(null);
+      setActiveTest("final");
+      setIsTestStarted(false);
+      setSelectedQuestions(randomQuestions);
+      setQuestionIndex(0);
+      setAnswers({});
+      answersRef.current = {};
+      if (first) setTimeLeft(Math.max(1, first.timeLimitSec));
+      testStartedAtRef.current = null;
+      setMessage(`Итоговый тест запущен: ${randomQuestions.length} случайных вопросов. Режим строгий.`);
+    } finally {
+      setStartingTest(null);
     }
-    if (pool.length === 0) {
-      setMessage(
-        testConfig.uavAutoGeneration
-          ? "Нет карточек БПЛА с ТТХ и нет активных вопросов в банке. Заполните справочник БПЛА или добавьте вопросы в админке."
-          : "Нет активных вопросов в банке. Добавьте их в разделе «Админ / Тесты».",
-      );
-      return;
-    }
-    const recentIds = session ? loadRecentQuestionIds(session.id) : [];
-    const randomQuestions = pickTestQuestions(pool, testConfig.finalQuestionCount, recentIds);
-    if (session) rememberQuestionIds(session.id, randomQuestions.map((q) => q.id));
-    const first = randomQuestions[0];
-    await beginFinalAttempt(session.id);
-    expireHandledForQuestionIdRef.current = null;
-    setTrialFeedback(null);
-    setFinalTransition(null);
-    setFinalReview(null);
-    setActiveTest("final");
-    setIsTestStarted(false);
-    setSelectedQuestions(randomQuestions);
-    setQuestionIndex(0);
-    setAnswers({});
-    answersRef.current = {};
-    if (first) setTimeLeft(Math.max(1, first.timeLimitSec));
-    testStartedAtRef.current = null;
-    setMessage(`Итоговый тест запущен: ${randomQuestions.length} случайных вопросов. Режим строгий.`);
   };
 
   const getOptionLetterState = (index: number) => {
@@ -952,6 +972,7 @@ export default function TestsPage() {
         : finalTest.hasPassedFinal
           ? "Сдан · есть попытки"
           : "Доступен";
+  const isStartingTest = startingTest != null;
   const historyPageSize = 10;
   const historyVisible = historyExpanded ? results : results.slice(0, 5);
   const historyPages = historyExpanded ? Math.max(1, Math.ceil(historyVisible.length / historyPageSize)) : 1;
@@ -1024,9 +1045,11 @@ export default function TestsPage() {
                 className="btn tests-ref-btn-outline"
                 type="button"
                 onClick={onTrial}
-                disabled={isBootstrapping || isPoolLoading || !isConfigLoaded || activeTest != null}
+                disabled={
+                  isBootstrapping || isPoolLoading || !isConfigLoaded || activeTest != null || isStartingTest
+                }
               >
-                Начать пробный тест
+                {startingTest === "trial" ? "Загружаю…" : "Начать пробный тест"}
               </button>
             </article>
 
@@ -1052,9 +1075,11 @@ export default function TestsPage() {
                 className="btn tests-ref-btn-outline"
                 type="button"
                 onClick={onBank}
-                disabled={isBootstrapping || isPoolLoading || !isConfigLoaded || activeTest != null}
+                disabled={
+                  isBootstrapping || isPoolLoading || !isConfigLoaded || activeTest != null || isStartingTest
+                }
               >
-                Начать по всему банку
+                {startingTest === "bank" ? "Загружаю…" : "Начать по всему банку"}
               </button>
             </article>
 
@@ -1087,6 +1112,7 @@ export default function TestsPage() {
                     isPoolLoading ||
                     !isConfigLoaded ||
                     activeTest != null ||
+                    isStartingTest ||
                     finalTest == null ||
                     !finalTest.canStartFinal
                   }
@@ -1098,7 +1124,7 @@ export default function TestsPage() {
                         : undefined
                   }
                 >
-                  Начать итоговый тест
+                  {startingTest === "final" ? "Загружаю…" : "Начать итоговый тест"}
                 </button>
               )}
             </article>

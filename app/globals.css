@@ -1627,6 +1627,16 @@ html[data-theme="dark"] .chip-track .chip:not(.active):not(:disabled) {
   border-style: dashed;
 }
 
+.chip-track .chip.chip-back {
+  background: var(--glass);
+  border-color: var(--line);
+}
+
+html[data-theme="dark"] .chip-track .chip.chip-back {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
 .chip {
   white-space: nowrap;
   padding: 8px 10px;
