@@ -5327,6 +5327,23 @@ html[data-theme="dark"] .final-review-answer--correct {
   flex: 1 1 auto;
 }
 
+.personnel-notify-day-group + .personnel-notify-day-group {
+  border-top: 1px solid var(--line);
+}
+
+.personnel-notify-day-label {
+  margin: 0;
+  padding: 10px 12px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+
+.personnel-notify-day-group:first-child .personnel-notify-day-label {
+  padding-top: 8px;
+}
+
 .personnel-notify-panel__title {
   margin: 0;
   padding: 10px 12px 8px;

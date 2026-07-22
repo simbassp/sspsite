@@ -148,10 +148,10 @@ export async function syncUserAchievements(userId: string, employmentDate: strin
       for (const achievementId of newlyUnlocked) {
         const def = getAchievementDefinition(achievementId);
         if (!def) continue;
-        let body = "Откройте настройки профиля, чтобы выбрать награду.";
+        let body = "";
         if (def.category === "final") body = "Вы можете выбрать цвет имени и позывного в профиле.";
-        if (def.category === "trial") body = "Вы можете выбрать подсветку аватара в профиле.";
-        if (def.category === "bank") body = "Вы можете выбрать эффект над аватаром в профиле.";
+        else if (def.category === "trial") body = "Вы можете выбрать подсветку аватара в профиле.";
+        else if (def.category === "bank") body = "Вы можете выбрать эффект над аватаром в профиле.";
         await supabase.from("app_notifications").insert({
           user_id: userId,
           kind: "achievement",

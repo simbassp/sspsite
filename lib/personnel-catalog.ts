@@ -226,6 +226,7 @@ export function formatPersonnelRequestNotificationBody(
 export function formatNotificationBody(body: string): string {
   const trimmed = body.replace(/\r\n/g, "\n").trim();
   if (!trimmed) return trimmed;
+  if (trimmed === "Откройте настройки профиля, чтобы выбрать награду.") return "";
   const legacy = /^Тип:\s*(\w+)\s*$/i.exec(trimmed);
   if (legacy) {
     const type = legacy[1] as PersonnelRequestType;

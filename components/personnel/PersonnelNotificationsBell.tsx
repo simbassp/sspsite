@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { groupNotificationsByDay } from "@/lib/notification-groups";
 
 type NotificationItem = {
   id: string;
@@ -167,6 +168,8 @@ export function PersonnelNotificationsBell({ compact = false }: PersonnelNotific
     return () => document.removeEventListener("mousedown", onDoc);
   }, [open]);
 
+  const notificationGroups = useMemo(() => groupNotificationsByDay(items), [items]);
+
   const renderNotificationContent = (item: NotificationItem) => (
     <>
       {item.senderLabel ? <span className="personnel-notify-item__from">От: {item.senderLabel}</span> : null}
@@ -255,25 +258,30 @@ export function PersonnelNotificationsBell({ compact = false }: PersonnelNotific
           {items.length === 0 ? (
             <p className="personnel-notify-panel__empty">Нет уведомлений</p>
           ) : (
-            items.map((item) => {
-              if (item.href) {
-                return (
-                  <Link
-                    key={item.id}
-                    href={item.href}
-                    className={`personnel-notify-item${item.isRead ? "" : " is-unread"}`}
-                    onClick={() => setOpen(false)}
-                  >
-                    {renderNotificationContent(item)}
-                  </Link>
-                );
-              }
-              return (
-                <div key={item.id} className={`personnel-notify-item${item.isRead ? "" : " is-unread"}`}>
-                  {renderNotificationContent(item)}
-                </div>
-              );
-            })
+            notificationGroups.map((group) => (
+              <section key={`${group.label}-${group.items[0]?.id ?? "empty"}`} className="personnel-notify-day-group">
+                <p className="personnel-notify-day-label">{group.label}</p>
+                {group.items.map((item) => {
+                  if (item.href) {
+                    return (
+                      <Link
+                        key={item.id}
+                        href={item.href}
+                        className={`personnel-notify-item${item.isRead ? "" : " is-unread"}`}
+                        onClick={() => setOpen(false)}
+                      >
+                        {renderNotificationContent(item)}
+                      </Link>
+                    );
+                  }
+                  return (
+                    <div key={item.id} className={`personnel-notify-item${item.isRead ? "" : " is-unread"}`}>
+                      {renderNotificationContent(item)}
+                    </div>
+                  );
+                })}
+              </section>
+            ))
           )}
         </div>
       </div>
