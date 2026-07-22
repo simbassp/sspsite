@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ResultsExportExcelButton, postResultsExportExcel } from "@/components/admin/ResultsExportExcelButton";
 import { UserIdentityDisplay } from "@/components/profile/UserIdentityDisplay";
 import type { UserIdentityCosmetics } from "@/lib/user-identity-cosmetics";
 import type { ProfileNameColorId } from "@/lib/profile-name-color";
@@ -191,6 +192,8 @@ export default function AdminResultsPage() {
   const [deleteBusyId, setDeleteBusyId] = useState<string | null>(null);
   const [resetMessage, setResetMessage] = useState("");
   const [nextAutoResetAt, setNextAutoResetAt] = useState<string | null>(null);
+  const [exportExcelLoading, setExportExcelLoading] = useState(false);
+  const [exportExcelMsg, setExportExcelMsg] = useState("");
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -338,9 +341,49 @@ export default function AdminResultsPage() {
     : `${FINAL_AUTO_RESET_DAY_UTC}-го числа следующего месяца`;
   const showNotStartedFilter = typeFilter !== "trial";
 
+  const exportRowCount =
+    statusFilter === "not_started" ? visibleNotStarted.length : attemptsTotal;
+
+  const onExportExcel = async () => {
+    setExportExcelLoading(true);
+    setExportExcelMsg("");
+    try {
+      await postResultsExportExcel({
+        ...(periodMode === "today" ? { range: "today" as const } : {}),
+        ...(periodMode === "custom" && dateFrom ? { dateFrom } : {}),
+        ...(periodMode === "custom" && dateTo ? { dateTo } : {}),
+        attemptType: typeFilter,
+        attemptStatus: statusFilter,
+        search: searchTerm.trim() || undefined,
+        unit: unitFilter,
+        rotaPlatoon,
+        rotaSection,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === "empty_export") {
+        setExportExcelMsg("Нет записей для выгрузки по текущим фильтрам.");
+        return;
+      }
+      if (error instanceof Error && error.message === "gateway_timeout") {
+        setExportExcelMsg("Сервер долго формирует файл. Сузьте фильтр и попробуйте снова.");
+        return;
+      }
+      setExportExcelMsg("Не удалось сформировать Excel.");
+    } finally {
+      setExportExcelLoading(false);
+    }
+  };
+
   return (
     <section className="admin-results-page">
-      <h1 className="page-title">Админ / Результаты тестов</h1>
+      <div className="personnel-page__header">
+        <div>
+          <h1 className="page-title">Админ / Результаты тестов</h1>
+        </div>
+        <div className="personnel-page__header-actions">
+          <ResultsExportExcelButton busy={exportExcelLoading} onClick={() => void onExportExcel()} />
+        </div>
+      </div>
 
       {viewerCanReset && lastResetAudit && (
         <p className="page-subtitle" style={{ marginBottom: 10, fontSize: 11 }}>
@@ -359,6 +402,16 @@ export default function AdminResultsPage() {
       {isLoading && <p className="page-subtitle">Загружаем результаты…</p>}
       {loadError && <p className="page-subtitle">{loadError}</p>}
       {!!resetMessage && <p className="page-subtitle">{resetMessage}</p>}
+      {!!exportExcelMsg && <p className="page-subtitle">{exportExcelMsg}</p>}
+      {!isLoading && !loadError && exportRowCount > 0 && (
+        <p className="page-subtitle admin-results-export-meta">
+          В Excel попадёт {exportRowCount}{" "}
+          {statusFilter === "not_started"
+            ? `сотрудник${exportRowCount === 1 ? "" : exportRowCount >= 2 && exportRowCount <= 4 ? "а" : "ов"}`
+            : `попыт${exportRowCount === 1 ? "ка" : exportRowCount >= 2 && exportRowCount <= 4 ? "ки" : "ок"}`}{" "}
+          по текущим фильтрам.
+        </p>
+      )}
 
       <article className="card" style={{ marginTop: 12 }}>
         <div className="card-body personnel-filters admin-results-filters">

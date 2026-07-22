@@ -1,5 +1,13 @@
 import { effectiveFinalCountingFromUtc, nextAutoResetUtcIso } from "@/lib/final-effective-counting";
 import { FINAL_TEST_MAX_ATTEMPTS } from "@/lib/final-test-constants";
+import {
+  applyCreatedAtRange,
+  fetchAttemptsPage,
+  isMissingColumnError,
+  parseAttemptsQuery,
+  resolveDateRange,
+  timestampInRange,
+} from "@/lib/admin-results-query";
 import { canManageResults, canResetTestResults } from "@/lib/permissions";
 import { normalizeProfileNameColor, type ProfileNameColorId } from "@/lib/profile-name-color";
 import { loadIdentityCosmeticsMap } from "@/lib/user-identity-cosmetics-server";
@@ -9,11 +17,6 @@ import { normalizeUnitAssignment, matchesResultsUnitFilter, type RotaPlatoonFilt
 import type { UnitAssignment } from "@/lib/types";
 
 export const runtime = "nodejs";
-
-function isMissingColumnError(message: string | undefined) {
-  const m = (message || "").toLowerCase();
-  return m.includes("column") && m.includes("does not exist");
-}
 
 /** Строка пользователя после primary/fallback-select (поле окна попыток может отсутствовать в legacy-схеме). */
 type AppUserListRow = {
@@ -28,80 +31,6 @@ type AppUserListRow = {
   rota_platoon?: number | null;
   rota_section?: number | null;
   profile_name_color?: string | null;
-};
-
-function parseDateParam(raw: string | null): Date | null {
-  if (!raw || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
-  const [y, m, d] = raw.split("-").map(Number);
-  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return null;
-  return new Date(Date.UTC(y, m - 1, d));
-}
-
-function resolveDateRange(searchParams: URLSearchParams) {
-  const range = searchParams.get("range") || "all";
-  if (range === "today") {
-    const now = new Date();
-    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-    return {
-      range: "today" as const,
-      dateFrom: null as string | null,
-      dateTo: null as string | null,
-      startMs: start.getTime(),
-      endMs: start.getTime() + 86400000,
-    };
-  }
-
-  const dateFrom = searchParams.get("dateFrom");
-  const dateTo = searchParams.get("dateTo");
-  const start = parseDateParam(dateFrom);
-  const end = parseDateParam(dateTo);
-
-  if (!start && !end) {
-    return {
-      range: "all" as const,
-      dateFrom: null as string | null,
-      dateTo: null as string | null,
-      startMs: null as number | null,
-      endMs: null as number | null,
-    };
-  }
-
-  return {
-    range: "custom" as const,
-    dateFrom: dateFrom && start ? dateFrom : null,
-    dateTo: dateTo && end ? dateTo : null,
-    startMs: start ? start.getTime() : null,
-    endMs: end ? end.getTime() + 86400000 : null,
-  };
-}
-
-function timestampInRange(timestamp: string, startMs: number | null, endMs: number | null) {
-  const t = new Date(timestamp).getTime();
-  if (!Number.isFinite(t)) return false;
-  if (startMs != null && t < startMs) return false;
-  if (endMs != null && t >= endMs) return false;
-  return true;
-}
-
-function applyCreatedAtRange<T extends { gte: (col: string, val: string) => T; lt: (col: string, val: string) => T }>(
-  query: T,
-  startIso: string | null,
-  endIso: string | null,
-) {
-  let next = query;
-  if (startIso) next = next.gte("created_at", startIso);
-  if (endIso) next = next.lt("created_at", endIso);
-  return next;
-}
-
-type AttemptListQuery = {
-  page: number;
-  pageSize: number;
-  typeFilter: "all" | "trial" | "final";
-  statusFilter: "all" | "passed" | "failed" | "not_started";
-  allowedUserIds: string[] | null;
-  startIso: string | null;
-  endIso: string | null;
 };
 
 async function fetchFinalResultsForSummaries(
@@ -140,57 +69,6 @@ async function fetchFinalResultsForSummaries(
     .limit(10000);
   if (legacy.error) throw new Error(legacy.error.message);
   return (legacy.data ?? []) as Array<Record<string, unknown>>;
-}
-
-async function fetchAttemptsPage(
-  supabase: ReturnType<typeof getServerSupabaseServiceClient>,
-  query: AttemptListQuery,
-) {
-  if (query.statusFilter === "not_started") {
-    return { rows: [] as Array<Record<string, unknown>>, total: 0 };
-  }
-  if (query.allowedUserIds && query.allowedUserIds.length === 0) {
-    return { rows: [] as Array<Record<string, unknown>>, total: 0 };
-  }
-
-  const from = (query.page - 1) * query.pageSize;
-  const to = from + query.pageSize - 1;
-  const selectFull =
-    "id,user_id,type,status,score,created_at,questions_total,questions_correct,final_attempt_index";
-  const selectMid = "id,user_id,type,status,score,created_at";
-  const selectLegacy = "id,user_id,test_type,status,score,created_at";
-
-  const run = async (typeColumn: "type" | "test_type", select: string) => {
-    let q = supabase.from("test_results").select(select, { count: "exact" }).order("created_at", { ascending: false });
-    if (query.allowedUserIds?.length) q = q.in("user_id", query.allowedUserIds);
-    if (query.typeFilter !== "all") q = q.eq(typeColumn, query.typeFilter);
-    if (query.statusFilter !== "all") q = q.eq("status", query.statusFilter);
-    q = applyCreatedAtRange(q, query.startIso, query.endIso);
-    return q.range(from, to);
-  };
-
-  let res = await run("type", selectFull);
-  if (res.error && isMissingColumnError(res.error.message)) {
-    res = await run("type", selectMid);
-  }
-  if (res.error && isMissingColumnError(res.error.message)) {
-    res = await run("test_type", selectLegacy);
-  }
-  if (res.error) throw new Error(res.error.message);
-  return { rows: res.data ?? [], total: res.count ?? 0 };
-}
-
-function parseAttemptsQuery(searchParams: URLSearchParams) {
-  return {
-    page: Math.max(1, Number(searchParams.get("page") || 1) || 1),
-    pageSize: Math.min(50, Math.max(1, Number(searchParams.get("pageSize") || 10) || 10)),
-    typeFilter: (searchParams.get("attemptType") || "all") as "all" | "trial" | "final",
-    statusFilter: (searchParams.get("attemptStatus") || "all") as "all" | "passed" | "failed" | "not_started",
-    search: (searchParams.get("search") || "").trim().toLowerCase(),
-    unitFilter: (searchParams.get("unit") || "all") as UnitAssignmentFilter,
-    rotaPlatoon: (searchParams.get("rotaPlatoon") || "all") as RotaPlatoonFilter,
-    rotaSection: (searchParams.get("rotaSection") || "all") as RotaSectionFilter,
-  };
 }
 
 export async function GET(req: Request) {

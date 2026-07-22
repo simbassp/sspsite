@@ -1,0 +1,198 @@
+import type { RotaPlatoonFilter, RotaSectionFilter, UnitAssignmentFilter } from "@/lib/unit-assignment";
+import { normalizeBroadcastUnitFilter } from "@/lib/unit-assignment";
+
+export function isMissingColumnError(message: string | undefined) {
+  const m = (message || "").toLowerCase();
+  return m.includes("column") && m.includes("does not exist");
+}
+
+export function parseDateParam(raw: string | null): Date | null {
+  if (!raw || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+  const [y, m, d] = raw.split("-").map(Number);
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return null;
+  return new Date(Date.UTC(y, m - 1, d));
+}
+
+export function resolveDateRange(searchParams: URLSearchParams) {
+  const range = searchParams.get("range") || "all";
+  if (range === "today") {
+    const now = new Date();
+    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    return {
+      range: "today" as const,
+      dateFrom: null as string | null,
+      dateTo: null as string | null,
+      startMs: start.getTime(),
+      endMs: start.getTime() + 86400000,
+    };
+  }
+
+  const dateFrom = searchParams.get("dateFrom");
+  const dateTo = searchParams.get("dateTo");
+  const start = parseDateParam(dateFrom);
+  const end = parseDateParam(dateTo);
+
+  if (!start && !end) {
+    return {
+      range: "all" as const,
+      dateFrom: null as string | null,
+      dateTo: null as string | null,
+      startMs: null as number | null,
+      endMs: null as number | null,
+    };
+  }
+
+  return {
+    range: "custom" as const,
+    dateFrom: dateFrom && start ? dateFrom : null,
+    dateTo: dateTo && end ? dateTo : null,
+    startMs: start ? start.getTime() : null,
+    endMs: end ? end.getTime() + 86400000 : null,
+  };
+}
+
+export function resolveDateRangeFromBody(body: Record<string, unknown>) {
+  const params = new URLSearchParams();
+  if (body.range === "today") params.set("range", "today");
+  if (typeof body.dateFrom === "string" && body.dateFrom) params.set("dateFrom", body.dateFrom);
+  if (typeof body.dateTo === "string" && body.dateTo) params.set("dateTo", body.dateTo);
+  return resolveDateRange(params);
+}
+
+export function timestampInRange(timestamp: string, startMs: number | null, endMs: number | null) {
+  const t = new Date(timestamp).getTime();
+  if (!Number.isFinite(t)) return false;
+  if (startMs != null && t < startMs) return false;
+  if (endMs != null && t >= endMs) return false;
+  return true;
+}
+
+export function applyCreatedAtRange<T extends { gte: (col: string, val: string) => T; lt: (col: string, val: string) => T }>(
+  query: T,
+  startIso: string | null,
+  endIso: string | null,
+) {
+  let next = query;
+  if (startIso) next = next.gte("created_at", startIso);
+  if (endIso) next = next.lt("created_at", endIso);
+  return next;
+}
+
+export type AttemptListQuery = {
+  page: number;
+  pageSize: number;
+  typeFilter: "all" | "trial" | "final";
+  statusFilter: "all" | "passed" | "failed" | "not_started";
+  allowedUserIds: string[] | null;
+  startIso: string | null;
+  endIso: string | null;
+};
+
+export type ResultsListFilters = {
+  typeFilter: "all" | "trial" | "final";
+  statusFilter: "all" | "passed" | "failed" | "not_started";
+  search: string;
+  unitFilter: UnitAssignmentFilter;
+  rotaPlatoon: RotaPlatoonFilter;
+  rotaSection: RotaSectionFilter;
+};
+
+export function parseAttemptsQuery(searchParams: URLSearchParams): ResultsListFilters & { page: number; pageSize: number } {
+  return {
+    page: Math.max(1, Number(searchParams.get("page") || 1) || 1),
+    pageSize: Math.min(50, Math.max(1, Number(searchParams.get("pageSize") || 10) || 10)),
+    typeFilter: (searchParams.get("attemptType") || "all") as "all" | "trial" | "final",
+    statusFilter: (searchParams.get("attemptStatus") || "all") as "all" | "passed" | "failed" | "not_started",
+    search: (searchParams.get("search") || "").trim().toLowerCase(),
+    unitFilter: (searchParams.get("unit") || "all") as UnitAssignmentFilter,
+    rotaPlatoon: (searchParams.get("rotaPlatoon") || "all") as RotaPlatoonFilter,
+    rotaSection: (searchParams.get("rotaSection") || "all") as RotaSectionFilter,
+  };
+}
+
+export function parseResultsFiltersFromBody(body: Record<string, unknown>): ResultsListFilters {
+  return {
+    typeFilter: body.attemptType === "trial" || body.attemptType === "final" ? body.attemptType : "all",
+    statusFilter:
+      body.attemptStatus === "passed" || body.attemptStatus === "failed" || body.attemptStatus === "not_started"
+        ? body.attemptStatus
+        : "all",
+    search: typeof body.search === "string" ? body.search.trim().toLowerCase() : "",
+    unitFilter: normalizeBroadcastUnitFilter(body.unit),
+    rotaPlatoon: body.rotaPlatoon === "1" || body.rotaPlatoon === "2" ? body.rotaPlatoon : "all",
+    rotaSection: body.rotaSection === "1" || body.rotaSection === "2" || body.rotaSection === "3" || body.rotaSection === "4" ? body.rotaSection : "all",
+  };
+}
+
+const ATTEMPT_SELECT_FULL =
+  "id,user_id,type,status,score,created_at,questions_total,questions_correct,final_attempt_index";
+const ATTEMPT_SELECT_MID = "id,user_id,type,status,score,created_at";
+const ATTEMPT_SELECT_LEGACY = "id,user_id,test_type,status,score,created_at";
+
+async function runAttemptsQuery(
+  supabase: { from: (table: string) => unknown },
+  query: AttemptListQuery,
+  select: string,
+  typeColumn: "type" | "test_type",
+  options?: { from?: number; to?: number; count?: boolean; limit?: number },
+) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let q = (supabase.from("test_results") as any)
+    .select(select, options?.count ? { count: "exact" } : undefined)
+    .order("created_at", { ascending: false });
+  if (query.allowedUserIds?.length) q = q.in("user_id", query.allowedUserIds);
+  if (query.typeFilter !== "all") q = q.eq(typeColumn, query.typeFilter);
+  if (query.statusFilter !== "all" && query.statusFilter !== "not_started") q = q.eq("status", query.statusFilter);
+  q = applyCreatedAtRange(q, query.startIso, query.endIso);
+  if (options?.from != null && options?.to != null) q = q.range(options.from, options.to);
+  if (options?.limit != null) q = q.limit(options.limit);
+  return q as Promise<{ data: unknown[] | null; count?: number | null; error: { message: string } | null }>;
+}
+
+export async function fetchAttemptsPage(
+  supabase: { from: (table: string) => unknown },
+  query: AttemptListQuery,
+) {
+  if (query.statusFilter === "not_started") {
+    return { rows: [] as Array<Record<string, unknown>>, total: 0 };
+  }
+  if (query.allowedUserIds && query.allowedUserIds.length === 0) {
+    return { rows: [] as Array<Record<string, unknown>>, total: 0 };
+  }
+
+  const from = (query.page - 1) * query.pageSize;
+  const to = from + query.pageSize - 1;
+
+  let res = await runAttemptsQuery(supabase, query, ATTEMPT_SELECT_FULL, "type", { from, to, count: true });
+  if (res.error && isMissingColumnError(res.error.message)) {
+    res = await runAttemptsQuery(supabase, query, ATTEMPT_SELECT_MID, "type", { from, to, count: true });
+  }
+  if (res.error && isMissingColumnError(res.error.message)) {
+    res = await runAttemptsQuery(supabase, query, ATTEMPT_SELECT_LEGACY, "test_type", { from, to, count: true });
+  }
+  if (res.error) throw new Error(res.error.message);
+  return { rows: (res.data ?? []) as Array<Record<string, unknown>>, total: res.count ?? 0 };
+}
+
+export async function fetchAllAttemptsForExport(
+  supabase: { from: (table: string) => unknown },
+  query: AttemptListQuery,
+  maxRows = 10000,
+) {
+  if (query.statusFilter === "not_started") {
+    return { rows: [] as Array<Record<string, unknown>>, total: 0 };
+  }
+  if (query.allowedUserIds && query.allowedUserIds.length === 0) {
+    return { rows: [] as Array<Record<string, unknown>>, total: 0 };
+  }
+
+  let res = await runAttemptsQuery(supabase, query, ATTEMPT_SELECT_FULL, "type", { count: true, limit: maxRows });
+  if (res.error && isMissingColumnError(res.error.message)) {
+    res = await runAttemptsQuery(supabase, query, ATTEMPT_SELECT_MID, "type", { count: true, limit: maxRows });
+  }
+  if (res.error && isMissingColumnError(res.error.message)) {
+    res = await runAttemptsQuery(supabase, query, ATTEMPT_SELECT_LEGACY, "test_type", { count: true, limit: maxRows });
+  }
+  if (res.error) throw new Error(res.error.message);
+  return { rows: (res.data ?? []) as Array<Record<string, unknown>>, total: res.count ?? 0 };
+}
