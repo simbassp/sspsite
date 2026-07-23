@@ -1,22 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseSessionCookie } from "@/lib/auth";
+import { parseSessionCookie, clearSessionCookie } from "@/lib/auth";
 import { canAccessAdminPanel } from "@/lib/permissions";
 import { canAccessGameSection } from "@/lib/game-feature";
 import { SESSION_COOKIE } from "@/lib/seed";
-import { clearSessionCookie } from "@/lib/auth";
 import { isSessionStillValid } from "@/lib/server-session-validation";
+import {
+  isRecoveryRequest,
+  needsServerRecoveryExchange,
+} from "@/lib/auth-recovery-server";
 
 const publicPaths = ["/", "/login", "/register", "/reset-password", "/auth/recovery"];
-
-function isRecoveryQuery(searchParams: URLSearchParams) {
-  return (
-    searchParams.get("type") === "recovery" ||
-    searchParams.has("code") ||
-    searchParams.has("token_hash") ||
-    searchParams.has("token") ||
-    (searchParams.has("access_token") && searchParams.has("refresh_token"))
-  );
-}
 
 function redirectRecoveryTarget(request: NextRequest, targetPath: "/auth/recovery" | "/reset-password") {
   const url = new URL(targetPath, request.url);
@@ -31,17 +24,21 @@ export async function proxy(request: NextRequest) {
   if (pathname.startsWith("/api/")) {
     return NextResponse.next();
   }
-  const isPublic = publicPaths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
-  const recoverySearch = request.nextUrl.searchParams;
-  const isRecoveryLink = isRecoveryQuery(recoverySearch);
 
-  if ((pathname === "/login" || pathname === "/") && isRecoveryLink) {
-    const useServerCallback =
-      recoverySearch.has("code") || recoverySearch.has("token_hash") || recoverySearch.has("token");
-    return redirectRecoveryTarget(request, useServerCallback ? "/auth/recovery" : "/reset-password");
+  const searchParams = request.nextUrl.searchParams;
+  const recoveryFlow = isRecoveryRequest(pathname, searchParams);
+
+  if (recoveryFlow) {
+    if (
+      (pathname === "/login" || pathname === "/" || pathname === "/reset-password") &&
+      needsServerRecoveryExchange(searchParams)
+    ) {
+      return redirectRecoveryTarget(request, "/auth/recovery");
+    }
+    return NextResponse.next();
   }
 
-  const isRecoveryOnLogin = pathname === "/login" && isRecoveryLink;
+  const isPublic = publicPaths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
   const raw = request.cookies.get(SESSION_COOKIE)?.value;
   let session = parseSessionCookie(raw);
   if (session) {
@@ -58,11 +55,10 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  if (session && isPublic && !isRecoveryOnLogin && pathname !== "/reset-password" && pathname !== "/auth/recovery") {
+  if (session && isPublic && pathname !== "/reset-password" && pathname !== "/auth/recovery") {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
-  /** Совпадает с app/(protected)/admin/layout.tsx (в т.ч. право «Список пользователей»). */
   const hasAdminAccess = session ? canAccessAdminPanel(session) : false;
 
   if (session && pathname.startsWith("/admin") && !hasAdminAccess) {

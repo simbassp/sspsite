@@ -4,15 +4,17 @@ import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import {
+  applyRecoverySessionTokens,
   confirmRecoverySessionViaApi,
   getResetPasswordSupabaseClient,
+  loadRecoverySessionFromCookie,
 } from "@/lib/reset-password-client";
 import {
+  hasRecoveryEntryPoint,
   hasRecoveryUrlParams,
   mapRecoveryLinkError,
   readRecoveryErrorFromQuery,
   readRecoveryUrlParams,
-  type RecoveryUrlParams,
 } from "@/lib/reset-password-client-errors";
 
 type RecoveryStatus = "checking" | "ready" | "error";
@@ -39,9 +41,9 @@ export default function ResetPasswordPage() {
       return;
     }
 
-    const params: RecoveryUrlParams = readRecoveryUrlParams();
+    const params = readRecoveryUrlParams();
 
-    if (!hasRecoveryUrlParams(params)) {
+    if (!hasRecoveryEntryPoint(params)) {
       setRecoveryStatus("error");
       setError("Некорректная ссылка сброса. Запросите новую.");
       return;
@@ -72,21 +74,31 @@ export default function ResetPasswordPage() {
       await supabase.auth.signOut().catch(() => undefined);
 
       try {
-        await confirmRecoverySessionViaApi(params);
-        finish();
-        return;
+        const fromCookie = await loadRecoverySessionFromCookie();
+        if (fromCookie) {
+          await applyRecoverySessionTokens(fromCookie.accessToken, fromCookie.refreshToken);
+          finish();
+          return;
+        }
+
+        if (hasRecoveryUrlParams(params)) {
+          await confirmRecoverySessionViaApi(params);
+          finish();
+          return;
+        }
+
+        fail("Некорректная ссылка сброса. Запросите новую.");
       } catch (apiError) {
         const message = apiError instanceof Error ? apiError.message : "";
         const { accessToken, refreshToken, code, tokenHash } = params;
 
         if (accessToken && refreshToken) {
-          const { error: sessionError } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken,
-          });
-          if (!sessionError) {
+          try {
+            await applyRecoverySessionTokens(accessToken, refreshToken);
             finish();
             return;
+          } catch {
+            /* fall through */
           }
         }
 

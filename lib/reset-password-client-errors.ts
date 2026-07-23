@@ -23,8 +23,19 @@ export function readRecoveryUrlParams(): RecoveryUrlParams {
 
 export function readRecoveryErrorFromQuery() {
   if (typeof window === "undefined") return "";
-  const raw = new URLSearchParams(window.location.search).get("recovery_error");
-  return raw ? decodeURIComponent(raw) : "";
+  const fromQuery = new URLSearchParams(window.location.search).get("recovery_error");
+  if (!fromQuery) return "";
+  try {
+    return decodeURIComponent(fromQuery);
+  } catch {
+    return fromQuery;
+  }
+}
+
+export function hasRecoveryEntryPoint(params: RecoveryUrlParams) {
+  if (hasRecoveryUrlParams(params)) return true;
+  if (typeof window === "undefined") return false;
+  return new URLSearchParams(window.location.search).get("type") === "recovery";
 }
 
 export function hasRecoveryUrlParams(params: RecoveryUrlParams) {

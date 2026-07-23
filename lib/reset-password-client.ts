@@ -38,6 +38,31 @@ export function getResetPasswordSupabaseClient() {
   return resetClient;
 }
 
+export async function loadRecoverySessionFromCookie() {
+  const response = await fetch("/api/auth/recovery/session", { cache: "no-store" });
+  const payload = (await response.json()) as {
+    ok?: boolean;
+    error?: string;
+    accessToken?: string;
+    refreshToken?: string;
+  };
+  if (!response.ok || !payload.ok || !payload.accessToken || !payload.refreshToken) {
+    return null;
+  }
+  return { accessToken: payload.accessToken, refreshToken: payload.refreshToken };
+}
+
+export async function applyRecoverySessionTokens(accessToken: string, refreshToken: string) {
+  const supabase = getResetPasswordSupabaseClient();
+  const { error } = await supabase.auth.setSession({
+    access_token: accessToken,
+    refresh_token: refreshToken,
+  });
+  if (error) {
+    throw new Error(mapRecoveryLinkError(error.message));
+  }
+}
+
 export async function confirmRecoverySessionViaApi(params: {
   accessToken: string | null;
   refreshToken: string | null;
@@ -67,12 +92,5 @@ export async function confirmRecoverySessionViaApi(params: {
     throw new Error(mapRecoveryLinkError(payload.error || "recovery_confirm_failed"));
   }
 
-  const supabase = getResetPasswordSupabaseClient();
-  const { error } = await supabase.auth.setSession({
-    access_token: payload.accessToken,
-    refresh_token: payload.refreshToken,
-  });
-  if (error) {
-    throw new Error(mapRecoveryLinkError(error.message));
-  }
+  await applyRecoverySessionTokens(payload.accessToken, payload.refreshToken);
 }
