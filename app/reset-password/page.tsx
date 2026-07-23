@@ -1,15 +1,18 @@
 "use client";
 
-import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import {
+  confirmRecoverySessionViaApi,
   getResetPasswordSupabaseClient,
+} from "@/lib/reset-password-client";
+import {
   hasRecoveryUrlParams,
   mapRecoveryLinkError,
   readRecoveryUrlParams,
   type RecoveryUrlParams,
-} from "@/lib/reset-password-client";
+} from "@/lib/reset-password-client-errors";
 
 type RecoveryStatus = "checking" | "ready" | "error";
 
@@ -18,7 +21,6 @@ export default function ResetPasswordPage() {
   const [info, setInfo] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [recoveryParams] = useState<RecoveryUrlParams>(() => readRecoveryUrlParams());
   const [recoveryStatus, setRecoveryStatus] = useState<RecoveryStatus>("checking");
 
   useEffect(() => {
@@ -28,13 +30,15 @@ export default function ResetPasswordPage() {
       return;
     }
 
-    if (!hasRecoveryUrlParams(recoveryParams)) {
+    let cancelled = false;
+    const params: RecoveryUrlParams = readRecoveryUrlParams();
+
+    if (!hasRecoveryUrlParams(params)) {
       setRecoveryStatus("error");
       setError("Некорректная ссылка сброса. Запросите новую.");
       return;
     }
 
-    let cancelled = false;
     const supabase = getResetPasswordSupabaseClient();
 
     const finish = () => {
@@ -50,65 +54,55 @@ export default function ResetPasswordPage() {
       setError(mapRecoveryLinkError(message));
     };
 
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "PASSWORD_RECOVERY" || (event === "SIGNED_IN" && session)) {
+    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") {
         finish();
       }
     });
 
     const setupRecovery = async () => {
-      const { data: existingSession } = await supabase.auth.getSession();
-      if (existingSession.session) {
+      await supabase.auth.signOut().catch(() => undefined);
+
+      try {
+        await confirmRecoverySessionViaApi(params);
         finish();
         return;
-      }
+      } catch (apiError) {
+        const message = apiError instanceof Error ? apiError.message : "";
+        const { accessToken, refreshToken, code, tokenHash } = params;
 
-      const { accessToken, refreshToken, code, tokenHash, type } = recoveryParams;
-
-      if (accessToken && refreshToken) {
-        const { error: sessionError } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
-        });
-        if (sessionError) {
-          fail(sessionError.message);
-          return;
+        if (accessToken && refreshToken) {
+          const { error: sessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+          if (!sessionError) {
+            finish();
+            return;
+          }
         }
-        finish();
-        return;
-      }
 
-      if (code) {
-        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-        if (exchangeError) {
-          fail(exchangeError.message);
-          return;
+        if (code) {
+          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+          if (!exchangeError) {
+            finish();
+            return;
+          }
         }
-        finish();
-        return;
-      }
 
-      if (tokenHash && type === "recovery") {
-        const { error: verifyError } = await supabase.auth.verifyOtp({
-          token_hash: tokenHash,
-          type: "recovery",
-        });
-        if (verifyError) {
-          fail(verifyError.message);
-          return;
+        if (tokenHash) {
+          const verify = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: "recovery",
+          });
+          if (!verify.error) {
+            finish();
+            return;
+          }
         }
-        finish();
-        return;
-      }
 
-      await new Promise((resolve) => window.setTimeout(resolve, 700));
-      const { data: afterWait } = await supabase.auth.getSession();
-      if (afterWait.session) {
-        finish();
-        return;
+        fail(message || "Некорректная ссылка сброса. Запросите новую.");
       }
-
-      fail("Некорректная ссылка сброса. Запросите новую.");
     };
 
     void setupRecovery();
@@ -117,7 +111,7 @@ export default function ResetPasswordPage() {
       cancelled = true;
       authListener.subscription.unsubscribe();
     };
-  }, [recoveryParams]);
+  }, []);
 
   const onResetPassword = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

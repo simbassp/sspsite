@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import { cookies } from "next/headers";
+import { recoveryRedirectScript } from "@/lib/reset-password-client-errors";
 import { normalizeThemePreference, THEME_COOKIE } from "@/lib/theme-preference";
 import "./globals.css";
 
@@ -31,6 +32,9 @@ export default async function RootLayout({
       <body suppressHydrationWarning>
         <Script id="ssp-theme-init" strategy="beforeInteractive">
           {themeInitScript}
+        </Script>
+        <Script id="ssp-recovery-redirect" strategy="beforeInteractive">
+          {recoveryRedirectScript()}
         </Script>
         <Script id="ssp-chunk-reload" strategy="beforeInteractive">
           {chunkReloadScript}

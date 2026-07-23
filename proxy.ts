@@ -29,6 +29,14 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  if (pathname === "/" && isRecoveryLink) {
+    const url = new URL("/reset-password", request.url);
+    recoverySearch.forEach((value, key) => {
+      url.searchParams.set(key, value);
+    });
+    return NextResponse.redirect(url);
+  }
+
   const isRecoveryOnLogin = pathname === "/login" && isRecoveryLink;
   const raw = request.cookies.get(SESSION_COOKIE)?.value;
   let session = parseSessionCookie(raw);
