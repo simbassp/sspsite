@@ -10,6 +10,7 @@ import {
 import {
   hasRecoveryUrlParams,
   mapRecoveryLinkError,
+  readRecoveryErrorFromQuery,
   readRecoveryUrlParams,
   type RecoveryUrlParams,
 } from "@/lib/reset-password-client-errors";
@@ -31,6 +32,13 @@ export default function ResetPasswordPage() {
     }
 
     let cancelled = false;
+    const presetError = readRecoveryErrorFromQuery();
+    if (presetError) {
+      setRecoveryStatus("error");
+      setError(mapRecoveryLinkError(presetError));
+      return;
+    }
+
     const params: RecoveryUrlParams = readRecoveryUrlParams();
 
     if (!hasRecoveryUrlParams(params)) {

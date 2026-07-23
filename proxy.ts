@@ -6,7 +6,25 @@ import { SESSION_COOKIE } from "@/lib/seed";
 import { clearSessionCookie } from "@/lib/auth";
 import { isSessionStillValid } from "@/lib/server-session-validation";
 
-const publicPaths = ["/login", "/register", "/reset-password"];
+const publicPaths = ["/", "/login", "/register", "/reset-password", "/auth/recovery"];
+
+function isRecoveryQuery(searchParams: URLSearchParams) {
+  return (
+    searchParams.get("type") === "recovery" ||
+    searchParams.has("code") ||
+    searchParams.has("token_hash") ||
+    searchParams.has("token") ||
+    (searchParams.has("access_token") && searchParams.has("refresh_token"))
+  );
+}
+
+function redirectRecoveryTarget(request: NextRequest, targetPath: "/auth/recovery" | "/reset-password") {
+  const url = new URL(targetPath, request.url);
+  request.nextUrl.searchParams.forEach((value, key) => {
+    url.searchParams.set(key, value);
+  });
+  return NextResponse.redirect(url);
+}
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -15,26 +33,12 @@ export async function proxy(request: NextRequest) {
   }
   const isPublic = publicPaths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
   const recoverySearch = request.nextUrl.searchParams;
-  const isRecoveryLink =
-    recoverySearch.get("type") === "recovery" ||
-    recoverySearch.has("code") ||
-    recoverySearch.has("token_hash") ||
-    recoverySearch.has("token");
+  const isRecoveryLink = isRecoveryQuery(recoverySearch);
 
-  if (pathname === "/login" && isRecoveryLink) {
-    const url = new URL("/reset-password", request.url);
-    recoverySearch.forEach((value, key) => {
-      url.searchParams.set(key, value);
-    });
-    return NextResponse.redirect(url);
-  }
-
-  if (pathname === "/" && isRecoveryLink) {
-    const url = new URL("/reset-password", request.url);
-    recoverySearch.forEach((value, key) => {
-      url.searchParams.set(key, value);
-    });
-    return NextResponse.redirect(url);
+  if ((pathname === "/login" || pathname === "/") && isRecoveryLink) {
+    const useServerCallback =
+      recoverySearch.has("code") || recoverySearch.has("token_hash") || recoverySearch.has("token");
+    return redirectRecoveryTarget(request, useServerCallback ? "/auth/recovery" : "/reset-password");
   }
 
   const isRecoveryOnLogin = pathname === "/login" && isRecoveryLink;
@@ -54,7 +58,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  if (session && isPublic && !isRecoveryOnLogin && pathname !== "/reset-password") {
+  if (session && isPublic && !isRecoveryOnLogin && pathname !== "/reset-password" && pathname !== "/auth/recovery") {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 

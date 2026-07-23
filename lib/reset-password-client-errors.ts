@@ -13,12 +13,18 @@ export function readRecoveryUrlParams(): RecoveryUrlParams {
   const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
   const search = new URLSearchParams(window.location.search);
   return {
-    accessToken: hash.get("access_token"),
-    refreshToken: hash.get("refresh_token"),
+    accessToken: search.get("access_token") || hash.get("access_token"),
+    refreshToken: search.get("refresh_token") || hash.get("refresh_token"),
     code: search.get("code"),
     tokenHash: search.get("token_hash") || search.get("token"),
     type: search.get("type") || hash.get("type"),
   };
+}
+
+export function readRecoveryErrorFromQuery() {
+  if (typeof window === "undefined") return "";
+  const raw = new URLSearchParams(window.location.search).get("recovery_error");
+  return raw ? decodeURIComponent(raw) : "";
 }
 
 export function hasRecoveryUrlParams(params: RecoveryUrlParams) {
@@ -38,7 +44,7 @@ export function mapRecoveryLinkError(raw: string) {
   return raw.trim() || "Не удалось подтвердить ссылку сброса.";
 }
 
-/** Сохраняет hash/query ссылки до загрузки React (главная и /login иначе теряют #access_token). */
+/** До React: hash → reset-password; code/token → серверный /auth/recovery (мобильная почта). */
 export function recoveryRedirectScript() {
-  return `(function(){try{var path=window.location.pathname||"/";if(path==="/reset-password")return;var hash=window.location.hash||"";var search=window.location.search||"";var params=new URLSearchParams(hash.replace(/^#/,""));var searchParams=new URLSearchParams(search);var hashRecovery=params.get("type")==="recovery"||params.has("access_token");var queryRecovery=searchParams.get("type")==="recovery"||searchParams.has("code")||searchParams.has("token_hash")||searchParams.has("token");if(!hashRecovery&&!queryRecovery)return;window.location.replace("/reset-password"+search+hash);}catch(e){}})();`;
+  return `(function(){try{var path=window.location.pathname||"/";if(path==="/reset-password"||path==="/auth/recovery")return;var hash=window.location.hash||"";var search=window.location.search||"";var params=new URLSearchParams(hash.replace(/^#/,""));var searchParams=new URLSearchParams(search);var hashRecovery=params.get("type")==="recovery"||params.has("access_token");var queryRecovery=searchParams.get("type")==="recovery"||searchParams.has("code")||searchParams.has("token_hash")||searchParams.has("token")||(searchParams.has("access_token")&&searchParams.has("refresh_token"));if(!hashRecovery&&!queryRecovery)return;if(queryRecovery&&(searchParams.has("code")||searchParams.has("token_hash")||searchParams.has("token"))){window.location.replace("/auth/recovery"+search);return;}window.location.replace("/reset-password"+search+hash);}catch(e){}})();`;
 }

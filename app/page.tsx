@@ -15,6 +15,10 @@ export default function HomePage() {
       return;
     }
     if (searchParams.has("code") || searchParams.has("token_hash") || searchParams.has("token")) {
+      window.location.replace(`/auth/recovery${search}`);
+      return;
+    }
+    if (searchParams.has("access_token") && searchParams.has("refresh_token")) {
       window.location.replace(`/reset-password${search}`);
       return;
     }

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { passwordResetRedirectUrl } from "@/lib/auth-recovery-server";
 import {
   resolveActiveUserAuthEmail,
   resolvePasswordResetRedirectOrigin,
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
   }
 
   const origin = resolvePasswordResetRedirectOrigin(request);
-  const redirectTo = `${origin}/reset-password`;
+  const redirectTo = passwordResetRedirectUrl(origin);
   const sent = await sendSupabasePasswordResetEmail({
     baseUrl: supabaseUrl,
     anonKey: supabaseAnonKey,
