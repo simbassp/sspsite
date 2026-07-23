@@ -674,34 +674,70 @@ export async function requestPasswordReset(loginOrEmail: string) {
     return { ok: false as const, error: "Сброс доступен только в режиме Supabase." };
   }
 
-  const supabase = getSupabaseBrowserClient();
-  let lastError = "";
-  const redirectTo = `${window.location.origin}/reset-password`;
   const loginTrim = loginOrEmail.trim();
-  const emailsToTry = new Set<string>();
-  if (loginTrim.includes("@")) {
-    emailsToTry.add(loginTrim);
-  } else {
-    const resolved = await resolveEmailByLogin(loginTrim);
-    if (!resolved) {
-      return {
-        ok: false as const,
-        error:
-          "Логин не найден в базе профилей. Проверьте логин или войдите по email.",
-      };
-    }
-    emailsToTry.add(resolved);
+  if (!loginTrim) {
+    return { ok: false as const, error: "Введите логин или email." };
   }
 
-  for (const email of emailsToTry) {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
-    if (!error) {
+  if (typeof window === "undefined") {
+    return { ok: false as const, error: "Сброс доступен только в браузере." };
+  }
+
+  try {
+    const response = (await Promise.race([
+      fetch("/api/auth/request-password-reset", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ loginOrEmail: loginTrim }),
+        cache: "no-store",
+      }),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("request_timeout")), LOGIN_SERVER_TIMEOUT_MS);
+      }),
+    ])) as Response;
+
+    let payload: { ok?: boolean; error?: string } | null = null;
+    try {
+      payload = (await response.json()) as { ok?: boolean; error?: string };
+    } catch {
+      payload = null;
+    }
+
+    if (response.ok && payload?.ok) {
       return { ok: true as const };
     }
-    lastError = mapAuthErrorMessage(error.message);
-  }
 
-  return { ok: false as const, error: lastError || "Не удалось отправить ссылку для сброса." };
+    const serverMessage = typeof payload?.error === "string" ? payload.error.trim() : "";
+    if (response.status === 404) {
+      return {
+        ok: false as const,
+        error: serverMessage || "Логин не найден в базе профилей. Проверьте логин или укажите email.",
+      };
+    }
+    if ([502, 503, 504].includes(response.status)) {
+      return {
+        ok: false as const,
+        error: serverMessage || "Сервер авторизации временно недоступен. Попробуйте через минуту.",
+      };
+    }
+
+    return {
+      ok: false as const,
+      error: serverMessage || mapAuthErrorMessage("recover_failed"),
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message === "request_timeout") {
+      return {
+        ok: false as const,
+        error: "Сервер отвечает слишком долго. Проверьте интернет и попробуйте снова.",
+      };
+    }
+    return {
+      ok: false as const,
+      error: "Не удалось связаться с сервером. Проверьте интернет и попробуйте снова.",
+    };
+  }
 }
 
 export async function fetchCurrentAuthEmail() {

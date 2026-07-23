@@ -2,82 +2,122 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
-import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
+import { isSupabaseConfigured } from "@/lib/supabase";
+import {
+  getResetPasswordSupabaseClient,
+  hasRecoveryUrlParams,
+  mapRecoveryLinkError,
+  readRecoveryUrlParams,
+  type RecoveryUrlParams,
+} from "@/lib/reset-password-client";
 
-function readRecoveryMode() {
-  if (typeof window === "undefined") return false;
-  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-  const search = new URLSearchParams(window.location.search);
-  return (
-    hash.get("type") === "recovery" ||
-    search.get("type") === "recovery" ||
-    Boolean(search.get("code")) ||
-    Boolean(search.get("token_hash"))
-  );
-}
+type RecoveryStatus = "checking" | "ready" | "error";
 
 export default function ResetPasswordPage() {
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [recoveryMode] = useState(() => readRecoveryMode());
-  const [recoveryReady, setRecoveryReady] = useState(false);
+  const [recoveryParams] = useState<RecoveryUrlParams>(() => readRecoveryUrlParams());
+  const [recoveryStatus, setRecoveryStatus] = useState<RecoveryStatus>("checking");
 
   useEffect(() => {
-    if (!isSupabaseConfigured || typeof window === "undefined") return;
-    if (!recoveryMode) {
+    if (!isSupabaseConfigured || typeof window === "undefined") {
+      setRecoveryStatus("error");
+      setError("Сброс пароля доступен только через Supabase.");
+      return;
+    }
+
+    if (!hasRecoveryUrlParams(recoveryParams)) {
+      setRecoveryStatus("error");
       setError("Некорректная ссылка сброса. Запросите новую.");
       return;
     }
 
-    const supabase = getSupabaseBrowserClient();
-    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-    const search = new URLSearchParams(window.location.search);
+    let cancelled = false;
+    const supabase = getResetPasswordSupabaseClient();
 
-    const setupRecovery = async () => {
-      const accessToken = hash.get("access_token");
-      const refreshToken = hash.get("refresh_token");
-      const code = search.get("code");
-      const tokenHash = search.get("token_hash");
-
-      if (accessToken && refreshToken) {
-        const { error } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
-        });
-        if (error) {
-          setError(error.message);
-          return;
-        }
-        setRecoveryReady(true);
-      } else if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
-        if (error) {
-          setError(error.message);
-          return;
-        }
-        setRecoveryReady(true);
-      } else if (tokenHash) {
-        const { error } = await supabase.auth.verifyOtp({
-          type: "recovery",
-          token_hash: tokenHash,
-        });
-        if (error) {
-          setError(error.message);
-          return;
-        }
-        setRecoveryReady(true);
-      } else {
-        setError("Некорректная ссылка сброса. Запросите новую.");
-        return;
-      }
-
+    const finish = () => {
+      if (cancelled) return;
+      setRecoveryStatus("ready");
+      setError("");
       window.history.replaceState({}, "", "/reset-password?type=recovery");
     };
 
+    const fail = (message: string) => {
+      if (cancelled) return;
+      setRecoveryStatus("error");
+      setError(mapRecoveryLinkError(message));
+    };
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY" || (event === "SIGNED_IN" && session)) {
+        finish();
+      }
+    });
+
+    const setupRecovery = async () => {
+      const { data: existingSession } = await supabase.auth.getSession();
+      if (existingSession.session) {
+        finish();
+        return;
+      }
+
+      const { accessToken, refreshToken, code, tokenHash, type } = recoveryParams;
+
+      if (accessToken && refreshToken) {
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+        if (sessionError) {
+          fail(sessionError.message);
+          return;
+        }
+        finish();
+        return;
+      }
+
+      if (code) {
+        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+        if (exchangeError) {
+          fail(exchangeError.message);
+          return;
+        }
+        finish();
+        return;
+      }
+
+      if (tokenHash && type === "recovery") {
+        const { error: verifyError } = await supabase.auth.verifyOtp({
+          token_hash: tokenHash,
+          type: "recovery",
+        });
+        if (verifyError) {
+          fail(verifyError.message);
+          return;
+        }
+        finish();
+        return;
+      }
+
+      await new Promise((resolve) => window.setTimeout(resolve, 700));
+      const { data: afterWait } = await supabase.auth.getSession();
+      if (afterWait.session) {
+        finish();
+        return;
+      }
+
+      fail("Некорректная ссылка сброса. Запросите новую.");
+    };
+
     void setupRecovery();
-  }, [recoveryMode]);
+
+    return () => {
+      cancelled = true;
+      authListener.subscription.unsubscribe();
+    };
+  }, [recoveryParams]);
 
   const onResetPassword = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -96,15 +136,15 @@ export default function ResetPasswordPage() {
       setError("Пароли не совпадают.");
       return;
     }
-    if (!recoveryReady) {
+    if (recoveryStatus !== "ready") {
       setError("Сессия сброса еще не готова. Откройте ссылку из письма заново.");
       return;
     }
 
-    const supabase = getSupabaseBrowserClient();
+    const supabase = getResetPasswordSupabaseClient();
     const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
     if (updateError) {
-      setError(updateError.message);
+      setError(mapRecoveryLinkError(updateError.message));
       return;
     }
 
@@ -112,12 +152,12 @@ export default function ResetPasswordPage() {
     setNewPassword("");
     setConfirmPassword("");
     setInfo("Пароль обновлен. Войдите с новым паролем.");
-    if (typeof window !== "undefined") {
-      window.setTimeout(() => {
-        window.location.assign("/login");
-      }, 500);
-    }
+    window.setTimeout(() => {
+      window.location.assign("/login");
+    }, 500);
   };
+
+  const recoveryReady = recoveryStatus === "ready";
 
   return (
     <div className="auth-wrap">
@@ -137,6 +177,7 @@ export default function ResetPasswordPage() {
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               required
+              disabled={!recoveryReady}
             />
 
             <label className="label" htmlFor="confirmPassword">
@@ -149,12 +190,15 @@ export default function ResetPasswordPage() {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
+              disabled={!recoveryReady}
             />
 
-            {!recoveryReady && !error && <p className="page-subtitle">Проверяем ссылку сброса...</p>}
+            {recoveryStatus === "checking" && !error && (
+              <p className="page-subtitle">Проверяем ссылку сброса...</p>
+            )}
             {error && <p style={{ color: "#ff8d8d", fontSize: 13 }}>{error}</p>}
             {info && <p className="page-subtitle">{info}</p>}
-            <button className="btn btn-primary" type="submit">
+            <button className="btn btn-primary" type="submit" disabled={!recoveryReady}>
               Обновить пароль
             </button>
           </form>

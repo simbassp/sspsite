@@ -26,6 +26,12 @@ export function mapLoginErrorForDisplay(raw: string, kind: LoginFailureKind): st
   if (e.includes("не подтвержден") || e.includes("email не подтвержден")) {
     return "Email не подтверждён. Подтвердите почту по письму.";
   }
+  if (e.includes("логин не найден") || e.includes("login not found")) {
+    return "Логин не найден. Проверьте логин или укажите email.";
+  }
+  if (e.includes("слишком много запросов") || e.includes("rate limit")) {
+    return "Слишком много запросов на сброс. Подождите минуту и попробуйте снова.";
+  }
   if (e.includes("слишком много попыток") || e.includes("too many")) {
     return "Слишком много попыток входа. Подождите и попробуйте снова.";
   }

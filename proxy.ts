@@ -14,11 +14,22 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
   const isPublic = publicPaths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
-  const isRecoveryOnLogin =
-    pathname === "/login" &&
-    (request.nextUrl.searchParams.get("type") === "recovery" ||
-      Boolean(request.nextUrl.searchParams.get("code")) ||
-      Boolean(request.nextUrl.searchParams.get("token_hash")));
+  const recoverySearch = request.nextUrl.searchParams;
+  const isRecoveryLink =
+    recoverySearch.get("type") === "recovery" ||
+    recoverySearch.has("code") ||
+    recoverySearch.has("token_hash") ||
+    recoverySearch.has("token");
+
+  if (pathname === "/login" && isRecoveryLink) {
+    const url = new URL("/reset-password", request.url);
+    recoverySearch.forEach((value, key) => {
+      url.searchParams.set(key, value);
+    });
+    return NextResponse.redirect(url);
+  }
+
+  const isRecoveryOnLogin = pathname === "/login" && isRecoveryLink;
   const raw = request.cookies.get(SESSION_COOKIE)?.value;
   let session = parseSessionCookie(raw);
   if (session) {
