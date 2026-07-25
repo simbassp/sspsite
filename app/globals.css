@@ -4710,14 +4710,8 @@ html[data-theme="dark"] .final-review-answer--correct {
 .unit-field-label {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
   margin: 0 0 4px;
   white-space: nowrap;
-}
-
-.unit-field-label svg {
-  flex-shrink: 0;
-  opacity: 0.72;
 }
 
 .personnel-filters__field--compact .select {

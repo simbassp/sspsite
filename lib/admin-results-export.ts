@@ -78,10 +78,10 @@ export function resolveResultsExportColumns(config: ResultsExportFilterConfig): 
       { key: "name", header: "Имя", width: 24 },
       { key: "callsign", header: "Позывной", width: 16 },
       { key: "position", header: "Должность", width: 18 },
-      { key: "unit", header: "Подразделение", width: 18 },
+      { key: "unit", header: "П", width: 18 },
     ];
     if (exportShowsRotaUnit(config)) {
-      columns.push({ key: "rotaUnit", header: "Взвод/отдел", width: 14 });
+      columns.push({ key: "rotaUnit", header: "В/О", width: 14 });
     }
     columns.push(
       { key: "status", header: "Статус", width: 18 },
@@ -95,11 +95,11 @@ export function resolveResultsExportColumns(config: ResultsExportFilterConfig): 
     { key: "name", header: "Имя", width: 24 },
     { key: "callsign", header: "Позывной", width: 16 },
     { key: "position", header: "Должность", width: 18 },
-    { key: "unit", header: "Подразделение", width: 18 },
+    { key: "unit", header: "П", width: 18 },
   ];
 
   if (exportShowsRotaUnit(config)) {
-    columns.push({ key: "rotaUnit", header: "Взвод/отдел", width: 14 });
+    columns.push({ key: "rotaUnit", header: "В/О", width: 14 });
   }
 
   if (config.typeFilter === "all") {
@@ -127,19 +127,19 @@ export function buildResultsExportFilterLines(config: ResultsExportFilterConfig)
   lines.push(formatExportPeriodLine(config));
 
   if (config.unitFilter === "all") {
-    lines.push("Подразделение: все");
+    lines.push("П: все");
   } else if (config.unitFilter === "unset") {
-    lines.push("Подразделение: не указано");
+    lines.push("П: не указано");
   } else {
-    lines.push(`Подразделение: ${unitAssignmentLabel[config.unitFilter]}`);
+    lines.push(`П: ${unitAssignmentLabel[config.unitFilter]}`);
   }
 
   if (config.unitFilter === "company_4") {
     if (config.rotaPlatoon !== "all") {
-      lines.push(`Взвод: ${config.rotaPlatoon}`);
+      lines.push(`В: ${config.rotaPlatoon}`);
     }
     if (config.rotaSection !== "all") {
-      lines.push(`Отделение: ${config.rotaSection}`);
+      lines.push(`О: ${config.rotaSection}`);
     }
   }
 

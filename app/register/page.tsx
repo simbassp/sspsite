@@ -329,7 +329,7 @@ export default function RegisterPage() {
               }}
               required
             >
-              <option value="">Выберите подразделение</option>
+              <option value="">—</option>
               {UNIT_ASSIGNMENT_OPTIONS.map((unit) => (
                 <option key={unit} value={unit}>
                   {unitAssignmentLabel[unit]}
@@ -346,7 +346,7 @@ export default function RegisterPage() {
                   onChange={(e) => setForm((p) => ({ ...p, rotaPlatoon: e.target.value as typeof p.rotaPlatoon }))}
                   required
                 >
-                  <option value="">Выберите взвод</option>
+                  <option value="">—</option>
                   {ROTA_PLATOON_OPTIONS.map((value) => (
                     <option key={value} value={value}>
                       {rotaPlatoonLabel(value)}
@@ -361,7 +361,7 @@ export default function RegisterPage() {
                   onChange={(e) => setForm((p) => ({ ...p, rotaSection: e.target.value as typeof p.rotaSection }))}
                   required
                 >
-                  <option value="">Выберите отделение</option>
+                  <option value="">—</option>
                   {ROTA_SECTION_OPTIONS.map((value) => (
                     <option key={value} value={value}>
                       {rotaSectionLabel(value)}

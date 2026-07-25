@@ -743,7 +743,7 @@ export default function ProfileUserInspectPage() {
                           value={inspectUser.unit_assignment ?? ""}
                           onChange={(e) => void onUnitChangeForUser(e.target.value)}
                           disabled={unitSaving}
-                          aria-label="Подразделение"
+                          aria-label="П"
                         >
                           <option value="">Не указано</option>
                           {UNIT_ASSIGNMENT_OPTIONS.map((unit) => (

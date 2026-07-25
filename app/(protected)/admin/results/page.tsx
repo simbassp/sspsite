@@ -531,7 +531,7 @@ export default function AdminResultsPage() {
                 value={draftFilters.unitFilter}
                 onChange={(e) => patchDraft({ unitFilter: e.target.value as UnitAssignmentFilter })}
               >
-                <option value="all">Все подразделения</option>
+                <option value="all">Все</option>
                 <option value="unset">Не указано</option>
                 {UNIT_ASSIGNMENT_OPTIONS.map((unit) => (
                   <option key={unit} value={unit}>

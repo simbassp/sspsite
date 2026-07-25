@@ -105,8 +105,8 @@ function buildExportFilterLines(input: {
   filters: RosterFilters;
 }) {
   const lines: string[] = [];
-  if (input.platoon !== "all") lines.push(`Вз.: ${rotaPlatoonLabel(Number(input.platoon) as 1 | 2)}`);
-  if (input.section !== "all") lines.push(`Отд.: ${rotaSectionLabel(Number(input.section) as 1 | 2 | 3 | 4)}`);
+  if (input.platoon !== "all") lines.push(`В: ${rotaPlatoonLabel(Number(input.platoon) as 1 | 2)}`);
+  if (input.section !== "all") lines.push(`О: ${rotaSectionLabel(Number(input.section) as 1 | 2 | 3 | 4)}`);
   if (input.search) lines.push(`Поиск: ${input.search}`);
   if (input.testDate) lines.push(`Дата тестов: ${formatFilterDateLabel(input.testDate)}`);
   if (input.filters.license !== "all") lines.push(`Права: категория ${input.filters.license}`);

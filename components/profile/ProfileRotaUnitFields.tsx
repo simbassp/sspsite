@@ -32,9 +32,9 @@ export function ProfileRotaUnitFields({
           value={platoon ?? ""}
           onChange={(e) => onPlatoonChange(e.target.value ? (Number(e.target.value) as RotaPlatoon) : null)}
           disabled={saving}
-          aria-label="Взвод"
+          aria-label="В"
         >
-          <option value="">Не указан</option>
+          <option value="">—</option>
           {ROTA_PLATOON_OPTIONS.map((value) => (
             <option key={value} value={value}>
               {rotaPlatoonLabel(value)}
@@ -55,9 +55,9 @@ export function ProfileRotaUnitFields({
           value={section ?? ""}
           onChange={(e) => onSectionChange(e.target.value ? (Number(e.target.value) as RotaSection) : null)}
           disabled={saving}
-          aria-label="Отделение"
+          aria-label="О"
         >
-          <option value="">Не указано</option>
+          <option value="">—</option>
           {ROTA_SECTION_OPTIONS.map((value) => (
             <option key={value} value={value}>
               {rotaSectionLabel(value)}

@@ -236,7 +236,7 @@ export function PersonnelNotificationsBell({ compact = false }: PersonnelNotific
               <div className="personnel-notify-compose__form">
                 <p className="personnel-notify-compose__label">Сообщение пользователям</p>
                 <label className="personnel-notify-compose__field">
-                  <span className="personnel-notify-compose__field-label">Подразделение</span>
+                  <span className="personnel-notify-compose__field-label" title="Подразделение">П</span>
                   <select
                     className="select"
                     value={broadcastUnitFilter}

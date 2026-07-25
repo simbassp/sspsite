@@ -414,7 +414,7 @@ export default function AdminUsersPage() {
             setPage(1);
           }}
         >
-          <option value="all">Все подразделения</option>
+          <option value="all">Все</option>
           <option value="unset">Не указано</option>
           {UNIT_ASSIGNMENT_OPTIONS.map((unit) => (
             <option key={unit} value={unit}>
@@ -497,7 +497,7 @@ export default function AdminUsersPage() {
                 <th>Пользователь</th>
                 <th>Должность</th>
                 <th>Место</th>
-                <th title="Подразделение">Подр.</th>
+                <th title="Подразделение">П</th>
                 {showPermissionsColumn ? <th>Права</th> : null}
                 {canEditUsers ? <th>Действия</th> : null}
               </tr>
@@ -555,7 +555,7 @@ export default function AdminUsersPage() {
                     </span>
                   </td>
                   <td>
-                    <span className="unit-assignment-badge" title="Подразделение">
+                    <span className="unit-assignment-badge" title="П">
                       {unitAssignmentLabelOrEmpty(user.unitAssignment)}
                     </span>
                   </td>

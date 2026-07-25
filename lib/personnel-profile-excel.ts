@@ -323,8 +323,8 @@ function addOverviewSheet(workbook: ExcelJS.Workbook, bundle: PersonnelProfileEx
     ["Имя", bundle.user.name || "—"],
     ["Позывной", bundle.user.callsign || "—"],
     ["Должность", bundle.user.position || "—"],
-    ["Подразделение", bundle.user.unitAssignment || "—"],
-    ["Взвод/Отдел", bundle.user.rotaUnit],
+    ["П", bundle.user.unitAssignment || "—"],
+    ["В/О", bundle.user.rotaUnit],
     ["Место положения", bundle.user.dutyLocation],
   ]);
 
@@ -624,7 +624,7 @@ function addSummarySheet(
     "Имя",
     "Позывной",
     "Должность",
-    "Взвод/Отдел",
+    "В/О",
     "Место",
     "Права",
     "Пробных сдано",
