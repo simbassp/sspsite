@@ -2,6 +2,7 @@
 
 import { ROTA_PLATOON_OPTIONS, ROTA_SECTION_OPTIONS, rotaPlatoonLabel, rotaSectionLabel } from "@/lib/personnel-catalog";
 import type { RotaPlatoon, RotaSection } from "@/lib/rota-unit";
+import { UnitFieldLabel } from "@/components/profile/UnitFieldLabel";
 
 type ProfileRotaUnitFieldsProps = {
   variant: "platoon" | "section";
@@ -25,7 +26,7 @@ export function ProfileRotaUnitFields({
   if (variant === "platoon") {
     return (
       <div className="profile-hero-duty profile-hero-rota-platoon">
-        <p className="label profile-hero-duty-label">Взвод</p>
+        <UnitFieldLabel kind="platoon" className="profile-hero-duty-label" />
         <select
           className="select profile-unit-select"
           value={platoon ?? ""}
@@ -48,7 +49,7 @@ export function ProfileRotaUnitFields({
   return (
     <div className="profile-hero-rota profile-hero-rota--section">
       <div className="profile-hero-rota__field">
-        <p className="label profile-hero-duty-label">Отделение</p>
+        <UnitFieldLabel kind="section" className="profile-hero-duty-label" />
         <select
           className="select profile-unit-select"
           value={section ?? ""}

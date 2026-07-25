@@ -9,6 +9,7 @@ import { ProfileExportExcelButton } from "@/components/profile/ProfileExportExce
 import { ProfileNameEditModal } from "@/components/profile/ProfileNameEditModal";
 import { ProfilePersonnelMetaFields } from "@/components/profile/ProfilePersonnelMetaFields";
 import { ProfileRotaUnitFields } from "@/components/profile/ProfileRotaUnitFields";
+import { UnitFieldLabel } from "@/components/profile/UnitFieldLabel";
 import { UserIdentityDisplay } from "@/components/profile/UserIdentityDisplay";
 import { UserAvatar } from "@/components/profile/UserAvatar";
 import { SendUserNotificationModal } from "@/components/admin/SendUserNotificationModal";
@@ -29,6 +30,8 @@ import { canManageUsers, canManageResults, canResetTestResults, canInspectOtherU
 import { removeTestResultsForUser } from "@/lib/storage";
 import { rotaUnitCompactLabel, type RotaPlatoon, type RotaSection } from "@/lib/rota-unit";
 import {
+  rotaPlatoonLabel,
+  rotaSectionLabel,
   normalizePersonnelBloodGroup,
   normalizePersonnelLicenseCategories,
   type PersonnelBloodGroup,
@@ -732,7 +735,7 @@ export default function ProfileUserInspectPage() {
                 <div className="profile-hero-divider" aria-hidden="true" />
                 <div className="profile-hero-controls">
                   <div className="profile-hero-duty">
-                    <p className="label profile-hero-duty-label">Подразделение</p>
+                    <UnitFieldLabel kind="unit" className="profile-hero-duty-label" />
                     {canEditUnitForOthers ? (
                       <>
                         <select
@@ -784,21 +787,21 @@ export default function ProfileUserInspectPage() {
                   ) : inspectUser.unit_assignment === "company_4" ? (
                     <>
                       <div className="profile-hero-duty">
-                        <p className="label profile-hero-duty-label">Взвод</p>
+                        <UnitFieldLabel kind="platoon" className="profile-hero-duty-label" />
                         <span className="profile-rota-badge profile-rota-badge--static">
-                          {rotaPlatoon ? `${rotaPlatoon} взвод` : "Не указан"}
+                          {rotaPlatoon ? rotaPlatoonLabel(rotaPlatoon) : "—"}
                         </span>
                       </div>
                       <div className="profile-hero-duty">
-                        <p className="label profile-hero-duty-label">Отделение</p>
+                        <UnitFieldLabel kind="section" className="profile-hero-duty-label" />
                         <span className="profile-rota-badge profile-rota-badge--static">
-                          {rotaSection ? `${rotaSection} отделение` : "Не указано"}
+                          {rotaSection ? rotaSectionLabel(rotaSection) : "—"}
                         </span>
                       </div>
                     </>
                   ) : null}
                   <div className="profile-hero-duty profile-hero-duty--full">
-                    <p className="label profile-hero-duty-label">Место положения</p>
+                    <p className="label profile-hero-duty-label" title="Место положения">Место</p>
                     {canEditDutyForOthers ? (
                       <>
                         <ProfileDutyLocationToggle

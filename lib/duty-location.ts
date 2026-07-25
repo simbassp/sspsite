@@ -6,6 +6,11 @@ export function normalizeDutyLocation(raw: unknown): DutyLocation {
 }
 
 export const dutyLocationLabel: Record<DutyLocation, string> = {
-  base: "На базе",
-  deployment: "В командировке",
+  base: "Дома",
+  deployment: "А",
+};
+
+export const dutyLocationFullLabel: Record<DutyLocation, string> = {
+  base: "Дома",
+  deployment: "Командировка",
 };

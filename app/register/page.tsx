@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { AuthPasswordInput } from "@/components/AuthPasswordInput";
+import { UnitFieldLabel } from "@/components/profile/UnitFieldLabel";
 import { getPositions } from "@/lib/storage";
 import { positionDisplayLabel } from "@/lib/position-ui";
 import { ROTA_PLATOON_OPTIONS, ROTA_SECTION_OPTIONS, rotaPlatoonLabel, rotaSectionLabel } from "@/lib/personnel-catalog";
@@ -313,7 +314,7 @@ export default function RegisterPage() {
             />
             {passwordMismatch && <p style={{ color: "#ff8d8d", fontSize: 13 }}>Пароль в этих двух строках должен совпадать.</p>}
 
-            <label className="label">Подразделение</label>
+            <UnitFieldLabel kind="unit" />
             <select
               className="select"
               value={form.unitAssignment}
@@ -338,7 +339,7 @@ export default function RegisterPage() {
 
             {form.unitAssignment === "company_4" && (
               <>
-                <label className="label">Взвод</label>
+                <UnitFieldLabel kind="platoon" />
                 <select
                   className="select"
                   value={form.rotaPlatoon}
@@ -353,7 +354,7 @@ export default function RegisterPage() {
                   ))}
                 </select>
 
-                <label className="label">Отделение</label>
+                <UnitFieldLabel kind="section" />
                 <select
                   className="select"
                   value={form.rotaSection}

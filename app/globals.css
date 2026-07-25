@@ -1331,6 +1331,12 @@ html[data-theme="dark"] .unit-assignment-badge {
   padding: 5px 8px;
 }
 
+.profile-page .profile-hero-controls .profile-unit-select,
+.profile-page .profile-hero-controls .select {
+  min-width: 72px;
+  max-width: 108px;
+}
+
 .profile-page .profile-hero-rota {
   grid-column: 1 / -1;
   display: grid;
@@ -1343,8 +1349,8 @@ html[data-theme="dark"] .unit-assignment-badge {
   min-width: 0;
 }
 
-.profile-page .profile-hero-rota--section-module {
-  display: contents;
+.profile-page .profile-hero-rota--section {
+  min-width: 0;
 }
 
 .profile-page .profile-hero-rota__field {
@@ -4649,6 +4655,76 @@ html[data-theme="dark"] .final-review-answer--correct {
   min-width: 1040px;
 }
 
+.personnel-roster-card .personnel-table-wrap--fit .personnel-table--roster {
+  min-width: 0;
+  width: 100%;
+  table-layout: fixed;
+}
+
+.personnel-table-wrap--fit .personnel-table-scroll-hint {
+  display: none;
+}
+
+.personnel-table-wrap--fit .personnel-table-scroll--top {
+  display: none;
+}
+
+.personnel-table-wrap--fit .personnel-table-scroll--main {
+  overflow-x: visible;
+}
+
+.personnel-table--roster th,
+.personnel-table--roster td {
+  padding: 6px 8px;
+  font-size: 13px;
+}
+
+.personnel-table--roster .personnel-table__compact {
+  width: 72px;
+  text-align: center;
+}
+
+.personnel-table--roster .personnel-table__compact:nth-child(3) {
+  width: 88px;
+}
+
+.personnel-table--roster .personnel-table__compact:nth-child(4) {
+  width: 56px;
+}
+
+.personnel-table--roster .personnel-table__compact:nth-child(5) {
+  width: 64px;
+}
+
+.personnel-table--roster .personnel-roster-person__avatar {
+  width: 28px;
+  height: 28px;
+}
+
+.personnel-table--roster .pill {
+  padding: 2px 7px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.unit-field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 4px;
+  white-space: nowrap;
+}
+
+.unit-field-label svg {
+  flex-shrink: 0;
+  opacity: 0.72;
+}
+
+.personnel-filters__field--compact .select {
+  min-width: 0;
+  width: 100%;
+}
+
 .personnel-table-wrap--fit {
   overflow-x: visible;
 }
@@ -5066,7 +5142,7 @@ html[data-theme="dark"] .final-review-answer--correct {
 }
 
 .personnel-filters__row--primary {
-  grid-template-columns: repeat(3, minmax(110px, 1fr)) minmax(240px, 2fr);
+  grid-template-columns: minmax(72px, 0.55fr) minmax(72px, 0.55fr) minmax(0, 2.4fr);
 }
 
 .personnel-filters__search-date {
@@ -5077,7 +5153,7 @@ html[data-theme="dark"] .final-review-answer--correct {
 }
 
 .personnel-filters__row--secondary {
-  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  grid-template-columns: repeat(6, minmax(88px, 1fr));
 }
 
 .personnel-filters__row--tests {

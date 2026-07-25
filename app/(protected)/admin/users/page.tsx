@@ -6,6 +6,7 @@ import { AdminPermissionPicker } from "@/components/admin/AdminPermissionPicker"
 import { ProfileNameColorPicker } from "@/components/admin/ProfileNameColorPicker";
 import { UserIdentityDisplay } from "@/components/profile/UserIdentityDisplay";
 import { UserAvatar } from "@/components/profile/UserAvatar";
+import { UnitFieldLabel } from "@/components/profile/UnitFieldLabel";
 import { readClientSession, writeClientSession } from "@/lib/client-auth";
 import { ADMIN_PERMISSION_OPTIONS } from "@/lib/admin-permission-ui";
 import { dutyLocationLabel } from "@/lib/duty-location";
@@ -402,8 +403,8 @@ export default function AdminUsersPage() {
           }}
         >
           <option value="all">Все места</option>
-          <option value="base">На базе</option>
-          <option value="deployment">В командировке</option>
+          <option value="base">{dutyLocationLabel.base}</option>
+          <option value="deployment">{dutyLocationLabel.deployment}</option>
         </select>
         <select
           className="select"
@@ -496,7 +497,7 @@ export default function AdminUsersPage() {
                 <th>Пользователь</th>
                 <th>Должность</th>
                 <th>Место</th>
-                <th>Подразделение</th>
+                <th title="Подразделение">Подр.</th>
                 {showPermissionsColumn ? <th>Права</th> : null}
                 {canEditUsers ? <th>Действия</th> : null}
               </tr>

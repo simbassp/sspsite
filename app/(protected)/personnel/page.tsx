@@ -21,6 +21,7 @@ import {
   PersonnelRosterTestCell,
   type PersonnelTestRosterStats,
 } from "@/components/personnel/PersonnelIcons";
+import { UnitFieldLabel } from "@/components/profile/UnitFieldLabel";
 import { readClientSession } from "@/lib/client-auth";
 import { canManageUsers } from "@/lib/permissions";
 import { dutyLocationLabel } from "@/lib/duty-location";
@@ -104,8 +105,8 @@ function buildExportFilterLines(input: {
   filters: RosterFilters;
 }) {
   const lines: string[] = [];
-  if (input.platoon !== "all") lines.push(`Взвод: ${input.platoon}`);
-  if (input.section !== "all") lines.push(`Отделение: ${input.section}`);
+  if (input.platoon !== "all") lines.push(`Вз.: ${rotaPlatoonLabel(Number(input.platoon) as 1 | 2)}`);
+  if (input.section !== "all") lines.push(`Отд.: ${rotaSectionLabel(Number(input.section) as 1 | 2 | 3 | 4)}`);
   if (input.search) lines.push(`Поиск: ${input.search}`);
   if (input.testDate) lines.push(`Дата тестов: ${formatFilterDateLabel(input.testDate)}`);
   if (input.filters.license !== "all") lines.push(`Права: категория ${input.filters.license}`);
@@ -411,8 +412,8 @@ export default function PersonnelListPage() {
           <article className="card">
             <div className="card-body personnel-filters">
               <div className="personnel-filters__row personnel-filters__row--primary">
-                <div className="personnel-filters__field">
-                  <p className="label">Взвод</p>
+                <div className="personnel-filters__field personnel-filters__field--compact">
+                  <UnitFieldLabel kind="platoon" />
                   <select
                     className="select"
                     value={draftQuery.platoon}
@@ -423,8 +424,8 @@ export default function PersonnelListPage() {
                     <option value="2">{rotaPlatoonLabel(2)}</option>
                   </select>
                 </div>
-                <div className="personnel-filters__field">
-                  <p className="label">Отделение</p>
+                <div className="personnel-filters__field personnel-filters__field--compact">
+                  <UnitFieldLabel kind="section" />
                   <select
                     className="select"
                     value={draftQuery.section}
@@ -479,7 +480,7 @@ export default function PersonnelListPage() {
                   </select>
                 </div>
                 <div className="personnel-filters__field">
-                  <p className="label">Пробный тест</p>
+                  <p className="label" title="Пробный тест">Проб.</p>
                   <select
                     className="select"
                     value={draftQuery.filters.trialTest}
@@ -491,7 +492,7 @@ export default function PersonnelListPage() {
                   </select>
                 </div>
                 <div className="personnel-filters__field">
-                  <p className="label">Итоговый тест</p>
+                  <p className="label" title="Итоговый тест">Итог.</p>
                   <select
                     className="select"
                     value={draftQuery.filters.finalTest}
@@ -510,8 +511,8 @@ export default function PersonnelListPage() {
                     onChange={(e) => patchDraftFilters({ dutyStatus: e.target.value as RosterFilters["dutyStatus"] })}
                   >
                     <option value="all">Все</option>
-                    <option value="base">На базе</option>
-                    <option value="deployment">В командировке</option>
+                    <option value="base">{dutyLocationLabel.base}</option>
+                    <option value="deployment">{dutyLocationLabel.deployment}</option>
                   </select>
                 </div>
                 <div className="personnel-filters__field personnel-filters__actions">
@@ -541,7 +542,7 @@ export default function PersonnelListPage() {
               <strong>{stats.totalEmployees}</strong>
             </div>
             <div className="personnel-stat-card">
-              <p className="label">В командировке</p>
+              <p className="label" title="В командировке">А</p>
               <strong>{stats.deployedNow}</strong>
             </div>
           </div>
@@ -567,20 +568,21 @@ export default function PersonnelListPage() {
           {isLoading && <p className="page-subtitle">Загрузка…</p>}
 
           <article className="card personnel-roster-card">
-            <div className="card-body personnel-table-wrap">
-              <p className="personnel-table-scroll-hint">Прокрутите таблицу вбок, чтобы увидеть все колонки</p>
+            <div className="card-body personnel-table-wrap personnel-table-wrap--fit">
               <PersonnelTableDualScroll>
-                <table className="personnel-table">
+                <table className="personnel-table personnel-table--compact personnel-table--roster">
                   <thead>
                     <tr>
                       <th className="personnel-table__sticky">Имя</th>
                       <th className="personnel-table__compact" title="Взвод / отделение">
-                        Взвод/Отдел
+                        В/О
                       </th>
                       <th className="personnel-table__compact" title="Пробные и итоговые: сданы / не сданы">
-                        Тесты
+                        Тест
                       </th>
-                      <th className="personnel-table__compact">Статус</th>
+                      <th className="personnel-table__compact" title="Место положения">
+                        Место
+                      </th>
                       <th className="personnel-table__compact" title="Категории прав">
                         Права
                       </th>
@@ -629,7 +631,10 @@ export default function PersonnelListPage() {
                           <PersonnelRosterTestCell stats={displayTestStats(u)} />
                         </td>
                         <td className="personnel-table__compact">
-                          <span className={`pill ${u.dutyLocation === "base" ? "pill-green" : "pill-red"}`}>
+                          <span
+                            className={`pill ${u.dutyLocation === "base" ? "pill-green" : "pill-red"}`}
+                            title={u.dutyLocation === "deployment" ? "Командировка" : "Дома"}
+                          >
                             {dutyLocationLabel[u.dutyLocation]}
                           </span>
                         </td>
@@ -700,7 +705,10 @@ export default function PersonnelListPage() {
                         ) : null}
                       </div>
                     </div>
-                    <span className={`pill ${u.dutyLocation === "base" ? "pill-green" : "pill-red"}`}>
+                    <span
+                      className={`pill ${u.dutyLocation === "base" ? "pill-green" : "pill-red"}`}
+                      title={u.dutyLocation === "deployment" ? "Командировка" : "Дома"}
+                    >
                       {dutyLocationLabel[u.dutyLocation]}
                     </span>
                   </div>

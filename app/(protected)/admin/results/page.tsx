@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ResultsExportExcelButton, postResultsExportExcel } from "@/components/admin/ResultsExportExcelButton";
+import { UnitFieldLabel } from "@/components/profile/UnitFieldLabel";
 import { UserIdentityDisplay } from "@/components/profile/UserIdentityDisplay";
 import type { UserIdentityCosmetics } from "@/lib/user-identity-cosmetics";
 import type { ProfileNameColorId } from "@/lib/profile-name-color";
@@ -19,7 +20,7 @@ import {
   type UnitAssignmentFilter,
 } from "@/lib/unit-assignment";
 import type { UnitAssignment } from "@/lib/types";
-import { ROTA_PLATOON_OPTIONS, ROTA_SECTION_OPTIONS } from "@/lib/personnel-catalog";
+import { ROTA_PLATOON_OPTIONS, ROTA_SECTION_OPTIONS, rotaPlatoonLabel, rotaSectionLabel } from "@/lib/personnel-catalog";
 import { FINAL_AUTO_RESET_DAY_UTC } from "@/lib/final-effective-counting";
 import { appendResultsPeriodParams, buildResultsPeriodBody } from "@/lib/admin-results-query";
 import { clearPagePrefetchCache, readPagePrefetchCache, writePagePrefetchCache } from "@/lib/page-prefetch-cache";
@@ -523,8 +524,8 @@ export default function AdminResultsPage() {
               </div>
             </div>
 
-            <div className="personnel-filters__field">
-              <p className="label">Подразделение</p>
+            <div className="personnel-filters__field personnel-filters__field--compact">
+              <UnitFieldLabel kind="unit" />
               <select
                 className="select"
                 value={draftFilters.unitFilter}
@@ -542,8 +543,8 @@ export default function AdminResultsPage() {
 
             {draftFilters.unitFilter === "company_4" && (
               <>
-                <div className="personnel-filters__field">
-                  <p className="label">Взвод</p>
+                <div className="personnel-filters__field personnel-filters__field--compact">
+                  <UnitFieldLabel kind="platoon" />
                   <select
                     className="select"
                     value={draftFilters.rotaPlatoon}
@@ -552,13 +553,13 @@ export default function AdminResultsPage() {
                     <option value="all">Все</option>
                     {ROTA_PLATOON_OPTIONS.map((value) => (
                       <option key={value} value={String(value)}>
-                        {value} взвод
+                        {rotaPlatoonLabel(value)}
                       </option>
                     ))}
                   </select>
                 </div>
-                <div className="personnel-filters__field">
-                  <p className="label">Отделение</p>
+                <div className="personnel-filters__field personnel-filters__field--compact">
+                  <UnitFieldLabel kind="section" />
                   <select
                     className="select"
                     value={draftFilters.rotaSection}
@@ -567,7 +568,7 @@ export default function AdminResultsPage() {
                     <option value="all">Все</option>
                     {ROTA_SECTION_OPTIONS.map((value) => (
                       <option key={value} value={String(value)}>
-                        {value}
+                        {rotaSectionLabel(value)}
                       </option>
                     ))}
                   </select>

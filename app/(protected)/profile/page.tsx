@@ -10,6 +10,7 @@ import { ProfileNameEditModal } from "@/components/profile/ProfileNameEditModal"
 import { UserAvatar } from "@/components/profile/UserAvatar";
 import { ProfilePersonnelMetaFields } from "@/components/profile/ProfilePersonnelMetaFields";
 import { ProfileRotaUnitFields } from "@/components/profile/ProfileRotaUnitFields";
+import { UnitFieldLabel } from "@/components/profile/UnitFieldLabel";
 import { UserIdentityDisplay } from "@/components/profile/UserIdentityDisplay";
 import { readClientSession } from "@/lib/client-auth";
 import { type BankAvatarOverlayId, type FinalNameColorId, type TrialAvatarFrameId, type TopRankBadgeId } from "@/lib/achievements-catalog";
@@ -970,7 +971,7 @@ export default function ProfilePage() {
             <div className="profile-hero-divider" aria-hidden="true" />
             <div className="profile-hero-controls">
               <div className="profile-hero-duty">
-                <p className="label profile-hero-duty-label">Подразделение</p>
+                <UnitFieldLabel kind="unit" className="profile-hero-duty-label" />
                 <select
                   className="select profile-unit-select"
                   value={unitAssignment ?? ""}
@@ -1013,7 +1014,7 @@ export default function ProfilePage() {
                 />
               )}
               <div className="profile-hero-duty profile-hero-duty--full">
-                <p className="label profile-hero-duty-label">Место положения</p>
+                <p className="label profile-hero-duty-label" title="Место положения">Место</p>
                 <ProfileDutyLocationToggle
                   value={dutyLocation}
                   onChange={(next) => void onDutyChange(next)}

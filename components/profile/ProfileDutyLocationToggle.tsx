@@ -20,7 +20,7 @@ export function ProfileDutyLocationToggle({ value, onChange, disabled = false }:
         aria-pressed={value === "base"}
       >
         <HomeIcon />
-        На базе
+        Дома
       </button>
       <button
         type="button"
@@ -28,9 +28,10 @@ export function ProfileDutyLocationToggle({ value, onChange, disabled = false }:
         onClick={() => onChange("deployment")}
         disabled={disabled}
         aria-pressed={value === "deployment"}
+        title="Командировка"
       >
         <PlaneIcon />
-        В командировке
+        А
       </button>
     </div>
   );
