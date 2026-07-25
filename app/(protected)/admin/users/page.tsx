@@ -369,65 +369,74 @@ export default function AdminUsersPage() {
       ) : (
       <>
       {isLoadingUsers && <p className="page-subtitle">Загрузка...</p>}
-      <div className="grid grid-two admin-users-page__filters">
-        <input
-          className="input"
-          placeholder="Поиск по имени, логину"
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setPage(1);
-          }}
-        />
-        <select
-          className="select"
-          value={positionFilter}
-          onChange={(e) => {
-            setPositionFilter(e.target.value as typeof positionFilter);
-            setPage(1);
-          }}
-        >
-          <option value="all">Все должности</option>
-          {POSITION_OPTIONS.map((position) => (
-            <option key={position} value={position}>
-              {positionDisplayLabel(position)}
-            </option>
-          ))}
-        </select>
-        <select
-          className="select"
-          value={dutyFilter}
-          onChange={(e) => {
-            setDutyFilter(e.target.value as typeof dutyFilter);
-            setPage(1);
-          }}
-        >
-          <option value="all">Все места</option>
-          <option value="base">{dutyLocationLabel.base}</option>
-          <option value="deployment">{dutyLocationLabel.deployment}</option>
-        </select>
-        <select
-          className="select"
-          value={unitFilter}
-          onChange={(e) => {
-            setUnitFilter(e.target.value as typeof unitFilter);
-            setPage(1);
-          }}
-        >
-          <option value="all">Все</option>
-          <option value="unset">Не указано</option>
-          {UNIT_ASSIGNMENT_OPTIONS.map((unit) => (
-            <option key={unit} value={unit}>
-              {unitAssignmentLabel[unit]}
-            </option>
-          ))}
-        </select>
+      <div className="admin-users-page__filters personnel-filters">
+        <div className="personnel-filters__row personnel-filters__row--primary">
+          <div className="personnel-filters__field personnel-filters__field--grow">
+            <p className="label">Поиск</p>
+            <input
+              className="input"
+              placeholder="Имя, логин"
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setPage(1);
+              }}
+            />
+          </div>
+          <div className="personnel-filters__field personnel-filters__field--compact">
+            <UnitFieldLabel kind="position" />
+            <select
+              className="select"
+              value={positionFilter}
+              onChange={(e) => {
+                setPositionFilter(e.target.value as typeof positionFilter);
+                setPage(1);
+              }}
+            >
+              <option value="all">Все</option>
+              {POSITION_OPTIONS.map((position) => (
+                <option key={position} value={position}>
+                  {positionDisplayLabel(position)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="personnel-filters__field personnel-filters__field--compact">
+            <UnitFieldLabel kind="duty" />
+            <select
+              className="select"
+              value={dutyFilter}
+              onChange={(e) => {
+                setDutyFilter(e.target.value as typeof dutyFilter);
+                setPage(1);
+              }}
+            >
+              <option value="all">Все</option>
+              <option value="base">{dutyLocationLabel.base}</option>
+              <option value="deployment">{dutyLocationLabel.deployment}</option>
+            </select>
+          </div>
+          <div className="personnel-filters__field personnel-filters__field--compact">
+            <UnitFieldLabel kind="unit" />
+            <select
+              className="select"
+              value={unitFilter}
+              onChange={(e) => {
+                setUnitFilter(e.target.value as typeof unitFilter);
+                setPage(1);
+              }}
+            >
+              <option value="all">Все</option>
+              <option value="unset">—</option>
+              {UNIT_ASSIGNMENT_OPTIONS.map((unit) => (
+                <option key={unit} value={unit}>
+                  {unitAssignmentLabel[unit]}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
       </div>
-      {isHydrated && (
-        <p className="page-subtitle" style={{ marginBottom: 10 }}>
-          Фильтрация по должности, месту положения и подразделению (взвод / рота).
-        </p>
-      )}
       {info && <p className="page-subtitle admin-users-page__info">{info}</p>}
 
       {isHydrated && canEditUsers && permissionsTargetUser && (
@@ -495,10 +504,10 @@ export default function AdminUsersPage() {
             <thead>
               <tr>
                 <th>Пользователь</th>
-                <th>Должность</th>
-                <th>Место</th>
+                <th>Д</th>
+                <th title="Место положения">М</th>
                 <th title="Подразделение">П</th>
-                {showPermissionsColumn ? <th>Права</th> : null}
+                {showPermissionsColumn ? <th title="Права доступа">Пр</th> : null}
                 {canEditUsers ? <th>Действия</th> : null}
               </tr>
             </thead>
@@ -518,9 +527,6 @@ export default function AdminUsersPage() {
                   </td>
                   <td>
                     <div className="admin-users-role-position">
-                      <span className={`admin-users-role-text ${user.role === "admin" ? "is-admin" : "is-employee"}`}>
-                        {user.role === "admin" ? "Администратор" : "Сотрудник"}
-                      </span>
                       {canEditUsers ? (
                         <button
                           type="button"
@@ -540,7 +546,7 @@ export default function AdminUsersPage() {
                           {positionDisplayLabel(user.position)}
                         </button>
                       ) : (
-                        <span className={`admin-users-position-badge ${getPositionBadgeClass(user.position)}`} title="Должность">
+                        <span className={`admin-users-position-badge ${getPositionBadgeClass(user.position)}`} title="Д">
                           {positionDisplayLabel(user.position)}
                         </span>
                       )}
@@ -614,9 +620,6 @@ export default function AdminUsersPage() {
                     </div>
                   </Link>
                   <div className="admin-users-role-position">
-                    <span className={`admin-users-role-text ${user.role === "admin" ? "is-admin" : "is-employee"}`}>
-                      {user.role === "admin" ? "Администратор" : "Сотрудник"}
-                    </span>
                     {canEditUsers ? (
                       <button
                         type="button"
@@ -636,7 +639,7 @@ export default function AdminUsersPage() {
                         {positionDisplayLabel(user.position)}
                       </button>
                     ) : (
-                      <span className={`admin-users-position-badge ${getPositionBadgeClass(user.position)}`} title="Должность">
+                      <span className={`admin-users-position-badge ${getPositionBadgeClass(user.position)}`} title="Д">
                         {positionDisplayLabel(user.position)}
                       </span>
                     )}
@@ -731,7 +734,7 @@ export default function AdminUsersPage() {
               <p className="page-subtitle" style={{ marginTop: 8 }}>
                 {positionEditUser.name} (@{positionEditUser.login})
               </p>
-              <label className="label">Должность</label>
+              <UnitFieldLabel kind="position" />
               <select
                 className="select"
                 value={positionDraft}
@@ -739,7 +742,7 @@ export default function AdminUsersPage() {
               >
                 {POSITION_OPTIONS.map((p) => (
                   <option key={p} value={p}>
-                    {p}
+                    {positionDisplayLabel(p)}
                   </option>
                 ))}
               </select>

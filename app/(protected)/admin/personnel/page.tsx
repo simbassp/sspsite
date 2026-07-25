@@ -69,7 +69,7 @@ export default function AdminPersonnelPage() {
 
   return (
     <section className="screen personnel-page">
-      <h1 className="page-title">Личное дело — 4 рота</h1>
+      <h1 className="page-title">Личное дело — 4р</h1>
       <p className="page-subtitle">Настройки модуля и модерация заявок</p>
       {isPreview && <PersonnelPreviewBanner />}
 
@@ -78,7 +78,7 @@ export default function AdminPersonnelPage() {
           <h3 style={{ marginTop: 0 }}>Включение модуля</h3>
           <label style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
             <input type="checkbox" checked={moduleEnabled} onChange={(e) => setModuleEnabled(e.target.checked)} />
-            Показывать модуль сотрудникам 4 роты
+            Показывать модуль пользователям 4р
           </label>
           <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <input

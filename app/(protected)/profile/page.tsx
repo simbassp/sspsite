@@ -55,9 +55,7 @@ import {
 import { removeTestResultsForUser } from "@/lib/storage";
 import { rotaUnitCompactLabel, type RotaPlatoon, type RotaSection } from "@/lib/rota-unit";
 import {
-  normalizePersonnelBloodGroup,
   normalizePersonnelLicenseCategories,
-  type PersonnelBloodGroup,
   type PersonnelLicenseCategory,
 } from "@/lib/personnel-catalog";
 import { computeTrialProfileStats, deserializeTrialProfileStats, mapProfileTestResultsFromApi, type TrialProfileStatsPayload } from "@/lib/profile-trial-stats";
@@ -107,7 +105,6 @@ export default function ProfilePage() {
   const [rotaSaving, setRotaSaving] = useState(false);
   const [rotaSaveError, setRotaSaveError] = useState("");
   const [licenseCategories, setLicenseCategories] = useState<PersonnelLicenseCategory[]>([]);
-  const [bloodGroup, setBloodGroup] = useState<PersonnelBloodGroup | null>(null);
   const [dutySaving, setDutySaving] = useState(false);
   const [fieldError, setFieldError] = useState<{ name?: string; callsign?: string }>({});
   const [profileSaving, setProfileSaving] = useState(false);
@@ -195,7 +192,6 @@ export default function ProfilePage() {
           rotaPlatoon?: number | null;
           rotaSection?: number | null;
           licenseCategories?: unknown;
-          bloodGroup?: unknown;
           avatarUrl?: string | null;
           results?: Array<Record<string, unknown>>;
           trialStats?: TrialProfileStatsPayload;
@@ -235,7 +231,6 @@ export default function ProfilePage() {
           setRotaSection(null);
         }
         setLicenseCategories(normalizePersonnelLicenseCategories(payload.licenseCategories));
-        setBloodGroup(normalizePersonnelBloodGroup(payload.bloodGroup));
         const nextAvatarUrl =
           typeof payload.avatarUrl === "string" && payload.avatarUrl.trim() ? payload.avatarUrl.trim() : null;
         setAvatarUrl(nextAvatarUrl);
@@ -955,13 +950,12 @@ export default function ProfilePage() {
                   userId={session.id}
                   canEdit
                   licenseCategories={licenseCategories}
-                  bloodGroup={bloodGroup}
                 />
               ) : null}
               <div className="profile-hero-position">
                 <div
                   className={`admin-users-position-badge ${getPositionBadgeClass(profilePosition ?? session?.position ?? "")}`}
-                  title="Должность"
+                  title="Д"
                 >
                   <PositionStarIcon />
                   {positionDisplayLabel(profilePosition ?? session?.position ?? "")}

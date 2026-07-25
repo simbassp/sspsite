@@ -54,6 +54,7 @@ export function PersonnelNotificationsBell({ compact = false }: PersonnelNotific
   const [broadcastBody, setBroadcastBody] = useState("");
   const [broadcastHref, setBroadcastHref] = useState("");
   const [broadcastUnitFilter, setBroadcastUnitFilter] = useState<UnitAssignmentFilter>("all");
+  const [clearState, setClearState] = useState<"idle" | "clearing" | "done" | "error">("idle");
   const [sendState, setSendState] = useState<"idle" | "sending" | "done" | "error">("idle");
   const [sendMessage, setSendMessage] = useState("");
   const [portalReady, setPortalReady] = useState(false);
@@ -105,6 +106,24 @@ export function PersonnelNotificationsBell({ compact = false }: PersonnelNotific
       setItems((prev) => prev.map((item) => ({ ...item, isRead: true })));
     } catch {
       /* ignore */
+    }
+  };
+
+  const clearAllHistory = async () => {
+    if (!window.confirm("Очистить всю историю уведомлений для всех пользователей?")) return;
+    setClearState("clearing");
+    try {
+      const res = await fetch("/api/admin/notifications/clear", { method: "POST" });
+      const payload = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !payload.ok) {
+        setClearState("error");
+        return;
+      }
+      setItems([]);
+      setUnread(0);
+      setClearState("done");
+    } catch {
+      setClearState("error");
     }
   };
 
@@ -242,7 +261,7 @@ export function PersonnelNotificationsBell({ compact = false }: PersonnelNotific
                     value={broadcastUnitFilter}
                     onChange={(e) => setBroadcastUnitFilter(e.target.value as UnitAssignmentFilter)}
                   >
-                    <option value="all">Все пользователи</option>
+                    <option value="all">Все</option>
                     <option value="unset">Без подразделения</option>
                     {UNIT_ASSIGNMENT_OPTIONS.map((unit) => (
                       <option key={unit} value={unit}>
@@ -301,6 +320,19 @@ export function PersonnelNotificationsBell({ compact = false }: PersonnelNotific
             {sendMessage ? (
               <p className={`personnel-notify-compose__msg${sendState === "error" ? " is-error" : ""}`}>{sendMessage}</p>
             ) : null}
+          </div>
+        ) : null}
+
+        {canSend ? (
+          <div className="personnel-notify-panel__admin-actions">
+            <button
+              type="button"
+              className="btn btn-danger personnel-notify-clear-btn"
+              disabled={clearState === "clearing"}
+              onClick={() => void clearAllHistory()}
+            >
+              {clearState === "clearing" ? "Очистка…" : "Очистить историю"}
+            </button>
           </div>
         ) : null}
 

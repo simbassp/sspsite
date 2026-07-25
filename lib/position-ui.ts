@@ -6,8 +6,6 @@ export const POSITION_OPTIONS: readonly Position[] = [
   "Специалист",
   "Ведущий специалист",
   "Главный специалист",
-  "Командир взвода",
-  "Командир 4 роты",
 ] as const;
 
 const POSITION_DISPLAY_LABEL: Record<string, string> = {

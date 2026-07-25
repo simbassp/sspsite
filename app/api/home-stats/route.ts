@@ -209,7 +209,7 @@ async function buildHomeStats(): Promise<HomeStatsBody> {
         ? {
             id: `newcomer:${String(newest.id || "")}`,
             type: "user_added",
-            title: "Новый сотрудник",
+            title: "Новый пользователь",
             description: formatPerson(newest.name, newest.callsign),
             person: buildPerson(
               newest.name,
@@ -223,7 +223,7 @@ async function buildHomeStats(): Promise<HomeStatsBody> {
         ? {
             id: `left:${String(left.id || "")}`,
             type: "user_removed",
-            title: "Сотрудник покинул нас",
+            title: "Пользователь покинул нас",
             description: formatPerson(leftPayload.name, leftPayload.callsign),
             person: buildPerson(
               leftPayload.name,

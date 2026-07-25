@@ -940,6 +940,13 @@ export async function markNotificationsRead(userId: string, ids?: string[]) {
   await q;
 }
 
+export async function clearAllNotifications() {
+  const supabase = getServerSupabaseServiceClient();
+  const res = await supabase.from("app_notifications").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+  if (res.error) return { ok: false as const, error: res.error.message };
+  return { ok: true as const };
+}
+
 export async function countUnreadNotifications(userId: string) {
   const supabase = getServerSupabaseServiceClient();
   const res = await supabase

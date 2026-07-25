@@ -6,11 +6,11 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { AuthPasswordInput } from "@/components/AuthPasswordInput";
 import { UnitFieldLabel } from "@/components/profile/UnitFieldLabel";
 import { getPositions } from "@/lib/storage";
-import { positionDisplayLabel } from "@/lib/position-ui";
 import { ROTA_PLATOON_OPTIONS, ROTA_SECTION_OPTIONS, rotaPlatoonLabel, rotaSectionLabel } from "@/lib/personnel-catalog";
 import { UNIT_ASSIGNMENT_OPTIONS, unitAssignmentLabel } from "@/lib/unit-assignment";
 import type { UnitAssignment } from "@/lib/types";
 import { normalizeRotaPlatoon, normalizeRotaSection, type RotaPlatoon, type RotaSection } from "@/lib/rota-unit";
+import { positionDisplayLabel } from "@/lib/position-ui";
 import { registerUser } from "@/lib/users-repository";
 
 /** Один signUp + при сбое сети — перепроверка входом; на мобильном цепочка дольше, чем 15–20 с. */
@@ -371,7 +371,7 @@ export default function RegisterPage() {
               </>
             )}
 
-            <label className="label">Должность</label>
+            <UnitFieldLabel kind="position" />
             <select
               className="select"
               value={form.position}

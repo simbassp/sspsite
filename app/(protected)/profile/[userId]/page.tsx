@@ -32,9 +32,7 @@ import { rotaUnitCompactLabel, type RotaPlatoon, type RotaSection } from "@/lib/
 import {
   rotaPlatoonLabel,
   rotaSectionLabel,
-  normalizePersonnelBloodGroup,
   normalizePersonnelLicenseCategories,
-  type PersonnelBloodGroup,
   type PersonnelLicenseCategory,
 } from "@/lib/personnel-catalog";
 import { computeTrialProfileStats, deserializeTrialProfileStats, mapProfileTestResultsFromApi, type TrialProfileStatsPayload } from "@/lib/profile-trial-stats";
@@ -60,7 +58,6 @@ type InspectUser = {
   rota_platoon?: number | null;
   rota_section?: number | null;
   licenseCategories?: PersonnelLicenseCategory[];
-  bloodGroup?: PersonnelBloodGroup | null;
   nameColor?: ProfileNameColorId | null;
   avatarUrl?: string | null;
   cosmetics?: UserIdentityCosmetics | null;
@@ -131,7 +128,6 @@ export default function ProfileUserInspectPage() {
   const [rotaSaving, setRotaSaving] = useState(false);
   const [rotaSaveError, setRotaSaveError] = useState("");
   const [licenseCategories, setLicenseCategories] = useState<PersonnelLicenseCategory[]>([]);
-  const [bloodGroup, setBloodGroup] = useState<PersonnelBloodGroup | null>(null);
   const [showPersonnelStats, setShowPersonnelStats] = useState(false);
 
   useEffect(() => {
@@ -174,7 +170,6 @@ export default function ProfileUserInspectPage() {
             : null,
         );
         setLicenseCategories(normalizePersonnelLicenseCategories(u.licenseCategories));
-        setBloodGroup(normalizePersonnelBloodGroup(u.bloodGroup));
         setShowPersonnelStats(payload.personnelProfileShow === true);
         setRows(mapRows({ results: payload.results }).sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)));
         setTrialStatsFromApi(deserializeTrialProfileStats(payload.trialStats));
@@ -716,7 +711,6 @@ export default function ProfileUserInspectPage() {
                       userId={inspectUser.id}
                       canEdit={canEditPersonnelMeta}
                       licenseCategories={licenseCategories}
-                      bloodGroup={bloodGroup}
                     />
                   ) : null}
                   <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
@@ -725,7 +719,7 @@ export default function ProfileUserInspectPage() {
                   <div className="profile-hero-position">
                     <div
                       className={`admin-users-position-badge ${getPositionBadgeClass(inspectUser.position)}`}
-                      title="Должность"
+                      title="Д"
                     >
                       <PositionStarIcon />
                       {positionDisplayLabel(inspectUser.position)}
