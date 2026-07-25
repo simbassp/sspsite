@@ -912,27 +912,33 @@ export async function updateCurrentUserDutyLocation(location: DutyLocation) {
     return { ok: true as const, dutyLocation: location };
   }
 
-  const supabase = getSupabaseBrowserClient();
-  const { data, error } = await supabase.rpc("update_my_duty_location", {
-    p_location: location,
-  });
-
-  if (error) {
-    const raw = error.message || "";
-    return {
-      ok: false as const,
-      error: raw ? `Не удалось сохранить: ${raw}` : "Не удалось сохранить место положения.",
-    };
+  try {
+    const response = await fetch("/api/profile/duty-location", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ dutyLocation: location }),
+    });
+    const payload = (await response.json()) as { ok?: boolean; error?: string; dutyLocation?: DutyLocation };
+    if (!response.ok || !payload.ok) {
+      if (payload.error === "not_found") {
+        return {
+          ok: false as const,
+          error: "Запись пользователя не найдена. Выйдите и войдите снова.",
+        };
+      }
+      return {
+        ok: false as const,
+        error: payload.error || "Не удалось сохранить место положения.",
+      };
+    }
+    const current = readClientSession();
+    if (current) {
+      updateUser(current.id, { dutyLocation: payload.dutyLocation ?? location });
+    }
+    return { ok: true as const, dutyLocation: payload.dutyLocation ?? location };
+  } catch {
+    return { ok: false as const, error: "Не удалось сохранить место положения." };
   }
-
-  if (data !== true) {
-    return {
-      ok: false as const,
-      error: "Запись пользователя не найдена. Выйдите и войдите снова.",
-    };
-  }
-
-  return { ok: true as const, dutyLocation: location };
 }
 
 export async function updateCurrentUserUnitAssignment(unit: UnitAssignment | null) {
