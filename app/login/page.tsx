@@ -237,7 +237,7 @@ export default function LoginPage() {
       <div className="card auth-card">
         <div className="card-body">
           <div className="auth-card__header">
-            <h1 className="page-title">Вход в ССП ПВО</h1>
+            <h1 className="page-title">ВХОД</h1>
             <div className="auth-card__lead">
               <p className="page-subtitle">Закрытая платформа.</p>
               <p className="page-subtitle">Используйте выданные учётные данные.</p>

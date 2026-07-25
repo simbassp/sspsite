@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { BrandMark } from "@/components/BrandMark";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   canAccessAdminPanel,
@@ -551,11 +552,8 @@ export function AppShell({ session, children }: AppShellProps) {
     <div className="app-shell">
       <aside className="desktop-sidebar">
         <div className="brand">
-          <div className="brand-mark">ССП</div>
-          <div>
-            <h1>ПВО</h1>
-            {brandCallsign}
-          </div>
+          <BrandMark />
+          <div>{brandCallsign}</div>
         </div>
 
         <div style={{ marginTop: 14, display: "grid", gap: 8 }}>
@@ -612,12 +610,9 @@ export function AppShell({ session, children }: AppShellProps) {
         <header className="mobile-header" id="mobile-app-header">
           <div className="brand">
             <Link prefetch={false} href="/dashboard" style={{ display: "contents" }}>
-              <div className="brand-mark">ССП</div>
+              <BrandMark />
             </Link>
-            <div>
-              <h1>ПВО</h1>
-              {brandCallsign}
-            </div>
+            <div>{brandCallsign}</div>
           </div>
           <div className="header-actions">
             {notifyBellPlacement !== "desktop" ? <PersonnelNotificationsBell compact /> : null}

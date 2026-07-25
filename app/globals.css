@@ -368,7 +368,13 @@ html[data-theme="dark"] .selfcheck-hint__text svg {
   color: #fff;
   display: grid;
   place-items: center;
-  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.brand-mark svg {
+  width: 24px;
+  height: 24px;
+  display: block;
 }
 
 .brand h1 {
