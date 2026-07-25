@@ -1,6 +1,13 @@
 export type RosterExportTestFilter = "all" | "passed" | "failed";
 export type RosterExportDutyStatus = "all" | "base" | "deployment";
 
+import {
+  EXPORT_FINAL_FAILED_LABEL,
+  EXPORT_FINAL_PASSED_LABEL,
+  EXPORT_TRIAL_FAILED_LABEL,
+  EXPORT_TRIAL_PASSED_LABEL,
+} from "@/lib/export-test-labels";
+
 export type RosterExportFilterConfig = {
   testDate: string | null;
   license: "all" | string;
@@ -72,15 +79,15 @@ export function resolveRosterExportColumns(config: RosterExportFilterConfig): Ro
 
   if (includeTrial) {
     columns.push(
-      { key: "trialPassed", header: "П+", width: 8 },
-      { key: "trialFailed", header: "П−", width: 8 },
+      { key: "trialPassed", header: EXPORT_TRIAL_PASSED_LABEL, width: 16 },
+      { key: "trialFailed", header: EXPORT_TRIAL_FAILED_LABEL, width: 18 },
     );
   }
 
   if (includeFinal) {
     columns.push(
-      { key: "finalPassed", header: "И+", width: 8 },
-      { key: "finalFailed", header: "И−", width: 8 },
+      { key: "finalPassed", header: EXPORT_FINAL_PASSED_LABEL, width: 16 },
+      { key: "finalFailed", header: EXPORT_FINAL_FAILED_LABEL, width: 18 },
     );
   }
 

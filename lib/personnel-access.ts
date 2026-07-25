@@ -43,7 +43,7 @@ export function resolvePersonnelAccess(input: {
     };
   }
 
-  if (moduleLive && isCompany4) {
+  if (isCompany4) {
     return {
       canView: true,
       canEditOwn: true,
@@ -53,7 +53,7 @@ export function resolvePersonnelAccess(input: {
     };
   }
 
-  return { canView: false, canEditOwn: false, canModerate: false, isPreview: false, isCompany4 };
+  return { canView: false, canEditOwn: false, canModerate: false, isPreview: false, isCompany4: false };
 }
 
 export function canAccessPersonnelNav(

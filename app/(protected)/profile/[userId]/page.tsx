@@ -9,6 +9,7 @@ import { ProfileExportExcelButton } from "@/components/profile/ProfileExportExce
 import { ProfileNameEditModal } from "@/components/profile/ProfileNameEditModal";
 import { ProfilePersonnelMetaFields } from "@/components/profile/ProfilePersonnelMetaFields";
 import { ProfileRotaUnitFields } from "@/components/profile/ProfileRotaUnitFields";
+import { ProfileTestStatsCharts } from "@/components/profile/ProfileTestStatsCharts";
 import { UnitFieldLabel } from "@/components/profile/UnitFieldLabel";
 import { UserIdentityDisplay } from "@/components/profile/UserIdentityDisplay";
 import { UserAvatar } from "@/components/profile/UserAvatar";
@@ -877,6 +878,8 @@ export default function ProfileUserInspectPage() {
             }}
             onConfirm={() => void onConfirmResetStats()}
           />
+
+          {inspectUser.unit_assignment === "company_4" ? <ProfileTestStatsCharts rows={rows} /> : null}
 
           <article className="card" style={{ marginTop: 12 }}>
             <div className="card-body">

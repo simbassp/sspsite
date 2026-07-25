@@ -376,7 +376,7 @@ export default function PersonnelListPage() {
       <div className="personnel-page__header">
         <div>
           <h1 className="page-title">Сотрудники</h1>
-          <p className="page-subtitle">4р — личное дело</p>
+          <p className="page-subtitle">4р</p>
         </div>
         <div className="personnel-page__header-actions">
           {canExportExcel && tab === "all" && (

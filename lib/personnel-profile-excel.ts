@@ -1,3 +1,9 @@
+import {
+  EXPORT_FINAL_FAILED_LABEL,
+  EXPORT_FINAL_PASSED_LABEL,
+  EXPORT_TRIAL_FAILED_LABEL,
+  EXPORT_TRIAL_PASSED_LABEL,
+} from "@/lib/export-test-labels";
 import type { PersonnelProfileExportBundle } from "@/lib/personnel-profile-export-server";
 import { formatExportDuration, formatExportMoney } from "@/lib/personnel-profile-export-server";
 import { positionDisplayLabel } from "@/lib/position-ui";
@@ -149,10 +155,10 @@ function getTestSummary(bundle: PersonnelProfileExportBundle): TestSummaryCounts
 
 function testSummarySlices(summary: TestSummaryCounts): ExcelChartSlice[] {
   return [
-    { label: "Пробные (сданы)", value: summary.trialPassed, color: "#3B82F6" },
-    { label: "Пробные (не сданы)", value: summary.trialFailed, color: "#F59E0B" },
-    { label: "Итоговые (сданы)", value: summary.finalPassed, color: "#10B981" },
-    { label: "Итоговые (не сданы)", value: summary.finalFailed, color: "#C42B2B" },
+    { label: EXPORT_TRIAL_PASSED_LABEL, value: summary.trialPassed, color: "#3B82F6" },
+    { label: EXPORT_TRIAL_FAILED_LABEL, value: summary.trialFailed, color: "#F59E0B" },
+    { label: EXPORT_FINAL_PASSED_LABEL, value: summary.finalPassed, color: "#10B981" },
+    { label: EXPORT_FINAL_FAILED_LABEL, value: summary.finalFailed, color: "#C42B2B" },
   ];
 }
 
@@ -334,10 +340,10 @@ function addOverviewSheet(workbook: ExcelJS.Workbook, bundle: PersonnelProfileEx
   const p = bundle.profile;
   addPairs([
     ["В/У", p?.licenseCategories?.length ? p.licenseCategories.join(", ") : "—"],
-    ["П+", p ? String(p.testStats.trialPassed) : "0"],
-    ["П−", p ? String(p.testStats.trialFailed) : "0"],
-    ["И+", p ? String(p.testStats.finalPassed) : "0"],
-    ["И−", p ? String(p.testStats.finalFailed) : "0"],
+    [EXPORT_TRIAL_PASSED_LABEL, p ? String(p.testStats.trialPassed) : "0"],
+    [EXPORT_TRIAL_FAILED_LABEL, p ? String(p.testStats.trialFailed) : "0"],
+    [EXPORT_FINAL_PASSED_LABEL, p ? String(p.testStats.finalPassed) : "0"],
+    [EXPORT_FINAL_FAILED_LABEL, p ? String(p.testStats.finalFailed) : "0"],
   ]);
 }
 
@@ -388,7 +394,7 @@ function addTestsSummaryTable(
 
   const header = sheet.addRow(
     bulk
-      ? ["Имя", "Поз.", "П+", "П−", "И+", "И−"]
+      ? ["Имя", "Поз.", EXPORT_TRIAL_PASSED_LABEL, EXPORT_TRIAL_FAILED_LABEL, EXPORT_FINAL_PASSED_LABEL, EXPORT_FINAL_FAILED_LABEL]
       : ["Показатель", "Кол-во"],
   );
   styleHeaderRow(header);
@@ -417,10 +423,10 @@ function addTestsSummaryTable(
     if (!bundle) return;
     const s = getTestSummary(bundle);
     const rows: Array<[string, number, "pass" | "fail"]> = [
-      ["П+", s.trialPassed, "pass"],
-      ["П−", s.trialFailed, "fail"],
-      ["И+", s.finalPassed, "pass"],
-      ["И−", s.finalFailed, "fail"],
+      [EXPORT_TRIAL_PASSED_LABEL, s.trialPassed, "pass"],
+      [EXPORT_TRIAL_FAILED_LABEL, s.trialFailed, "fail"],
+      [EXPORT_FINAL_PASSED_LABEL, s.finalPassed, "pass"],
+      [EXPORT_FINAL_FAILED_LABEL, s.finalFailed, "fail"],
     ];
     for (const [label, value, tone] of rows) {
       const row = sheet.addRow([label, value]);
@@ -628,10 +634,10 @@ function addSummarySheet(
     "В/О",
     "М",
     "В/У",
-    "П+",
-    "П−",
-    "И+",
-    "И−",
+    EXPORT_TRIAL_PASSED_LABEL,
+    EXPORT_TRIAL_FAILED_LABEL,
+    EXPORT_FINAL_PASSED_LABEL,
+    EXPORT_FINAL_FAILED_LABEL,
   ]);
   styleHeaderRow(header, 36);
 

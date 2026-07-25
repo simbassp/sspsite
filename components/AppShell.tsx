@@ -13,7 +13,6 @@ import {
   canManageTests,
   canManageUav,
   canManageUsers,
-  canModeratePersonnel,
   canViewUserList,
 } from "@/lib/permissions";
 import { PersonnelNotificationsBell } from "@/components/personnel/PersonnelNotificationsBell";
@@ -419,9 +418,6 @@ export function AppShell({ session, children }: AppShellProps) {
       ? [{ href: "/admin/counteraction", label: "Противодействие", icon: "shield" as const }]
       : []),
     ...(canManageUav(session) ? [{ href: "/admin/uav", label: "БПЛА", icon: "uav" as const }] : []),
-    ...(session.role === "admin" || canModeratePersonnel(session)
-      ? [{ href: "/admin/personnel", label: "Личное дело", icon: "personnel" as const }]
-      : []),
     ...(canSeeGameSection ? [{ href: "/game", label: "Полигон", icon: "game" as const }] : []),
   ];
 

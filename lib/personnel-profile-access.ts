@@ -38,10 +38,6 @@ export async function resolvePersonnelProfileViewAccess(
     };
   }
 
-  if (!settings.moduleEnabled) {
-    return { show: false, isPreview: false, canEditOwn: false, canModerate: false };
-  }
-
   if (session.id === targetUserId && access.isCompany4) {
     return { show: true, isPreview: false, canEditOwn: true, canModerate: false };
   }
