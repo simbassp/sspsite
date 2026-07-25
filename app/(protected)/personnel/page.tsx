@@ -8,7 +8,6 @@ import type { UserIdentityCosmetics } from "@/lib/user-identity-cosmetics";
 import type { ProfileNameColorId } from "@/lib/profile-name-color";
 import { withTimeout } from "@/lib/async-utils";
 import { clearPagePrefetchCache, readPagePrefetchCache, writePagePrefetchCache } from "@/lib/page-prefetch-cache";
-import { PersonnelPreviewBanner } from "@/components/personnel/PersonnelPreviewBanner";
 import { PersonnelTableDualScroll } from "@/components/personnel/PersonnelTableDualScroll";
 import {
   PersonnelExportExcelButton,
@@ -156,7 +155,6 @@ export default function PersonnelListPage() {
     trialTests: [],
     finalTests: [],
   });
-  const [isPreview, setIsPreview] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const canExportExcel = useMemo(() => (session ? canManageUsers(session) : false), [session]);
@@ -172,7 +170,6 @@ export default function PersonnelListPage() {
     total: number;
     stats?: typeof stats;
     tops?: typeof tops;
-    isPreview?: boolean;
   };
 
   const appliedFilterKey = useMemo(() => buildRosterFilterKey(appliedQuery), [appliedQuery]);
@@ -186,7 +183,6 @@ export default function PersonnelListPage() {
     setUsersTotal(payload.total);
     if (payload.stats) setStats(payload.stats);
     if (payload.tops) setTops(payload.tops);
-    setIsPreview(payload.isPreview === true);
   }, []);
 
   const fetchRosterPage = useCallback(
@@ -206,7 +202,6 @@ export default function PersonnelListPage() {
         total?: number;
         stats?: typeof stats;
         tops?: typeof tops;
-        isPreview?: boolean;
       };
       if (!res.ok || !payload.ok) return null;
       return {
@@ -214,7 +209,6 @@ export default function PersonnelListPage() {
         total: typeof payload.total === "number" ? payload.total : (payload.users?.length ?? 0),
         stats: payload.stats,
         tops: payload.tops,
-        isPreview: payload.isPreview,
       };
     },
     [appliedFilterKey],
@@ -395,8 +389,6 @@ export default function PersonnelListPage() {
       </div>
 
       {exportExcelMsg && <p className="page-subtitle">{exportExcelMsg}</p>}
-
-      {isPreview && <PersonnelPreviewBanner />}
 
       <div className="personnel-tabs">
         <button type="button" className={tab === "all" ? "is-active" : ""} onClick={() => setTab("all")}>
