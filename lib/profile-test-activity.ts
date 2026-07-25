@@ -92,3 +92,5 @@ export function buildProfileTestActivity(rows: TestResult[]) {
 
   return { activityByMonth, activitySummary };
 }
+
+export type ProfileTestActivityData = ReturnType<typeof buildProfileTestActivity>;

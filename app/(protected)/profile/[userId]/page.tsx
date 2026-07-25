@@ -37,6 +37,7 @@ import {
   type PersonnelLicenseCategory,
 } from "@/lib/personnel-catalog";
 import { computeTrialProfileStats, deserializeTrialProfileStats, mapProfileTestResultsFromApi, type TrialProfileStatsPayload } from "@/lib/profile-trial-stats";
+import { buildProfileTestActivity, type ProfileTestActivityData } from "@/lib/profile-test-activity";
 import { DutyLocation, SessionUser, TestResult, TestResultsResetScope, UnitAssignment } from "@/lib/types";
 
 const RESET_SCOPE_LABELS: Record<TestResultsResetScope, string> = {
@@ -108,6 +109,7 @@ export default function ProfileUserInspectPage() {
   const [inspectUser, setInspectUser] = useState<InspectUser | null>(null);
   const [rows, setRows] = useState<TestResult[]>([]);
   const [trialStatsFromApi, setTrialStatsFromApi] = useState<ReturnType<typeof deserializeTrialProfileStats>>(null);
+  const [testActivity, setTestActivity] = useState<ProfileTestActivityData>(() => buildProfileTestActivity([]));
   const [showAllAttempts, setShowAllAttempts] = useState(false);
   const [attemptsPage, setAttemptsPage] = useState(1);
   const [showAllFinalAttempts, setShowAllFinalAttempts] = useState(false);
@@ -151,6 +153,7 @@ export default function ProfileUserInspectPage() {
           user?: InspectUser & { duty_location?: string; unit_assignment?: UnitAssignment | null };
           results?: Array<Record<string, unknown>>;
           trialStats?: TrialProfileStatsPayload;
+          testActivity?: ProfileTestActivityData;
           personnelProfileShow?: boolean;
         };
         if (cancelled) return;
@@ -174,6 +177,7 @@ export default function ProfileUserInspectPage() {
         setShowPersonnelStats(payload.personnelProfileShow === true);
         setRows(mapRows({ results: payload.results }).sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)));
         setTrialStatsFromApi(deserializeTrialProfileStats(payload.trialStats));
+        setTestActivity(payload.testActivity ?? buildProfileTestActivity([]));
       } catch {
         if (!cancelled) setError("network");
       } finally {
@@ -301,10 +305,12 @@ export default function ProfileUserInspectPage() {
       ok?: boolean;
       results?: Array<Record<string, unknown>>;
       trialStats?: TrialProfileStatsPayload;
+      testActivity?: ProfileTestActivityData;
     };
     if (response.ok && payload.ok && Array.isArray(payload.results)) {
       setRows(mapRows({ results: payload.results }).sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)));
       setTrialStatsFromApi(deserializeTrialProfileStats(payload.trialStats));
+      setTestActivity(payload.testActivity ?? buildProfileTestActivity([]));
     }
   };
 
@@ -879,7 +885,7 @@ export default function ProfileUserInspectPage() {
             onConfirm={() => void onConfirmResetStats()}
           />
 
-          {inspectUser.unit_assignment === "company_4" ? <ProfileTestStatsCharts rows={rows} /> : null}
+          {inspectUser.unit_assignment === "company_4" ? <ProfileTestStatsCharts activity={testActivity} /> : null}
 
           <article className="card" style={{ marginTop: 12 }}>
             <div className="card-body">

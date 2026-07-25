@@ -60,6 +60,7 @@ import {
   type PersonnelLicenseCategory,
 } from "@/lib/personnel-catalog";
 import { computeTrialProfileStats, deserializeTrialProfileStats, mapProfileTestResultsFromApi, type TrialProfileStatsPayload } from "@/lib/profile-trial-stats";
+import { buildProfileTestActivity, type ProfileTestActivityData } from "@/lib/profile-test-activity";
 import { DutyLocation, Position, TestResult, TestResultsResetScope, UnitAssignment } from "@/lib/types";
 
 function mapBootstrapResults(raw: Array<Record<string, unknown>>): TestResult[] {
@@ -77,6 +78,7 @@ export default function ProfilePage() {
   const [sessionResolved, setSessionResolved] = useState(false);
   const [rows, setRows] = useState<TestResult[]>([]);
   const [trialStatsFromApi, setTrialStatsFromApi] = useState<ReturnType<typeof deserializeTrialProfileStats>>(null);
+  const [testActivity, setTestActivity] = useState<ProfileTestActivityData>(() => buildProfileTestActivity([]));
   const [inviteCodes, setInviteCodes] = useState<InviteCodeRecord[]>([]);
   const [inviteInput, setInviteInput] = useState("");
   const [maxUsesInput, setMaxUsesInput] = useState("");
@@ -196,6 +198,7 @@ export default function ProfilePage() {
           avatarUrl?: string | null;
           results?: Array<Record<string, unknown>>;
           trialStats?: TrialProfileStatsPayload;
+          testActivity?: ProfileTestActivityData;
           inviteCodes?: Array<Record<string, unknown>>;
           personnelProfileShow?: boolean;
           nameColor?: ProfileNameColorId | null;
@@ -208,6 +211,7 @@ export default function ProfilePage() {
         const mappedRows = mapProfileTestResultsFromApi(payload.results || []);
         setRows(mappedRows);
         setTrialStatsFromApi(deserializeTrialProfileStats(payload.trialStats));
+        setTestActivity(payload.testActivity ?? buildProfileTestActivity([]));
         if (payload.dutyLocation === "deployment" || payload.dutyLocation === "base") {
           setDutyLocation(payload.dutyLocation);
         }
@@ -765,9 +769,16 @@ export default function ProfilePage() {
       resetStatsModal.setOpen(false);
       setSettingsMessage(`Статистика сброшена: ${RESET_SCOPE_LABELS[resetStatsModal.scope]}.`);
       const refreshed = await fetch("/api/profile/bootstrap", { cache: "no-store" });
-      const refreshedPayload = (await refreshed.json()) as { ok?: boolean; results?: Array<Record<string, unknown>> };
+      const refreshedPayload = (await refreshed.json()) as {
+        ok?: boolean;
+        results?: Array<Record<string, unknown>>;
+        trialStats?: TrialProfileStatsPayload;
+        testActivity?: ProfileTestActivityData;
+      };
       if (refreshed.ok && refreshedPayload.ok && Array.isArray(refreshedPayload.results)) {
         setRows(mapBootstrapResults(refreshedPayload.results));
+        setTrialStatsFromApi(deserializeTrialProfileStats(refreshedPayload.trialStats));
+        setTestActivity(refreshedPayload.testActivity ?? buildProfileTestActivity([]));
       }
     } catch {
       setSettingsMessage("Ошибка сети. Попробуйте ещё раз.");
@@ -1191,7 +1202,7 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {unitAssignment === "company_4" ? <ProfileTestStatsCharts rows={rows} /> : null}
+      {unitAssignment === "company_4" ? <ProfileTestStatsCharts activity={testActivity} /> : null}
 
       <article className="card" style={{ marginTop: 12 }}>
         <div className="card-body">

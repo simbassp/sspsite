@@ -36,6 +36,7 @@ export async function GET() {
     const resultsRows = resultsBundle.rows;
     const resultsError = resultsBundle.error;
     const trialStats = serializeTrialProfileStats(resultsBundle.trialStats);
+    const testActivity = resultsBundle.testActivity;
 
     let profileRow: Record<string, unknown> | null = (profilePrimaryQ.data || null) as Record<string, unknown> | null;
     let profileError: string | null = profilePrimaryQ.error?.message || null;
@@ -118,6 +119,7 @@ export async function GET() {
       bloodGroup: personnelMeta.bloodGroup,
       results: resultsRows,
       trialStats,
+      testActivity,
       inviteCodes,
       personnelProfileShow,
     });

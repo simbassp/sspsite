@@ -19,6 +19,12 @@ import {
 import { resolveBulkLinkedUserIds, resolveFinalUserContext } from "@/lib/server-final-user-context";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 import {
+  emptyTestRosterStats,
+  loadBulkTestStatsForRoster,
+  summarizeTestResultRows,
+  type PersonnelTestRosterStats,
+} from "@/lib/test-results-stats-server";
+import {
   calcRosterStats,
   hasAdvancedRosterFilters,
   userMatchesRosterFilters,
@@ -31,12 +37,7 @@ export type PersonnelModuleSettings = {
   moderationEnabled: boolean;
 };
 
-export type PersonnelTestRosterStats = {
-  trialPassed: number;
-  trialFailed: number;
-  finalPassed: number;
-  finalFailed: number;
-};
+export type { PersonnelTestRosterStats };
 
 export type PersonnelUserCard = {
   id: string;
@@ -195,25 +196,6 @@ async function loadLicenses(userIds: string[]) {
   return map;
 }
 
-function emptyTestRosterStats(): PersonnelTestRosterStats {
-  return { trialPassed: 0, trialFailed: 0, finalPassed: 0, finalFailed: 0 };
-}
-
-function summarizeTestResultRows(
-  rows: Array<{ type?: string; test_type?: string; status?: string }>,
-): PersonnelTestRosterStats {
-  const stats = emptyTestRosterStats();
-  for (const test of rows) {
-    const type = test.type ?? test.test_type ?? "trial";
-    if (type === "final") {
-      if (test.status === "passed") stats.finalPassed += 1;
-      else stats.finalFailed += 1;
-    } else if (test.status === "passed") stats.trialPassed += 1;
-    else stats.trialFailed += 1;
-  }
-  return stats;
-}
-
 function mskDayBounds(dateIso: string) {
   const start = new Date(`${dateIso}T00:00:00+03:00`);
   const end = new Date(`${dateIso}T23:59:59.999+03:00`);
@@ -274,52 +256,11 @@ async function loadTestStatsForUsersOnDate(userIds: string[], dateIso: string) {
 }
 
 async function loadTestStatsForUsers(userIds: string[]) {
-  const map = new Map<string, PersonnelTestRosterStats>();
-  for (const id of userIds) map.set(id, emptyTestRosterStats());
-  if (userIds.length === 0) return map;
+  if (userIds.length === 0) return new Map<string, PersonnelTestRosterStats>();
 
   const supabase = getServerSupabaseServiceClient();
   const linkedMap = await resolveBulkLinkedUserIds(supabase, userIds);
-  const queryIds = [...new Set(linkedMap.keys())];
-
-  let testRows = [] as Array<Record<string, unknown>>;
-
-  const fetchChunk = async (ids: string[]) => {
-    const primary = await supabase
-      .from("test_results")
-      .select("user_id,type,status")
-      .in("user_id", ids)
-      .order("created_at", { ascending: false })
-      .limit(Math.min(ids.length * 120, 8000));
-
-    if (!primary.error) {
-      return (primary.data ?? []) as Array<Record<string, unknown>>;
-    }
-    return [] as Array<Record<string, unknown>>;
-  };
-
-  for (let i = 0; i < queryIds.length; i += 80) {
-    const chunk = queryIds.slice(i, i + 80);
-    testRows.push(...(await fetchChunk(chunk)));
-  }
-
-  const rowsByUser = new Map<string, Array<{ type?: string; test_type?: string; status?: string }>>();
-  for (const row of testRows) {
-    const rawUid = String(row.user_id ?? "");
-    if (!rawUid) continue;
-    const canon = linkedMap.get(rawUid) ?? rawUid;
-    if (!map.has(canon)) continue;
-    const list = rowsByUser.get(canon) ?? [];
-    if (list.length >= 120) continue;
-    list.push(row as { type?: string; test_type?: string; status?: string });
-    rowsByUser.set(canon, list);
-  }
-
-  for (const [id, rows] of rowsByUser) {
-    map.set(id, summarizeTestResultRows(rows));
-  }
-
-  return map;
+  return loadBulkTestStatsForRoster(supabase, userIds, linkedMap);
 }
 
 async function loadProfileTestRows(userId: string) {
@@ -354,20 +295,16 @@ export async function loadPersonnelProfilesBulk(
   if (uniqueIds.length === 0) return result;
 
   const supabase = getServerSupabaseServiceClient();
-  const testQueryIds = options?.linkedUserMap ? [...new Set(options.linkedUserMap.keys())] : uniqueIds;
+  const linkedMap =
+    options?.linkedUserMap ?? (await resolveBulkLinkedUserIds(supabase, uniqueIds));
 
-  const [usersRes, licenseRes, testPrimaryRes] = await Promise.all([
+  const [usersRes, licenseRes, testStatsMap] = await Promise.all([
     supabase
       .from("app_users")
       .select("id,name,callsign,position,duty_location,unit_assignment,rota_platoon,rota_section,created_at")
       .in("id", uniqueIds),
     supabase.from("personnel_licenses").select("user_id,categories").in("user_id", uniqueIds),
-    supabase
-      .from("test_results")
-      .select("user_id,type,status,created_at")
-      .in("user_id", testQueryIds)
-      .order("created_at", { ascending: false })
-      .limit(Math.min(uniqueIds.length * 120, 8000)),
+    loadBulkTestStatsForRoster(supabase, uniqueIds, linkedMap),
   ]);
 
   if (usersRes.error || !usersRes.data?.length) return result;
@@ -375,18 +312,6 @@ export async function loadPersonnelProfilesBulk(
   const licenseMap = new Map<string, PersonnelLicenseCategory[]>();
   for (const row of (licenseRes.data ?? []) as Array<{ user_id: string; categories?: string[] }>) {
     licenseMap.set(String(row.user_id), normalizePersonnelLicenseCategories(row.categories));
-  }
-
-  const testsByUser = new Map<string, Array<{ type?: string; status?: string; created_at?: string }>>();
-  for (const row of (testPrimaryRes.data ?? []) as Array<Record<string, unknown>>) {
-    const rawUid = String(row.user_id ?? "");
-    if (!rawUid) continue;
-    const uid = options?.linkedUserMap?.get(rawUid) ?? rawUid;
-    if (!uniqueIds.includes(uid)) continue;
-    const list = testsByUser.get(uid) ?? [];
-    if (list.length >= 120) continue;
-    list.push(row as { type?: string; status?: string; created_at?: string });
-    testsByUser.set(uid, list);
   }
 
   for (const u of usersRes.data as Array<Record<string, unknown>>) {
@@ -403,10 +328,12 @@ export async function loadPersonnelProfilesBulk(
       createdAt: String(u.created_at ?? new Date().toISOString()),
     };
 
-    result.set(
-      id,
-      await assemblePersonnelCard(basic, licenseMap.get(id) ?? [], testsByUser.get(id) ?? []),
-    );
+    const testStats = testStatsMap.get(id) ?? emptyTestRosterStats();
+    result.set(id, {
+      ...basic,
+      licenseCategories: licenseMap.get(id) ?? [],
+      testStats,
+    });
   }
 
   return result;

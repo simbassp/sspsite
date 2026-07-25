@@ -1,12 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
 import { PersonnelTestActivityBlock } from "@/components/personnel/PersonnelTestActivityBlock";
-import { buildProfileTestActivity } from "@/lib/profile-test-activity";
-import type { TestResult } from "@/lib/types";
+import type { ProfileTestActivityData } from "@/lib/profile-test-activity";
 
-export function ProfileTestStatsCharts({ rows }: { rows: TestResult[] }) {
-  const activity = useMemo(() => buildProfileTestActivity(rows), [rows]);
+export function ProfileTestStatsCharts({ activity }: { activity: ProfileTestActivityData }) {
   const hasData = activity.activitySummary.some((item) => item.value > 0);
 
   return (

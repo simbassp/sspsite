@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { buildProfileTestActivity, type ProfileTestActivityData } from "@/lib/profile-test-activity";
 import {
   computeTrialProfileStats,
   mapProfileTestResultApiRow,
@@ -6,6 +7,8 @@ import {
   type TrialProfileStats,
 } from "@/lib/profile-trial-stats";
 import { isMissingColumnError, resolveFinalUserContext } from "@/lib/server-final-user-context";
+import { scanAllTestResultStatsRows } from "@/lib/test-results-stats-server";
+import type { TestResult } from "@/lib/types";
 
 const PROFILE_RESULTS_SELECT =
   "id,user_id,type,status,score,created_at,started_at,finished_at,duration_seconds,is_completed,questions_total,questions_correct";
@@ -13,21 +16,21 @@ const PROFILE_RESULTS_SELECT =
 const PROFILE_RESULTS_MID_SELECT =
   "id,user_id,type,status,score,created_at,questions_total,questions_correct";
 
-const PROFILE_RESULTS_STATS_SELECT = "id,type,status,created_at,duration_seconds,is_completed";
-const PROFILE_RESULTS_STATS_MID_SELECT = "id,type,status,created_at";
-
-const PAGE_SIZE = 500;
 const RECENT_RESULTS_LIMIT = 300;
-const MAX_STATS_PAGES = 40;
 
 export type ProfileTestResultsBundle = {
   rows: Array<Record<string, unknown>>;
   trialStats: TrialProfileStats;
+  testActivity: ProfileTestActivityData;
   error: string | null;
 };
 
 function emptyTrialStats(): TrialProfileStats {
   return { total: 0, passed: 0, successRate: 0, totalTimeSec: null, lastAttempt: null };
+}
+
+function emptyTestActivity(): ProfileTestActivityData {
+  return buildProfileTestActivity([]);
 }
 
 function chunkIds(ids: string[], size = 80) {
@@ -36,29 +39,21 @@ function chunkIds(ids: string[], size = 80) {
   return chunks;
 }
 
-async function fetchResultsPage(
-  supabase: SupabaseClient,
-  userIds: string[],
-  offset: number,
-  limit: number,
-  select: string,
-) {
-  const res = await supabase
-    .from("test_results")
-    .select(select)
-    .in("user_id", userIds)
-    .order("created_at", { ascending: false })
-    .range(offset, offset + limit - 1);
-  if (res.error) return { rows: [] as Array<Record<string, unknown>>, error: res.error.message };
-  return { rows: (res.data ?? []) as unknown as Array<Record<string, unknown>>, error: null as string | null };
-}
-
-function mapStatsRow(r: Record<string, unknown>) {
+function mapStatsRowToTestResult(r: {
+  id?: string;
+  user_id?: string;
+  type?: string;
+  test_type?: string;
+  status?: string;
+  created_at?: string;
+  duration_seconds?: number | null;
+  is_completed?: boolean | null;
+}): TestResult {
   return {
-    id: String(r.id),
-    userId: "",
-    type: r.type === "final" || r.test_type === "final" ? ("final" as const) : ("trial" as const),
-    status: r.status === "passed" ? ("passed" as const) : ("failed" as const),
+    id: String(r.id ?? `${r.user_id}-${r.created_at}`),
+    userId: String(r.user_id ?? ""),
+    type: r.type === "final" || r.test_type === "final" ? "final" : "trial",
+    status: r.status === "passed" ? "passed" : "failed",
     score: 0,
     createdAt: String(r.created_at ?? ""),
     startedAt: null,
@@ -70,44 +65,6 @@ function mapStatsRow(r: Record<string, unknown>) {
     questionsCorrect: null,
     finalAttemptIndex: null,
   };
-}
-
-async function scanTrialStats(
-  supabase: SupabaseClient,
-  userIds: string[],
-): Promise<{ stats: TrialProfileStats; error: string | null }> {
-  let useMidSelect = false;
-  const trialRows: ReturnType<typeof mapStatsRow>[] = [];
-
-  for (const part of chunkIds(userIds)) {
-    let offset = 0;
-    let pages = 0;
-    for (;;) {
-      if (pages >= MAX_STATS_PAGES) break;
-      pages += 1;
-      const select = useMidSelect ? PROFILE_RESULTS_STATS_MID_SELECT : PROFILE_RESULTS_STATS_SELECT;
-      let page = await fetchResultsPage(supabase, part, offset, PAGE_SIZE, select);
-      if (page.error && !useMidSelect && isMissingColumnError(page.error)) {
-        useMidSelect = true;
-        offset = 0;
-        pages = 0;
-        trialRows.length = 0;
-        page = await fetchResultsPage(supabase, part, offset, PAGE_SIZE, PROFILE_RESULTS_STATS_MID_SELECT);
-      }
-      if (page.error) return { stats: emptyTrialStats(), error: page.error };
-
-      for (const row of page.rows) {
-        const mapped = mapStatsRow(row);
-        if (mapped.type === "trial") trialRows.push(mapped);
-      }
-
-      if (page.rows.length < PAGE_SIZE) break;
-      offset += PAGE_SIZE;
-    }
-  }
-
-  trialRows.sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
-  return { stats: computeTrialProfileStats(trialRows), error: null };
 }
 
 async function loadRecentFullResults(
@@ -159,17 +116,32 @@ export async function loadProfileTestResultsBundle(
 ): Promise<ProfileTestResultsBundle> {
   const ctx = await resolveFinalUserContext(supabase, userId);
   const userIds = [...new Set(ctx.linkedUserIds.filter(Boolean))];
-  if (!userIds.length) return { rows: [], trialStats: emptyTrialStats(), error: null };
+  if (!userIds.length) {
+    return { rows: [], trialStats: emptyTrialStats(), testActivity: emptyTestActivity(), error: null };
+  }
 
-  const [recent, statsLoad] = await Promise.all([
+  const [recent, history] = await Promise.all([
     loadRecentFullResults(supabase, userIds),
-    scanTrialStats(supabase, userIds),
+    scanAllTestResultStatsRows(supabase, userIds),
   ]);
 
-  if (recent.error) return { rows: [], trialStats: emptyTrialStats(), error: recent.error };
-  if (statsLoad.error) return { rows: recent.rows, trialStats: emptyTrialStats(), error: statsLoad.error };
+  if (recent.error) {
+    return { rows: [], trialStats: emptyTrialStats(), testActivity: emptyTestActivity(), error: recent.error };
+  }
+  if (history.error) {
+    return {
+      rows: recent.rows,
+      trialStats: emptyTrialStats(),
+      testActivity: emptyTestActivity(),
+      error: history.error,
+    };
+  }
 
-  return { rows: recent.rows, trialStats: statsLoad.stats, error: null };
+  const historyRows = history.rows.map(mapStatsRowToTestResult).sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
+  const trialStats = computeTrialProfileStats(historyRows);
+  const testActivity = buildProfileTestActivity(historyRows);
+
+  return { rows: recent.rows, trialStats, testActivity, error: null };
 }
 
 /** @deprecated Используйте loadProfileTestResultsBundle. */

@@ -63,6 +63,7 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
 
     const resultsRows = resultsBundle.rows;
     const trialStats = serializeTrialProfileStats(resultsBundle.trialStats);
+    const testActivity = resultsBundle.testActivity;
 
     const isOnline = onlineFromFlagOnly
       ? userRow.is_online === true
@@ -117,6 +118,7 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
       },
       results: resultsRows,
       trialStats,
+      testActivity,
       personnelProfileShow,
     });
   } catch (error) {
