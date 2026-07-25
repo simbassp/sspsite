@@ -384,17 +384,35 @@ html[data-theme="dark"] .selfcheck-hint__text svg {
   text-transform: uppercase;
 }
 
-.brand p,
-.brand__callsign {
-  margin-top: 2px;
-  color: var(--muted);
-  font-size: 11px;
+.brand__identity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
+.brand__name {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.15;
+  color: var(--text);
+}
+
+.brand p,
+.brand__callsign {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.15;
+}
+
+.brand__name .profile-name-color,
 .brand__callsign .profile-name-color {
   font-weight: 600;
 }
 
+.brand__name .profile-name-color[class*="profile-name-color--gradient-"],
 .brand__callsign .profile-name-color[class*="profile-name-color--gradient-"] {
   color: transparent;
 }

@@ -231,10 +231,15 @@ export function AppShell({ session, children }: AppShellProps) {
     return () => window.removeEventListener(IDENTITY_COSMETICS_UPDATED_EVENT, onCosmeticsUpdated);
   }, []);
 
-  const brandCallsign = (
-    <p className="brand__callsign">
-      <UserIdentityDisplay callsign={session.callsign} cosmetics={headerCosmetics} emptyName="—" />
-    </p>
+  const brandIdentity = (
+    <div className="brand__identity">
+      <p className="brand__name">
+        <UserIdentityDisplay name={session.name} cosmetics={headerCosmetics} emptyName="—" />
+      </p>
+      <p className="brand__callsign">
+        <UserIdentityDisplay callsign={session.callsign} cosmetics={headerCosmetics} emptyName="—" />
+      </p>
+    </div>
   );
 
   const navLinks = showPersonnelNav
@@ -553,7 +558,7 @@ export function AppShell({ session, children }: AppShellProps) {
       <aside className="desktop-sidebar">
         <div className="brand">
           <BrandMark />
-          <div>{brandCallsign}</div>
+          <div>{brandIdentity}</div>
         </div>
 
         <div style={{ marginTop: 14, display: "grid", gap: 8 }}>
@@ -612,7 +617,7 @@ export function AppShell({ session, children }: AppShellProps) {
             <Link prefetch={false} href="/dashboard" style={{ display: "contents" }}>
               <BrandMark />
             </Link>
-            <div>{brandCallsign}</div>
+            <div>{brandIdentity}</div>
           </div>
           <div className="header-actions">
             {notifyBellPlacement !== "desktop" ? <PersonnelNotificationsBell compact /> : null}
