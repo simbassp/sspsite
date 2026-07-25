@@ -4,7 +4,8 @@ import { resolveFinalUserContext } from "@/lib/server-final-user-context";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 import { formatTotalTestDuration } from "@/lib/format";
 import { formatTestResultForType } from "@/lib/test-pass-rules";
-import { normalizeUnitAssignment, unitAssignmentLabelOrEmpty } from "@/lib/unit-assignment";
+import { normalizeUnitAssignment, unitAssignmentLabel } from "@/lib/unit-assignment";
+import { positionDisplayLabel } from "@/lib/position-ui";
 import { rotaUnitLabelCompact } from "@/lib/personnel-catalog";
 import type { PersonnelProfilePayload } from "@/lib/personnel-server";
 
@@ -156,11 +157,14 @@ function buildExportBundleFromUser(
       name: String(u.name ?? ""),
       callsign: String(u.callsign ?? ""),
       login: String(u.login ?? ""),
-      position: String(u.position ?? ""),
-      role: u.role === "admin" ? "Администратор" : "Сотрудник",
-      status: u.status === "inactive" ? "Неактивен" : "Активен",
+      position: positionDisplayLabel(String(u.position ?? "")),
+      role: u.role === "admin" ? "А" : "С",
+      status: u.status === "inactive" ? "—" : "+",
       dutyLocation: dutyLocationLabel[duty],
-      unitAssignment: unitAssignmentLabelOrEmpty(normalizeUnitAssignment(u.unit_assignment)),
+      unitAssignment: (() => {
+        const unit = normalizeUnitAssignment(u.unit_assignment);
+        return unit ? unitAssignmentLabel[unit] : "—";
+      })(),
       rotaUnit: rotaUnitLabelCompact(rotaPlatoon, rotaSection),
     },
     profile,

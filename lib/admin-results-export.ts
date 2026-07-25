@@ -1,5 +1,6 @@
 import { calcAttemptPeopleStats, shouldShowTrialTripleStreak, type TrialTripleStreakStats } from "@/lib/admin-results-query";
 import { rotaUnitLabelCompact } from "@/lib/personnel-catalog";
+import { positionDisplayLabel } from "@/lib/position-ui";
 import { formatTestResultForType } from "@/lib/test-pass-rules";
 import { unitAssignmentLabel, type RotaPlatoonFilter, type RotaSectionFilter, type UnitAssignmentFilter } from "@/lib/unit-assignment";
 import type { UnitAssignment } from "@/lib/types";
@@ -76,46 +77,46 @@ export function resolveResultsExportColumns(config: ResultsExportFilterConfig): 
   if (config.statusFilter === "not_started") {
     const columns: ResultsExportColumn[] = [
       { key: "name", header: "Имя", width: 24 },
-      { key: "callsign", header: "Позывной", width: 16 },
-      { key: "position", header: "Должность", width: 18 },
-      { key: "unit", header: "П", width: 18 },
+      { key: "callsign", header: "Поз.", width: 14 },
+      { key: "position", header: "Д", width: 10 },
+      { key: "unit", header: "П", width: 10 },
     ];
     if (exportShowsRotaUnit(config)) {
-      columns.push({ key: "rotaUnit", header: "В/О", width: 14 });
+      columns.push({ key: "rotaUnit", header: "В/О", width: 12 });
     }
     columns.push(
-      { key: "status", header: "Статус", width: 18 },
-      { key: "usedAttempts", header: "Попыток итога", width: 14 },
-      { key: "maxAttempts", header: "Лимит попыток", width: 14 },
+      { key: "status", header: "Р", width: 12 },
+      { key: "usedAttempts", header: "Поп.", width: 10 },
+      { key: "maxAttempts", header: "Лим.", width: 10 },
     );
     return columns;
   }
 
   const columns: ResultsExportColumn[] = [
     { key: "name", header: "Имя", width: 24 },
-    { key: "callsign", header: "Позывной", width: 16 },
-    { key: "position", header: "Должность", width: 18 },
-    { key: "unit", header: "П", width: 18 },
+    { key: "callsign", header: "Поз.", width: 14 },
+    { key: "position", header: "Д", width: 10 },
+    { key: "unit", header: "П", width: 10 },
   ];
 
   if (exportShowsRotaUnit(config)) {
-    columns.push({ key: "rotaUnit", header: "В/О", width: 14 });
+    columns.push({ key: "rotaUnit", header: "В/О", width: 12 });
   }
 
   if (config.typeFilter === "all") {
-    columns.push({ key: "type", header: "Тип теста", width: 12 });
+    columns.push({ key: "type", header: "Т", width: 8 });
   }
 
   if (config.statusFilter === "all") {
-    columns.push({ key: "status", header: "Результат", width: 12 });
+    columns.push({ key: "status", header: "Р", width: 10 });
   }
 
-  columns.push({ key: "result", header: "Балл / ответы", width: 18 });
+  columns.push({ key: "result", header: "Балл", width: 16 });
 
   columns.push({ key: "createdAt", header: "Дата", width: 12 });
 
   if (shouldShowTrialTripleStreak(config.typeFilter, config.statusFilter)) {
-    columns.push({ key: "trialPassedCount", header: "Пробных сдано", width: 14 });
+    columns.push({ key: "trialPassedCount", header: "П+", width: 10 });
   }
 
   return columns;
@@ -211,15 +212,15 @@ export function resultsAttemptCellValue(row: ResultsAttemptExportRow, key: Resul
     case "callsign":
       return row.callsign;
     case "position":
-      return row.position || "—";
+      return positionDisplayLabel(row.position);
     case "unit":
       return row.unitAssignment ? unitAssignmentLabel[row.unitAssignment] : "—";
     case "rotaUnit":
       return rotaUnitLabelCompact(row.rotaPlatoon, row.rotaSection) || "—";
     case "type":
-      return row.type === "trial" ? "Пробный" : "Итоговый";
+      return row.type === "trial" ? "П" : "И";
     case "status":
-      return row.status === "passed" ? "Сдал" : "Не сдал";
+      return row.status === "passed" ? "+" : "−";
     case "result":
       return formatTestResultForType(row);
     case "attemptIndex":
@@ -245,13 +246,13 @@ export function resultsNotStartedCellValue(row: ResultsNotStartedExportRow, key:
     case "callsign":
       return row.callsign;
     case "position":
-      return row.position || "—";
+      return positionDisplayLabel(row.position);
     case "unit":
       return row.unitAssignment ? unitAssignmentLabel[row.unitAssignment] : "—";
     case "rotaUnit":
       return rotaUnitLabelCompact(row.rotaPlatoon, row.rotaSection) || "—";
     case "status":
-      return "Не проходил итог";
+      return "И−";
     case "usedAttempts":
       return row.usedFinalAttempts;
     case "maxAttempts":

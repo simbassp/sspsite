@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ResultsExportExcelButton } from "@/components/admin/ResultsExportExcelButton";
 import { AdminPermissionPicker } from "@/components/admin/AdminPermissionPicker";
 import { ProfileNameColorPicker } from "@/components/admin/ProfileNameColorPicker";
 import { UserIdentityDisplay } from "@/components/profile/UserIdentityDisplay";
@@ -65,6 +66,7 @@ export default function AdminUsersPage() {
   const [positionDraft, setPositionDraft] = useState<Position | "">("");
   const [positionSaving, setPositionSaving] = useState(false);
   const [savingNameColorId, setSavingNameColorId] = useState<string | null>(null);
+  const [exportExcelLoading, setExportExcelLoading] = useState(false);
   const permissionEditorRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -342,6 +344,49 @@ export default function AdminUsersPage() {
   const currentPage = Math.min(page, pages);
   const permissionsTargetUser = permissionsTargetId ? users.find((item) => item.id === permissionsTargetId) ?? null : null;
 
+  const onExportExcel = async () => {
+    setExportExcelLoading(true);
+    setInfo("");
+    try {
+      const res = await fetch("/api/admin/users/export-excel", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          search: query,
+          position: positionFilter,
+          duty: dutyFilter,
+          unit: unitFilter,
+        }),
+      });
+      if (!res.ok) {
+        const payload = (await res.json().catch(() => ({}))) as { error?: string };
+        if (payload.error === "empty_export") {
+          setInfo("Нет пользователей для выгрузки по текущим фильтрам.");
+          return;
+        }
+        setInfo("Не удалось сформировать Excel.");
+        return;
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get("content-disposition") || "";
+      const match = /filename\*=UTF-8''([^;]+)|filename="([^"]+)"/i.exec(disposition);
+      const filename = decodeURIComponent(match?.[1] || match?.[2] || "users.xlsx");
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setInfo("Excel-файл сформирован и скачан.");
+    } catch {
+      setInfo("Не удалось сформировать Excel.");
+    } finally {
+      setExportExcelLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!permissionsTargetId) return;
     if (typeof window === "undefined") return;
@@ -434,6 +479,10 @@ export default function AdminUsersPage() {
                 </option>
               ))}
             </select>
+          </div>
+          <div className="personnel-filters__field personnel-filters__actions">
+            <p className="label">&nbsp;</p>
+            <ResultsExportExcelButton busy={exportExcelLoading} onClick={() => void onExportExcel()} />
           </div>
         </div>
       </div>

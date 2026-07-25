@@ -1,5 +1,6 @@
 import type { PersonnelProfileExportBundle } from "@/lib/personnel-profile-export-server";
 import { formatExportDuration, formatExportMoney } from "@/lib/personnel-profile-export-server";
+import { positionDisplayLabel } from "@/lib/position-ui";
 import type { RosterExportColumn, RosterExportColumnKey } from "@/lib/personnel-roster-export";
 import {
   buildBarChartSvg,
@@ -321,22 +322,22 @@ function addOverviewSheet(workbook: ExcelJS.Workbook, bundle: PersonnelProfileEx
   addSection("Основные данные");
   addPairs([
     ["Имя", bundle.user.name || "—"],
-    ["Позывной", bundle.user.callsign || "—"],
-    ["Должность", bundle.user.position || "—"],
+    ["Поз.", bundle.user.callsign || "—"],
+    ["Д", positionDisplayLabel(bundle.user.position)],
     ["П", bundle.user.unitAssignment || "—"],
     ["В/О", bundle.user.rotaUnit],
-    ["Место положения", bundle.user.dutyLocation],
+    ["М", bundle.user.dutyLocation],
   ]);
 
   sheet.addRow([]);
   addSection("Сводная статистика");
   const p = bundle.profile;
   addPairs([
-    ["Категории прав", p?.licenseCategories?.length ? p.licenseCategories.join(", ") : "—"],
-    ["Пробных сдано", p ? String(p.testStats.trialPassed) : "0"],
-    ["Пробных не сдано", p ? String(p.testStats.trialFailed) : "0"],
-    ["Итоговых сдано", p ? String(p.testStats.finalPassed) : "0"],
-    ["Итоговых не сдано", p ? String(p.testStats.finalFailed) : "0"],
+    ["В/У", p?.licenseCategories?.length ? p.licenseCategories.join(", ") : "—"],
+    ["П+", p ? String(p.testStats.trialPassed) : "0"],
+    ["П−", p ? String(p.testStats.trialFailed) : "0"],
+    ["И+", p ? String(p.testStats.finalPassed) : "0"],
+    ["И−", p ? String(p.testStats.finalFailed) : "0"],
   ]);
 }
 
@@ -387,8 +388,8 @@ function addTestsSummaryTable(
 
   const header = sheet.addRow(
     bulk
-      ? ["Сотрудник", "Позывной", "Пробные (сданы)", "Пробные (не сданы)", "Итоговые (сданы)", "Итоговые (не сданы)"]
-      : ["Показатель", "Количество"],
+      ? ["Имя", "Поз.", "П+", "П−", "И+", "И−"]
+      : ["Показатель", "Кол-во"],
   );
   styleHeaderRow(header);
 
@@ -416,10 +417,10 @@ function addTestsSummaryTable(
     if (!bundle) return;
     const s = getTestSummary(bundle);
     const rows: Array<[string, number, "pass" | "fail"]> = [
-      ["Пробные (сданы)", s.trialPassed, "pass"],
-      ["Пробные (не сданы)", s.trialFailed, "fail"],
-      ["Итоговые (сданы)", s.finalPassed, "pass"],
-      ["Итоговые (не сданы)", s.finalFailed, "fail"],
+      ["П+", s.trialPassed, "pass"],
+      ["П−", s.trialFailed, "fail"],
+      ["И+", s.finalPassed, "pass"],
+      ["И−", s.finalFailed, "fail"],
     ];
     for (const [label, value, tone] of rows) {
       const row = sheet.addRow([label, value]);
@@ -438,16 +439,16 @@ function appendTestsDetailRows(sheet: ExcelJS.Worksheet, bundle: PersonnelProfil
             bundle.user.name,
             bundle.user.callsign,
             t.createdAt,
-            t.type === "final" ? "Итоговый" : "Пробный",
-            t.status === "passed" ? "Сдан" : "Не сдан",
+            t.type === "final" ? "И" : "П",
+            t.status === "passed" ? "+" : "−",
             t.score,
             t.resultText,
             formatExportDuration(t.durationSeconds),
           ]
         : [
             t.createdAt,
-            t.type === "final" ? "Итоговый" : "Пробный",
-            t.status === "passed" ? "Сдан" : "Не сдан",
+            t.type === "final" ? "И" : "П",
+            t.status === "passed" ? "+" : "−",
             t.score,
             t.resultText,
             formatExportDuration(t.durationSeconds),
@@ -503,7 +504,7 @@ async function addSingleTestsSheet(workbook: ExcelJS.Workbook, bundle: Personnel
   styleSectionTitle(detailTitle.getCell(1));
   applyCompactRow(detailTitle, 20);
 
-  const detailHeader = sheet.addRow(["Дата", "Тип", "Статус", "Балл", "Результат", "Длительность"]);
+  const detailHeader = sheet.addRow(["Дата", "Т", "Р", "Балл", "Рез.", "Время"]);
   styleHeaderRow(detailHeader);
 
   if (!bundle.testResults.length) {
@@ -559,14 +560,14 @@ async function addBulkTestsSheet(workbook: ExcelJS.Workbook, bundles: PersonnelP
   applyCompactRow(detailTitle, 20);
 
   const detailHeader = sheet.addRow([
-    "Сотрудник",
-    "Позывной",
+    "Имя",
+    "Поз.",
     "Дата",
-    "Тип",
-    "Статус",
+    "Т",
+    "Р",
     "Балл",
-    "Результат",
-    "Длительность",
+    "Рез.",
+    "Время",
   ]);
   styleHeaderRow(detailHeader);
 
@@ -622,15 +623,15 @@ function addSummarySheet(
 
   const header = sheet.addRow([
     "Имя",
-    "Позывной",
-    "Должность",
+    "Поз.",
+    "Д",
     "В/О",
-    "Место",
-    "Права",
-    "Пробных сдано",
-    "Пробных не сдано",
-    "Итоговых сдано",
-    "Итоговых не сдано",
+    "М",
+    "В/У",
+    "П+",
+    "П−",
+    "И+",
+    "И−",
   ]);
   styleHeaderRow(header, 36);
 
@@ -639,7 +640,7 @@ function addSummarySheet(
     const row = sheet.addRow([
       bundle.user.name || "—",
       bundle.user.callsign || "—",
-      bundle.user.position || "—",
+      positionDisplayLabel(bundle.user.position),
       bundle.user.rotaUnit,
       bundle.user.dutyLocation,
       p?.licenseCategories?.length ? p.licenseCategories.join(", ") : "—",

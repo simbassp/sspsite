@@ -51,16 +51,16 @@ export function exportIncludesTestStats(config: RosterExportFilterConfig) {
 export function resolveRosterExportColumns(config: RosterExportFilterConfig): RosterExportColumn[] {
   const columns: RosterExportColumn[] = [
     { key: "name", header: "Имя", width: 24 },
-    { key: "callsign", header: "Позывной", width: 16 },
-    { key: "rotaUnit", header: "В/О", width: 18 },
+    { key: "callsign", header: "Поз.", width: 14 },
+    { key: "rotaUnit", header: "В/О", width: 12 },
   ];
 
   if (config.dutyStatus !== "all") {
-    columns.push({ key: "dutyStatus", header: "Статус", width: 16 });
+    columns.push({ key: "dutyStatus", header: "М", width: 10 });
   }
 
   if (config.license !== "all") {
-    columns.push({ key: "licenses", header: "Права", width: 16 });
+    columns.push({ key: "licenses", header: "В/У", width: 12 });
   }
 
   const includeTrial = exportIncludesTrialStats(config);
@@ -72,15 +72,15 @@ export function resolveRosterExportColumns(config: RosterExportFilterConfig): Ro
 
   if (includeTrial) {
     columns.push(
-      { key: "trialPassed", header: "Пробный сдал", width: 14 },
-      { key: "trialFailed", header: "Пробный не сдал", width: 16 },
+      { key: "trialPassed", header: "П+", width: 8 },
+      { key: "trialFailed", header: "П−", width: 8 },
     );
   }
 
   if (includeFinal) {
     columns.push(
-      { key: "finalPassed", header: "Итоговый сдал", width: 14 },
-      { key: "finalFailed", header: "Итоговый не сдал", width: 16 },
+      { key: "finalPassed", header: "И+", width: 8 },
+      { key: "finalFailed", header: "И−", width: 8 },
     );
   }
 
