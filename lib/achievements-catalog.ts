@@ -49,14 +49,7 @@ export type AchievementDefinition = {
   thresholdMonths?: number;
 };
 
-export const TENURE_ACHIEVEMENTS: AchievementDefinition[] = [
-  { id: "tenure-1m", category: "tenure", title: "Месяц с нами", description: "1 месяц с даты трудоустройства", tierLabel: "Деревянная медаль", tenureMedal: "wood", thresholdMonths: 1 },
-  { id: "tenure-3m", category: "tenure", title: "Три месяца", description: "3 месяца с даты трудоустройства", tierLabel: "Каменная медаль", tenureMedal: "stone", thresholdMonths: 3 },
-  { id: "tenure-6m", category: "tenure", title: "Полгода в строю", description: "6 месяцев с даты трудоустройства", tierLabel: "Бронзовая медаль", tenureMedal: "bronze", thresholdMonths: 6 },
-  { id: "tenure-1y", category: "tenure", title: "Год службы", description: "1 год с даты трудоустройства", tierLabel: "Серебряная медаль", tenureMedal: "silver", thresholdMonths: 12 },
-  { id: "tenure-18m", category: "tenure", title: "Полтора года", description: "1,5 года с даты трудоустройства", tierLabel: "Золотая медаль", tenureMedal: "gold", thresholdMonths: 18 },
-  { id: "tenure-2y", category: "tenure", title: "Два года", description: "2 года с даты трудоустройства", tierLabel: "Алмазная медаль", tenureMedal: "diamond", thresholdMonths: 24 },
-];
+export const TENURE_ACHIEVEMENTS: AchievementDefinition[] = [];
 
 export const TRIAL_ACHIEVEMENTS: AchievementDefinition[] = [
   { id: "trial-100", category: "trial", title: "100 пробных", description: "100 сданных пробных тестов", tierLabel: "Голубая рамка", trialFrame: "trial-frame-100", threshold: 100 },
@@ -125,7 +118,6 @@ export const BANK_ACHIEVEMENTS: AchievementDefinition[] = [
 ];
 
 export const ALL_ACHIEVEMENTS: AchievementDefinition[] = [
-  ...TENURE_ACHIEVEMENTS,
   ...TRIAL_ACHIEVEMENTS,
   ...FINAL_ACHIEVEMENTS,
   ...BANK_ACHIEVEMENTS,

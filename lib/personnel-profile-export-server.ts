@@ -1,4 +1,3 @@
-import { employmentDaysSince } from "@/lib/employment-date";
 import { dutyLocationLabel } from "@/lib/duty-location";
 import { loadPersonnelProfile } from "@/lib/personnel-server";
 import { resolveFinalUserContext } from "@/lib/server-final-user-context";
@@ -6,11 +5,7 @@ import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 import { formatTotalTestDuration } from "@/lib/format";
 import { formatTestResultForType } from "@/lib/test-pass-rules";
 import { normalizeUnitAssignment, unitAssignmentLabelOrEmpty } from "@/lib/unit-assignment";
-import {
-  PERSONNEL_EXAM_TYPES,
-  personnelExamLabel,
-  rotaUnitLabelCompact,
-} from "@/lib/personnel-catalog";
+import { rotaUnitLabelCompact } from "@/lib/personnel-catalog";
 import type { PersonnelProfilePayload } from "@/lib/personnel-server";
 
 export type PersonnelProfileExportTestRow = {
@@ -37,43 +32,14 @@ export type PersonnelProfileExportBundle = {
     dutyLocation: string;
     unitAssignment: string;
     rotaUnit: string;
-    employmentDate: string;
-    employmentDays: string;
   };
   profile: PersonnelProfilePayload | null;
-  exams: Array<{
-    examType: string;
-    label: string;
-    status: string;
-    passedAt: string;
-    expiresAt: string;
-  }>;
   testResults: PersonnelProfileExportTestRow[];
 };
 
 function isMissingColumnError(message: string | undefined) {
   const m = (message || "").toLowerCase();
   return m.includes("column") && m.includes("does not exist");
-}
-
-function formatRuDate(value: string | null | undefined) {
-  if (!value?.trim()) return "—";
-  const d = new Date(value.includes("T") ? value : `${value}T12:00:00`);
-  if (!Number.isFinite(d.getTime())) return value;
-  return d.toLocaleDateString("ru-RU");
-}
-
-function formatRuDateTime(value: string | null | undefined) {
-  if (!value?.trim()) return "—";
-  const d = new Date(value);
-  if (!Number.isFinite(d.getTime())) return value;
-  return d.toLocaleString("ru-RU", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }
 
 function mapExportTestRows(testRows: Array<Record<string, unknown>>): PersonnelProfileExportTestRow[] {
@@ -102,6 +68,19 @@ function mapExportTestRows(testRows: Array<Record<string, unknown>>): PersonnelP
         scorePercent: Number(row.score ?? 0),
       }),
     };
+  });
+}
+
+function formatRuDateTime(value: string | null | undefined) {
+  if (!value?.trim()) return "—";
+  const d = new Date(value);
+  if (!Number.isFinite(d.getTime())) return value;
+  return d.toLocaleString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 }
 
@@ -162,24 +141,6 @@ function buildExportBundleFromUser(
   testResults: PersonnelProfileExportTestRow[],
   exportedAt: string,
 ): PersonnelProfileExportBundle {
-  const examMap = new Map((profile?.exams ?? []).map((e) => [e.examType, e]));
-  const exams = PERSONNEL_EXAM_TYPES.map((type) => {
-    const row = examMap.get(type);
-    const passed = row?.status === "passed";
-    return {
-      examType: type,
-      label: personnelExamLabel[type],
-      status: passed ? "Сдан" : "Не сдан",
-      passedAt: formatRuDate(row?.passedAt),
-      expiresAt: formatRuDate(row?.expiresAt),
-    };
-  });
-
-  const employmentDateRaw =
-    u.employment_date != null && String(u.employment_date).trim()
-      ? String(u.employment_date).slice(0, 10)
-      : null;
-  const days = employmentDaysSince(employmentDateRaw);
   const duty =
     typeof u.duty_location === "string" && u.duty_location.trim().toLowerCase() === "deployment"
       ? "deployment"
@@ -187,7 +148,6 @@ function buildExportBundleFromUser(
 
   const rotaPlatoon = u.rota_platoon != null ? Number(u.rota_platoon) : null;
   const rotaSection = u.rota_section != null ? Number(u.rota_section) : null;
-  const rotaModule = u.rota_module != null ? Number(u.rota_module) : null;
 
   return {
     exportedAt,
@@ -201,35 +161,22 @@ function buildExportBundleFromUser(
       status: u.status === "inactive" ? "Неактивен" : "Активен",
       dutyLocation: dutyLocationLabel[duty],
       unitAssignment: unitAssignmentLabelOrEmpty(normalizeUnitAssignment(u.unit_assignment)),
-      rotaUnit: rotaUnitLabelCompact(rotaPlatoon, rotaSection, rotaModule),
-      employmentDate: employmentDateRaw ? formatRuDate(employmentDateRaw) : "—",
-      employmentDays: days != null ? `${days} дн.` : "—",
+      rotaUnit: rotaUnitLabelCompact(rotaPlatoon, rotaSection),
     },
     profile,
-    exams,
     testResults,
   };
 }
 
 export async function loadPersonnelProfileExportBundle(userId: string): Promise<PersonnelProfileExportBundle | null> {
   const supabase = getServerSupabaseServiceClient();
-  let userRes = await supabase
+  const userRes = await supabase
     .from("app_users")
     .select(
-      "id,name,callsign,position,role,status,login,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,employment_date,created_at",
+      "id,name,callsign,position,role,status,login,duty_location,unit_assignment,rota_platoon,rota_section,created_at",
     )
     .eq("id", userId)
     .maybeSingle();
-
-  if (userRes.error && isMissingColumnError(userRes.error.message)) {
-    userRes = await supabase
-      .from("app_users")
-      .select(
-        "id,name,callsign,position,role,status,login,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,created_at",
-      )
-      .eq("id", userId)
-      .maybeSingle();
-  }
 
   if (userRes.error || !userRes.data) return null;
   const { profile, testResults } = await loadUserExportProfileData(userId);
@@ -251,7 +198,6 @@ export function buildPersonnelExportFilename(bundle: PersonnelProfileExportBundl
   return `${base || "profile"}-${date}.xlsx`;
 }
 
-/** ASCII-only имя для заголовка filename= (без кириллицы). */
 export function buildPersonnelExportAsciiFilename(bundle: PersonnelProfileExportBundle) {
   const base = (bundle.user.login || "profile")
     .trim()
@@ -294,23 +240,14 @@ export async function loadPersonnelBulkExportBundles(userIds: string[]): Promise
   const supabase = getServerSupabaseServiceClient();
   const exportedAt = new Date().toLocaleString("ru-RU");
 
-  const usersPrimary = await supabase
+  const usersRes = await supabase
     .from("app_users")
     .select(
-      "id,name,callsign,position,role,status,login,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,employment_date,created_at",
+      "id,name,callsign,position,role,status,login,duty_location,unit_assignment,rota_platoon,rota_section,created_at",
     )
     .in("id", uniqueIds);
 
-  let users = (usersPrimary.data ?? []) as Array<Record<string, unknown>>;
-  if (usersPrimary.error && isMissingColumnError(usersPrimary.error.message)) {
-    const fallback = await supabase
-      .from("app_users")
-      .select(
-        "id,name,callsign,position,role,status,login,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,created_at",
-      )
-      .in("id", uniqueIds);
-    users = (fallback.data ?? []) as Array<Record<string, unknown>>;
-  }
+  const users = (usersRes.data ?? []) as Array<Record<string, unknown>>;
   const userMap = new Map(users.map((u) => [String(u.id), u]));
 
   const profileData = await runInPool(uniqueIds, 6, async (userId) => ({

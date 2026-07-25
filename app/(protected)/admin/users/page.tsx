@@ -9,7 +9,7 @@ import { UserAvatar } from "@/components/profile/UserAvatar";
 import { readClientSession, writeClientSession } from "@/lib/client-auth";
 import { ADMIN_PERMISSION_OPTIONS } from "@/lib/admin-permission-ui";
 import { dutyLocationLabel } from "@/lib/duty-location";
-import { POSITION_OPTIONS, getPositionBadgeClass } from "@/lib/position-ui";
+import { POSITION_OPTIONS, getPositionBadgeClass, positionDisplayLabel } from "@/lib/position-ui";
 import { canManageUsers } from "@/lib/permissions";
 import type { ProfileNameColorId } from "@/lib/profile-name-color";
 import { dispatchIdentityCosmeticsUpdated } from "@/lib/user-identity-cosmetics";
@@ -389,7 +389,7 @@ export default function AdminUsersPage() {
           <option value="all">Все должности</option>
           {POSITION_OPTIONS.map((position) => (
             <option key={position} value={position}>
-              {position}
+              {positionDisplayLabel(position)}
             </option>
           ))}
         </select>
@@ -437,7 +437,7 @@ export default function AdminUsersPage() {
               <span>
                 <strong>{renderUserNameLine(permissionsTargetUser)}</strong>
                 <small>@{permissionsTargetUser.login}</small>
-                <small>{permissionsTargetUser.position}</small>
+                <small>{positionDisplayLabel(permissionsTargetUser.position)}</small>
               </span>
             </div>
             {canPickNameColor ? (
@@ -536,11 +536,11 @@ export default function AdminUsersPage() {
                             );
                           }}
                         >
-                          {user.position}
+                          {positionDisplayLabel(user.position)}
                         </button>
                       ) : (
                         <span className={`admin-users-position-badge ${getPositionBadgeClass(user.position)}`} title="Должность">
-                          {user.position}
+                          {positionDisplayLabel(user.position)}
                         </span>
                       )}
                     </div>
@@ -632,11 +632,11 @@ export default function AdminUsersPage() {
                           );
                         }}
                       >
-                        {user.position}
+                        {positionDisplayLabel(user.position)}
                       </button>
                     ) : (
                       <span className={`admin-users-position-badge ${getPositionBadgeClass(user.position)}`} title="Должность">
-                        {user.position}
+                        {positionDisplayLabel(user.position)}
                       </span>
                     )}
                   </div>

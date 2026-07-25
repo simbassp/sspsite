@@ -10,6 +10,20 @@ export const POSITION_OPTIONS: readonly Position[] = [
   "Командир 4 роты",
 ] as const;
 
+const POSITION_DISPLAY_LABEL: Record<string, string> = {
+  стажер: "СТ",
+  "младший специалист": "МС",
+  специалист: "С",
+  "ведущий специалист": "ВС",
+  "главный специалист": "ГС",
+};
+
+/** Короткая подпись должности для UI (в БД хранится полное название). */
+export function positionDisplayLabel(position: string): string {
+  const key = position.trim().toLowerCase();
+  return POSITION_DISPLAY_LABEL[key] ?? (position.trim() || "—");
+}
+
 /** Классы совпадают с `.admin-users-position-badge` в `globals.css`. */
 export function getPositionBadgeClass(position: string): string {
   const normalized = position.trim().toLowerCase();

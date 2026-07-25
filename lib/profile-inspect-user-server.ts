@@ -3,11 +3,11 @@ import { isMissingColumnError } from "@/lib/server-final-user-context";
 
 /** От большего к меньшему: косметика грузится отдельно, здесь только поля профиля. */
 const INSPECT_USER_SELECT_TIERS = [
-  "id,name,callsign,position,role,status,login,is_online,last_seen_at,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,employment_date,avatar_url,profile_name_color",
-  "id,name,callsign,position,role,status,login,is_online,last_seen_at,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,employment_date,avatar_url",
-  "id,name,callsign,position,role,status,login,is_online,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,employment_date",
-  "id,name,callsign,position,role,status,login,is_online,last_seen_at,duty_location,unit_assignment,rota_platoon,rota_section,rota_module",
-  "id,name,callsign,position,role,status,login,is_online,duty_location,unit_assignment,rota_platoon,rota_section,rota_module",
+  "id,name,callsign,position,role,status,login,is_online,last_seen_at,duty_location,unit_assignment,rota_platoon,rota_section,avatar_url,profile_name_color",
+  "id,name,callsign,position,role,status,login,is_online,last_seen_at,duty_location,unit_assignment,rota_platoon,rota_section,avatar_url",
+  "id,name,callsign,position,role,status,login,is_online,duty_location,unit_assignment,rota_platoon,rota_section",
+  "id,name,callsign,position,role,status,login,is_online,last_seen_at,duty_location,unit_assignment,rota_platoon,rota_section",
+  "id,name,callsign,position,role,status,login,is_online,duty_location,unit_assignment,rota_platoon,rota_section",
   "id,name,callsign,position,role,status,login,is_online",
 ] as const;
 

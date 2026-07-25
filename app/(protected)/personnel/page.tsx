@@ -11,39 +11,30 @@ import { clearPagePrefetchCache, readPagePrefetchCache, writePagePrefetchCache }
 import { PersonnelPreviewBanner } from "@/components/personnel/PersonnelPreviewBanner";
 import { PersonnelTableDualScroll } from "@/components/personnel/PersonnelTableDualScroll";
 import {
-  postResetPersonnelExams,
-  ResetPersonnelExamsButton,
-  ResetPersonnelExamsModal,
-  useResetPersonnelExamsModal,
-} from "@/components/personnel/ResetPersonnelExamsModal";
-import {
   PersonnelExportExcelButton,
   PersonnelExportExcelModal,
   postPersonnelExportExcel,
   usePersonnelExportExcelModal,
 } from "@/components/personnel/PersonnelExportExcelModal";
 import {
-  PersonnelExamRosterIcon,
   PersonnelRosterLicenseCell,
   PersonnelRosterTestCell,
   type PersonnelTestRosterStats,
 } from "@/components/personnel/PersonnelIcons";
 import { readClientSession } from "@/lib/client-auth";
-import { canManageUsers, canResetTestResults } from "@/lib/permissions";
+import { canManageUsers } from "@/lib/permissions";
 import { dutyLocationLabel } from "@/lib/duty-location";
 import { resolvePersonnelProfilePath } from "@/lib/personnel-profile-path";
-import { PERSONNEL_EXAM_TYPES, PERSONNEL_LICENSE_CATEGORIES, ROTA_MODULE_OPTIONS, personnelExamLabel, rotaUnitLabel, rotaUnitLabelCompact } from "@/lib/personnel-catalog";
-import type { PersonnelExamType, PersonnelLicenseCategory, PersonnelRosterTops } from "@/lib/personnel-catalog";
+import { PERSONNEL_LICENSE_CATEGORIES, rotaPlatoonLabel, rotaSectionLabel, rotaUnitLabel, rotaUnitLabelCompact } from "@/lib/personnel-catalog";
+import type { PersonnelRosterTops } from "@/lib/personnel-catalog";
 import { PersonnelTopGrid } from "@/components/personnel/PersonnelTopGrid";
 import type { Position } from "@/lib/types";
 
 import {
   EMPTY_ROSTER_FILTER_PARAMS,
   hasActiveRosterFilters,
-  type ExamFilterStatus,
   type RosterFilterParams,
   type TestFilter,
-  type TriState,
 } from "@/lib/personnel-roster-filters";
 
 const EMPTY_TEST_STATS: PersonnelTestRosterStats = {
@@ -64,7 +55,6 @@ const EMPTY_ROSTER_FILTERS = EMPTY_ROSTER_FILTER_PARAMS;
 type RosterQuery = {
   platoon: "all" | "1" | "2";
   section: "all" | "1" | "2" | "3" | "4";
-  module: string;
   search: string;
   testDate: string;
   filters: RosterFilters;
@@ -73,7 +63,6 @@ type RosterQuery = {
 const DEFAULT_ROSTER_QUERY: RosterQuery = {
   platoon: "all",
   section: "all",
-  module: "all",
   search: "",
   testDate: "",
   filters: EMPTY_ROSTER_FILTERS,
@@ -83,16 +72,11 @@ function buildRosterFilterKey(query: RosterQuery) {
   const q = new URLSearchParams();
   if (query.platoon !== "all") q.set("platoon", query.platoon);
   if (query.section !== "all") q.set("section", query.section);
-  if (query.module !== "all") q.set("module", query.module);
   if (query.search.trim()) q.set("search", query.search.trim());
   if (query.testDate) q.set("testDate", query.testDate);
-  q.set("examType", query.filters.examType);
-  q.set("examStatus", query.filters.examStatus);
   q.set("license", query.filters.license);
   q.set("trialTest", query.filters.trialTest);
   q.set("finalTest", query.filters.finalTest);
-  q.set("hits", query.filters.hits);
-  q.set("premiums", query.filters.premiums);
   q.set("dutyStatus", query.filters.dutyStatus);
   return q.toString();
 }
@@ -101,7 +85,6 @@ function hasActiveRosterQuery(query: RosterQuery) {
   return (
     query.platoon !== "all" ||
     query.section !== "all" ||
-    query.module !== "all" ||
     !!query.search.trim() ||
     hasActiveRosterFilters(query.filters, query.testDate)
   );
@@ -116,7 +99,6 @@ function formatFilterDateLabel(iso: string) {
 function buildExportFilterLines(input: {
   platoon: "all" | "1" | "2";
   section: "all" | "1" | "2" | "3" | "4";
-  module: string;
   search: string;
   testDate: string;
   filters: RosterFilters;
@@ -124,15 +106,8 @@ function buildExportFilterLines(input: {
   const lines: string[] = [];
   if (input.platoon !== "all") lines.push(`Взвод: ${input.platoon}`);
   if (input.section !== "all") lines.push(`Отделение: ${input.section}`);
-  if (input.module !== "all") lines.push(`Модуль: ${input.module}`);
   if (input.search) lines.push(`Поиск: ${input.search}`);
   if (input.testDate) lines.push(`Дата тестов: ${formatFilterDateLabel(input.testDate)}`);
-  if (input.filters.examType !== "all") {
-    lines.push(`Зачёт: ${personnelExamLabel[input.filters.examType]}`);
-  }
-  if (input.filters.examStatus !== "all") {
-    lines.push(`Результат зачёта: ${input.filters.examStatus === "passed" ? "Сдан" : "Не сдан"}`);
-  }
   if (input.filters.license !== "all") lines.push(`Права: категория ${input.filters.license}`);
   if (input.filters.trialTest !== "all") {
     lines.push(`Пробный тест: ${input.filters.trialTest === "passed" ? "Сдал" : "Не сдал"}`);
@@ -140,8 +115,6 @@ function buildExportFilterLines(input: {
   if (input.filters.finalTest !== "all") {
     lines.push(`Итоговый тест: ${input.filters.finalTest === "passed" ? "Сдал" : "Не сдал"}`);
   }
-  if (input.filters.hits !== "all") lines.push(`Сбития: ${input.filters.hits === "yes" ? "Есть" : "Нет"}`);
-  if (input.filters.premiums !== "all") lines.push(`Премии: ${input.filters.premiums === "yes" ? "Есть" : "Нет"}`);
   if (input.filters.dutyStatus !== "all") {
     lines.push(`Статус: ${dutyLocationLabel[input.filters.dutyStatus]}`);
   }
@@ -159,13 +132,6 @@ type UserRow = {
   dutyLocation: "base" | "deployment";
   rotaPlatoon: number | null;
   rotaSection: number | null;
-  rotaModule: number | null;
-  exams: Array<{ examType: string; status: string }>;
-  deploymentsCount: number;
-  deploymentDays: number;
-  uavHitsTotal: number;
-  premiumsTotal: number;
-  medalsCount: number;
   licenseCategories: string[];
   testStats: PersonnelTestRosterStats;
   testStatsOnDate?: PersonnelTestRosterStats | null;
@@ -184,23 +150,16 @@ export default function PersonnelListPage() {
   const [appliedQuery, setAppliedQuery] = useState<RosterQuery>(DEFAULT_ROSTER_QUERY);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [usersTotal, setUsersTotal] = useState(0);
-  const [stats, setStats] = useState({ totalEmployees: 0, deployedNow: 0, avgDays: 0, totalDays: 0, totalHits: 0, totalPremiums: 0 });
+  const [stats, setStats] = useState({ totalEmployees: 0, deployedNow: 0 });
   const [tops, setTops] = useState<PersonnelRosterTops<UserRow>>({
-    hits: [],
     trialTests: [],
     finalTests: [],
-    deployments: [],
-    activity: [],
   });
   const [isPreview, setIsPreview] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
-  const canResetExams = useMemo(() => (session ? canResetTestResults(session) : false), [session]);
   const canExportExcel = useMemo(() => (session ? canManageUsers(session) : false), [session]);
-  const resetExamsModal = useResetPersonnelExamsModal("filter");
   const exportExcelModal = usePersonnelExportExcelModal("filter");
-  const [resetExamsSaving, setResetExamsSaving] = useState(false);
-  const [resetExamsMsg, setResetExamsMsg] = useState("");
   const [exportExcelLoading, setExportExcelLoading] = useState(false);
   const [exportExcelMsg, setExportExcelMsg] = useState("");
   const [rosterPage, setRosterPage] = useState(1);
@@ -317,18 +276,7 @@ export default function PersonnelListPage() {
     }
   }, [applyRosterPayload, fetchRosterPage, prefetchRosterPage, rosterCacheKey, rosterPage]);
 
-  const examMap = useMemo(() => {
-    const m = new Map<string, Map<string, string>>();
-    for (const u of users) {
-      const inner = new Map<string, string>();
-      for (const e of u.exams) inner.set(e.examType, e.status);
-      m.set(u.id, inner);
-    }
-    return m;
-  }, [users]);
-
   const rosterPageCount = Math.max(1, Math.ceil(usersTotal / ROSTER_PAGE_SIZE));
-  const displayStats = stats;
   const rosterFiltersActive = hasActiveRosterQuery(appliedQuery);
   const displayTestStats = (user: UserRow) => resolveUserTestStats(user, appliedQuery.testDate);
 
@@ -389,21 +337,15 @@ export default function PersonnelListPage() {
           scope: "filter",
           platoon: appliedQuery.platoon,
           section: appliedQuery.section,
-          module: appliedQuery.module,
           search: appliedQuery.search.trim(),
           testDate: appliedQuery.testDate || undefined,
-          examType: appliedQuery.filters.examType,
-          examStatus: appliedQuery.filters.examStatus,
           license: appliedQuery.filters.license,
           trialTest: appliedQuery.filters.trialTest,
           finalTest: appliedQuery.filters.finalTest,
-          hits: appliedQuery.filters.hits,
-          premiums: appliedQuery.filters.premiums,
           dutyStatus: appliedQuery.filters.dutyStatus,
           filterLines: buildExportFilterLines({
             platoon: appliedQuery.platoon,
             section: appliedQuery.section,
-            module: appliedQuery.module,
             search: appliedQuery.search.trim(),
             testDate: appliedQuery.testDate,
             filters: appliedQuery.filters,
@@ -419,38 +361,12 @@ export default function PersonnelListPage() {
           ? "Нет сотрудников для выгрузки."
           : message === "gateway_timeout"
             ? "Сервер не успел сформировать файл. Попробуйте сузить фильтр или повторите позже."
-          : message === "export_failed"
-            ? "Не удалось сформировать Excel."
-            : `Не удалось сформировать Excel: ${message}`,
+            : message === "export_failed"
+              ? "Не удалось сформировать Excel."
+              : `Не удалось сформировать Excel: ${message}`,
       );
     } finally {
       setExportExcelLoading(false);
-    }
-  };
-
-  const onResetExamsBulk = async () => {
-    if (resetExamsSaving) return;
-    setResetExamsSaving(true);
-    setResetExamsMsg("");
-    try {
-      const affected =
-        resetExamsModal.bulkScope === "all"
-          ? await postResetPersonnelExams({ scope: "all" })
-          : await postResetPersonnelExams({
-              scope: "filter",
-              platoon: appliedQuery.platoon,
-              section: appliedQuery.section,
-              search: appliedQuery.search.trim(),
-            });
-      resetExamsModal.setOpen(false);
-      setResetExamsMsg(
-        affected > 0 ? `Зачёты сброшены для ${affected} сотрудник${affected === 1 ? "а" : "ов"}.` : "Записей зачётов не было.",
-      );
-      await load();
-    } catch {
-      setResetExamsMsg("Не удалось сбросить зачёты.");
-    } finally {
-      setResetExamsSaving(false);
     }
   };
 
@@ -459,7 +375,7 @@ export default function PersonnelListPage() {
       <div className="personnel-page__header">
         <div>
           <h1 className="page-title">Сотрудники</h1>
-          <p className="page-subtitle">4 рота — личное дело и статистика</p>
+          <p className="page-subtitle">4р — личное дело</p>
         </div>
         <div className="personnel-page__header-actions">
           {canExportExcel && tab === "all" && (
@@ -471,22 +387,12 @@ export default function PersonnelListPage() {
               }}
             />
           )}
-          {canResetExams && tab === "all" && (
-            <ResetPersonnelExamsButton
-              busy={resetExamsSaving}
-              onClick={() => {
-                setResetExamsMsg("");
-                resetExamsModal.setOpen(true);
-              }}
-            />
-          )}
           <Link href="/profile" className="btn btn-primary personnel-header-btn">
             Мой профиль
           </Link>
         </div>
       </div>
 
-      {resetExamsMsg && <p className="page-subtitle">{resetExamsMsg}</p>}
       {exportExcelMsg && <p className="page-subtitle">{exportExcelMsg}</p>}
 
       {isPreview && <PersonnelPreviewBanner />}
@@ -513,8 +419,8 @@ export default function PersonnelListPage() {
                     onChange={(e) => patchDraft({ platoon: e.target.value as RosterQuery["platoon"] })}
                   >
                     <option value="all">Все</option>
-                    <option value="1">1 взвод</option>
-                    <option value="2">2 взвод</option>
+                    <option value="1">{rotaPlatoonLabel(1)}</option>
+                    <option value="2">{rotaPlatoonLabel(2)}</option>
                   </select>
                 </div>
                 <div className="personnel-filters__field">
@@ -525,21 +431,10 @@ export default function PersonnelListPage() {
                     onChange={(e) => patchDraft({ section: e.target.value as RosterQuery["section"] })}
                   >
                     <option value="all">Все</option>
-                    <option value="1">1</option>
-                    <option value="2">2</option>
-                    <option value="3">3</option>
-                    <option value="4">4</option>
-                  </select>
-                </div>
-                <div className="personnel-filters__field">
-                  <p className="label">Модуль</p>
-                  <select className="select" value={draftQuery.module} onChange={(e) => patchDraft({ module: e.target.value })}>
-                    <option value="all">Все</option>
-                    {ROTA_MODULE_OPTIONS.map((value) => (
-                      <option key={value} value={String(value)}>
-                        {value}
-                      </option>
-                    ))}
+                    <option value="1">{rotaSectionLabel(1)}</option>
+                    <option value="2">{rotaSectionLabel(2)}</option>
+                    <option value="3">{rotaSectionLabel(3)}</option>
+                    <option value="4">{rotaSectionLabel(4)}</option>
                   </select>
                 </div>
                 <div className="personnel-filters__search-date">
@@ -569,40 +464,6 @@ export default function PersonnelListPage() {
 
               <div className="personnel-filters__row personnel-filters__row--secondary">
                 <div className="personnel-filters__field">
-                  <p className="label">Зачёт</p>
-                  <select
-                    className="select"
-                    value={draftQuery.filters.examType}
-                    onChange={(e) => {
-                      const nextType = e.target.value as RosterFilters["examType"];
-                      patchDraftFilters({
-                        examType: nextType,
-                        examStatus: nextType === "all" ? "all" : draftQuery.filters.examStatus,
-                      });
-                    }}
-                  >
-                    <option value="all">Все</option>
-                    {PERSONNEL_EXAM_TYPES.map((type) => (
-                      <option key={type} value={type}>
-                        {personnelExamLabel[type]}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="personnel-filters__field">
-                  <p className="label">Результат зачёта</p>
-                  <select
-                    className="select"
-                    value={draftQuery.filters.examStatus}
-                    onChange={(e) => patchDraftFilters({ examStatus: e.target.value as ExamFilterStatus })}
-                    disabled={draftQuery.filters.examType === "all"}
-                  >
-                    <option value="all">Все</option>
-                    <option value="passed">Сдан</option>
-                    <option value="failed">Не сдан</option>
-                  </select>
-                </div>
-                <div className="personnel-filters__field">
                   <p className="label">Права</p>
                   <select
                     className="select"
@@ -617,33 +478,6 @@ export default function PersonnelListPage() {
                     ))}
                   </select>
                 </div>
-                <div className="personnel-filters__field">
-                  <p className="label">Сбития</p>
-                  <select
-                    className="select"
-                    value={draftQuery.filters.hits}
-                    onChange={(e) => patchDraftFilters({ hits: e.target.value as TriState })}
-                  >
-                    <option value="all">Все</option>
-                    <option value="yes">Есть</option>
-                    <option value="no">Нет</option>
-                  </select>
-                </div>
-                <div className="personnel-filters__field">
-                  <p className="label">Премии</p>
-                  <select
-                    className="select"
-                    value={draftQuery.filters.premiums}
-                    onChange={(e) => patchDraftFilters({ premiums: e.target.value as TriState })}
-                  >
-                    <option value="all">Все</option>
-                    <option value="yes">Есть</option>
-                    <option value="no">Нет</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="personnel-filters__row personnel-filters__row--tests">
                 <div className="personnel-filters__field">
                   <p className="label">Пробный тест</p>
                   <select
@@ -704,23 +538,11 @@ export default function PersonnelListPage() {
           <div className="personnel-stat-grid">
             <div className="personnel-stat-card">
               <p className="label">Всего</p>
-              <strong>{displayStats.totalEmployees}</strong>
+              <strong>{stats.totalEmployees}</strong>
             </div>
             <div className="personnel-stat-card">
               <p className="label">В командировке</p>
-              <strong>{displayStats.deployedNow}</strong>
-            </div>
-            <div className="personnel-stat-card">
-              <p className="label">Ср. дней</p>
-              <strong>{displayStats.avgDays}</strong>
-            </div>
-            <div className="personnel-stat-card">
-              <p className="label">Сбитий</p>
-              <strong>{displayStats.totalHits}</strong>
-            </div>
-            <div className="personnel-stat-card">
-              <p className="label">Премии</p>
-              <strong>{displayStats.totalPremiums.toLocaleString("ru-RU")} ₽</strong>
+              <strong>{stats.deployedNow}</strong>
             </div>
           </div>
 
@@ -748,112 +570,90 @@ export default function PersonnelListPage() {
             <div className="card-body personnel-table-wrap">
               <p className="personnel-table-scroll-hint">Прокрутите таблицу вбок, чтобы увидеть все колонки</p>
               <PersonnelTableDualScroll>
-              <table className="personnel-table">
-                <thead>
-                  <tr>
-                    <th className="personnel-table__sticky">Имя</th>
-                    <th className="personnel-table__compact" title="Взвод / отделение / модуль">
-                      Взвод/Отдел/Мод
-                    </th>
-                    <th className="personnel-table__compact">Зачёты</th>
-                    <th className="personnel-table__compact" title="Пробные и итоговые: сданы / не сданы">
-                      Тесты
-                    </th>
-                    <th className="personnel-table__compact" title="Командировки">
-                      Команд.
-                    </th>
-                    <th className="personnel-table__compact">Сбития</th>
-                    <th className="personnel-table__compact">Премии</th>
-                    <th className="personnel-table__compact">Статус</th>
-                    <th className="personnel-table__compact" title="Категории прав">
-                      Права
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((u) => (
-                    <tr key={u.id}>
-                      <td className="personnel-table__sticky">
-                        <Link href={profilePath(u.id)} className="personnel-roster-person">
-                          <UserAvatar
-                            name={u.name}
-                            callsign={u.callsign}
-                            avatarUrl={u.avatarUrl ?? null}
-                            size={34}
-                            className="personnel-roster-person__avatar"
-                            avatarFrame={u.cosmetics?.avatarFrame ?? null}
-                            bankOverlay={u.cosmetics?.bankOverlay ?? null}
-                            topRankBadge={u.cosmetics?.topRankBadge ?? null}
-                          />
-                          <UserIdentityDisplay
-                            as="div"
-                            className="personnel-roster-person__identity"
-                            name={u.name}
-                            callsign={u.callsign}
-                            cosmetics={
-                              u.cosmetics ??
-                              (u.nameColor ? { adminNameColor: u.nameColor } : null)
-                            }
-                            nameClassName="personnel-roster-person__name"
-                            callsignClassName="personnel-roster-person__callsign"
-                            separator=""
-                          />
-                        </Link>
-                      </td>
-                      <td
-                        className="personnel-table__compact"
-                        title={
-                          u.rotaPlatoon || u.rotaSection || u.rotaModule
-                            ? rotaUnitLabel(u.rotaPlatoon, u.rotaSection, u.rotaModule)
-                            : undefined
-                        }
-                      >
-                        {rotaUnitLabelCompact(u.rotaPlatoon, u.rotaSection, u.rotaModule)}
-                      </td>
-                      <td className="personnel-table__compact">
-                        <div className="personnel-roster-exams">
-                          {PERSONNEL_EXAM_TYPES.map((t) => {
-                            const st = examMap.get(u.id)?.get(t);
-                            return (
-                              <PersonnelExamRosterIcon key={t} type={t} passed={st === "passed"} />
-                            );
-                          })}
-                        </div>
-                      </td>
-                      <td className="personnel-table__compact">
-                        <PersonnelRosterTestCell stats={displayTestStats(u)} />
-                      </td>
-                      <td className="personnel-table__compact">
-                        {u.deploymentsCount} ({u.deploymentDays} дн.)
-                      </td>
-                      <td className="personnel-table__compact">{u.uavHitsTotal}</td>
-                      <td className="personnel-table__compact">{u.premiumsTotal.toLocaleString("ru-RU")} ₽</td>
-                      <td className="personnel-table__compact">
-                        <span className={`pill ${u.dutyLocation === "base" ? "pill-green" : "pill-red"}`}>
-                          {dutyLocationLabel[u.dutyLocation]}
-                        </span>
-                      </td>
-                      <td className="personnel-table__compact">
-                        <PersonnelRosterLicenseCell categories={u.licenseCategories} />
-                      </td>
-                    </tr>
-                  ))}
-                  {isLoading && users.length === 0 && (
+                <table className="personnel-table">
+                  <thead>
                     <tr>
-                      <td colSpan={9} className="personnel-table__empty">
-                        Загрузка…
-                      </td>
+                      <th className="personnel-table__sticky">Имя</th>
+                      <th className="personnel-table__compact" title="Взвод / отделение">
+                        Взвод/Отдел
+                      </th>
+                      <th className="personnel-table__compact" title="Пробные и итоговые: сданы / не сданы">
+                        Тесты
+                      </th>
+                      <th className="personnel-table__compact">Статус</th>
+                      <th className="personnel-table__compact" title="Категории прав">
+                        Права
+                      </th>
                     </tr>
-                  )}
-                  {!isLoading && usersTotal === 0 && (
-                    <tr>
-                      <td colSpan={9} className="personnel-table__empty">
-                        {users.length === 0 ? "Сотрудники не найдены" : "Нет сотрудников по выбранным фильтрам"}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {users.map((u) => (
+                      <tr key={u.id}>
+                        <td className="personnel-table__sticky">
+                          <Link href={profilePath(u.id)} className="personnel-roster-person">
+                            <UserAvatar
+                              name={u.name}
+                              callsign={u.callsign}
+                              avatarUrl={u.avatarUrl ?? null}
+                              size={34}
+                              className="personnel-roster-person__avatar"
+                              avatarFrame={u.cosmetics?.avatarFrame ?? null}
+                              bankOverlay={u.cosmetics?.bankOverlay ?? null}
+                              topRankBadge={u.cosmetics?.topRankBadge ?? null}
+                            />
+                            <UserIdentityDisplay
+                              as="div"
+                              className="personnel-roster-person__identity"
+                              name={u.name}
+                              callsign={u.callsign}
+                              cosmetics={
+                                u.cosmetics ?? (u.nameColor ? { adminNameColor: u.nameColor } : null)
+                              }
+                              nameClassName="personnel-roster-person__name"
+                              callsignClassName="personnel-roster-person__callsign"
+                              separator=""
+                            />
+                          </Link>
+                        </td>
+                        <td
+                          className="personnel-table__compact"
+                          title={
+                            u.rotaPlatoon || u.rotaSection
+                              ? rotaUnitLabel(u.rotaPlatoon, u.rotaSection)
+                              : undefined
+                          }
+                        >
+                          {rotaUnitLabelCompact(u.rotaPlatoon, u.rotaSection)}
+                        </td>
+                        <td className="personnel-table__compact">
+                          <PersonnelRosterTestCell stats={displayTestStats(u)} />
+                        </td>
+                        <td className="personnel-table__compact">
+                          <span className={`pill ${u.dutyLocation === "base" ? "pill-green" : "pill-red"}`}>
+                            {dutyLocationLabel[u.dutyLocation]}
+                          </span>
+                        </td>
+                        <td className="personnel-table__compact">
+                          <PersonnelRosterLicenseCell categories={u.licenseCategories} />
+                        </td>
+                      </tr>
+                    ))}
+                    {isLoading && users.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="personnel-table__empty">
+                          Загрузка…
+                        </td>
+                      </tr>
+                    )}
+                    {!isLoading && usersTotal === 0 && (
+                      <tr>
+                        <td colSpan={5} className="personnel-table__empty">
+                          {users.length === 0 ? "Сотрудники не найдены" : "Нет сотрудников по выбранным фильтрам"}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </PersonnelTableDualScroll>
             </div>
             <div className="card-body personnel-mobile-cards">
@@ -883,8 +683,7 @@ export default function PersonnelListPage() {
                           <UserIdentityDisplay
                             name={u.name}
                             cosmetics={
-                              u.cosmetics ??
-                              (u.nameColor ? { adminNameColor: u.nameColor } : null)
+                              u.cosmetics ?? (u.nameColor ? { adminNameColor: u.nameColor } : null)
                             }
                             nameClassName="personnel-mobile-card__name-text"
                           />
@@ -894,8 +693,7 @@ export default function PersonnelListPage() {
                             <UserIdentityDisplay
                               callsign={u.callsign}
                               cosmetics={
-                                u.cosmetics ??
-                                (u.nameColor ? { adminNameColor: u.nameColor } : null)
+                                u.cosmetics ?? (u.nameColor ? { adminNameColor: u.nameColor } : null)
                               }
                             />
                           </p>
@@ -907,33 +705,13 @@ export default function PersonnelListPage() {
                     </span>
                   </div>
                   <div className="personnel-mobile-card__meta">
-                    <span>{rotaUnitLabelCompact(u.rotaPlatoon, u.rotaSection, u.rotaModule)}</span>
+                    <span>{rotaUnitLabelCompact(u.rotaPlatoon, u.rotaSection)}</span>
                     <PersonnelRosterLicenseCell categories={u.licenseCategories} />
-                  </div>
-                  <div className="personnel-mobile-card__exams">
-                    {PERSONNEL_EXAM_TYPES.map((t) => {
-                      const st = examMap.get(u.id)?.get(t);
-                      return <PersonnelExamRosterIcon key={t} type={t} passed={st === "passed"} />;
-                    })}
                   </div>
                   <div className="personnel-mobile-card__stats">
                     <div>
                       <span className="label">Тесты</span>
                       <PersonnelRosterTestCell stats={displayTestStats(u)} />
-                    </div>
-                    <div>
-                      <span className="label">Сбития</span>
-                      <strong>{u.uavHitsTotal}</strong>
-                    </div>
-                    <div>
-                      <span className="label">Премии</span>
-                      <strong>{u.premiumsTotal.toLocaleString("ru-RU")} ₽</strong>
-                    </div>
-                    <div>
-                      <span className="label">Команд.</span>
-                      <strong>
-                        {u.deploymentsCount} ({u.deploymentDays} дн.)
-                      </strong>
                     </div>
                   </div>
                 </article>
@@ -970,17 +748,6 @@ export default function PersonnelListPage() {
       )}
 
       {tab === "top" && <PersonnelTopGrid tops={tops} profilePath={profilePath} />}
-
-      <ResetPersonnelExamsModal
-        open={resetExamsModal.open}
-        saving={resetExamsSaving}
-        mode="bulk"
-        bulkScope={resetExamsModal.bulkScope}
-        filteredCount={usersTotal}
-        onBulkScopeChange={resetExamsModal.setBulkScope}
-        onClose={() => resetExamsModal.setOpen(false)}
-        onConfirm={() => void onResetExamsBulk()}
-      />
 
       <PersonnelExportExcelModal
         open={exportExcelModal.open}

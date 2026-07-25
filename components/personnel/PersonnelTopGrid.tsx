@@ -3,22 +3,10 @@ import type { ReactNode } from "react";
 import { UserIdentityDisplay } from "@/components/profile/UserIdentityDisplay";
 import { UserAvatar } from "@/components/profile/UserAvatar";
 import type { UserIdentityCosmetics } from "@/lib/user-identity-cosmetics";
-import {
-  IconActivity,
-  IconCar,
-  IconTestFinal,
-  IconTestTrial,
-  IconUavHit,
-} from "@/components/personnel/PersonnelIcons";
-import {
-  computePersonnelActivityScore,
-  PERSONNEL_ACTIVITY_SCORE_NOTE,
-  PERSONNEL_ACTIVITY_SCORE_PARTS,
-  type PersonnelRosterTopUser,
-  type PersonnelRosterTops,
-} from "@/lib/personnel-catalog";
+import { IconTestFinal, IconTestTrial } from "@/components/personnel/PersonnelIcons";
+import type { PersonnelRosterTopUser, PersonnelRosterTops } from "@/lib/personnel-catalog";
 
-type TopCardTone = "red" | "blue" | "green" | "amber" | "purple";
+type TopCardTone = "blue" | "green";
 
 type TopCardConfig<T extends PersonnelRosterTopUser> = {
   key: string;
@@ -28,23 +16,10 @@ type TopCardConfig<T extends PersonnelRosterTopUser> = {
   icon: ReactNode;
   list: T[];
   formatValue: (user: T) => string;
-  footnote?: ReactNode;
 };
 
-function buildTopCards<T extends PersonnelRosterTopUser>(
-  tops: PersonnelRosterTops<T>,
-  formatHits: (user: T) => string,
-): TopCardConfig<T>[] {
+function buildTopCards<T extends PersonnelRosterTopUser>(tops: PersonnelRosterTops<T>): TopCardConfig<T>[] {
   return [
-    {
-      key: "hits",
-      title: "Топ по сбитиям",
-      subtitle: "Всего сбитий БПЛА",
-      tone: "red",
-      icon: <IconUavHit size={18} />,
-      list: tops.hits,
-      formatValue: formatHits,
-    },
     {
       key: "trial",
       title: "Топ по пробным тестам",
@@ -63,30 +38,6 @@ function buildTopCards<T extends PersonnelRosterTopUser>(
       list: tops.finalTests,
       formatValue: (user) => `${user.testStats.finalPassed} сдано`,
     },
-    {
-      key: "deployments",
-      title: "Топ по командировкам",
-      subtitle: "Количество поездок",
-      tone: "amber",
-      icon: <IconCar size={18} />,
-      list: tops.deployments,
-      formatValue: (user) => `${user.deploymentsCount} шт.`,
-    },
-    {
-      key: "activity",
-      title: "Самые активные",
-      subtitle: "Сумма всех показателей",
-      tone: "purple",
-      icon: <IconActivity size={18} />,
-      list: tops.activity,
-      formatValue: (user) => `${computePersonnelActivityScore(user)} очк.`,
-      footnote: (
-        <>
-          <strong>Как считаются очки:</strong> {PERSONNEL_ACTIVITY_SCORE_PARTS.join(" + ")}.{" "}
-          {PERSONNEL_ACTIVITY_SCORE_NOTE}
-        </>
-      ),
-    },
   ];
 }
 
@@ -97,20 +48,17 @@ export function PersonnelTopGrid<T extends PersonnelRosterTopUser>({
   tops: PersonnelRosterTops<T>;
   profilePath: (userId: string) => string;
 }) {
-  const cards = buildTopCards(tops, (user) => String(user.uavHitsTotal));
+  const cards = buildTopCards(tops);
 
   return (
     <div className="personnel-top-section">
-      <p className="personnel-top-intro">
-        Рейтинг по ключевым показателям роты. В карточке «Самые активные» очки — это сумма сбитий,
-        командировок, медалей, сданных тестов и зачётов (по 1 очку за каждый пункт).
-      </p>
+      <p className="personnel-top-intro">Рейтинг по результатам пробных и итоговых тестов.</p>
 
       <div className="personnel-top-grid">
         {cards.map((card) => (
           <article
             key={card.key}
-            className={`card personnel-top-card personnel-top-card--${card.tone}${card.key === "activity" ? " personnel-top-card--wide" : ""}`}
+            className={`card personnel-top-card personnel-top-card--${card.tone}`}
           >
             <div className="card-body">
               <header className="personnel-top-card__head">
@@ -154,8 +102,6 @@ export function PersonnelTopGrid<T extends PersonnelRosterTopUser>({
                   </li>
                 ))}
               </ol>
-
-              {card.footnote ? <p className="personnel-top-card__note">{card.footnote}</p> : null}
             </div>
           </article>
         ))}

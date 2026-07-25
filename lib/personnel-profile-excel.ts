@@ -137,13 +137,12 @@ function getTestSummary(bundle: PersonnelProfileExportBundle): TestSummaryCounts
     return fromResults;
   }
 
-  const items = bundle.profile?.activitySummary ?? [];
-  const val = (key: string) => items.find((item) => item.key === key)?.value ?? 0;
+  const stats = bundle.profile?.testStats;
   return {
-    trialPassed: val("trialPassed"),
-    trialFailed: val("trialFailed"),
-    finalPassed: val("finalPassed"),
-    finalFailed: val("finalFailed"),
+    trialPassed: stats?.trialPassed ?? 0,
+    trialFailed: stats?.trialFailed ?? 0,
+    finalPassed: stats?.finalPassed ?? 0,
+    finalFailed: stats?.finalFailed ?? 0,
   };
 }
 
@@ -188,28 +187,16 @@ function employeeLabel(bundle: PersonnelProfileExportBundle) {
 }
 
 function summaryStatsSlices(bundle: PersonnelProfileExportBundle): ExcelChartSlice[] {
-  const p = bundle.profile;
-  return [
-    { label: "Командировки", value: p?.deploymentsCount ?? 0, color: "#3B82F6" },
-    { label: "Сбития БПЛА", value: p?.uavHitsTotal ?? 0, color: "#C42B2B" },
-    { label: "Медали", value: p?.medals?.length ?? 0, color: "#F59E0B" },
-    { label: "Премии (шт.)", value: p?.premiums?.length ?? 0, color: "#D97706" },
-  ];
+  const summary = getTestSummary(bundle);
+  return testSummarySlices(summary);
 }
 
-function activitySummarySlices(bundle: PersonnelProfileExportBundle): ExcelChartSlice[] {
-  return (bundle.profile?.activitySummary ?? []).map((item) => ({
-    label: item.label,
-    value: item.value,
-    color: item.color.startsWith("#") ? item.color : "#C42B2B",
-  }));
+function activitySummarySlices(_bundle: PersonnelProfileExportBundle): ExcelChartSlice[] {
+  return [];
 }
 
-function monthlyActivityTotals(bundle: PersonnelProfileExportBundle) {
-  return (bundle.profile?.activityByMonth ?? []).map((month) => ({
-    label: month.month,
-    value: month.total,
-  }));
+function monthlyActivityTotals(_bundle: PersonnelProfileExportBundle) {
+  return [] as Array<{ label: string; value: number }>;
 }
 
 async function embedChartImage(
@@ -337,36 +324,20 @@ function addOverviewSheet(workbook: ExcelJS.Workbook, bundle: PersonnelProfileEx
     ["Позывной", bundle.user.callsign || "—"],
     ["Должность", bundle.user.position || "—"],
     ["Подразделение", bundle.user.unitAssignment || "—"],
-    ["Взвод/Отдел/Мод", bundle.user.rotaUnit],
+    ["Взвод/Отдел", bundle.user.rotaUnit],
     ["Место положения", bundle.user.dutyLocation],
-    ["Трудоустройство", bundle.user.employmentDate],
-    ["Стаж", bundle.user.employmentDays],
   ]);
 
   sheet.addRow([]);
   addSection("Сводная статистика");
   const p = bundle.profile;
   addPairs([
-    ["Командировок", p ? String(p.deploymentsCount) : "0"],
-    ["Дней в командировках", p ? String(p.deploymentDays) : "0"],
-    ["Сбитий БПЛА", p ? String(p.uavHitsTotal) : "0"],
-    ["Премии", p ? formatExportMoney(p.premiumsTotal) : "0 ₽"],
-    ["Медалей", p?.medals?.length != null ? String(p.medals.length) : "0"],
     ["Категории прав", p?.licenseCategories?.length ? p.licenseCategories.join(", ") : "—"],
+    ["Пробных сдано", p ? String(p.testStats.trialPassed) : "0"],
+    ["Пробных не сдано", p ? String(p.testStats.trialFailed) : "0"],
+    ["Итоговых сдано", p ? String(p.testStats.finalPassed) : "0"],
+    ["Итоговых не сдано", p ? String(p.testStats.finalFailed) : "0"],
   ]);
-
-  if (p?.activitySummary?.length) {
-    sheet.addRow([]);
-    addSection("Активность (сводка)");
-    const actHeader = sheet.addRow(["Показатель", "Количество"]);
-    sheet.mergeCells(actHeader.number, 2, actHeader.number, 4);
-    styleHeaderRow(actHeader);
-    for (const item of p.activitySummary) {
-      const row = sheet.addRow([item.label, item.value]);
-      sheet.mergeCells(row.number, 2, row.number, 4);
-      row.eachCell((cell) => styleTableCell(cell));
-    }
-  }
 }
 
 function getOrCreateBulkSheet(workbook: ExcelJS.Workbook, name: string, columns: Array<{ width: number }>, headerCells: string[]) {
@@ -377,160 +348,6 @@ function getOrCreateBulkSheet(workbook: ExcelJS.Workbook, name: string, columns:
     styleHeaderRow(sheet.addRow(headerCells));
   }
   return sheet;
-}
-
-function addExamsSheet(workbook: ExcelJS.Workbook, bundle: PersonnelProfileExportBundle, bulk = false) {
-  const sheet = bulk
-    ? getOrCreateBulkSheet(workbook, "Зачёты", [{ width: 28 }, { width: 16 }, { width: 24 }, { width: 16 }, { width: 16 }, { width: 16 }], [
-        "Сотрудник",
-        "Позывной",
-        "Зачёт",
-        "Статус",
-        "Дата сдачи",
-        "Действует до",
-      ])
-    : (() => {
-        const created = workbook.addWorksheet("Зачёты");
-        created.columns = [{ width: 24 }, { width: 16 }, { width: 16 }, { width: 16 }];
-        styleHeaderRow(created.addRow(["Зачёт", "Статус", "Дата сдачи", "Действует до"]));
-        return created;
-      })();
-  for (const exam of bundle.exams) {
-    const row = sheet.addRow(
-      bulk
-        ? [bundle.user.name, bundle.user.callsign, exam.label, exam.status, exam.passedAt, exam.expiresAt]
-        : [exam.label, exam.status, exam.passedAt, exam.expiresAt],
-    );
-    row.eachCell((cell) => styleTableCell(cell));
-    const statusCell = row.getCell(bulk ? 4 : 2);
-    statusCell.fill = {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: { argb: exam.status === "Сдан" ? PASS_FILL : FAIL_FILL },
-    };
-    statusCell.font = { bold: true };
-  }
-}
-
-function addDeploymentsSheet(workbook: ExcelJS.Workbook, bundle: PersonnelProfileExportBundle, bulk = false) {
-  const sheet = bulk
-    ? getOrCreateBulkSheet(
-        workbook,
-        "Командировки",
-        [{ width: 28 }, { width: 16 }, { width: 18 }, { width: 18 }, { width: 10 }, { width: 10 }, { width: 16 }],
-        ["Сотрудник", "Позывной", "Дата начала", "Дата окончания", "Дней", "Сбитий", "Премия"],
-      )
-    : (() => {
-        const created = workbook.addWorksheet("Командировки");
-        created.columns = [{ width: 18 }, { width: 18 }, { width: 10 }, { width: 10 }, { width: 16 }];
-        styleHeaderRow(created.addRow(["Дата начала", "Дата окончания", "Дней", "Сбитий", "Премия"]));
-        return created;
-      })();
-  const rows = bundle.profile?.deployments ?? [];
-  if (!rows.length) {
-    if (!bulk) {
-      const row = sheet.addRow(["Нет записей", "", "", "", ""]);
-      sheet.mergeCells(row.number, 1, row.number, 5);
-    }
-    return;
-  }
-  for (const d of rows) {
-    const row = sheet.addRow(
-      bulk
-        ? [
-            bundle.user.name,
-            bundle.user.callsign,
-            formatSheetDate(d.dateFrom),
-            formatSheetDate(d.dateTo),
-            d.days,
-            d.uavHits,
-            formatExportMoney(d.premiumAmount),
-          ]
-        : [
-            formatSheetDate(d.dateFrom),
-            formatSheetDate(d.dateTo),
-            d.days,
-            d.uavHits,
-            formatExportMoney(d.premiumAmount),
-          ],
-    );
-    row.eachCell((cell) => styleTableCell(cell));
-  }
-}
-
-function addMedalsSheet(workbook: ExcelJS.Workbook, bundle: PersonnelProfileExportBundle, bulk = false) {
-  const sheet = bulk
-    ? getOrCreateBulkSheet(
-        workbook,
-        "Медали",
-        [{ width: 28 }, { width: 16 }, { width: 40 }, { width: 16 }],
-        ["Сотрудник", "Позывной", "Название", "Дата"],
-      )
-    : (() => {
-        const created = workbook.addWorksheet("Медали");
-        created.columns = [{ width: 40 }, { width: 16 }];
-        styleHeaderRow(created.addRow(["Название", "Дата"]));
-        return created;
-      })();
-  const rows = bundle.profile?.medals ?? [];
-  if (!rows.length) {
-    if (!bulk) {
-      sheet.addRow(["Нет записей", ""]);
-    }
-    return;
-  }
-  for (const m of rows) {
-    const row = sheet.addRow(
-      bulk
-        ? [bundle.user.name, bundle.user.callsign, m.title, formatSheetDate(m.awardedAt)]
-        : [m.title, formatSheetDate(m.awardedAt)],
-    );
-    row.eachCell((cell) => styleTableCell(cell));
-  }
-}
-
-function addPremiumsSheet(workbook: ExcelJS.Workbook, bundle: PersonnelProfileExportBundle, bulk = false) {
-  const sheet = bulk
-    ? getOrCreateBulkSheet(
-        workbook,
-        "Премии",
-        [{ width: 28 }, { width: 16 }, { width: 34 }, { width: 16 }, { width: 16 }, { width: 18 }],
-        ["Сотрудник", "Позывной", "Название", "Сумма", "Дата", "Источник"],
-      )
-    : (() => {
-        const created = workbook.addWorksheet("Премии");
-        created.columns = [{ width: 34 }, { width: 16 }, { width: 16 }, { width: 18 }];
-        styleHeaderRow(created.addRow(["Название", "Сумма", "Дата", "Источник"]));
-        return created;
-      })();
-  const rows = bundle.profile?.premiums ?? [];
-  if (!rows.length) {
-    if (!bulk) {
-      const row = sheet.addRow(["Нет записей", "", "", ""]);
-      sheet.mergeCells(row.number, 1, row.number, 4);
-    }
-    return;
-  }
-  for (const premium of rows) {
-    const row = sheet.addRow(
-      bulk
-        ? [
-            bundle.user.name,
-            bundle.user.callsign,
-            premium.title,
-            formatExportMoney(premium.amount),
-            formatSheetDate(premium.awardedAt),
-            premium.source === "deployment" ? "Командировка" : "Отдельная",
-          ]
-        : [
-            premium.title,
-            formatExportMoney(premium.amount),
-            formatSheetDate(premium.awardedAt),
-            premium.source === "deployment" ? "Командировка" : "Отдельная",
-          ],
-    );
-    row.eachCell((cell) => styleTableCell(cell));
-  }
 }
 
 async function addTestsChartsBlock(
@@ -771,45 +588,6 @@ async function addBulkTestsSheet(workbook: ExcelJS.Workbook, bundles: PersonnelP
   }
 }
 
-function addActivitySheet(workbook: ExcelJS.Workbook, bundle: PersonnelProfileExportBundle, bulk = false) {
-  const sheet = bulk
-    ? getOrCreateBulkSheet(
-        workbook,
-        "Активность",
-        [{ width: 28 }, { width: 16 }, { width: 14 }, { width: 24 }, { width: 12 }],
-        ["Сотрудник", "Позывной", "Месяц", "Показатель", "Количество"],
-      )
-    : (() => {
-        const created = workbook.addWorksheet("Активность");
-        created.columns = [{ width: 14 }, { width: 24 }, { width: 12 }];
-        styleHeaderRow(created.addRow(["Месяц", "Показатель", "Количество"]));
-        return created;
-      })();
-  const months = bundle.profile?.activityByMonth ?? [];
-  if (!months.length) {
-    if (!bulk) {
-      const row = sheet.addRow(["Нет данных", "", ""]);
-      sheet.mergeCells(row.number, 1, row.number, 3);
-    }
-    return;
-  }
-  for (const month of months) {
-    if (!month.segments.length) {
-      const row = sheet.addRow(bulk ? [bundle.user.name, bundle.user.callsign, month.month, "—", 0] : [month.month, "—", 0]);
-      row.eachCell((cell) => styleTableCell(cell));
-      continue;
-    }
-    for (const seg of month.segments) {
-      const row = sheet.addRow(
-        bulk
-          ? [bundle.user.name, bundle.user.callsign, month.month, seg.label, seg.value]
-          : [month.month, seg.label, seg.value],
-      );
-      row.eachCell((cell) => styleTableCell(cell));
-    }
-  }
-}
-
 function addSummarySheet(
   workbook: ExcelJS.Workbook,
   bundles: PersonnelProfileExportBundle[],
@@ -834,7 +612,7 @@ function addSummarySheet(
   ];
 
   const title = sheet.addRow([meta.title]);
-  sheet.mergeCells(title.number, 1, title.number, 13);
+  sheet.mergeCells(title.number, 1, title.number, 10);
   styleSectionTitle(title.getCell(1));
   title.height = 24;
 
@@ -846,16 +624,13 @@ function addSummarySheet(
     "Имя",
     "Позывной",
     "Должность",
-    "Взвод/Отдел/Мод",
+    "Взвод/Отдел",
     "Место",
-    "Трудоустройство",
-    "Стаж",
-    "Командировки",
-    "Дней",
-    "Сбития",
-    "Премии",
-    "Медали",
     "Права",
+    "Пробных сдано",
+    "Пробных не сдано",
+    "Итоговых сдано",
+    "Итоговых не сдано",
   ]);
   styleHeaderRow(header, 36);
 
@@ -867,72 +642,30 @@ function addSummarySheet(
       bundle.user.position || "—",
       bundle.user.rotaUnit,
       bundle.user.dutyLocation,
-      bundle.user.employmentDate,
-      bundle.user.employmentDays,
-      p?.deploymentsCount ?? 0,
-      p?.deploymentDays ?? 0,
-      p?.uavHitsTotal ?? 0,
-      p ? formatExportMoney(p.premiumsTotal) : "0 ₽",
-      p?.medals?.length ?? 0,
       p?.licenseCategories?.length ? p.licenseCategories.join(", ") : "—",
+      p?.testStats.trialPassed ?? 0,
+      p?.testStats.trialFailed ?? 0,
+      p?.testStats.finalPassed ?? 0,
+      p?.testStats.finalFailed ?? 0,
     ]);
     applyCompactRow(row);
     row.eachCell((cell, col) => {
-      const centerCols = new Set([8, 9, 10, 12]);
+      const centerCols = new Set([7, 8, 9, 10]);
       styleCompactTableCell(cell, centerCols.has(col) ? "center" : "left");
     });
   }
 }
 
-function aggregateActivitySummary(bundles: PersonnelProfileExportBundle[]): ExcelChartSlice[] {
-  const totals = new Map<string, ExcelChartSlice>();
-  for (const bundle of bundles) {
-    for (const item of bundle.profile?.activitySummary ?? []) {
-      const existing = totals.get(item.key);
-      if (existing) {
-        existing.value += item.value;
-      } else {
-        totals.set(item.key, {
-          label: item.label,
-          value: item.value,
-          color: item.color.startsWith("#") ? item.color : "#C42B2B",
-        });
-      }
-    }
-  }
-  return Array.from(totals.values());
+function aggregateActivitySummary(_bundles: PersonnelProfileExportBundle[]): ExcelChartSlice[] {
+  return [];
 }
 
-function aggregateMonthlyActivity(bundles: PersonnelProfileExportBundle[]) {
-  const totals = new Map<string, number>();
-  const labels = new Map<string, string>();
-  for (const bundle of bundles) {
-    for (const month of bundle.profile?.activityByMonth ?? []) {
-      labels.set(month.month, month.month);
-      totals.set(month.month, (totals.get(month.month) ?? 0) + month.total);
-    }
-  }
-  return Array.from(labels.keys()).map((label) => ({ label, value: totals.get(label) ?? 0 }));
+function aggregateMonthlyActivity(_bundles: PersonnelProfileExportBundle[]) {
+  return [] as Array<{ label: string; value: number }>;
 }
 
 function aggregateSummaryStats(bundles: PersonnelProfileExportBundle[]): ExcelChartSlice[] {
-  let deployments = 0;
-  let hits = 0;
-  let medals = 0;
-  let premiums = 0;
-  for (const bundle of bundles) {
-    const p = bundle.profile;
-    deployments += p?.deploymentsCount ?? 0;
-    hits += p?.uavHitsTotal ?? 0;
-    medals += p?.medals?.length ?? 0;
-    premiums += p?.premiums?.length ?? 0;
-  }
-  return [
-    { label: "Командировки", value: deployments, color: "#3B82F6" },
-    { label: "Сбития БПЛА", value: hits, color: "#C42B2B" },
-    { label: "Медали", value: medals, color: "#F59E0B" },
-    { label: "Премии (шт.)", value: premiums, color: "#D97706" },
-  ];
+  return testSummarySlices(aggregateTestSummary(bundles));
 }
 
 async function addBulkChartsSheet(workbook: ExcelJS.Workbook, bundles: PersonnelProfileExportBundle[]) {
@@ -1003,14 +736,6 @@ async function buildWorkbook(bundles: PersonnelProfileExportBundle[], bulk: bool
       exportedAt: bundles[0]?.exportedAt ?? new Date().toLocaleString("ru-RU"),
     });
     await addBulkChartsSheet(workbook, bundles);
-
-    for (const bundle of bundles) {
-      addExamsSheet(workbook, bundle, true);
-      addDeploymentsSheet(workbook, bundle, true);
-      addMedalsSheet(workbook, bundle, true);
-      addPremiumsSheet(workbook, bundle, true);
-      addActivitySheet(workbook, bundle, true);
-    }
     await addBulkTestsSheet(workbook, bundles);
     applyWorkbookTableFilters(workbook, true);
   } else {
@@ -1018,12 +743,7 @@ async function buildWorkbook(bundles: PersonnelProfileExportBundle[], bulk: bool
     if (!bundle) throw new Error("empty_export_bundle");
     addOverviewSheet(workbook, bundle);
     await addChartsSheet(workbook, bundle);
-    addExamsSheet(workbook, bundle);
-    addDeploymentsSheet(workbook, bundle);
-    addMedalsSheet(workbook, bundle);
-    addPremiumsSheet(workbook, bundle);
     await addSingleTestsSheet(workbook, bundle);
-    addActivitySheet(workbook, bundle);
     applyWorkbookTableFilters(workbook, false);
   }
 
@@ -1047,12 +767,7 @@ export type PersonnelRosterFilterExportRow = {
   callsign: string;
   rotaUnit: string;
   dutyLocation?: string;
-  deploymentsCount?: number;
-  deploymentDays?: number;
-  uavHitsTotal?: number;
-  premiumsTotal?: number;
   licenseCategories?: string;
-  examResult?: string;
   testDate?: string | null;
   trialPassed?: number;
   trialFailed?: number;
@@ -1070,18 +785,8 @@ function rosterExportCellValue(row: PersonnelRosterFilterExportRow, key: RosterE
       return row.rotaUnit || "—";
     case "dutyStatus":
       return row.dutyLocation || "—";
-    case "deployments":
-      return row.deploymentsCount ?? 0;
-    case "deploymentDays":
-      return row.deploymentDays ?? 0;
-    case "uavHits":
-      return row.uavHitsTotal ?? 0;
-    case "premiums":
-      return row.premiumsTotal ?? 0;
     case "licenses":
       return row.licenseCategories || "—";
-    case "exam":
-      return row.examResult || "—";
     case "testDate":
       return row.testDate || "—";
     case "trialPassed":
@@ -1138,16 +843,7 @@ export async function buildPersonnelRosterFilterExcelBuffer(input: {
   const header = sheet.addRow(input.columns.map((column) => column.header));
   styleHeaderRow(header, 32);
 
-  const numericKeys = new Set([
-    "deployments",
-    "deploymentDays",
-    "uavHits",
-    "premiums",
-    "trialPassed",
-    "trialFailed",
-    "finalPassed",
-    "finalFailed",
-  ]);
+  const numericKeys = new Set(["trialPassed", "trialFailed", "finalPassed", "finalFailed"]);
 
   for (const row of input.rows) {
     const dataRow = sheet.addRow(input.columns.map((column) => rosterExportCellValue(row, column.key)));

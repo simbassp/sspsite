@@ -13,7 +13,6 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const platoonRaw = url.searchParams.get("platoon");
   const sectionRaw = url.searchParams.get("section");
-  const moduleRaw = url.searchParams.get("module");
   const search = url.searchParams.get("search") ?? "";
   const testDateRaw = url.searchParams.get("testDate") ?? "";
   const testDate = /^\d{4}-\d{2}-\d{2}$/.test(testDateRaw.trim()) ? testDateRaw.trim() : undefined;
@@ -22,12 +21,10 @@ export async function GET(req: Request) {
 
   const platoon = platoonRaw && platoonRaw !== "all" ? Number(platoonRaw) : ("all" as const);
   const section = sectionRaw && sectionRaw !== "all" ? Number(sectionRaw) : ("all" as const);
-  const module = moduleRaw && moduleRaw !== "all" ? Number(moduleRaw) : ("all" as const);
 
   const roster = await loadPersonnelRoster({
     platoon,
     section,
-    module,
     search,
     testDate,
     page,

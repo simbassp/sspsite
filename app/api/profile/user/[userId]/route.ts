@@ -80,8 +80,6 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
     const personnelProfileShow = personnelProfileView.show;
     const rotaPlatoon = userRow.rota_platoon != null ? Number(userRow.rota_platoon) : null;
     const rotaSection = userRow.rota_section != null ? Number(userRow.rota_section) : null;
-    const rotaModule = userRow.rota_module != null ? Number(userRow.rota_module) : null;
-    const employmentDate = userRow.employment_date ? String(userRow.employment_date).slice(0, 10) : null;
     const personnelMeta =
       personnelProfileShow && unitAssignment === "company_4"
         ? await loadProfilePersonnelMeta(userId)
@@ -110,8 +108,6 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
         unit_assignment: unitAssignment,
         rota_platoon: rotaPlatoon,
         rota_section: rotaSection,
-        rota_module: rotaModule,
-        employment_date: employmentDate,
         avatarUrl,
         nameColor: cosmetics.adminNameColor ?? null,
         cosmetics,

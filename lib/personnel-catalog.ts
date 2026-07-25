@@ -237,32 +237,35 @@ export function formatNotificationBody(body: string): string {
 
 export const ROTA_PLATOON_OPTIONS = [1, 2] as const;
 export const ROTA_SECTION_OPTIONS = [1, 2, 3, 4] as const;
-export const ROTA_MODULE_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] as const;
+
+export function rotaPlatoonLabel(platoon: number) {
+  return `В${platoon}`;
+}
+
+export function rotaSectionLabel(section: number) {
+  return `О${section}`;
+}
 
 export function rotaUnitLabel(
   platoon: number | null | undefined,
   section: number | null | undefined,
-  module: number | null | undefined = null,
 ) {
-  if (!platoon && !section && !module) return "—";
+  if (!platoon && !section) return "—";
   const parts: string[] = [];
-  if (platoon) parts.push(`${platoon} взвод`);
-  if (section) parts.push(`${section} отделение`);
-  if (module) parts.push(`${module} модуль`);
+  if (platoon) parts.push(rotaPlatoonLabel(platoon));
+  if (section) parts.push(rotaSectionLabel(section));
   return parts.join(" / ");
 }
 
-/** Компактная подпись для таблицы ростера и Excel: В1/О2/М11 */
+/** Компактная подпись для таблицы ростера и Excel: В1/О2 */
 export function rotaUnitLabelCompact(
   platoon: number | null | undefined,
   section: number | null | undefined,
-  module: number | null | undefined = null,
 ) {
-  if (!platoon && !section && !module) return "—";
+  if (!platoon && !section) return "—";
   const parts: string[] = [];
-  if (platoon) parts.push(`В${platoon}`);
-  if (section) parts.push(`О${section}`);
-  if (module) parts.push(`М${module}`);
+  if (platoon) parts.push(rotaPlatoonLabel(platoon));
+  if (section) parts.push(rotaSectionLabel(section));
   return parts.join("/");
 }
 
@@ -273,61 +276,24 @@ export type PersonnelRosterTopUser = {
   avatarUrl?: string | null;
   nameColor?: import("@/lib/profile-name-color").ProfileNameColorId | null;
   cosmetics?: import("@/lib/user-identity-cosmetics").UserIdentityCosmetics | null;
-  uavHitsTotal: number;
-  deploymentsCount: number;
-  medalsCount: number;
   testStats: {
     trialPassed: number;
     trialFailed: number;
     finalPassed: number;
     finalFailed: number;
   };
-  exams: Array<{ examType: string; status: string }>;
 };
-
-/** Суммарный балл активности по ключевым показателям (без премий). */
-export function computePersonnelActivityScore(user: PersonnelRosterTopUser) {
-  const passedExams = user.exams.filter((exam) => exam.status === "passed").length;
-  return (
-    user.uavHitsTotal +
-    user.deploymentsCount +
-    user.medalsCount +
-    user.testStats.trialPassed +
-    user.testStats.finalPassed +
-    passedExams
-  );
-}
-
-export const PERSONNEL_ACTIVITY_SCORE_PARTS = [
-  "сбития",
-  "командировки",
-  "медали",
-  "сданные пробные тесты",
-  "сданные итоговые тесты",
-  "сданные зачёты",
-] as const;
-
-export const PERSONNEL_ACTIVITY_SCORE_NOTE =
-  "Каждый пункт даёт 1 очко. Премии и дни в командировках не учитываются.";
 
 const ROSTER_TOP_LIMIT = 5;
 
 export type PersonnelRosterTops<T extends PersonnelRosterTopUser> = {
-  hits: T[];
   trialTests: T[];
   finalTests: T[];
-  deployments: T[];
-  activity: T[];
 };
 
 export function buildPersonnelRosterTops<T extends PersonnelRosterTopUser>(users: T[]): PersonnelRosterTops<T> {
   return {
-    hits: [...users].sort((a, b) => b.uavHitsTotal - a.uavHitsTotal).slice(0, ROSTER_TOP_LIMIT),
     trialTests: [...users].sort((a, b) => b.testStats.trialPassed - a.testStats.trialPassed).slice(0, ROSTER_TOP_LIMIT),
     finalTests: [...users].sort((a, b) => b.testStats.finalPassed - a.testStats.finalPassed).slice(0, ROSTER_TOP_LIMIT),
-    deployments: [...users].sort((a, b) => b.deploymentsCount - a.deploymentsCount).slice(0, ROSTER_TOP_LIMIT),
-    activity: [...users]
-      .sort((a, b) => computePersonnelActivityScore(b) - computePersonnelActivityScore(a))
-      .slice(0, ROSTER_TOP_LIMIT),
   };
 }

@@ -6,7 +6,6 @@ import { normalizeProfileNameColor, type ProfileNameColorId } from "@/lib/profil
 import { mapIdentityCosmeticsFromRow, type UserIdentityCosmetics } from "@/lib/user-identity-cosmetics";
 import { loadIdentityCosmeticsMap } from "@/lib/user-identity-cosmetics-server";
 import { createRouteCache } from "@/lib/server-route-cache";
-import { UNIT_COMMANDERS, unitAssignmentLabel } from "@/lib/unit-assignment";
 
 export const runtime = "nodejs";
 
@@ -79,7 +78,7 @@ const homeStatsCache = createRouteCache<HomeStatsBody>(HOME_STATS_CACHE_MS);
 
 async function buildHomeStats(): Promise<HomeStatsBody> {
   const supabase = getServerSupabaseServiceClient();
-    const [newestQ, leftQ, promotedQ] = await Promise.all([
+    const [newestQ, leftQ] = await Promise.all([
       supabase
         .from("app_users")
         .select("id,name,callsign,created_at,status,profile_name_color")
@@ -89,12 +88,6 @@ async function buildHomeStats(): Promise<HomeStatsBody> {
         .from("dashboard_events")
         .select("id,payload,created_at")
         .eq("kind", "user_deleted")
-        .order("created_at", { ascending: false })
-        .limit(1),
-      supabase
-        .from("dashboard_events")
-        .select("id,payload,created_at")
-        .eq("kind", "position_promoted")
         .order("created_at", { ascending: false })
         .limit(1),
     ]);
@@ -113,11 +106,8 @@ async function buildHomeStats(): Promise<HomeStatsBody> {
     }
 
     const left = Array.isArray(leftQ.data) ? leftQ.data[0] : null;
-    const promoted = Array.isArray(promotedQ.data) ? promotedQ.data[0] : null;
     const leftPayload = (left?.payload || {}) as Record<string, unknown>;
-    const promotedPayload = (promoted?.payload || {}) as Record<string, unknown>;
     const leftUserId = typeof leftPayload.user_id === "string" ? leftPayload.user_id : "";
-    const promotedUserId = typeof promotedPayload.user_id === "string" ? promotedPayload.user_id : "";
 
     let usersSummary: {
       totalUsers: number;
@@ -192,7 +182,6 @@ async function buildHomeStats(): Promise<HomeStatsBody> {
     const eventUserIds = [
       newest && typeof newest.id === "string" ? newest.id : "",
       leftUserId,
-      promotedUserId,
     ].filter(Boolean);
     const eventCosmeticsById = eventUserIds.length
       ? await loadIdentityCosmeticsMap(eventUserIds)
@@ -220,7 +209,7 @@ async function buildHomeStats(): Promise<HomeStatsBody> {
         ? {
             id: `newcomer:${String(newest.id || "")}`,
             type: "user_added",
-            title: "Наш новый товарищ:",
+            title: "Новый сотрудник",
             description: formatPerson(newest.name, newest.callsign),
             person: buildPerson(
               newest.name,
@@ -234,7 +223,7 @@ async function buildHomeStats(): Promise<HomeStatsBody> {
         ? {
             id: `left:${String(left.id || "")}`,
             type: "user_removed",
-            title: "Товарищ покинул нас:",
+            title: "Сотрудник покинул нас",
             description: formatPerson(leftPayload.name, leftPayload.callsign),
             person: buildPerson(
               leftPayload.name,
@@ -246,32 +235,6 @@ async function buildHomeStats(): Promise<HomeStatsBody> {
             created_at: left.created_at ? String(left.created_at) : null,
           }
         : null,
-      promoted
-        ? {
-            id: `promoted:${String(promoted.id || "")}`,
-            type: "position_changed",
-            title: "Повышение должности",
-            description: `${formatPerson(promotedPayload.name, promotedPayload.callsign)} — новая должность: ${
-              toSafeString(promotedPayload.position) || "Не указана"
-            }`,
-            person: buildPerson(
-              promotedPayload.name,
-              promotedPayload.callsign,
-              promotedUserId
-                ? eventCosmeticsById.get(promotedUserId) ?? mapIdentityCosmeticsFromRow({})
-                : mapIdentityCosmeticsFromRow({}),
-              ` — новая должность: ${toSafeString(promotedPayload.position) || "Не указана"}`,
-            ),
-            created_at: promoted.created_at ? String(promoted.created_at) : null,
-          }
-        : null,
-      ...UNIT_COMMANDERS.map((item) => ({
-        id: `commander:${item.unit}`,
-        type: "commander_assigned" as const,
-        title: unitAssignmentLabel[item.unit],
-        description: item.commander,
-        created_at: null,
-      })),
     ]
       .filter(Boolean)
       .sort((a, b) => {

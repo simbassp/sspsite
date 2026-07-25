@@ -1,6 +1,6 @@
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
-import { normalizeRotaModule, normalizeRotaPlatoon, normalizeRotaSection } from "@/lib/rota-unit";
+import { normalizeRotaPlatoon, normalizeRotaSection } from "@/lib/rota-unit";
 
 export const runtime = "nodejs";
 
@@ -22,19 +22,15 @@ export async function PATCH(request: Request) {
     return Response.json({ ok: false, error: "invalid_json" }, { status: 400 });
   }
 
-  const raw = (body ?? {}) as { rotaPlatoon?: unknown; rotaSection?: unknown; rotaModule?: unknown };
+  const raw = (body ?? {}) as { rotaPlatoon?: unknown; rotaSection?: unknown };
   const rotaPlatoon = normalizeRotaPlatoon(raw.rotaPlatoon);
   const rotaSection = normalizeRotaSection(raw.rotaSection);
-  const rotaModule = normalizeRotaModule(raw.rotaModule);
 
   if (raw.rotaPlatoon !== undefined && raw.rotaPlatoon !== null && raw.rotaPlatoon !== "" && rotaPlatoon === null) {
     return Response.json({ ok: false, error: "invalid_rota_platoon" }, { status: 400 });
   }
   if (raw.rotaSection !== undefined && raw.rotaSection !== null && raw.rotaSection !== "" && rotaSection === null) {
     return Response.json({ ok: false, error: "invalid_rota_section" }, { status: 400 });
-  }
-  if (raw.rotaModule !== undefined && raw.rotaModule !== null && raw.rotaModule !== "" && rotaModule === null) {
-    return Response.json({ ok: false, error: "invalid_rota_module" }, { status: 400 });
   }
 
   try {
@@ -55,16 +51,15 @@ export async function PATCH(request: Request) {
       .update({
         rota_platoon: rotaPlatoon,
         rota_section: rotaSection,
-        rota_module: rotaModule,
       })
       .eq("id", session.id)
-      .select("rota_platoon,rota_section,rota_module")
+      .select("rota_platoon,rota_section")
       .maybeSingle();
 
     if (upd.error) {
       if (isMissingColumnError(upd.error.message)) {
         return Response.json(
-          { ok: false, error: "Колонки rota_platoon/rota_section/rota_module отсутствуют. Примените миграции Supabase." },
+          { ok: false, error: "Колонки rota_platoon/rota_section отсутствуют. Примените миграции Supabase." },
           { status: 503 },
         );
       }
@@ -75,7 +70,6 @@ export async function PATCH(request: Request) {
       ok: true,
       rotaPlatoon: upd.data?.rota_platoon != null ? Number(upd.data.rota_platoon) : null,
       rotaSection: upd.data?.rota_section != null ? Number(upd.data.rota_section) : null,
-      rotaModule: upd.data?.rota_module != null ? Number(upd.data.rota_module) : null,
     });
   } catch (error) {
     return Response.json(

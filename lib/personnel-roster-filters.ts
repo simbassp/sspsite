@@ -1,4 +1,4 @@
-import type { PersonnelExamType, PersonnelLicenseCategory } from "@/lib/personnel-catalog";
+import type { PersonnelLicenseCategory } from "@/lib/personnel-catalog";
 
 export type PersonnelTestRosterStats = {
   trialPassed: number;
@@ -7,39 +7,26 @@ export type PersonnelTestRosterStats = {
   finalFailed: number;
 };
 
-export type ExamFilterStatus = "all" | "passed" | "failed";
-export type TriState = "all" | "yes" | "no";
 export type TestFilter = "all" | "passed" | "failed";
 
 export type RosterFilterParams = {
-  examType: "all" | PersonnelExamType;
-  examStatus: ExamFilterStatus;
   license: "all" | PersonnelLicenseCategory;
   trialTest: TestFilter;
   finalTest: TestFilter;
-  hits: TriState;
-  premiums: TriState;
   dutyStatus: "all" | "base" | "deployment";
 };
 
 export const EMPTY_ROSTER_FILTER_PARAMS: RosterFilterParams = {
-  examType: "all",
-  examStatus: "all",
   license: "all",
   trialTest: "all",
   finalTest: "all",
-  hits: "all",
-  premiums: "all",
   dutyStatus: "all",
 };
 
 export type RosterFilterUser = {
   id: string;
   dutyLocation: "base" | "deployment";
-  deploymentDays: number;
   licenseCategories: string[];
-  uavHitsTotal: number;
-  premiumsTotal: number;
   testStats: PersonnelTestRosterStats;
   testStatsOnDate?: PersonnelTestRosterStats | null;
 };
@@ -63,12 +50,9 @@ export function hasActiveRosterFilters(filters: RosterFilterParams, testDate?: s
 export function hasAdvancedRosterFilters(filters: RosterFilterParams, testDate?: string) {
   return (
     !!testDate ||
-    (filters.examType !== "all" && filters.examStatus !== "all") ||
     filters.license !== "all" ||
     filters.trialTest !== "all" ||
     filters.finalTest !== "all" ||
-    filters.hits !== "all" ||
-    filters.premiums !== "all" ||
     filters.dutyStatus !== "all"
   );
 }
@@ -76,15 +60,8 @@ export function hasAdvancedRosterFilters(filters: RosterFilterParams, testDate?:
 export function userMatchesRosterFilters(
   user: RosterFilterUser,
   filters: RosterFilterParams,
-  examMap: Map<string, Map<string, string>>,
   testDate: string,
 ) {
-  if (filters.examType !== "all" && filters.examStatus !== "all") {
-    const passed = examMap.get(user.id)?.get(filters.examType) === "passed";
-    if (filters.examStatus === "passed" && !passed) return false;
-    if (filters.examStatus === "failed" && passed) return false;
-  }
-
   if (filters.license !== "all" && !user.licenseCategories.includes(filters.license)) return false;
 
   const ts = resolveUserTestStats(user, testDate);
@@ -97,43 +74,29 @@ export function userMatchesRosterFilters(
     if (testDate ? ts.finalFailed === 0 : ts.finalPassed > 0) return false;
   }
 
-  if (filters.hits === "yes" && user.uavHitsTotal === 0) return false;
-  if (filters.hits === "no" && user.uavHitsTotal > 0) return false;
-  if (filters.premiums === "yes" && user.premiumsTotal === 0) return false;
-  if (filters.premiums === "no" && user.premiumsTotal > 0) return false;
   if (filters.dutyStatus !== "all" && user.dutyLocation !== filters.dutyStatus) return false;
 
   return true;
 }
 
-export function calcRosterStats(list: Array<Pick<RosterFilterUser, "dutyLocation" | "deploymentDays" | "uavHitsTotal" | "premiumsTotal">>) {
+export function calcRosterStats(list: Array<Pick<RosterFilterUser, "dutyLocation">>) {
   const totals = list.reduce(
     (acc, user) => {
       acc.totalEmployees += 1;
       if (user.dutyLocation === "deployment") acc.deployedNow += 1;
-      acc.totalDays += user.deploymentDays;
-      acc.totalHits += user.uavHitsTotal;
-      acc.totalPremiums += user.premiumsTotal;
       return acc;
     },
-    { totalEmployees: 0, deployedNow: 0, totalDays: 0, totalHits: 0, totalPremiums: 0 },
+    { totalEmployees: 0, deployedNow: 0 },
   );
-  return {
-    ...totals,
-    avgDays: totals.totalEmployees ? Math.round(totals.totalDays / totals.totalEmployees) : 0,
-  };
+  return totals;
 }
 
 export function parseRosterFilterParams(searchParams: URLSearchParams): RosterFilterParams {
   const read = (key: string) => searchParams.get(key) || "all";
   return {
-    examType: read("examType") as RosterFilterParams["examType"],
-    examStatus: read("examStatus") as ExamFilterStatus,
     license: read("license") as RosterFilterParams["license"],
     trialTest: read("trialTest") as TestFilter,
     finalTest: read("finalTest") as TestFilter,
-    hits: read("hits") as TriState,
-    premiums: read("premiums") as TriState,
     dutyStatus: read("dutyStatus") as RosterFilterParams["dutyStatus"],
   };
 }

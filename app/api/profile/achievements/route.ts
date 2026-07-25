@@ -11,10 +11,8 @@ import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 
 export const runtime = "nodejs";
 
-async function readEmploymentDate(userId: string) {
-  const supabase = getServerSupabaseServiceClient();
-  const userQ = await supabase.from("app_users").select("employment_date").eq("id", userId).maybeSingle();
-  return userQ.data?.employment_date ? String(userQ.data.employment_date).slice(0, 10) : null;
+async function readEmploymentDate(_userId: string) {
+  return null;
 }
 
 export async function GET(request: Request) {

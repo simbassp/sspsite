@@ -1,9 +1,7 @@
 import { resolvePersonnelProfileViewAccess } from "@/lib/personnel-profile-access";
-import { syncUserAchievementsByUserId } from "@/lib/achievements-server";
 import { loadProfilePersonnelMeta } from "@/lib/profile-personnel-meta";
 import { loadProfileTestResultsBundle } from "@/lib/profile-test-results-server";
 import { serializeTrialProfileStats } from "@/lib/profile-trial-stats";
-import { loadPersonnelProfile } from "@/lib/personnel-server";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 import { normalizeUnitAssignment } from "@/lib/unit-assignment";
@@ -23,11 +21,10 @@ export async function GET() {
 
   try {
     const supabase = getServerSupabaseServiceClient();
-    void syncUserAchievementsByUserId(session.id).catch(() => undefined);
 
     const profilePrimaryPromise = supabase
       .from("app_users")
-      .select("auth_user_id,duty_location,unit_assignment,rota_platoon,rota_section,rota_module,employment_date,avatar_url,profile_name_color,position")
+      .select("auth_user_id,duty_location,unit_assignment,rota_platoon,rota_section,avatar_url,profile_name_color,position")
       .eq("id", session.id)
       .maybeSingle();
 
@@ -46,8 +43,6 @@ export async function GET() {
     let unitAssignment: UnitAssignment | null = null;
     let rotaPlatoon: number | null = null;
     let rotaSection: number | null = null;
-    let rotaModule: number | null = null;
-    let employmentDate: string | null = null;
     let avatarUrl: string | null = null;
     let nameColor = normalizeProfileNameColor(null);
     let position: string | null = null;
@@ -63,8 +58,6 @@ export async function GET() {
       unitAssignment = normalizeUnitAssignment(profileRow.unit_assignment);
       rotaPlatoon = profileRow.rota_platoon != null ? Number(profileRow.rota_platoon) : null;
       rotaSection = profileRow.rota_section != null ? Number(profileRow.rota_section) : null;
-      rotaModule = profileRow.rota_module != null ? Number(profileRow.rota_module) : null;
-      employmentDate = profileRow.employment_date ? String(profileRow.employment_date).slice(0, 10) : null;
       if (typeof profileRow.avatar_url === "string" && profileRow.avatar_url.trim()) {
         avatarUrl = profileRow.avatar_url.trim();
       }
@@ -91,34 +84,15 @@ export async function GET() {
             .limit(100)
         : Promise.resolve({ data: [] as Array<Record<string, unknown>>, error: null });
     const personnelViewPromise = resolvePersonnelProfileViewAccess(session, session.id);
-    const personnelProfileBundlePromise = personnelViewPromise.then(async (personnelView) => {
-      if (!personnelView.show) {
-        return { show: false as const, bundle: null };
-      }
-      const profile = await loadPersonnelProfile(session.id);
-      if (!profile) {
-        return { show: false as const, bundle: null };
-      }
-      return {
-        show: true as const,
-        bundle: {
-          profile,
-          isPreview: personnelView.isPreview,
-          canEditOwn: personnelView.canEditOwn,
-          canModerate: personnelView.canModerate,
-        },
-      };
-    });
     const authEmailPromise = authUserId
       ? supabase.auth.admin.getUserById(authUserId).catch(() => ({ data: { user: null } }))
       : Promise.resolve({ data: { user: null } });
-    const [authInfo, invitesQ, personnelProfileResult] = await Promise.all([
+    const [authInfo, invitesQ, personnelView] = await Promise.all([
       authEmailPromise,
       invitesPromise,
-      personnelProfileBundlePromise,
+      personnelViewPromise,
     ]);
-    const personnelProfileShow = personnelProfileResult.show;
-    const personnelProfile = personnelProfileResult.bundle;
+    const personnelProfileShow = personnelView.show;
     const personnelMeta =
       personnelProfileShow && unitAssignment === "company_4"
         ? await loadProfilePersonnelMeta(session.id)
@@ -137,8 +111,6 @@ export async function GET() {
       unitAssignment,
       rotaPlatoon,
       rotaSection,
-      rotaModule,
-      employmentDate,
       avatarUrl,
       nameColor,
       position,
@@ -148,7 +120,6 @@ export async function GET() {
       trialStats,
       inviteCodes,
       personnelProfileShow,
-      personnelProfile,
     });
   } catch (error) {
     return Response.json(

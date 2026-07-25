@@ -1,9 +1,6 @@
 import { getPersonnelContext } from "@/lib/personnel-api-guard";
-import { formatPersonnelRequestNotificationBody } from "@/lib/personnel-catalog";
 import {
-  createPersonnelRequest,
   loadNotifications,
-  notifyModerators,
 } from "@/lib/personnel-server";
 
 export const runtime = "nodejs";
@@ -48,21 +45,5 @@ export async function POST(req: Request) {
     return Response.json({ ok: false, error: "moderation_disabled" }, { status: 503 });
   }
 
-  const created = await createPersonnelRequest({
-    userId: targetUserId,
-    requestType,
-    payload: body.payload ?? {},
-  });
-
-  if (created.error) {
-    return Response.json({ ok: false, error: created.error.message }, { status: 500 });
-  }
-
-  await notifyModerators(
-    "Новая заявка в личное дело",
-    formatPersonnelRequestNotificationBody(requestType, body.payload ?? {}),
-    "/admin/personnel",
-  );
-
-  return Response.json({ ok: true, id: created.data?.id });
+  return Response.json({ ok: false, error: "feature_removed" }, { status: 410 });
 }

@@ -114,55 +114,10 @@ async function dismissRevokedAchievementNotifications(userId: string, revokedAch
   }
 }
 
-export async function syncUserAchievements(userId: string, employmentDate: string | null) {
-  const supabase = getServerSupabaseServiceClient();
-  const progress = await loadUserAchievementProgress(userId, employmentDate);
+export async function syncUserAchievements(userId: string, _employmentDate: string | null) {
+  const progress = await loadUserAchievementProgress(userId, null);
   const unlockedIds = computeUnlockedAchievementIds(progress);
-
-  const existingQ = await supabase
-    .from("user_achievements")
-    .select("id,achievement_id,unlocked_at")
-    .eq("user_id", userId);
-  const existingRows = existingQ.error ? [] : existingQ.data ?? [];
-  const existingSet = new Set(existingRows.map((row) => String(row.achievement_id)));
-
-  const newlyUnlocked = unlockedIds.filter((id) => !existingSet.has(id));
-  const revokedRows = existingRows.filter((row) => !unlockedIds.includes(String(row.achievement_id)));
-  const revokedAchievementIds = revokedRows.map((row) => String(row.achievement_id));
-  const revokedRowIds = revokedRows.map((row) => String(row.id));
-
-  if (revokedRowIds.length) {
-    await supabase.from("user_achievements").delete().in("id", revokedRowIds);
-    await dismissRevokedAchievementNotifications(userId, revokedAchievementIds);
-    await reconcileAchievementCosmetics(userId, unlockedIds);
-  }
-
-  if (newlyUnlocked.length) {
-    const insertResult = await supabase.from("user_achievements").insert(
-      newlyUnlocked.map((achievementId) => ({
-        user_id: userId,
-        achievement_id: achievementId,
-      })),
-    );
-    if (!insertResult.error) {
-      for (const achievementId of newlyUnlocked) {
-        const def = getAchievementDefinition(achievementId);
-        if (!def) continue;
-        let body = "";
-        if (def.category === "final") body = "Вы можете выбрать цвет имени и позывного в профиле.";
-        else if (def.category === "trial") body = "Вы можете выбрать подсветку аватара в профиле.";
-        else if (def.category === "bank") body = "Вы можете выбрать эффект над аватаром в профиле.";
-        await supabase.from("app_notifications").insert({
-          user_id: userId,
-          kind: "achievement",
-          title: `Достижение: ${def.title}`,
-          body,
-          href: "/profile",
-        });
-      }
-    }
-  }
-
+  await reconcileAchievementCosmetics(userId, unlockedIds);
   return { progress, unlockedIds };
 }
 
@@ -187,8 +142,7 @@ export async function loadUserAchievementsState(
   const progress = await loadUserAchievementProgress(userId, employmentDate);
   const unlockedIds = computeUnlockedAchievementIds(progress);
 
-  const [storedQ, notifyQ, userRow, topRankMap] = await Promise.all([
-    supabase.from("user_achievements").select("id,achievement_id,unlocked_at").eq("user_id", userId),
+  const [notifyQ, userRow, topRankMap] = await Promise.all([
     supabase
       .from("app_notifications")
       .select("id,title,body,created_at,kind")
@@ -221,11 +175,7 @@ export async function loadUserAchievementsState(
   return {
     progress,
     unlockedIds,
-    storedUnlocks: (storedQ.data ?? []).map((row) => ({
-      id: String(row.id),
-      achievementId: String(row.achievement_id),
-      unlockedAt: String(row.unlocked_at),
-    })),
+    storedUnlocks: [],
     pendingNotifications,
     cosmetics: { avatarFrame, nameColor, bankOverlay },
     topRankBadge: topRankMap.get(userId) ?? null,

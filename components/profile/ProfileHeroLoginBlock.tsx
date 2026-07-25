@@ -1,5 +1,7 @@
 "use client";
 
+import { maskEmail } from "@/lib/mask-email";
+
 type ProfileHeroLoginBlockProps = {
   email: string;
   onChangeEmail: () => void;
@@ -16,7 +18,7 @@ export function ProfileHeroLoginBlock({
   return (
     <div className="profile-hero-login">
       <p className="label profile-hero-login-label">Данные входа</p>
-      <p className="profile-hero-login-email">{email || "не определён"}</p>
+      <p className="profile-hero-login-email">{maskEmail(email)}</p>
       <div className="profile-login-row">
         <button className="btn profile-btn-with-icon profile-hero-login-btn" type="button" onClick={onChangeEmail}>
           <MailIcon />

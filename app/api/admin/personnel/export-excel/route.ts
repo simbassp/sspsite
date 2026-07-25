@@ -42,18 +42,6 @@ function buildExportSummaryLines(rows: PersonnelRosterFilterExportRow[], config:
     const deployed = rows.filter((row) => row.dutyLocation === dutyLocationLabel.deployment).length;
     lines.push(["В командировке", deployed]);
     lines.push(["На базе", rows.length - deployed]);
-    lines.push([
-      "Всего дней в командировке",
-      rows.reduce((sum, row) => sum + (row.deploymentDays ?? 0), 0),
-    ]);
-  }
-
-  if (config.hits !== "all") {
-    lines.push(["Всего сбитий", rows.reduce((sum, row) => sum + (row.uavHitsTotal ?? 0), 0)]);
-  }
-
-  if (config.premiums !== "all") {
-    lines.push(["Сумма премий, ₽", rows.reduce((sum, row) => sum + (row.premiumsTotal ?? 0), 0)]);
   }
 
   if (exportIncludesTrialStats(config)) {
@@ -64,12 +52,6 @@ function buildExportSummaryLines(rows: PersonnelRosterFilterExportRow[], config:
   if (exportIncludesFinalStats(config)) {
     lines.push(["Итоговых сдано (попыток)", rows.reduce((sum, row) => sum + (row.finalPassed ?? 0), 0)]);
     lines.push(["Итоговых не сдано (попыток)", rows.reduce((sum, row) => sum + (row.finalFailed ?? 0), 0)]);
-  }
-
-  if (config.examType !== "all") {
-    const passed = rows.filter((row) => row.examResult === "Сдан").length;
-    lines.push(["Сдано по выбранному зачёту", passed]);
-    lines.push(["Не сдано по выбранному зачёту", rows.length - passed]);
   }
 
   return lines;
@@ -85,36 +67,19 @@ function buildExportRows(
 
   return cards.map((user) => {
     const stats = useDateScopedStats ? (user.testStatsOnDate ?? user.testStats) : user.testStats;
-    const exam = user.exams.find((item) => item.examType === config.examType);
-    const examResult =
-      exam?.status === "passed" ? "Сдан" : exam?.status === "failed" ? "Не сдан" : "—";
 
     const row: PersonnelRosterFilterExportRow = {
       name: user.name,
       callsign: user.callsign,
-      rotaUnit: rotaUnitLabelCompact(user.rotaPlatoon, user.rotaSection, user.rotaModule),
+      rotaUnit: rotaUnitLabelCompact(user.rotaPlatoon, user.rotaSection),
     };
 
     if (config.dutyStatus !== "all") {
       row.dutyLocation = dutyLocationLabel[user.dutyLocation];
-      row.deploymentsCount = user.deploymentsCount;
-      row.deploymentDays = user.deploymentDays;
-    }
-
-    if (config.hits !== "all") {
-      row.uavHitsTotal = user.uavHitsTotal;
-    }
-
-    if (config.premiums !== "all") {
-      row.premiumsTotal = user.premiumsTotal;
     }
 
     if (config.license !== "all") {
       row.licenseCategories = user.licenseCategories.length ? user.licenseCategories.join(", ") : "—";
-    }
-
-    if (config.examType !== "all") {
-      row.examResult = examResult;
     }
 
     if (config.testDate && exportIncludesTestStats(config)) {
@@ -152,17 +117,12 @@ export async function POST(request: Request) {
     scope?: unknown;
     platoon?: unknown;
     section?: unknown;
-    module?: unknown;
     search?: unknown;
     userIds?: unknown;
     testDate?: unknown;
-    examType?: unknown;
-    examStatus?: unknown;
     license?: unknown;
     trialTest?: unknown;
     finalTest?: unknown;
-    hits?: unknown;
-    premiums?: unknown;
     dutyStatus?: unknown;
     filterLines?: unknown;
   };
@@ -215,28 +175,16 @@ export async function POST(request: Request) {
         }
         userIds = resolved.userIds;
       } else {
-        const moduleRaw = raw.module;
-        const module =
-          moduleRaw === "all" || moduleRaw === null || moduleRaw === undefined || moduleRaw === ""
-            ? ("all" as const)
-            : Number.isFinite(Number(moduleRaw))
-              ? Number(moduleRaw)
-              : ("all" as const);
         const roster = await loadPersonnelRoster({
           platoon: platoon ?? "all",
           section: section ?? "all",
-          module,
           search: typeof raw.search === "string" ? raw.search : "",
           testDate: exportConfig.testDate ?? undefined,
           mode: "export",
           rosterFilters: {
-            examType: exportConfig.examType as RosterFilterParams["examType"],
-            examStatus: exportConfig.examStatus,
             license: exportConfig.license as RosterFilterParams["license"],
             trialTest: exportConfig.trialTest,
             finalTest: exportConfig.finalTest,
-            hits: exportConfig.hits,
-            premiums: exportConfig.premiums,
             dutyStatus: exportConfig.dutyStatus,
           },
         });
@@ -252,52 +200,42 @@ export async function POST(request: Request) {
     }
 
     if (useRosterFilterExport) {
-      const cards = await loadPersonnelRosterCardsByIds(
-        userIds,
-        exportIncludesTestStats(exportConfig) ? exportConfig.testDate : null,
-      );
-      if (!cards.length) {
-        return Response.json({ ok: false, error: "no_data" }, { status: 404 });
-      }
-
+      const cards = await loadPersonnelRosterCardsByIds(userIds, exportConfig.testDate);
       const rows = buildExportRows(cards, exportConfig);
       const columns = resolveRosterExportColumns(exportConfig);
       const summaryLines = buildExportSummaryLines(rows, exportConfig);
-
       const buffer = await buildPersonnelRosterFilterExcelBuffer({
-        rows,
         columns,
+        rows,
         filterLines,
-        summaryLines,
+        summaryLines: filterLines.length ? [] : summaryLines,
       });
 
-      return new Response(new Uint8Array(buffer), {
+      const disposition = buildPersonnelBulkExportContentDisposition("filter");
+      return new Response(buffer, {
         status: 200,
         headers: {
-          "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-          "content-disposition": buildPersonnelBulkExportContentDisposition("filter"),
-          "cache-control": "no-store",
+          "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "Content-Disposition": disposition,
         },
       });
     }
 
     const bundles = await loadPersonnelProfileExportBundles(userIds);
     if (!bundles.length) {
-      return Response.json({ ok: false, error: "no_data" }, { status: 404 });
+      return Response.json({ ok: false, error: "no_users" }, { status: 400 });
     }
 
     const buffer = await buildPersonnelBulkExcelBuffer(bundles);
-
-    return new Response(new Uint8Array(buffer), {
+    const disposition = buildPersonnelBulkExportContentDisposition(scope);
+    return new Response(buffer, {
       status: 200,
       headers: {
-        "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "content-disposition": buildPersonnelBulkExportContentDisposition(scope),
-        "cache-control": "no-store",
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": disposition,
       },
     });
   } catch (error) {
-    console.error("[personnel-export-excel]", error);
     return Response.json(
       { ok: false, error: error instanceof Error ? error.message : "export_excel_exception" },
       { status: 500 },

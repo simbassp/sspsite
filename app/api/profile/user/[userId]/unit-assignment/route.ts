@@ -45,7 +45,6 @@ export async function PATCH(request: Request, context: { params: Promise<{ userI
     if (unit !== "company_4") {
       updatePayload.rota_platoon = null;
       updatePayload.rota_section = null;
-      updatePayload.rota_module = null;
     }
 
     const upd = await supabase

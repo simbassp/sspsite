@@ -1,20 +1,11 @@
-import type { PersonnelExamType } from "@/lib/personnel-catalog";
-import { personnelExamLabel } from "@/lib/personnel-catalog";
-
-export type RosterExportExamStatus = "all" | "passed" | "failed";
 export type RosterExportTestFilter = "all" | "passed" | "failed";
-export type RosterExportTriState = "all" | "yes" | "no";
 export type RosterExportDutyStatus = "all" | "base" | "deployment";
 
 export type RosterExportFilterConfig = {
   testDate: string | null;
-  examType: "all" | PersonnelExamType;
-  examStatus: RosterExportExamStatus;
   license: "all" | string;
   trialTest: RosterExportTestFilter;
   finalTest: RosterExportTestFilter;
-  hits: RosterExportTriState;
-  premiums: RosterExportTriState;
   dutyStatus: RosterExportDutyStatus;
 };
 
@@ -23,12 +14,7 @@ export type RosterExportColumnKey =
   | "callsign"
   | "rotaUnit"
   | "dutyStatus"
-  | "deployments"
-  | "deploymentDays"
-  | "uavHits"
-  | "premiums"
   | "licenses"
-  | "exam"
   | "testDate"
   | "trialPassed"
   | "trialFailed"
@@ -43,13 +29,9 @@ export type RosterExportColumn = {
 
 export function hasRosterFocusFilters(config: RosterExportFilterConfig) {
   return (
-    config.examType !== "all" ||
-    config.examStatus !== "all" ||
     config.license !== "all" ||
     config.trialTest !== "all" ||
     config.finalTest !== "all" ||
-    config.hits !== "all" ||
-    config.premiums !== "all" ||
     config.dutyStatus !== "all"
   );
 }
@@ -74,31 +56,11 @@ export function resolveRosterExportColumns(config: RosterExportFilterConfig): Ro
   ];
 
   if (config.dutyStatus !== "all") {
-    columns.push(
-      { key: "dutyStatus", header: "Статус", width: 16 },
-      { key: "deployments", header: "Командировок", width: 14 },
-      { key: "deploymentDays", header: "Дней в командировке", width: 18 },
-    );
-  }
-
-  if (config.hits !== "all") {
-    columns.push({ key: "uavHits", header: "Сбитий", width: 10 });
-  }
-
-  if (config.premiums !== "all") {
-    columns.push({ key: "premiums", header: "Премии, ₽", width: 14 });
+    columns.push({ key: "dutyStatus", header: "Статус", width: 16 });
   }
 
   if (config.license !== "all") {
     columns.push({ key: "licenses", header: "Права", width: 16 });
-  }
-
-  if (config.examType !== "all") {
-    columns.push({
-      key: "exam",
-      header: `Зачёт: ${personnelExamLabel[config.examType]}`,
-      width: 18,
-    });
   }
 
   const includeTrial = exportIncludesTrialStats(config);
@@ -127,33 +89,15 @@ export function resolveRosterExportColumns(config: RosterExportFilterConfig): Ro
 
 export function parseRosterExportFilterConfig(raw: {
   testDate?: unknown;
-  examType?: unknown;
-  examStatus?: unknown;
   license?: unknown;
   trialTest?: unknown;
   finalTest?: unknown;
-  hits?: unknown;
-  premiums?: unknown;
   dutyStatus?: unknown;
 }): RosterExportFilterConfig {
   const testDateRaw = typeof raw.testDate === "string" ? raw.testDate.trim() : "";
   const testDate = /^\d{4}-\d{2}-\d{2}$/.test(testDateRaw) ? testDateRaw : null;
 
-  const examTypeRaw = typeof raw.examType === "string" ? raw.examType : "all";
-  const examType =
-    examTypeRaw === "ttx" ||
-    examTypeRaw === "medicine" ||
-    examTypeRaw === "verification" ||
-    examTypeRaw === "physical" ||
-    examTypeRaw === "shooting"
-      ? examTypeRaw
-      : "all";
-
-  const parseTri = (value: unknown): RosterExportTriState =>
-    value === "yes" || value === "no" ? value : "all";
   const parseTest = (value: unknown): RosterExportTestFilter =>
-    value === "passed" || value === "failed" ? value : "all";
-  const parseExamStatus = (value: unknown): RosterExportExamStatus =>
     value === "passed" || value === "failed" ? value : "all";
   const parseDuty = (value: unknown): RosterExportDutyStatus =>
     value === "base" || value === "deployment" ? value : "all";
@@ -162,13 +106,9 @@ export function parseRosterExportFilterConfig(raw: {
 
   return {
     testDate,
-    examType,
-    examStatus: parseExamStatus(raw.examStatus),
     license: licenseRaw === "all" ? "all" : licenseRaw,
     trialTest: parseTest(raw.trialTest),
     finalTest: parseTest(raw.finalTest),
-    hits: parseTri(raw.hits),
-    premiums: parseTri(raw.premiums),
     dutyStatus: parseDuty(raw.dutyStatus),
   };
 }

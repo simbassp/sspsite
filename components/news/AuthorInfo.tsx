@@ -1,6 +1,6 @@
 "use client";
 
-import { getPositionBadgeClass } from "@/lib/position-ui";
+import { getPositionBadgeClass, positionDisplayLabel } from "@/lib/position-ui";
 import { UserIdentityDisplay } from "@/components/profile/UserIdentityDisplay";
 import type { UserIdentityCosmetics } from "@/lib/user-identity-cosmetics";
 
@@ -41,7 +41,7 @@ export function AuthorInfo({ author, fallbackName }: AuthorInfoProps) {
       </div>
       {position ? (
         <span className={`news-author-position admin-users-position-badge ${getPositionBadgeClass(position)}`}>
-          {position}
+          {positionDisplayLabel(position)}
         </span>
       ) : null}
     </div>

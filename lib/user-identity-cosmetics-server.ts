@@ -45,7 +45,7 @@ export function buildTopRankBadgeMapFromUsers<T extends PersonnelRosterTopUser>(
   const map = new Map<string, TopRankBadgeId>();
   if (!users.length) return map;
   const tops = buildPersonnelRosterTops(users);
-  tops.activity.slice(0, 3).forEach((user, index) => {
+  tops.trialTests.slice(0, 3).forEach((user, index) => {
     const badge: TopRankBadgeId = index === 0 ? "top-1" : index === 1 ? "top-2" : "top-3";
     map.set(user.id, badge);
   });
@@ -63,7 +63,7 @@ export async function loadTopRankBadgeMap(): Promise<Map<string, TopRankBadgeId>
   topRankInflight = (async () => {
     const map = new Map<string, TopRankBadgeId>();
     try {
-      const roster = await loadPersonnelRoster({ platoon: "all", section: "all", module: "all" });
+      const roster = await loadPersonnelRoster({ platoon: "all", section: "all" });
       if (roster.ok && roster.users.length) {
         for (const [id, badge] of buildTopRankBadgeMapFromUsers(roster.users)) {
           map.set(id, badge);

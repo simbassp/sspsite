@@ -8,7 +8,7 @@ import type { UserIdentityCosmetics } from "@/lib/user-identity-cosmetics";
 import type { ProfileNameColorId } from "@/lib/profile-name-color";
 import { useClientSession } from "@/hooks/useClientSession";
 import { canResetTestResults } from "@/lib/permissions";
-import { getPositionBadgeClass } from "@/lib/position-ui";
+import { getPositionBadgeClass, positionDisplayLabel } from "@/lib/position-ui";
 import { formatDateTime } from "@/lib/format";
 import { formatTestResultForType } from "@/lib/test-pass-rules";
 import {
@@ -660,7 +660,7 @@ export default function AdminResultsPage() {
                       </Link>
                     </h3>
                     <span className={`admin-users-position-badge ${getPositionBadgeClass(row.position || "")}`}>
-                      {row.position || "—"}
+                      {positionDisplayLabel(row.position || "") || "—"}
                     </span>
                   </div>
                   <div className="admin-results-row__tags">
@@ -724,7 +724,7 @@ export default function AdminResultsPage() {
                       </Link>
                     </h3>
                     <span className={`admin-users-position-badge ${getPositionBadgeClass(row.position || "")}`}>
-                      {row.position || "—"}
+                      {positionDisplayLabel(row.position || "") || "—"}
                     </span>
                   </div>
                   <div className="admin-results-row__tags">

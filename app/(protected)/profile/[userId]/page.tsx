@@ -7,31 +7,27 @@ import { useEffect, useMemo, useState } from "react";
 import { ProfileDutyLocationToggle } from "@/components/profile/ProfileDutyLocationToggle";
 import { ProfileExportExcelButton } from "@/components/profile/ProfileExportExcelButton";
 import { ProfileNameEditModal } from "@/components/profile/ProfileNameEditModal";
-import { ProfileEmploymentDateField } from "@/components/profile/ProfileEmploymentDateField";
 import { ProfilePersonnelMetaFields } from "@/components/profile/ProfilePersonnelMetaFields";
 import { ProfileRotaUnitFields } from "@/components/profile/ProfileRotaUnitFields";
 import { UserIdentityDisplay } from "@/components/profile/UserIdentityDisplay";
 import { UserAvatar } from "@/components/profile/UserAvatar";
-import { AchievementMedalsRow } from "@/components/achievements/AchievementMedalsRow";
 import { SendUserNotificationModal } from "@/components/admin/SendUserNotificationModal";
 import { readClientSession } from "@/lib/client-auth";
 import type { ProfileNameColorId } from "@/lib/profile-name-color";
 import type { UserIdentityCosmetics } from "@/lib/user-identity-cosmetics";
-import { formatDate, formatDateTime, formatTotalTestDuration } from "@/lib/format";
+import { formatDateTime, formatTotalTestDuration } from "@/lib/format";
 import { formatTestResultForType } from "@/lib/test-pass-rules";
 import { dutyLocationLabel } from "@/lib/duty-location";
 import { unitAssignmentLabel, unitAssignmentLabelOrEmpty, normalizeUnitAssignment, UNIT_ASSIGNMENT_OPTIONS } from "@/lib/unit-assignment";
-import { PersonnelProfileStats, type PersonnelActivityData } from "@/components/personnel/PersonnelProfileStats";
-import { PersonnelTestActivityBlock } from "@/components/personnel/PersonnelTestActivityBlock";
 import {
   ResetTestStatsButton,
   ResetTestStatsModal,
   useResetTestStatsModal,
 } from "@/components/profile/ResetTestStatsModal";
-import { getPositionBadgeClass } from "@/lib/position-ui";
+import { getPositionBadgeClass, positionDisplayLabel } from "@/lib/position-ui";
 import { canManageUsers, canManageResults, canResetTestResults, canInspectOtherUserProfile, canModeratePersonnel, canViewUserList } from "@/lib/permissions";
 import { removeTestResultsForUser } from "@/lib/storage";
-import { rotaUnitCompactLabel, type RotaModule, type RotaPlatoon, type RotaSection, normalizeRotaModule } from "@/lib/rota-unit";
+import { rotaUnitCompactLabel, type RotaPlatoon, type RotaSection } from "@/lib/rota-unit";
 import {
   normalizePersonnelBloodGroup,
   normalizePersonnelLicenseCategories,
@@ -60,14 +56,11 @@ type InspectUser = {
   unit_assignment: UnitAssignment | null;
   rota_platoon?: number | null;
   rota_section?: number | null;
-  rota_module?: number | null;
-  employment_date?: string | null;
   licenseCategories?: PersonnelLicenseCategory[];
   bloodGroup?: PersonnelBloodGroup | null;
   nameColor?: ProfileNameColorId | null;
   avatarUrl?: string | null;
   cosmetics?: UserIdentityCosmetics | null;
-  unlockedAchievementIds?: string[];
 };
 
 function mapRows(payload: { results?: Array<Record<string, unknown>> }): TestResult[] {
@@ -92,7 +85,6 @@ export default function ProfileUserInspectPage() {
   const canEditUnitForOthers = session ? canManageUsers(session) || canModeratePersonnel(session) : false;
   const canEditProfileFields = session ? canManageUsers(session) : false;
   const canEditRotaForOthers = session ? canManageUsers(session) || canModeratePersonnel(session) : false;
-  const canEditEmploymentForOthers = canEditRotaForOthers;
   const canEditPersonnelMeta = canEditRotaForOthers;
   const canExportExcel = session ? canManageUsers(session) : false;
   const canResetStats = session ? canResetTestResults(session) : false;
@@ -128,19 +120,13 @@ export default function ProfileUserInspectPage() {
   const [profileEditModalOpen, setProfileEditModalOpen] = useState(false);
   const [notifyModalOpen, setNotifyModalOpen] = useState(false);
   const [fieldError, setFieldError] = useState<{ name?: string; callsign?: string }>({});
-  const [personnelActivity, setPersonnelActivity] = useState<PersonnelActivityData | null>(null);
-  const [personnelReloadToken, setPersonnelReloadToken] = useState(0);
   const [isResettingStats, setIsResettingStats] = useState(false);
   const [resetStatsMessage, setResetStatsMessage] = useState("");
   const resetStatsModal = useResetTestStatsModal("all");
   const [rotaPlatoon, setRotaPlatoon] = useState<RotaPlatoon | null>(null);
   const [rotaSection, setRotaSection] = useState<RotaSection | null>(null);
-  const [rotaModule, setRotaModule] = useState<RotaModule | null>(null);
   const [rotaSaving, setRotaSaving] = useState(false);
   const [rotaSaveError, setRotaSaveError] = useState("");
-  const [employmentDateStored, setEmploymentDateStored] = useState<string | null>(null);
-  const [employmentSaving, setEmploymentSaving] = useState(false);
-  const [employmentSaveError, setEmploymentSaveError] = useState("");
   const [licenseCategories, setLicenseCategories] = useState<PersonnelLicenseCategory[]>([]);
   const [bloodGroup, setBloodGroup] = useState<PersonnelBloodGroup | null>(null);
   const [showPersonnelStats, setShowPersonnelStats] = useState(false);
@@ -184,8 +170,6 @@ export default function ProfileUserInspectPage() {
             ? u.rota_section
             : null,
         );
-        setRotaModule(normalizeRotaModule(u.rota_module));
-        setEmploymentDateStored(typeof u.employment_date === "string" && u.employment_date ? u.employment_date : null);
         setLicenseCategories(normalizePersonnelLicenseCategories(u.licenseCategories));
         setBloodGroup(normalizePersonnelBloodGroup(u.bloodGroup));
         setShowPersonnelStats(payload.personnelProfileShow === true);
@@ -252,11 +236,7 @@ export default function ProfileUserInspectPage() {
     }
   }, [finalAttemptsPage, finalAttemptsTotalPages, showAllFinalAttempts]);
 
-  const saveRotaForUser = async (
-    nextPlatoon: RotaPlatoon | null,
-    nextSection: RotaSection | null,
-    nextModule: RotaModule | null,
-  ) => {
+  const saveRotaForUser = async (nextPlatoon: RotaPlatoon | null, nextSection: RotaSection | null) => {
     if (!userId || !canEditRotaForOthers || inspectUser?.unit_assignment !== "company_4" || rotaSaving) {
       return false;
     }
@@ -266,14 +246,13 @@ export default function ProfileUserInspectPage() {
       const response = await fetch(`/api/profile/user/${encodeURIComponent(userId)}/rota-unit`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ rotaPlatoon: nextPlatoon, rotaSection: nextSection, rotaModule: nextModule }),
+        body: JSON.stringify({ rotaPlatoon: nextPlatoon, rotaSection: nextSection }),
       });
       const payload = (await response.json()) as {
         ok?: boolean;
         error?: string;
         rotaPlatoon?: number | null;
         rotaSection?: number | null;
-        rotaModule?: number | null;
       };
       if (!response.ok || !payload.ok) {
         setRotaSaveError(payload.error || "Не удалось сохранить взвод и отделение.");
@@ -290,7 +269,6 @@ export default function ProfileUserInspectPage() {
           ? payload.rotaSection
           : null,
       );
-      setRotaModule(normalizeRotaModule(payload.rotaModule));
       return true;
     } catch {
       setRotaSaveError("Ошибка сети. Попробуйте ещё раз.");
@@ -304,7 +282,7 @@ export default function ProfileUserInspectPage() {
     const prev = rotaPlatoon;
     setRotaPlatoon(next);
     void (async () => {
-      const ok = await saveRotaForUser(next, rotaSection, rotaModule);
+      const ok = await saveRotaForUser(next, rotaSection);
       if (!ok) setRotaPlatoon(prev);
     })();
   };
@@ -313,49 +291,8 @@ export default function ProfileUserInspectPage() {
     const prev = rotaSection;
     setRotaSection(next);
     void (async () => {
-      const ok = await saveRotaForUser(rotaPlatoon, next, rotaModule);
+      const ok = await saveRotaForUser(rotaPlatoon, next);
       if (!ok) setRotaSection(prev);
-    })();
-  };
-
-  const onRotaModuleChangeForUser = (next: RotaModule | null) => {
-    const prev = rotaModule;
-    setRotaModule(next);
-    void (async () => {
-      const ok = await saveRotaForUser(rotaPlatoon, rotaSection, next);
-      if (!ok) setRotaModule(prev);
-    })();
-  };
-
-  const onEmploymentDateChangeForUser = (next: string) => {
-    if (!userId || !canEditEmploymentForOthers || !next || employmentSaving) return;
-    const prevStored = employmentDateStored;
-    setEmploymentDateStored(next);
-    setEmploymentSaving(true);
-    setEmploymentSaveError("");
-    void (async () => {
-      try {
-        const response = await fetch(`/api/profile/user/${encodeURIComponent(userId)}/employment-date`, {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ employmentDate: next }),
-        });
-        const payload = (await response.json()) as { ok?: boolean; error?: string; employmentDate?: string | null };
-        if (!response.ok || !payload.ok) {
-          setEmploymentDateStored(prevStored);
-          setEmploymentSaveError(payload.error || "Не удалось сохранить дату трудоустройства.");
-          return;
-        }
-        setEmploymentDateStored(
-          typeof payload.employmentDate === "string" && payload.employmentDate ? payload.employmentDate : null,
-        );
-        setPersonnelReloadToken((t) => t + 1);
-      } catch {
-        setEmploymentDateStored(prevStored);
-        setEmploymentSaveError("Ошибка сети. Попробуйте ещё раз.");
-      } finally {
-        setEmploymentSaving(false);
-      }
     })();
   };
 
@@ -369,26 +306,6 @@ export default function ProfileUserInspectPage() {
     if (response.ok && payload.ok && Array.isArray(payload.results)) {
       setRows(mapRows({ results: payload.results }).sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)));
       setTrialStatsFromApi(deserializeTrialProfileStats(payload.trialStats));
-    }
-  };
-
-  const refreshPersonnelActivity = async () => {
-    if (normalizeUnitAssignment(inspectUser?.unit_assignment) !== "company_4") return;
-    setPersonnelReloadToken((token) => token + 1);
-    try {
-      const res = await fetch(`/api/personnel/profile/${encodeURIComponent(userId)}`, { cache: "no-store" });
-      const payload = (await res.json()) as {
-        ok?: boolean;
-        profile?: PersonnelActivityData;
-      };
-      if (res.ok && payload.ok && payload.profile) {
-        setPersonnelActivity({
-          activityByMonth: payload.profile.activityByMonth,
-          activitySummary: payload.profile.activitySummary,
-        });
-      }
-    } catch {
-      // ignore
     }
   };
 
@@ -411,7 +328,6 @@ export default function ProfileUserInspectPage() {
       resetStatsModal.setOpen(false);
       setResetStatsMessage(`Статистика сброшена: ${RESET_SCOPE_LABELS[resetStatsModal.scope]}.`);
       await reloadInspectUserResults();
-      await refreshPersonnelActivity();
     } catch {
       setResetStatsMessage("Ошибка сети. Попробуйте ещё раз.");
     } finally {
@@ -588,7 +504,6 @@ export default function ProfileUserInspectPage() {
     if (next !== "company_4") {
       setRotaPlatoon(null);
       setRotaSection(null);
-      setRotaModule(null);
       setRotaSaveError("");
     }
     setUnitSaving(true);
@@ -766,9 +681,6 @@ export default function ProfileUserInspectPage() {
                       {canExportExcel ? <ProfileExportExcelButton userId={inspectUser.id} /> : null}
                     </div>
                   </div>
-                  {inspectUser ? (
-                    <AchievementMedalsRow unlockedIds={inspectUser.unlockedAchievementIds ?? []} />
-                  ) : null}
                   <div className="profile-hero-status-block">
                     <div className="profile-hero-status-inline">
                       <span className="profile-hero-status-value">
@@ -788,10 +700,10 @@ export default function ProfileUserInspectPage() {
                       ) : null}
                     </div>
                     {inspectUser.unit_assignment === "company_4" &&
-                    rotaUnitCompactLabel(rotaPlatoon, rotaSection, rotaModule) ? (
+                    rotaUnitCompactLabel(rotaPlatoon, rotaSection) ? (
                       <div className="profile-hero-rota-row">
                         <span className="profile-rota-badge">
-                          {rotaUnitCompactLabel(rotaPlatoon, rotaSection, rotaModule)}
+                          {rotaUnitCompactLabel(rotaPlatoon, rotaSection)}
                         </span>
                       </div>
                     ) : null}
@@ -813,7 +725,7 @@ export default function ProfileUserInspectPage() {
                       title="Должность"
                     >
                       <PositionStarIcon />
-                      {inspectUser.position}
+                      {positionDisplayLabel(inspectUser.position)}
                     </div>
                   </div>
                 </div>
@@ -855,22 +767,18 @@ export default function ProfileUserInspectPage() {
                         variant="platoon"
                         platoon={rotaPlatoon}
                         section={rotaSection}
-                        module={rotaModule}
                         saving={rotaSaving}
                         error={rotaSaveError}
                         onPlatoonChange={onRotaPlatoonChangeForUser}
                         onSectionChange={onRotaSectionChangeForUser}
-                        onModuleChange={onRotaModuleChangeForUser}
                       />
                       <ProfileRotaUnitFields
-                        variant="section-module"
+                        variant="section"
                         platoon={rotaPlatoon}
                         section={rotaSection}
-                        module={rotaModule}
                         saving={rotaSaving}
                         onPlatoonChange={onRotaPlatoonChangeForUser}
                         onSectionChange={onRotaSectionChangeForUser}
-                        onModuleChange={onRotaModuleChangeForUser}
                       />
                     </>
                   ) : inspectUser.unit_assignment === "company_4" ? (
@@ -887,29 +795,8 @@ export default function ProfileUserInspectPage() {
                           {rotaSection ? `${rotaSection} отделение` : "Не указано"}
                         </span>
                       </div>
-                      <div className="profile-hero-duty">
-                        <p className="label profile-hero-duty-label">Модуль</p>
-                        <span className="profile-rota-badge profile-rota-badge--static">
-                          {rotaModule ? `${rotaModule} модуль` : "Не указан"}
-                        </span>
-                      </div>
                     </>
                   ) : null}
-                  {canEditEmploymentForOthers ? (
-                    <ProfileEmploymentDateField
-                      value={employmentDateStored ?? ""}
-                      saving={employmentSaving}
-                      error={employmentSaveError}
-                      onChange={onEmploymentDateChangeForUser}
-                    />
-                  ) : (
-                    <div className="profile-hero-duty profile-hero-employment">
-                      <p className="label profile-hero-duty-label">Трудоустройство</p>
-                      <span className="profile-rota-badge profile-rota-badge--static">
-                        {employmentDateStored ? formatDate(employmentDateStored) : "Не указано"}
-                      </span>
-                    </div>
-                  )}
                   <div className="profile-hero-duty profile-hero-duty--full">
                     <p className="label profile-hero-duty-label">Место положения</p>
                     {canEditDutyForOthers ? (
@@ -950,14 +837,6 @@ export default function ProfileUserInspectPage() {
             fieldError={fieldError}
             message={profileMessage}
           />
-
-          {userId && showPersonnelStats ? (
-            <PersonnelProfileStats
-              userId={userId}
-              onActivityData={setPersonnelActivity}
-              reloadToken={personnelReloadToken}
-            />
-          ) : null}
 
           {canSendUserNotification && inspectUser ? (
             <SendUserNotificationModal
@@ -1065,12 +944,6 @@ export default function ProfileUserInspectPage() {
                   </div>
                 </>
               )}
-              {personnelActivity ? (
-                <PersonnelTestActivityBlock
-                  activityByMonth={personnelActivity.activityByMonth}
-                  activitySummary={personnelActivity.activitySummary}
-                />
-              ) : null}
             </div>
           </article>
 

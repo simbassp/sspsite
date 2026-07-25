@@ -8,16 +8,9 @@ import { ProfileExportExcelButton } from "@/components/profile/ProfileExportExce
 import { ProfileHeroLoginBlock } from "@/components/profile/ProfileHeroLoginBlock";
 import { ProfileNameEditModal } from "@/components/profile/ProfileNameEditModal";
 import { UserAvatar } from "@/components/profile/UserAvatar";
-import { ProfileEmploymentDateField } from "@/components/profile/ProfileEmploymentDateField";
 import { ProfilePersonnelMetaFields } from "@/components/profile/ProfilePersonnelMetaFields";
 import { ProfileRotaUnitFields } from "@/components/profile/ProfileRotaUnitFields";
 import { UserIdentityDisplay } from "@/components/profile/UserIdentityDisplay";
-import { AchievementUnlockBanner } from "@/components/achievements/AchievementUnlockBanner";
-import { AchievementMedalsRow } from "@/components/achievements/AchievementMedalsRow";
-import {
-  ProfileCosmeticsButton,
-  ProfileCosmeticsModal,
-} from "@/components/achievements/ProfileCosmeticsModal";
 import { readClientSession } from "@/lib/client-auth";
 import { type BankAvatarOverlayId, type FinalNameColorId, type TrialAvatarFrameId, type TopRankBadgeId } from "@/lib/achievements-catalog";
 import type { ProfileNameColorId } from "@/lib/profile-name-color";
@@ -45,15 +38,13 @@ import {
   updateCurrentUserPasswordWithOldPassword,
   updateCurrentUserRotaUnit,
 } from "@/lib/users-repository";
-import { PersonnelProfileStats, type PersonnelActivityData, type PersonnelProfileInitialPayload } from "@/components/personnel/PersonnelProfileStats";
-import { PersonnelTestActivityBlock } from "@/components/personnel/PersonnelTestActivityBlock";
 import {
   ResetTestStatsButton,
   ResetTestStatsModal,
   useResetTestStatsModal,
 } from "@/components/profile/ResetTestStatsModal";
 import { canManageUsers, canResetTestResults } from "@/lib/permissions";
-import { getPositionBadgeClass } from "@/lib/position-ui";
+import { getPositionBadgeClass, positionDisplayLabel } from "@/lib/position-ui";
 import { dutyLocationLabel } from "@/lib/duty-location";
 import {
   UNIT_ASSIGNMENT_OPTIONS,
@@ -61,7 +52,7 @@ import {
   unitAssignmentLabelOrEmpty,
 } from "@/lib/unit-assignment";
 import { removeTestResultsForUser } from "@/lib/storage";
-import { rotaUnitCompactLabel, type RotaModule, type RotaPlatoon, type RotaSection, normalizeRotaModule } from "@/lib/rota-unit";
+import { rotaUnitCompactLabel, type RotaPlatoon, type RotaSection } from "@/lib/rota-unit";
 import {
   normalizePersonnelBloodGroup,
   normalizePersonnelLicenseCategories,
@@ -112,12 +103,8 @@ export default function ProfilePage() {
   const [unitSaveError, setUnitSaveError] = useState("");
   const [rotaPlatoon, setRotaPlatoon] = useState<RotaPlatoon | null>(null);
   const [rotaSection, setRotaSection] = useState<RotaSection | null>(null);
-  const [rotaModule, setRotaModule] = useState<RotaModule | null>(null);
   const [rotaSaving, setRotaSaving] = useState(false);
   const [rotaSaveError, setRotaSaveError] = useState("");
-  const [employmentDateStored, setEmploymentDateStored] = useState<string | null>(null);
-  const [employmentSaving, setEmploymentSaving] = useState(false);
-  const [employmentSaveError, setEmploymentSaveError] = useState("");
   const [licenseCategories, setLicenseCategories] = useState<PersonnelLicenseCategory[]>([]);
   const [bloodGroup, setBloodGroup] = useState<PersonnelBloodGroup | null>(null);
   const [dutySaving, setDutySaving] = useState(false);
@@ -131,21 +118,12 @@ export default function ProfilePage() {
   const [attemptsPage, setAttemptsPage] = useState(1);
   const [showAllFinalAttempts, setShowAllFinalAttempts] = useState(false);
   const [finalAttemptsPage, setFinalAttemptsPage] = useState(1);
-  const [personnelActivity, setPersonnelActivity] = useState<PersonnelActivityData | null>(null);
-  const [personnelReloadToken, setPersonnelReloadToken] = useState(0);
-  const [personnelInitialPayload, setPersonnelInitialPayload] = useState<PersonnelProfileInitialPayload | null>(null);
   const [showPersonnelProfile, setShowPersonnelProfile] = useState(false);
   const [displayNameColor, setDisplayNameColor] = useState<ProfileNameColorId | null>(null);
-  const [achievementUnlockedIds, setAchievementUnlockedIds] = useState<string[]>([]);
-  const [achievementNotifications, setAchievementNotifications] = useState<
-    Array<{ id: string; title: string; body: string }>
-  >([]);
   const [achievementAvatarFrame, setAchievementAvatarFrame] = useState<TrialAvatarFrameId | null>(null);
   const [achievementBankOverlay, setAchievementBankOverlay] = useState<BankAvatarOverlayId | null>(null);
   const [achievementNameColor, setAchievementNameColor] = useState<FinalNameColorId | null>(null);
   const [achievementTopBadge, setAchievementTopBadge] = useState<TopRankBadgeId | null>(null);
-  const [cosmeticsModalOpen, setCosmeticsModalOpen] = useState(false);
-  const [cosmeticsSaving, setCosmeticsSaving] = useState(false);
   const resetStatsModal = useResetTestStatsModal("all");
   const canManageInvites = session?.role === "admin";
   const canResetStats = useMemo(() => (session ? canResetTestResults(session) : false), [session]);
@@ -166,8 +144,6 @@ export default function ProfilePage() {
         const response = await fetch("/api/profile/achievements?sync=1", { cache: "no-store" });
         const payload = (await response.json()) as {
           ok?: boolean;
-          unlockedIds?: string[];
-          pendingNotifications?: Array<{ id: string; title: string; body: string }>;
           cosmetics?: {
             avatarFrame?: TrialAvatarFrameId | null;
             bankOverlay?: BankAvatarOverlayId | null;
@@ -176,8 +152,6 @@ export default function ProfilePage() {
           topRankBadge?: TopRankBadgeId | null;
         };
         if (!response.ok || !payload.ok || cancelled) return;
-        setAchievementUnlockedIds(Array.isArray(payload.unlockedIds) ? payload.unlockedIds : []);
-        setAchievementNotifications(Array.isArray(payload.pendingNotifications) ? payload.pendingNotifications : []);
         setAchievementAvatarFrame(payload.cosmetics?.avatarFrame ?? null);
         setAchievementBankOverlay(payload.cosmetics?.bankOverlay ?? null);
         setAchievementNameColor(payload.cosmetics?.nameColor ?? null);
@@ -219,8 +193,6 @@ export default function ProfilePage() {
           unitAssignment?: UnitAssignment | null;
           rotaPlatoon?: number | null;
           rotaSection?: number | null;
-          rotaModule?: number | null;
-          employmentDate?: string | null;
           licenseCategories?: unknown;
           bloodGroup?: unknown;
           avatarUrl?: string | null;
@@ -228,7 +200,6 @@ export default function ProfilePage() {
           trialStats?: TrialProfileStatsPayload;
           inviteCodes?: Array<Record<string, unknown>>;
           personnelProfileShow?: boolean;
-          personnelProfile?: PersonnelProfileInitialPayload | null;
           nameColor?: ProfileNameColorId | null;
           position?: Position | null;
         };
@@ -262,21 +233,12 @@ export default function ProfilePage() {
         } else {
           setRotaSection(null);
         }
-        setRotaModule(normalizeRotaModule(payload.rotaModule));
-        setEmploymentDateStored(
-          typeof payload.employmentDate === "string" && payload.employmentDate ? payload.employmentDate : null,
-        );
         setLicenseCategories(normalizePersonnelLicenseCategories(payload.licenseCategories));
         setBloodGroup(normalizePersonnelBloodGroup(payload.bloodGroup));
         const nextAvatarUrl =
           typeof payload.avatarUrl === "string" && payload.avatarUrl.trim() ? payload.avatarUrl.trim() : null;
         setAvatarUrl(nextAvatarUrl);
         setShowPersonnelProfile(payload.personnelProfileShow === true);
-        if (payload.personnelProfile) {
-          setPersonnelInitialPayload(payload.personnelProfile);
-        } else {
-          setPersonnelInitialPayload(null);
-        }
         if ("nameColor" in payload) {
           setDisplayNameColor(payload.nameColor ?? null);
           dispatchIdentityCosmeticsUpdated({ adminNameColor: payload.nameColor ?? null });
@@ -657,7 +619,6 @@ export default function ProfilePage() {
     if (next !== "company_4") {
       setRotaPlatoon(null);
       setRotaSection(null);
-      setRotaModule(null);
       setRotaSaveError("");
     }
     persistSession({
@@ -666,18 +627,13 @@ export default function ProfilePage() {
     });
   };
 
-  const saveRotaUnit = async (
-    nextPlatoon: RotaPlatoon | null,
-    nextSection: RotaSection | null,
-    nextModule: RotaModule | null,
-  ) => {
+  const saveRotaUnit = async (nextPlatoon: RotaPlatoon | null, nextSection: RotaSection | null) => {
     if (unitAssignment !== "company_4" || rotaSaving) return false;
     setRotaSaving(true);
     setRotaSaveError("");
     const res = await updateCurrentUserRotaUnit({
       rotaPlatoon: nextPlatoon,
       rotaSection: nextSection,
-      rotaModule: nextModule,
     });
     setRotaSaving(false);
     if (!res.ok) {
@@ -690,7 +646,6 @@ export default function ProfilePage() {
         ? res.rotaSection
         : null) as RotaSection | null,
     );
-    setRotaModule(normalizeRotaModule(res.rotaModule));
     return true;
   };
 
@@ -698,7 +653,7 @@ export default function ProfilePage() {
     const prev = rotaPlatoon;
     setRotaPlatoon(next);
     void (async () => {
-      const ok = await saveRotaUnit(next, rotaSection, rotaModule);
+      const ok = await saveRotaUnit(next, rotaSection);
       if (!ok) setRotaPlatoon(prev);
     })();
   };
@@ -707,49 +662,8 @@ export default function ProfilePage() {
     const prev = rotaSection;
     setRotaSection(next);
     void (async () => {
-      const ok = await saveRotaUnit(rotaPlatoon, next, rotaModule);
+      const ok = await saveRotaUnit(rotaPlatoon, next);
       if (!ok) setRotaSection(prev);
-    })();
-  };
-
-  const onRotaModuleChange = (next: RotaModule | null) => {
-    const prev = rotaModule;
-    setRotaModule(next);
-    void (async () => {
-      const ok = await saveRotaUnit(rotaPlatoon, rotaSection, next);
-      if (!ok) setRotaModule(prev);
-    })();
-  };
-
-  const onEmploymentDateChange = (next: string) => {
-    if (!next || employmentSaving) return;
-    const prevStored = employmentDateStored;
-    setEmploymentDateStored(next);
-    setEmploymentSaving(true);
-    setEmploymentSaveError("");
-    void (async () => {
-      try {
-        const response = await fetch("/api/profile/employment-date", {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ employmentDate: next }),
-        });
-        const payload = (await response.json()) as { ok?: boolean; error?: string; employmentDate?: string | null };
-        if (!response.ok || !payload.ok) {
-          setEmploymentDateStored(prevStored);
-          setEmploymentSaveError(payload.error || "Не удалось сохранить дату трудоустройства.");
-          return;
-        }
-        setEmploymentDateStored(
-          typeof payload.employmentDate === "string" && payload.employmentDate ? payload.employmentDate : null,
-        );
-        setPersonnelReloadToken((t) => t + 1);
-      } catch {
-        setEmploymentDateStored(prevStored);
-        setEmploymentSaveError("Ошибка сети. Попробуйте ещё раз.");
-      } finally {
-        setEmploymentSaving(false);
-      }
     })();
   };
 
@@ -835,25 +749,6 @@ export default function ProfilePage() {
     }
   };
 
-  const refreshPersonnelActivity = async (targetUserId: string) => {
-    setPersonnelReloadToken((token) => token + 1);
-    try {
-      const res = await fetch(`/api/personnel/profile/${encodeURIComponent(targetUserId)}`, { cache: "no-store" });
-      const payload = (await res.json()) as {
-        ok?: boolean;
-        profile?: PersonnelActivityData;
-      };
-      if (res.ok && payload.ok && payload.profile) {
-        setPersonnelActivity({
-          activityByMonth: payload.profile.activityByMonth,
-          activitySummary: payload.profile.activitySummary,
-        });
-      }
-    } catch {
-      // ignore — overview reloads via reloadToken
-    }
-  };
-
   const onConfirmResetStats = async () => {
     if (isResettingStats || !session?.id) return;
     setIsResettingStats(true);
@@ -877,7 +772,6 @@ export default function ProfilePage() {
       if (refreshed.ok && refreshedPayload.ok && Array.isArray(refreshedPayload.results)) {
         setRows(mapBootstrapResults(refreshedPayload.results));
       }
-      await refreshPersonnelActivity(session.id);
     } catch {
       setSettingsMessage("Ошибка сети. Попробуйте ещё раз.");
     } finally {
@@ -983,16 +877,6 @@ export default function ProfilePage() {
     <section className="profile-page">
       <h1 className="page-title">Профиль</h1>
       {!!initialLoadError && <p className="page-subtitle">{initialLoadError}</p>}
-      <AchievementUnlockBanner
-        notifications={achievementNotifications}
-        onDismiss={(ids) => {
-          void fetch("/api/profile/achievements", {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ dismissNotificationIds: ids }),
-          }).then(() => setAchievementNotifications([]));
-        }}
-      />
 
       <article className="card profile-hero-card">
         <div className="card-body">
@@ -1021,7 +905,6 @@ export default function ProfilePage() {
                         emptyName="—"
                       />
                     </p>
-                    <ProfileCosmeticsButton onClick={() => setCosmeticsModalOpen(true)} />
                     <button
                       type="button"
                       className="btn profile-hero-edit-btn"
@@ -1049,7 +932,6 @@ export default function ProfilePage() {
                   {canExportExcel && session?.id ? <ProfileExportExcelButton userId={session.id} /> : null}
                 </div>
               </div>
-              <AchievementMedalsRow unlockedIds={achievementUnlockedIds} />
               <div className="profile-hero-status-block">
                 <div className="profile-hero-status-inline">
                   <span className="profile-hero-status-value">
@@ -1061,9 +943,9 @@ export default function ProfilePage() {
                   </span>
                   <span className="unit-assignment-badge">{unitAssignmentLabelOrEmpty(unitAssignment)}</span>
                 </div>
-                {unitAssignment === "company_4" && rotaUnitCompactLabel(rotaPlatoon, rotaSection, rotaModule) ? (
+                {unitAssignment === "company_4" && rotaUnitCompactLabel(rotaPlatoon, rotaSection) ? (
                   <div className="profile-hero-rota-row">
-                    <span className="profile-rota-badge">{rotaUnitCompactLabel(rotaPlatoon, rotaSection, rotaModule)}</span>
+                    <span className="profile-rota-badge">{rotaUnitCompactLabel(rotaPlatoon, rotaSection)}</span>
                   </div>
                 ) : null}
               </div>
@@ -1081,7 +963,7 @@ export default function ProfilePage() {
                   title="Должность"
                 >
                   <PositionStarIcon />
-                  {profilePosition ?? session?.position ?? "—"}
+                  {positionDisplayLabel(profilePosition ?? session?.position ?? "")}
                 </div>
               </div>
             </div>
@@ -1114,32 +996,22 @@ export default function ProfilePage() {
                   variant="platoon"
                   platoon={rotaPlatoon}
                   section={rotaSection}
-                  module={rotaModule}
                   saving={rotaSaving}
                   error={rotaSaveError}
                   onPlatoonChange={onRotaPlatoonChange}
                   onSectionChange={onRotaSectionChange}
-                  onModuleChange={onRotaModuleChange}
                 />
               )}
               {unitAssignment === "company_4" && (
                 <ProfileRotaUnitFields
-                  variant="section-module"
+                  variant="section"
                   platoon={rotaPlatoon}
                   section={rotaSection}
-                  module={rotaModule}
                   saving={rotaSaving}
                   onPlatoonChange={onRotaPlatoonChange}
                   onSectionChange={onRotaSectionChange}
-                  onModuleChange={onRotaModuleChange}
                 />
               )}
-              <ProfileEmploymentDateField
-                value={employmentDateStored ?? ""}
-                saving={employmentSaving}
-                error={employmentSaveError}
-                onChange={onEmploymentDateChange}
-              />
               <div className="profile-hero-duty profile-hero-duty--full">
                 <p className="label profile-hero-duty-label">Место положения</p>
                 <ProfileDutyLocationToggle
@@ -1160,63 +1032,6 @@ export default function ProfilePage() {
           </div>
         </div>
       </article>
-
-      {session?.id && showPersonnelProfile ? (
-        <PersonnelProfileStats
-          userId={session.id}
-          onActivityData={setPersonnelActivity}
-          reloadToken={personnelReloadToken}
-          initialPayload={personnelInitialPayload}
-        />
-      ) : null}
-
-      <ProfileCosmeticsModal
-        open={cosmeticsModalOpen}
-        onClose={() => {
-          if (cosmeticsSaving) return;
-          setCosmeticsModalOpen(false);
-        }}
-        unlockedIds={achievementUnlockedIds}
-        name={session.name ?? ""}
-        callsign={session.callsign ?? ""}
-        avatarUrl={avatarUrl}
-        avatarFrame={achievementAvatarFrame}
-        bankOverlay={achievementBankOverlay}
-        nameColor={achievementNameColor}
-        saving={cosmeticsSaving}
-        onSave={(next) => {
-            void (async () => {
-              setCosmeticsSaving(true);
-              try {
-                const response = await fetch("/api/profile/achievements", {
-                  method: "PATCH",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify(next),
-                });
-                const payload = (await response.json()) as {
-                  ok?: boolean;
-                  cosmetics?: {
-                    avatarFrame?: TrialAvatarFrameId | null;
-                    bankOverlay?: BankAvatarOverlayId | null;
-                    nameColor?: FinalNameColorId | null;
-                  };
-                };
-                if (!response.ok || !payload.ok) return;
-                setAchievementAvatarFrame(payload.cosmetics?.avatarFrame ?? null);
-                setAchievementBankOverlay(payload.cosmetics?.bankOverlay ?? null);
-                setAchievementNameColor(payload.cosmetics?.nameColor ?? null);
-                dispatchIdentityCosmeticsUpdated({
-                  achievementNameColor: payload.cosmetics?.nameColor ?? null,
-                  avatarFrame: payload.cosmetics?.avatarFrame ?? null,
-                  bankOverlay: payload.cosmetics?.bankOverlay ?? null,
-                });
-                setCosmeticsModalOpen(false);
-              } finally {
-                setCosmeticsSaving(false);
-              }
-            })();
-          }}
-        />
 
       <ProfileNameEditModal
         open={profileEditModalOpen}
@@ -1443,12 +1258,6 @@ export default function ProfilePage() {
               </div>
             </>
           )}
-          {personnelActivity ? (
-            <PersonnelTestActivityBlock
-              activityByMonth={personnelActivity.activityByMonth}
-              activitySummary={personnelActivity.activitySummary}
-            />
-          ) : null}
           {rows.length > 0 && (
             <div
               style={{

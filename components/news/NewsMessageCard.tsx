@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { UserAvatar } from "@/components/profile/UserAvatar";
 import { UserIdentityDisplay } from "@/components/profile/UserIdentityDisplay";
-import { getPositionBadgeClass } from "@/lib/position-ui";
+import { getPositionBadgeClass, positionDisplayLabel } from "@/lib/position-ui";
 import {
   formatNewsDateParts,
   getAuthorAvatarUrl,
@@ -149,7 +149,7 @@ export function NewsMessageCard({
               </strong>
               {position ? (
                 <span className={`news-message-card__author-position admin-users-position-badge ${getPositionBadgeClass(position)}`}>
-                  {position}
+                  {positionDisplayLabel(position)}
                 </span>
               ) : null}
             </span>

@@ -9,6 +9,8 @@ import { getServerSession } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
 
+const REMOVED_ENTITIES = new Set(["deployment", "premium", "medal", "exam"]);
+
 export async function POST(req: Request) {
   const session = await getServerSession();
   if (!session) {
@@ -17,16 +19,20 @@ export async function POST(req: Request) {
 
   const body = (await req.json()) as {
     action?: "delete" | "update" | "create";
-    entity?: PersonnelManageEntity;
+    entity?: PersonnelManageEntity | string;
     userId?: string;
     id?: string;
     examType?: string;
     data?: Record<string, unknown>;
   };
 
-  const { action, entity, userId, id, examType, data } = body;
+  const { action, entity, userId, data } = body;
   if (!action || !entity || !userId) {
     return Response.json({ ok: false, error: "invalid_request" }, { status: 400 });
+  }
+
+  if (REMOVED_ENTITIES.has(entity)) {
+    return Response.json({ ok: false, error: "feature_removed" }, { status: 410 });
   }
 
   const view = await resolvePersonnelProfileViewAccess(session, userId);
@@ -34,12 +40,16 @@ export async function POST(req: Request) {
     return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
   }
 
+  if (entity !== "licenses") {
+    return Response.json({ ok: false, error: "invalid_entity" }, { status: 400 });
+  }
+
   const result =
     action === "delete"
-      ? await deletePersonnelRecord({ userId, entity, id, examType })
+      ? await deletePersonnelRecord({ userId, entity: "licenses" })
       : action === "create"
-        ? await createPersonnelRecord({ userId, entity, data: data ?? {} })
-        : await updatePersonnelRecord({ userId, entity, id, examType, data: data ?? {} });
+        ? await createPersonnelRecord({ userId, entity: "licenses", data: data ?? {} })
+        : await updatePersonnelRecord({ userId, entity: "licenses", data: data ?? {} });
 
   if (!result.ok) {
     return Response.json({ ok: false, error: result.error }, { status: 400 });

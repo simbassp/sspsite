@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { AuthPasswordInput } from "@/components/AuthPasswordInput";
 import { getPositions } from "@/lib/storage";
-import { ROTA_PLATOON_OPTIONS, ROTA_SECTION_OPTIONS } from "@/lib/personnel-catalog";
+import { positionDisplayLabel } from "@/lib/position-ui";
+import { ROTA_PLATOON_OPTIONS, ROTA_SECTION_OPTIONS, rotaPlatoonLabel, rotaSectionLabel } from "@/lib/personnel-catalog";
 import { UNIT_ASSIGNMENT_OPTIONS, unitAssignmentLabel } from "@/lib/unit-assignment";
 import type { UnitAssignment } from "@/lib/types";
 import { normalizeRotaPlatoon, normalizeRotaSection, type RotaPlatoon, type RotaSection } from "@/lib/rota-unit";
@@ -347,7 +348,7 @@ export default function RegisterPage() {
                   <option value="">Выберите взвод</option>
                   {ROTA_PLATOON_OPTIONS.map((value) => (
                     <option key={value} value={value}>
-                      {value} взвод
+                      {rotaPlatoonLabel(value)}
                     </option>
                   ))}
                 </select>
@@ -362,7 +363,7 @@ export default function RegisterPage() {
                   <option value="">Выберите отделение</option>
                   {ROTA_SECTION_OPTIONS.map((value) => (
                     <option key={value} value={value}>
-                      {value} отделение
+                      {rotaSectionLabel(value)}
                     </option>
                   ))}
                 </select>
@@ -377,7 +378,7 @@ export default function RegisterPage() {
             >
               {positions.map((item) => (
                 <option key={item} value={item}>
-                  {item}
+                  {positionDisplayLabel(item)}
                 </option>
               ))}
             </select>
