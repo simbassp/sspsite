@@ -1,4 +1,9 @@
 import { computeFinalTestSummary } from "@/lib/server-final-test-summary";
+import {
+  evaluateOrphanAttempt,
+  loadFinalAttemptRow,
+} from "@/lib/final-attempt-server";
+import type { OrphanAttemptSummary } from "@/lib/types";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 
@@ -44,7 +49,7 @@ export async function GET() {
   try {
     const supabase = getServerSupabaseServiceClient();
     const t0 = Date.now();
-    const orphanPromise = supabase.from("final_attempts").select("user_id").eq("user_id", session.id).maybeSingle();
+    const orphanPromise = loadFinalAttemptRow(supabase, session.id);
     const bankTimePromise = supabase
       .from("test_questions")
       .select("time_limit_sec")
@@ -129,7 +134,8 @@ export async function GET() {
     }
     const t1 = Date.now();
 
-    const [orphanQ, bankTimeQ, finalTestSummary] = await Promise.all([orphanPromise, bankTimePromise, finalSummaryPromise]);
+    const [orphanRow, bankTimeQ, finalTestSummary] = await Promise.all([orphanPromise, bankTimePromise, finalSummaryPromise]);
+    const orphanAttempt: OrphanAttemptSummary = evaluateOrphanAttempt(orphanRow);
     const t2 = Date.now();
     if (configQ.error) {
       if (process.env.NODE_ENV !== "production") {
@@ -154,7 +160,8 @@ export async function GET() {
       console.debug("[api/tests/bootstrap] ok", {
         userId: session.id,
         hasSettings: Boolean(configQ.data),
-        hasOrphanAttempt: Boolean(orphanQ.data?.user_id),
+        hasOrphanAttempt: orphanAttempt.hasOrphan,
+        orphanAttempt,
         timingsMs: {
           testSettings: t1 - t0,
           orphanAttempt: t2 - t1,
@@ -174,7 +181,8 @@ export async function GET() {
         manualBankUavTtxEnabled: cfg.manual_bank_uav_ttx_enabled !== false,
         manualBankCounteractionEnabled: cfg.manual_bank_counteraction_enabled !== false,
       },
-      hasOrphanAttempt: Boolean(orphanQ.data?.user_id),
+      hasOrphanAttempt: orphanAttempt.hasOrphan,
+      orphanAttempt,
       bankQuestionTimeSec,
       timingsMs: {
         testSettings: t1 - t0,

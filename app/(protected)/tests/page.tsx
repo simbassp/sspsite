@@ -6,6 +6,7 @@ import { FINAL_TEST_MAX_ATTEMPTS } from "@/lib/final-test-constants";
 import { FINAL_AUTO_RESET_DAY_UTC } from "@/lib/final-effective-counting";
 import { formatDateTime } from "@/lib/format";
 import {
+  abandonFinalAttempt,
   beginFinalAttempt,
   createTrialResult,
   fetchActiveQuestionPool,
@@ -13,11 +14,14 @@ import {
   fetchUserResults,
   finishFinalAttempt,
   forceFailFinalAttempt,
+  interruptFinalAttempt,
   loadFinalAttempt,
   persistFinalAttempt,
   recordBankCompletion,
+  recoverFinalAttemptFromServer,
   seedDefaultQuestionsIfEmpty,
 } from "@/lib/tests-repository";
+import { evaluateOrphanAttempt } from "@/lib/final-attempt-recovery";
 import { filterDbPoolByManualTopicSettings } from "@/lib/manual-topic";
 import { DEFAULT_TEST_CONFIG } from "@/lib/test-config";
 import {
@@ -30,7 +34,7 @@ import {
 import { loadRecentQuestionIds, pickTestQuestions, rememberQuestionIds, shuffleQuestions } from "@/lib/test-question-selection";
 import { generateUavTtxQuestionBank } from "@/lib/uav-test-generator";
 import { fetchUavItems } from "@/lib/uav-repository";
-import { TestConfig, TestQuestion, TestResult } from "@/lib/types";
+import { TestConfig, TestQuestion, TestResult, type OrphanAttemptSummary } from "@/lib/types";
 
 const ANSWER_TRANSITION_MS = 3000;
 const QUESTION_START_COUNTDOWN_SEC = 3;
@@ -78,6 +82,12 @@ function waitForUiPaint() {
   return new Promise<void>((resolve) => {
     requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
   });
+}
+
+function formatRecoveryCountdown(seconds: number) {
+  const min = Math.floor(seconds / 60);
+  const sec = seconds % 60;
+  return min > 0 ? `${min}:${String(sec).padStart(2, "0")}` : `${sec} сек`;
 }
 
 type StartingTestMode = "trial" | "bank" | "final";
@@ -170,6 +180,9 @@ export default function TestsPage() {
   const [bankQuestionTimeSec, setBankQuestionTimeSec] = useState<number | null>(null);
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [historyPage, setHistoryPage] = useState(1);
+  const [orphanRecovery, setOrphanRecovery] = useState<OrphanAttemptSummary | null>(null);
+  const [orphanRecoveryLoading, setOrphanRecoveryLoading] = useState(false);
+  const [recoveryCountdown, setRecoveryCountdown] = useState(0);
 
   useEffect(() => {
     setIsHydrated(true);
@@ -220,6 +233,28 @@ export default function TestsPage() {
       /* ignore */
     }
   }, [session]);
+
+  const resolveOrphanAttempt = useCallback(
+    async (orphan: OrphanAttemptSummary): Promise<string | null> => {
+      if (!session || !orphan.hasOrphan) return null;
+      if (orphan.canRecover) {
+        setOrphanRecovery(orphan);
+        setRecoveryCountdown(orphan.secondsRemaining);
+        return null;
+      }
+      if (orphan.recoveryUsed) {
+        await forceFailFinalAttempt(session.id);
+        return "Итоговая попытка прервана повторно после восстановления и засчитана как НЕ СДАЛ.";
+      }
+      if (orphan.expired) {
+        await abandonFinalAttempt(session.id);
+        return "Время восстановления истекло — незавершённая попытка удалена без записи результата.";
+      }
+      await abandonFinalAttempt(session.id);
+      return "Незавершённая попытка удалена без записи результата.";
+    },
+    [session],
+  );
 
   useEffect(() => {
     if (!finalTest || finalTest.hasPassedFinal || !finalTest.attemptsExhausted) return;
@@ -379,6 +414,90 @@ export default function TestsPage() {
     }
   };
 
+  const restoreFinalAttempt = async (attempt: Awaited<ReturnType<typeof loadFinalAttempt>>, replacedQuestion?: TestQuestion) => {
+    if (!session || !attempt?.questionIds.length) return false;
+    const pool = questionPool.length > 0 ? questionPool : await loadQuestionPool();
+    if (!pool) return false;
+    const byId = new Map(pool.map((q) => [q.id, q]));
+    if (replacedQuestion) byId.set(replacedQuestion.id, replacedQuestion);
+    const questions = attempt.questionIds
+      .map((id, i) => (i === attempt.questionIndex && replacedQuestion ? replacedQuestion : byId.get(id)))
+      .filter((q): q is TestQuestion => Boolean(q));
+    if (questions.length !== attempt.questionIds.length) return false;
+    const restoredAnswers = Object.fromEntries(
+      Object.entries(attempt.answers).map(([k, v]) => [k, Number(v)]),
+    );
+    expireHandledForQuestionIdRef.current = null;
+    setTrialFeedback(null);
+    setFinalTransition(null);
+    setFinalReview(null);
+    setActiveTest("final");
+    setIsTestStarted(false);
+    setSelectedQuestions(questions);
+    setQuestionIndex(attempt.questionIndex);
+    setAnswers(restoredAnswers);
+    answersRef.current = restoredAnswers;
+    testStartedAtRef.current = attempt.startedAt;
+    const current = questions[attempt.questionIndex];
+    if (current) setTimeLeft(Math.max(1, current.timeLimitSec));
+    return true;
+  };
+
+  const handleRecoverOrphan = async () => {
+    if (!session || orphanRecoveryLoading) return;
+    setOrphanRecoveryLoading(true);
+    try {
+      const result = await recoverFinalAttemptFromServer();
+      if (!result.ok) {
+        setMessage("Не удалось восстановить попытку. Попробуйте обновить страницу.");
+        setOrphanRecovery(null);
+        return;
+      }
+      const ok = await restoreFinalAttempt(result.attempt, result.replacedQuestion);
+      if (!ok) {
+        setMessage("Не удалось загрузить вопросы попытки. Проверьте интернет.");
+        return;
+      }
+      setOrphanRecovery(null);
+      setMessage("Попытка восстановлена. Текущий вопрос заменён на другой.");
+    } finally {
+      setOrphanRecoveryLoading(false);
+    }
+  };
+
+  const handleDeclineOrphan = async () => {
+    if (!session || orphanRecoveryLoading) return;
+    setOrphanRecoveryLoading(true);
+    try {
+      await abandonFinalAttempt(session.id);
+      setOrphanRecovery(null);
+      setMessage("Незавершённая попытка удалена без записи результата.");
+    } finally {
+      setOrphanRecoveryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!orphanRecovery?.canRecover) return;
+    setRecoveryCountdown(orphanRecovery.secondsRemaining);
+    const id = window.setInterval(() => {
+      setRecoveryCountdown((prev) => {
+        if (prev <= 1) {
+          window.clearInterval(id);
+          void (async () => {
+            if (!session) return;
+            await abandonFinalAttempt(session.id);
+            setOrphanRecovery(null);
+            setMessage("Время восстановления истекло — попытка удалена без записи результата.");
+          })();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [orphanRecovery?.canRecover, orphanRecovery?.secondsRemaining, session]);
+
   useEffect(() => {
     if (!session) return;
     let cancelled = false;
@@ -398,6 +517,7 @@ export default function TestsPage() {
             error?: string;
             config?: TestConfig;
             hasOrphanAttempt?: boolean;
+            orphanAttempt?: OrphanAttemptSummary;
             bankQuestionTimeSec?: number | null;
             timingsMs?: Record<string, number>;
             finalTest?: FinalTestSummary | null;
@@ -423,11 +543,22 @@ export default function TestsPage() {
           setFinalTest(payload.finalTest);
         }
 
-        if (payload.hasOrphanAttempt) {
+        if (payload.orphanAttempt?.hasOrphan || payload.hasOrphanAttempt) {
           try {
-            await forceFailFinalAttempt(session.id);
+            const orphanMsg = await resolveOrphanAttempt(
+              payload.orphanAttempt || {
+                hasOrphan: true,
+                canRecover: false,
+                recoveryUsed: false,
+                expired: true,
+                secondsRemaining: 0,
+                questionIndex: 0,
+                questionCount: 0,
+                answeredCount: 0,
+              },
+            );
             if (cancelled) return;
-            setMessage("Итоговая попытка была прервана (обновление/закрытие/выход) и засчитана как НЕ СДАЛ.");
+            if (orphanMsg) setMessage(orphanMsg);
           } catch {
             if (process.env.NODE_ENV !== "production") {
               console.debug("[tests] orphan attempt resolve failed");
@@ -467,10 +598,17 @@ export default function TestsPage() {
           const orphanAttempt = await loadFinalAttempt(session.id);
           if (cancelled) return;
           if (orphanAttempt) {
-            await forceFailFinalAttempt(session.id);
-            if (!cancelled) {
-              setMessage("Итоговая попытка была прервана (обновление/закрытие/выход) и засчитана как НЕ СДАЛ.");
-            }
+            const summary = evaluateOrphanAttempt({
+              startedAt: orphanAttempt.startedAt,
+              questionIndex: orphanAttempt.questionIndex,
+              answers: orphanAttempt.answers,
+              questionIds: orphanAttempt.questionIds,
+              recoveryUsed: Boolean(orphanAttempt.recoveryUsed),
+              interruptedAt: orphanAttempt.interruptedAt ?? null,
+              updatedAt: null,
+            });
+            const orphanMsg = await resolveOrphanAttempt(summary);
+            if (!cancelled && orphanMsg) setMessage(orphanMsg);
           }
           setBootstrapError("");
           await refresh();
@@ -487,7 +625,7 @@ export default function TestsPage() {
     return () => {
       cancelled = true;
     };
-  }, [session, reloadFinalSummary]);
+  }, [session, reloadFinalSummary, resolveOrphanAttempt]);
 
   const activeQuestions = selectedQuestions;
   const currentQuestion = activeQuestions[questionIndex];
@@ -526,15 +664,23 @@ export default function TestsPage() {
 
   useEffect(() => {
     if (!session || activeTest !== "final") return;
-    const onExit = () => void forceFailFinalAttempt(session.id);
-
-    window.addEventListener("beforeunload", onExit);
-    window.addEventListener("pagehide", onExit);
+    const onPageHide = () => void interruptFinalAttempt(session.id);
+    window.addEventListener("pagehide", onPageHide);
     return () => {
-      window.removeEventListener("beforeunload", onExit);
-      window.removeEventListener("pagehide", onExit);
+      window.removeEventListener("pagehide", onPageHide);
     };
   }, [activeTest, session]);
+
+  useEffect(() => {
+    if (activeTest !== "final") return;
+    if (!finalTransition && !isAnswering) return;
+    const timer = window.setTimeout(() => {
+      if (finalTransitionRef.current || isAnsweringRef.current) {
+        completeFinalAfterTransitionRef.current();
+      }
+    }, 6500);
+    return () => window.clearTimeout(timer);
+  }, [activeTest, finalTransition, isAnswering]);
 
   useEffect(() => {
     if (!isTestStarted || !currentQuestion || !activeTest) return;
@@ -778,6 +924,7 @@ export default function TestsPage() {
       startedAt: testStartedAtRef.current || new Date().toISOString(),
       questionIndex: nextIndex,
       answers: Object.fromEntries(Object.entries(nextAnswers).map(([k, v]) => [k, String(v)])),
+      questionIds: list.map((q) => q.id),
     });
     setIsAnswering(false);
   };
@@ -927,7 +1074,8 @@ export default function TestsPage() {
       const randomQuestions = pickTestQuestions(pool, testConfig.finalQuestionCount, recentIds);
       if (session) rememberQuestionIds(session.id, randomQuestions.map((q) => q.id));
       const first = randomQuestions[0];
-      await beginFinalAttempt(session.id);
+      const questionIds = randomQuestions.map((q) => q.id);
+      const attemptState = await beginFinalAttempt(session.id, questionIds);
       expireHandledForQuestionIdRef.current = null;
       setTrialFeedback(null);
       setFinalTransition(null);
@@ -939,7 +1087,7 @@ export default function TestsPage() {
       setAnswers({});
       answersRef.current = {};
       if (first) setTimeLeft(Math.max(1, first.timeLimitSec));
-      testStartedAtRef.current = null;
+      testStartedAtRef.current = attemptState.startedAt;
       setMessage(`Итоговый тест запущен: ${randomQuestions.length} случайных вопросов. Режим строгий.`);
     } finally {
       setStartingTest(null);
@@ -1511,6 +1659,59 @@ export default function TestsPage() {
           </div>
         </div>
       </section>
+
+      {orphanRecovery?.canRecover ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="final-recovery-title"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+            zIndex: 1000,
+          }}
+        >
+          <article className="card" style={{ width: "min(480px, 100%)" }}>
+            <div className="card-body">
+              <h3 id="final-recovery-title" style={{ marginTop: 0 }}>
+                Продолжить итоговый тест?
+              </h3>
+              <p className="page-subtitle" style={{ marginTop: 0 }}>
+                Обнаружена незавершённая попытка. Можно восстановить её один раз в течение 5 минут. Текущий вопрос
+                будет заменён на другой.
+              </p>
+              <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
+                Отвечено: {orphanRecovery.answeredCount} из {orphanRecovery.questionCount}. Осталось:{" "}
+                <strong>{formatRecoveryCountdown(recoveryCountdown)}</strong>
+              </p>
+              <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
+                <button
+                  className="btn btn-primary"
+                  type="button"
+                  onClick={() => void handleRecoverOrphan()}
+                  disabled={orphanRecoveryLoading || recoveryCountdown <= 0}
+                  aria-busy={orphanRecoveryLoading}
+                >
+                  {orphanRecoveryLoading ? "Восстанавливаю…" : "Продолжить"}
+                </button>
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => void handleDeclineOrphan()}
+                  disabled={orphanRecoveryLoading}
+                >
+                  Отказаться
+                </button>
+              </div>
+            </div>
+          </article>
+        </div>
+      ) : null}
     </section>
   );
 }

@@ -395,6 +395,7 @@ export function startFinalAttempt(userId: string): FinalAttemptState {
     startedAt: new Date().toISOString(),
     questionIndex: 0,
     answers: {},
+    questionIds: [],
   };
   data.finalAttempt = state;
   writeData(data);

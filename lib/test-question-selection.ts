@@ -79,3 +79,14 @@ export function pickTestQuestions(
   const ordered = [...shuffleQuestions(fresh), ...shuffleQuestions(stale)];
   return ordered.slice(0, need);
 }
+
+/** Один новый вопрос из банка, исключая уже использованные в попытке. */
+export function pickReplacementQuestion(
+  bank: readonly TestQuestion[],
+  excludeIds: ReadonlySet<string>,
+): TestQuestion | null {
+  const candidates = bank.filter((q) => !excludeIds.has(q.id));
+  if (!candidates.length) return null;
+  const shuffled = shuffleQuestions(candidates);
+  return shuffled[0] ?? null;
+}

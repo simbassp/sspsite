@@ -1,0 +1,143 @@
+import { evaluateOrphanAttempt as evaluateOrphanAttemptCore } from "@/lib/final-attempt-recovery";
+import { pickReplacementQuestion } from "@/lib/test-question-selection";
+import { loadServerTestQuestionPool } from "@/lib/test-question-pool-server";
+import type { OrphanAttemptSummary } from "@/lib/types";
+import type { TestQuestion } from "@/lib/types";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+export type { OrphanAttemptSummary };
+
+export type FinalAttemptDbRow = {
+  user_id: string;
+  started_at: string;
+  question_index: number;
+  answers: Record<string, string> | null;
+  question_ids?: string[] | null;
+  recovery_used?: boolean | null;
+  interrupted_at?: string | null;
+  updated_at?: string | null;
+};
+
+export type FinalAttemptPayload = {
+  userId: string;
+  startedAt: string;
+  questionIndex: number;
+  answers: Record<string, string>;
+  questionIds: string[];
+  recoveryUsed: boolean;
+  interruptedAt: string | null;
+  updatedAt: string | null;
+};
+
+export function mapFinalAttemptRow(row: FinalAttemptDbRow): FinalAttemptPayload {
+  const rawIds = row.question_ids;
+  const questionIds = Array.isArray(rawIds) ? rawIds.map(String).filter(Boolean) : [];
+  return {
+    userId: row.user_id,
+    startedAt: row.started_at,
+    questionIndex: Math.max(0, Number(row.question_index ?? 0)),
+    answers: row.answers && typeof row.answers === "object" ? (row.answers as Record<string, string>) : {},
+    questionIds,
+    recoveryUsed: Boolean(row.recovery_used),
+    interruptedAt: row.interrupted_at ? String(row.interrupted_at) : null,
+    updatedAt: row.updated_at ? String(row.updated_at) : null,
+  };
+}
+
+export function evaluateOrphanAttempt(row: FinalAttemptPayload | null, now = Date.now()): OrphanAttemptSummary {
+  if (!row) {
+    return evaluateOrphanAttemptCore(null, now);
+  }
+  return evaluateOrphanAttemptCore(
+    {
+      startedAt: row.startedAt,
+      questionIndex: row.questionIndex,
+      answers: row.answers,
+      questionIds: row.questionIds,
+      recoveryUsed: row.recoveryUsed,
+      interruptedAt: row.interruptedAt,
+      updatedAt: row.updatedAt,
+    },
+    now,
+  );
+}
+
+export async function loadFinalAttemptRow(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<FinalAttemptPayload | null> {
+  const res = await supabase
+    .from("final_attempts")
+    .select("user_id,started_at,question_index,answers,question_ids,recovery_used,interrupted_at,updated_at")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (res.error || !res.data) return null;
+  return mapFinalAttemptRow(res.data as FinalAttemptDbRow);
+}
+
+export async function abandonFinalAttempt(supabase: SupabaseClient, userId: string) {
+  await supabase.from("final_attempts").delete().eq("user_id", userId);
+}
+
+export async function markFinalAttemptInterrupted(supabase: SupabaseClient, userId: string) {
+  const now = new Date().toISOString();
+  const res = await supabase
+    .from("final_attempts")
+    .update({ interrupted_at: now, updated_at: now })
+    .eq("user_id", userId)
+    .select("user_id")
+    .maybeSingle();
+  return Boolean(res.data);
+}
+
+export async function recoverFinalAttempt(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<
+  | { ok: true; attempt: FinalAttemptPayload; replacedQuestion: TestQuestion }
+  | { ok: false; error: string }
+> {
+  const row = await loadFinalAttemptRow(supabase, userId);
+  if (!row) return { ok: false, error: "not_found" };
+
+  const summary = evaluateOrphanAttempt(row);
+  if (!summary.canRecover) {
+    if (summary.recoveryUsed) return { ok: false, error: "recovery_already_used" };
+    if (summary.expired) return { ok: false, error: "recovery_window_expired" };
+    return { ok: false, error: "recovery_not_available" };
+  }
+
+  const pool = await loadServerTestQuestionPool(supabase);
+  const exclude = new Set(row.questionIds);
+  const replacement = pickReplacementQuestion(pool, exclude);
+  if (!replacement) return { ok: false, error: "no_replacement_question" };
+
+  const index = Math.min(row.questionIndex, row.questionIds.length - 1);
+  const nextQuestionIds = [...row.questionIds];
+  nextQuestionIds[index] = replacement.id;
+
+  const now = new Date().toISOString();
+  const upd = await supabase
+    .from("final_attempts")
+    .update({
+      question_ids: nextQuestionIds,
+      question_index: index,
+      recovery_used: true,
+      interrupted_at: null,
+      updated_at: now,
+    })
+    .eq("user_id", userId)
+    .select("user_id,started_at,question_index,answers,question_ids,recovery_used,interrupted_at,updated_at")
+    .maybeSingle();
+
+  if (upd.error || !upd.data) {
+    return { ok: false, error: upd.error?.message || "recover_update_failed" };
+  }
+
+  return {
+    ok: true,
+    attempt: mapFinalAttemptRow(upd.data as FinalAttemptDbRow),
+    replacedQuestion: replacement,
+  };
+}

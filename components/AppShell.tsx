@@ -543,11 +543,11 @@ export function AppShell({ session, children }: AppShellProps) {
     isLoggingOutRef.current = true;
     setIsLoggingOut(true);
     try {
-      const [{ forceFailFinalAttempt }, { logoutUser }] = await Promise.all([
+      const [{ interruptFinalAttempt }, { logoutUser }] = await Promise.all([
         import("@/lib/tests-repository"),
         import("@/lib/users-repository"),
       ]);
-      void withTimeout(forceFailFinalAttempt(session.id), 1200).catch(() => {});
+      void withTimeout(interruptFinalAttempt(session.id), 1200).catch(() => {});
       await withTimeout(logoutUser(), 1200);
     } catch {}
     window.location.assign("/login");

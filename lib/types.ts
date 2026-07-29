@@ -194,8 +194,22 @@ export interface FinalAttemptState {
   userId: string;
   startedAt: string;
   questionIndex: number;
-  answers: Record<number, string>;
+  answers: Record<string, string>;
+  questionIds: string[];
+  recoveryUsed?: boolean;
+  interruptedAt?: string | null;
 }
+
+export type OrphanAttemptSummary = {
+  hasOrphan: boolean;
+  canRecover: boolean;
+  recoveryUsed: boolean;
+  expired: boolean;
+  secondsRemaining: number;
+  questionIndex: number;
+  questionCount: number;
+  answeredCount: number;
+};
 
 export interface AppData {
   users: UserRecord[];

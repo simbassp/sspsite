@@ -9,11 +9,13 @@ import {
   listTestQuestions,
   listTestResults,
   markFinalAttemptAsFailed,
+  readData,
   removeTestQuestion,
   saveFinalAttempt,
   startFinalAttempt,
   updateTestConfig,
   upsertTestQuestion,
+  writeData,
 } from "@/lib/storage";
 import { createDefaultQuestionBank } from "@/lib/test-question-bank";
 import { normalizeTestConfig } from "@/lib/test-config";
@@ -43,6 +45,10 @@ type FinalAttemptRow = {
   started_at: string;
   question_index: number;
   answers: Record<string, string>;
+  question_ids?: string[] | null;
+  recovery_used?: boolean | null;
+  interrupted_at?: string | null;
+  updated_at?: string | null;
 };
 
 type TestQuestionRow = {
@@ -124,11 +130,16 @@ function mapResult(row: TestResultRow): TestResult {
 }
 
 function mapAttempt(row: FinalAttemptRow): FinalAttemptState {
+  const rawIds = row.question_ids;
+  const questionIds = Array.isArray(rawIds) ? rawIds.map(String).filter(Boolean) : [];
   return {
     userId: row.user_id,
     startedAt: row.started_at,
     questionIndex: row.question_index,
-    answers: Object.fromEntries(Object.entries(row.answers || {}).map(([k, v]) => [Number(k), String(v)])),
+    answers: Object.fromEntries(Object.entries(row.answers || {}).map(([k, v]) => [String(k), String(v)])),
+    questionIds,
+    recoveryUsed: Boolean(row.recovery_used),
+    interruptedAt: row.interrupted_at ? String(row.interrupted_at) : null,
   };
 }
 
@@ -342,40 +353,38 @@ export async function recordBankCompletion(
   }
 }
 
-export async function beginFinalAttempt(userId: string) {
+export async function beginFinalAttempt(userId: string, questionIds: string[] = []) {
   if (!isSupabaseConfigured) {
-    return startFinalAttempt(userId);
+    const state = startFinalAttempt(userId);
+    return { ...state, questionIds };
   }
-  const payload = {
-    user_id: userId,
-    started_at: new Date().toISOString(),
-    question_index: 0,
-    answers: {},
-  };
+  const startedAt = new Date().toISOString();
   try {
     const response = await fetch("/api/tests/final-attempt", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        startedAt: payload.started_at,
+        startedAt,
         questionIndex: 0,
         answers: {},
+        questionIds,
       }),
     });
     const result = (await response.json()) as { ok?: boolean; attempt?: FinalAttemptRow };
     if (!response.ok || !result.ok) {
-      return startFinalAttempt(userId);
+      return { ...startFinalAttempt(userId), questionIds };
     }
     return mapAttempt(
-      (result.attempt || payload) as unknown as {
-        user_id: string;
-        started_at: string;
-        question_index: number;
-        answers: Record<string, string>;
-      },
+      (result.attempt || {
+        user_id: userId,
+        started_at: startedAt,
+        question_index: 0,
+        answers: {},
+        question_ids: questionIds,
+      }) as FinalAttemptRow,
     );
   } catch {
-    return startFinalAttempt(userId);
+    return { ...startFinalAttempt(userId), questionIds };
   }
 }
 
@@ -392,6 +401,7 @@ export async function persistFinalAttempt(state: FinalAttemptState) {
         startedAt: state.startedAt,
         questionIndex: state.questionIndex,
         answers: state.answers,
+        questionIds: state.questionIds,
       }),
     });
     const result = (await response.json()) as { ok?: boolean };
@@ -449,6 +459,57 @@ export async function finishFinalAttempt(
   } catch {
     completeFinalAttempt(userId, score, passed, meta);
     return;
+  }
+}
+
+export async function interruptFinalAttempt(_userId: string) {
+  if (!isSupabaseConfigured) return;
+  try {
+    await fetch("/api/tests/final-attempt", { method: "PATCH", keepalive: true });
+  } catch {
+    /* ignore offline */
+  }
+}
+
+export async function abandonFinalAttempt(_userId: string) {
+  if (!isSupabaseConfigured) {
+    const data = readData();
+    data.finalAttempt = null;
+    writeData(data);
+    return;
+  }
+  try {
+    await fetch("/api/tests/final-attempt", { method: "DELETE" });
+  } catch {
+    /* ignore offline */
+  }
+}
+
+export async function recoverFinalAttemptFromServer(): Promise<
+  | { ok: true; attempt: FinalAttemptState; replacedQuestion: TestQuestion }
+  | { ok: false; error: string }
+> {
+  if (!isSupabaseConfigured) {
+    return { ok: false, error: "supabase_not_configured" };
+  }
+  try {
+    const response = await fetch("/api/tests/final-attempt/recover", { method: "POST" });
+    const payload = (await response.json()) as {
+      ok?: boolean;
+      error?: string;
+      attempt?: FinalAttemptRow;
+      replacedQuestion?: TestQuestion;
+    };
+    if (!response.ok || !payload.ok || !payload.attempt || !payload.replacedQuestion) {
+      return { ok: false, error: payload.error || "recover_failed" };
+    }
+    return {
+      ok: true,
+      attempt: mapAttempt(payload.attempt),
+      replacedQuestion: payload.replacedQuestion,
+    };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "recover_exception" };
   }
 }
 
