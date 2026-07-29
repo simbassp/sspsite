@@ -36,23 +36,27 @@ export async function loadServerTestQuestionPool(supabase: SupabaseClient): Prom
     manualBankCounteractionEnabled: cfgRow.manual_bank_counteraction_enabled !== false,
   });
 
-  let questionsRes = await supabase
+  const questionsWithTopic = await supabase
     .from("test_questions")
     .select("id,type,text,options,correct_index,time_limit_sec,order_index,is_active,created_at,manual_topic")
     .eq("is_active", true)
     .order("order_index", { ascending: true })
     .limit(2000);
 
-  if (questionsRes.error && isMissingColumnError(questionsRes.error.message)) {
-    questionsRes = await supabase
+  let questionRows: Array<Record<string, unknown>> = [];
+  if (questionsWithTopic.error && isMissingColumnError(questionsWithTopic.error.message)) {
+    const fallback = await supabase
       .from("test_questions")
       .select("id,type,text,options,correct_index,time_limit_sec,order_index,is_active,created_at")
       .eq("is_active", true)
       .order("order_index", { ascending: true })
       .limit(2000);
+    questionRows = (fallback.data ?? []) as Array<Record<string, unknown>>;
+  } else {
+    questionRows = (questionsWithTopic.data ?? []) as Array<Record<string, unknown>>;
   }
 
-  const dbPool: TestQuestion[] = ((questionsRes.data ?? []) as Array<Record<string, unknown>>).map((q, index) =>
+  const dbPool: TestQuestion[] = questionRows.map((q, index) =>
     dedupeQuestionOptions({
       id: String(q.id),
       type: q.type === "final" ? "final" : "trial",
@@ -70,25 +74,29 @@ export async function loadServerTestQuestionPool(supabase: SupabaseClient): Prom
 
   if (!testConfig.uavAutoGeneration) return dbFiltered;
 
-  let uavRes = await supabase
+  const uavWithSort = await supabase
     .from("catalog_items")
     .select("id,title,category,summary,image,specs,details,sort_order")
     .eq("kind", "uav")
     .order("sort_order", { ascending: true })
     .limit(200);
 
-  if (uavRes.error && isMissingColumnError(uavRes.error.message)) {
-    uavRes = await supabase
+  let uavRows: Array<Record<string, unknown>> = [];
+  if (uavWithSort.error && isMissingColumnError(uavWithSort.error.message)) {
+    const fallback = await supabase
       .from("catalog_items")
       .select("id,title,category,summary,image,specs,details")
       .eq("kind", "uav")
       .limit(200);
+    uavRows = (fallback.data ?? []) as Array<Record<string, unknown>>;
+  } else {
+    uavRows = (uavWithSort.data ?? []) as Array<Record<string, unknown>>;
   }
 
   const fromUav =
-    uavRes.error || !uavRes.data?.length
+    !uavRows.length
       ? []
-      : generateUavTtxQuestionBank(uavRes.data as never[], testConfig.timePerQuestionSec);
+      : generateUavTtxQuestionBank(uavRows as never[], testConfig.timePerQuestionSec);
 
   if (!fromUav.length) return dbFiltered;
 
