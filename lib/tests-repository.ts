@@ -130,16 +130,31 @@ function mapResult(row: TestResultRow): TestResult {
   };
 }
 
-function mapAttempt(row: FinalAttemptRow): FinalAttemptState {
-  const questionIds = parseQuestionIds(row.question_ids);
+type FinalAttemptApiRow = FinalAttemptRow & {
+  userId?: string;
+  startedAt?: string;
+  questionIndex?: number;
+  questionIds?: string[] | null;
+  recoveryUsed?: boolean | null;
+  interruptedAt?: string | null;
+};
+
+function mapAttempt(row: FinalAttemptApiRow): FinalAttemptState {
+  const questionIds = parseQuestionIds(row.questionIds ?? row.question_ids);
+  const answersRaw = row.answers && typeof row.answers === "object" ? row.answers : {};
   return {
-    userId: row.user_id,
-    startedAt: row.started_at,
-    questionIndex: row.question_index,
-    answers: Object.fromEntries(Object.entries(row.answers || {}).map(([k, v]) => [String(k), String(v)])),
+    userId: String(row.userId ?? row.user_id),
+    startedAt: String(row.startedAt ?? row.started_at),
+    questionIndex: Math.max(0, Number(row.questionIndex ?? row.question_index ?? 0)),
+    answers: Object.fromEntries(Object.entries(answersRaw).map(([k, v]) => [String(k), String(v)])),
     questionIds,
-    recoveryUsed: Boolean(row.recovery_used),
-    interruptedAt: row.interrupted_at ? String(row.interrupted_at) : null,
+    recoveryUsed: Boolean(row.recoveryUsed ?? row.recovery_used),
+    interruptedAt:
+      row.interruptedAt != null
+        ? String(row.interruptedAt)
+        : row.interrupted_at != null
+          ? String(row.interrupted_at)
+          : null,
   };
 }
 
@@ -419,7 +434,7 @@ export async function loadFinalAttempt(userId: string) {
   }
   try {
     const response = await fetch("/api/tests/final-attempt", { cache: "no-store" });
-    const payload = (await response.json()) as { ok?: boolean; attempt?: FinalAttemptRow | null };
+    const payload = (await response.json()) as { ok?: boolean; attempt?: FinalAttemptApiRow | null };
     if (!response.ok || !payload.ok || !payload.attempt) {
       return getFinalAttempt(userId);
     }
@@ -497,20 +512,27 @@ export async function recoverFinalAttemptFromServer(): Promise<
     const payload = (await response.json()) as {
       ok?: boolean;
       error?: string;
-      attempt?: FinalAttemptRow;
+      attempt?: FinalAttemptApiRow;
       questions?: TestQuestion[];
       replacedQuestion?: TestQuestion;
     };
     if (!response.ok || !payload.ok || !payload.attempt || !payload.replacedQuestion || !Array.isArray(payload.questions)) {
       return { ok: false, error: payload.error || "recover_failed" };
     }
+    if (payload.questions.length === 0) {
+      return { ok: false, error: "recover_failed" };
+    }
     const attempt = mapAttempt(payload.attempt);
-    if (payload.questions.length !== attempt.questionIds.length) {
+    if (payload.questions.length !== attempt.questionIds.length && attempt.questionIds.length > 0) {
       return { ok: false, error: "recover_questions_mismatch" };
     }
+    const normalizedAttempt =
+      attempt.questionIds.length > 0
+        ? attempt
+        : { ...attempt, questionIds: payload.questions.map((q) => q.id) };
     return {
       ok: true,
-      attempt,
+      attempt: normalizedAttempt,
       questions: payload.questions,
       replacedQuestion: payload.replacedQuestion,
     };

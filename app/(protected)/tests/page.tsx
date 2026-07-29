@@ -104,6 +104,9 @@ function recoverOrphanErrorMessage(error: string) {
       return "Не удалось подобрать новый вопрос. Попробуйте позже или начните новый тест.";
     case "not_interrupted":
       return "Не удалось подтвердить обрыв попытки. Обновите страницу и попробуйте снова.";
+    case "recover_failed":
+    case "recover_questions_mismatch":
+      return "Сервер не смог вернуть вопросы попытки. Обновите страницу и попробуйте ещё раз.";
     default:
       return "Не удалось восстановить попытку. Обновите страницу или начните новый тест.";
   }
