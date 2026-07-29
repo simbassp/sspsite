@@ -511,9 +511,11 @@ export default function TestsPage() {
     if (!session || orphanRecoveryLoading) return;
     setOrphanRecoveryLoading(true);
     try {
-      await abandonFinalAttempt(session.id);
+      await forceFailFinalAttempt(session.id);
       setOrphanRecovery(null);
-      setMessage("Незавершённая попытка удалена без записи результата.");
+      recoveryDeadlineRef.current = null;
+      setMessage("Отказ от восстановления — попытка засчитана как НЕ СДАЛ.");
+      await refresh({ reloadFinalSummaryAfter: true });
     } finally {
       setOrphanRecoveryLoading(false);
     }
@@ -1731,7 +1733,7 @@ export default function TestsPage() {
               </h3>
               <p className="page-subtitle" style={{ marginTop: 0 }}>
                 Обнаружена незавершённая попытка. Можно восстановить её один раз в течение 5 минут. Текущий вопрос
-                будет заменён на другой.
+                будет заменён на другой. Отказ засчитывается как НЕ СДАЛ.
               </p>
               <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 0 }}>
                 Отвечено: {orphanRecovery.answeredCount} из {orphanRecovery.questionCount}. Осталось:{" "}
@@ -1753,7 +1755,7 @@ export default function TestsPage() {
                   onClick={() => void handleDeclineOrphan()}
                   disabled={orphanRecoveryLoading}
                 >
-                  Отказаться
+                  {orphanRecoveryLoading ? "Завершаю…" : "Отказаться (не сдал)"}
                 </button>
               </div>
             </div>
