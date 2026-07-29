@@ -47,20 +47,27 @@ export async function POST(request: Request) {
   const supabase = getServerSupabaseServiceClient();
   const now = new Date().toISOString();
 
+  const questionIds = Array.isArray(body.questionIds) ? body.questionIds.map(String).filter(Boolean) : [];
+  const questionIndex = Math.max(0, Number(body.questionIndex ?? 0));
+  const answers = body.answers && typeof body.answers === "object" ? body.answers : {};
+
   const inProgress = await supabase.from("final_attempts").select("user_id").eq("user_id", session.id).maybeSingle();
-  if (!inProgress.data) {
+  const isPersist =
+    Boolean(inProgress.data) ||
+    questionIndex > 0 ||
+    Object.keys(answers).length > 0;
+  if (!isPersist) {
     const summary = await computeFinalTestSummary(supabase, session.id);
     if (!summary.canStartFinal) {
       return Response.json({ ok: false, error: "final_attempts_exhausted" }, { status: 403 });
     }
   }
 
-  const questionIds = Array.isArray(body.questionIds) ? body.questionIds.map(String).filter(Boolean) : [];
   const payload: Record<string, unknown> = {
     user_id: session.id,
     started_at: String(body.startedAt || now),
-    question_index: Math.max(0, Number(body.questionIndex ?? 0)),
-    answers: body.answers && typeof body.answers === "object" ? body.answers : {},
+    question_index: questionIndex,
+    answers,
     question_ids: questionIds,
     updated_at: now,
   };
