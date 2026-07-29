@@ -486,7 +486,7 @@ export async function abandonFinalAttempt(_userId: string) {
 }
 
 export async function recoverFinalAttemptFromServer(): Promise<
-  | { ok: true; attempt: FinalAttemptState; replacedQuestion: TestQuestion }
+  | { ok: true; attempt: FinalAttemptState; questions: TestQuestion[]; replacedQuestion: TestQuestion }
   | { ok: false; error: string }
 > {
   if (!isSupabaseConfigured) {
@@ -498,14 +498,20 @@ export async function recoverFinalAttemptFromServer(): Promise<
       ok?: boolean;
       error?: string;
       attempt?: FinalAttemptRow;
+      questions?: TestQuestion[];
       replacedQuestion?: TestQuestion;
     };
-    if (!response.ok || !payload.ok || !payload.attempt || !payload.replacedQuestion) {
+    if (!response.ok || !payload.ok || !payload.attempt || !payload.replacedQuestion || !Array.isArray(payload.questions)) {
       return { ok: false, error: payload.error || "recover_failed" };
+    }
+    const attempt = mapAttempt(payload.attempt);
+    if (payload.questions.length !== attempt.questionIds.length) {
+      return { ok: false, error: "recover_questions_mismatch" };
     }
     return {
       ok: true,
-      attempt: mapAttempt(payload.attempt),
+      attempt,
+      questions: payload.questions,
       replacedQuestion: payload.replacedQuestion,
     };
   } catch (error) {

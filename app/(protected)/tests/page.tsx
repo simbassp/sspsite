@@ -98,6 +98,8 @@ function recoverOrphanErrorMessage(error: string) {
       return "Восстановление уже использовано. Попытка засчитана как НЕ СДАЛ.";
     case "missing_question_ids":
       return "Эту попытку нельзя восстановить (нет списка вопросов). Начните итоговый тест заново.";
+    case "missing_attempt_questions":
+      return "Не удалось собрать вопросы попытки на сервере. Начните итоговый тест заново.";
     case "no_replacement_question":
       return "Не удалось подобрать новый вопрос. Попробуйте позже или начните новый тест.";
     case "not_interrupted":
@@ -434,16 +436,11 @@ export default function TestsPage() {
     }
   };
 
-  const restoreFinalAttempt = async (attempt: Awaited<ReturnType<typeof loadFinalAttempt>>, replacedQuestion?: TestQuestion) => {
-    if (!session || !attempt?.questionIds.length) return false;
-    const pool = questionPool.length > 0 ? questionPool : await loadQuestionPool();
-    if (!pool) return false;
-    const byId = new Map(pool.map((q) => [q.id, q]));
-    if (replacedQuestion) byId.set(replacedQuestion.id, replacedQuestion);
-    const questions = attempt.questionIds
-      .map((id, i) => (i === attempt.questionIndex && replacedQuestion ? replacedQuestion : byId.get(id)))
-      .filter((q): q is TestQuestion => Boolean(q));
-    if (questions.length !== attempt.questionIds.length) return false;
+  const restoreFinalAttempt = async (
+    attempt: Awaited<ReturnType<typeof loadFinalAttempt>>,
+    questions: TestQuestion[],
+  ) => {
+    if (!session || !attempt || !questions.length || questions.length !== attempt.questionIds.length) return false;
     const restoredAnswers = Object.fromEntries(
       Object.entries(attempt.answers).map(([k, v]) => [k, Number(v)]),
     );
@@ -454,6 +451,11 @@ export default function TestsPage() {
     setActiveTest("final");
     setIsTestStarted(false);
     setSelectedQuestions(questions);
+    setQuestionPool((prev) => {
+      const byId = new Map(prev.map((q) => [q.id, q]));
+      for (const q of questions) byId.set(q.id, q);
+      return Array.from(byId.values());
+    });
     setQuestionIndex(attempt.questionIndex);
     setAnswers(restoredAnswers);
     answersRef.current = restoredAnswers;
@@ -471,7 +473,11 @@ export default function TestsPage() {
       await interruptFinalAttempt(session.id);
       const result = await recoverFinalAttemptFromServer();
       if (!result.ok) {
-        if (result.error === "recovery_window_expired" || result.error === "missing_question_ids") {
+        if (
+          result.error === "recovery_window_expired" ||
+          result.error === "missing_question_ids" ||
+          result.error === "missing_attempt_questions"
+        ) {
           await abandonFinalAttempt(session.id);
         } else if (result.error === "recovery_already_used") {
           await forceFailFinalAttempt(session.id);
@@ -481,9 +487,12 @@ export default function TestsPage() {
         recoveryDeadlineRef.current = null;
         return;
       }
-      const ok = await restoreFinalAttempt(result.attempt, result.replacedQuestion);
+      const ok = await restoreFinalAttempt(result.attempt, result.questions);
       if (!ok) {
-        setMessage("Не удалось загрузить вопросы попытки. Проверьте интернет.");
+        await forceFailFinalAttempt(session.id);
+        setOrphanRecovery(null);
+        recoveryDeadlineRef.current = null;
+        setMessage("Не удалось открыть восстановленную попытку. Попытка засчитана как НЕ СДАЛ.");
         return;
       }
       setOrphanRecovery(null);

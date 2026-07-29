@@ -24,6 +24,7 @@ export async function POST() {
     return Response.json({
       ok: true,
       attempt: result.attempt,
+      questions: result.questions,
       replacedQuestion: result.replacedQuestion,
     });
   } catch (error) {

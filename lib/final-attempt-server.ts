@@ -3,7 +3,7 @@ import {
   parseQuestionIds,
 } from "@/lib/final-attempt-recovery";
 import { pickReplacementQuestion } from "@/lib/test-question-selection";
-import { loadServerTestQuestionPool } from "@/lib/test-question-pool-server";
+import { loadServerTestQuestionPool, resolveQuestionsForAttempt } from "@/lib/test-question-pool-server";
 import type { OrphanAttemptSummary } from "@/lib/types";
 import type { TestQuestion } from "@/lib/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -118,7 +118,7 @@ export async function recoverFinalAttempt(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<
-  | { ok: true; attempt: FinalAttemptPayload; replacedQuestion: TestQuestion }
+  | { ok: true; attempt: FinalAttemptPayload; questions: TestQuestion[]; replacedQuestion: TestQuestion }
   | { ok: false; error: string }
 > {
   const row = await prepareOrphanForRecovery(supabase, userId);
@@ -142,6 +142,14 @@ export async function recoverFinalAttempt(
   const nextQuestionIds = [...row.questionIds];
   nextQuestionIds[index] = replacement.id;
 
+  const baseQuestions = await resolveQuestionsForAttempt(supabase, row.questionIds);
+  if (!baseQuestions) return { ok: false, error: "missing_attempt_questions" };
+
+  const questions = nextQuestionIds.map((id, i) => (i === index ? replacement : baseQuestions[i]!));
+  if (questions.length !== nextQuestionIds.length) {
+    return { ok: false, error: "missing_attempt_questions" };
+  }
+
   const now = new Date().toISOString();
   const upd = await supabase
     .from("final_attempts")
@@ -163,6 +171,7 @@ export async function recoverFinalAttempt(
   return {
     ok: true,
     attempt: mapFinalAttemptRow(upd.data as FinalAttemptDbRow),
+    questions,
     replacedQuestion: replacement,
   };
 }

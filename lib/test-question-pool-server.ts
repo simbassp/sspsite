@@ -103,3 +103,54 @@ export async function loadServerTestQuestionPool(supabase: SupabaseClient): Prom
   const ids = new Set(fromUav.map((q) => q.id));
   return [...fromUav, ...dbFiltered.filter((q) => !ids.has(q.id))];
 }
+
+function mapQuestionRow(q: Record<string, unknown>, index: number): TestQuestion {
+  return dedupeQuestionOptions({
+    id: String(q.id),
+    type: q.type === "final" ? "final" : "trial",
+    text: String(q.text ?? ""),
+    options: Array.isArray(q.options) ? q.options.map(String) : [],
+    correctIndex: Number(q.correct_index ?? 0),
+    timeLimitSec: Number(q.time_limit_sec ?? 10),
+    order: Number(q.order_index ?? index + 1),
+    isActive: Boolean(q.is_active ?? true),
+    createdAt: String(q.created_at ?? new Date().toISOString()),
+    manualTopic: normalizeManualTopic(q.manual_topic),
+  });
+}
+
+/** Собрать вопросы попытки по id (из пула + прямой догрузки из БД). */
+export async function resolveQuestionsForAttempt(
+  supabase: SupabaseClient,
+  questionIds: readonly string[],
+): Promise<TestQuestion[] | null> {
+  if (!questionIds.length) return null;
+
+  const pool = await loadServerTestQuestionPool(supabase);
+  const byId = new Map(pool.map((q) => [q.id, q]));
+  const missing = questionIds.filter((id) => !byId.has(id));
+
+  if (missing.length) {
+    const withTopic = await supabase
+      .from("test_questions")
+      .select("id,type,text,options,correct_index,time_limit_sec,order_index,is_active,created_at,manual_topic")
+      .in("id", missing);
+    let extraRows: Array<Record<string, unknown>> = [];
+    if (withTopic.error && isMissingColumnError(withTopic.error.message)) {
+      const fallback = await supabase
+        .from("test_questions")
+        .select("id,type,text,options,correct_index,time_limit_sec,order_index,is_active,created_at")
+        .in("id", missing);
+      extraRows = (fallback.data ?? []) as Array<Record<string, unknown>>;
+    } else {
+      extraRows = (withTopic.data ?? []) as Array<Record<string, unknown>>;
+    }
+    for (const [index, row] of extraRows.entries()) {
+      const mapped = mapQuestionRow(row, index);
+      byId.set(mapped.id, mapped);
+    }
+  }
+
+  const questions = questionIds.map((id) => byId.get(id)).filter((q): q is TestQuestion => Boolean(q));
+  return questions.length === questionIds.length ? questions : null;
+}
