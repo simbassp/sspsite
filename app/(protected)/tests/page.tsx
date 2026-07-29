@@ -90,6 +90,23 @@ function formatRecoveryCountdown(seconds: number) {
   return min > 0 ? `${min}:${String(sec).padStart(2, "0")}` : `${sec} сек`;
 }
 
+function recoverOrphanErrorMessage(error: string) {
+  switch (error) {
+    case "recovery_window_expired":
+      return "Время восстановления истекло — попытка удалена без записи результата.";
+    case "recovery_already_used":
+      return "Восстановление уже использовано. Попытка засчитана как НЕ СДАЛ.";
+    case "missing_question_ids":
+      return "Эту попытку нельзя восстановить (нет списка вопросов). Начните итоговый тест заново.";
+    case "no_replacement_question":
+      return "Не удалось подобрать новый вопрос. Попробуйте позже или начните новый тест.";
+    case "not_interrupted":
+      return "Не удалось подтвердить обрыв попытки. Обновите страницу и попробуйте снова.";
+    default:
+      return "Не удалось восстановить попытку. Обновите страницу или начните новый тест.";
+  }
+}
+
 type StartingTestMode = "trial" | "bank" | "final";
 type TrialFeedback = { chosen: number | null; correct: number };
 type FinalTransition = { chosen: number | null };
@@ -214,6 +231,8 @@ export default function TestsPage() {
   const finalReviewRef = useRef<HTMLDivElement | null>(null);
   /** Одноразовое уведомление в блоке сообщений при исчерпании попыток итога. */
   const finalAttemptsExhaustedBannerRef = useRef(false);
+  const recoveryDeadlineRef = useRef<number | null>(null);
+  const recoverOrphanInFlightRef = useRef(false);
 
   answersRef.current = answers;
   questionIndexRef.current = questionIndex;
@@ -238,8 +257,9 @@ export default function TestsPage() {
     async (orphan: OrphanAttemptSummary): Promise<string | null> => {
       if (!session || !orphan.hasOrphan) return null;
       if (orphan.canRecover) {
+        recoveryDeadlineRef.current = Date.now() + Math.max(1, orphan.secondsRemaining) * 1000;
         setOrphanRecovery(orphan);
-        setRecoveryCountdown(orphan.secondsRemaining);
+        setRecoveryCountdown(Math.max(1, orphan.secondsRemaining));
         return null;
       }
       if (orphan.recoveryUsed) {
@@ -444,13 +464,21 @@ export default function TestsPage() {
   };
 
   const handleRecoverOrphan = async () => {
-    if (!session || orphanRecoveryLoading) return;
+    if (!session || orphanRecoveryLoading || recoverOrphanInFlightRef.current) return;
+    recoverOrphanInFlightRef.current = true;
     setOrphanRecoveryLoading(true);
     try {
+      await interruptFinalAttempt(session.id);
       const result = await recoverFinalAttemptFromServer();
       if (!result.ok) {
-        setMessage("Не удалось восстановить попытку. Попробуйте обновить страницу.");
+        if (result.error === "recovery_window_expired" || result.error === "missing_question_ids") {
+          await abandonFinalAttempt(session.id);
+        } else if (result.error === "recovery_already_used") {
+          await forceFailFinalAttempt(session.id);
+        }
+        setMessage(recoverOrphanErrorMessage(result.error));
         setOrphanRecovery(null);
+        recoveryDeadlineRef.current = null;
         return;
       }
       const ok = await restoreFinalAttempt(result.attempt, result.replacedQuestion);
@@ -459,8 +487,10 @@ export default function TestsPage() {
         return;
       }
       setOrphanRecovery(null);
+      recoveryDeadlineRef.current = null;
       setMessage("Попытка восстановлена. Текущий вопрос заменён на другой.");
     } finally {
+      recoverOrphanInFlightRef.current = false;
       setOrphanRecoveryLoading(false);
     }
   };
@@ -478,25 +508,28 @@ export default function TestsPage() {
   };
 
   useEffect(() => {
-    if (!orphanRecovery?.canRecover) return;
-    setRecoveryCountdown(orphanRecovery.secondsRemaining);
-    const id = window.setInterval(() => {
-      setRecoveryCountdown((prev) => {
-        if (prev <= 1) {
-          window.clearInterval(id);
-          void (async () => {
-            if (!session) return;
-            await abandonFinalAttempt(session.id);
-            setOrphanRecovery(null);
-            setMessage("Время восстановления истекло — попытка удалена без записи результата.");
-          })();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    if (!orphanRecovery?.canRecover || !recoveryDeadlineRef.current) return;
+
+    const tick = () => {
+      const deadline = recoveryDeadlineRef.current;
+      if (!deadline) return;
+      const left = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+      setRecoveryCountdown(left);
+      if (left <= 0) {
+        recoveryDeadlineRef.current = null;
+        void (async () => {
+          if (!session) return;
+          await abandonFinalAttempt(session.id);
+          setOrphanRecovery(null);
+          setMessage("Время восстановления истекло — попытка удалена без записи результата.");
+        })();
+      }
+    };
+
+    tick();
+    const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
-  }, [orphanRecovery?.canRecover, orphanRecovery?.secondsRemaining, session]);
+  }, [orphanRecovery?.canRecover, session]);
 
   useEffect(() => {
     if (!session) return;
@@ -598,13 +631,16 @@ export default function TestsPage() {
           const orphanAttempt = await loadFinalAttempt(session.id);
           if (cancelled) return;
           if (orphanAttempt) {
+            await interruptFinalAttempt(session.id);
+            const refreshedAttempt = await loadFinalAttempt(session.id);
+            const attemptForSummary = refreshedAttempt || orphanAttempt;
             const summary = evaluateOrphanAttempt({
-              startedAt: orphanAttempt.startedAt,
-              questionIndex: orphanAttempt.questionIndex,
-              answers: orphanAttempt.answers,
-              questionIds: orphanAttempt.questionIds,
-              recoveryUsed: Boolean(orphanAttempt.recoveryUsed),
-              interruptedAt: orphanAttempt.interruptedAt ?? null,
+              startedAt: attemptForSummary.startedAt,
+              questionIndex: attemptForSummary.questionIndex,
+              answers: attemptForSummary.answers,
+              questionIds: attemptForSummary.questionIds,
+              recoveryUsed: Boolean(attemptForSummary.recoveryUsed),
+              interruptedAt: attemptForSummary.interruptedAt ?? new Date().toISOString(),
               updatedAt: null,
             });
             const orphanMsg = await resolveOrphanAttempt(summary);

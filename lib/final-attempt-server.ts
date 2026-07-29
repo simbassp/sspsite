@@ -1,4 +1,7 @@
-import { evaluateOrphanAttempt as evaluateOrphanAttemptCore } from "@/lib/final-attempt-recovery";
+import {
+  evaluateOrphanAttempt as evaluateOrphanAttemptCore,
+  parseQuestionIds,
+} from "@/lib/final-attempt-recovery";
 import { pickReplacementQuestion } from "@/lib/test-question-selection";
 import { loadServerTestQuestionPool } from "@/lib/test-question-pool-server";
 import type { OrphanAttemptSummary } from "@/lib/types";
@@ -30,8 +33,7 @@ export type FinalAttemptPayload = {
 };
 
 export function mapFinalAttemptRow(row: FinalAttemptDbRow): FinalAttemptPayload {
-  const rawIds = row.question_ids;
-  const questionIds = Array.isArray(rawIds) ? rawIds.map(String).filter(Boolean) : [];
+  const questionIds = parseQuestionIds(row.question_ids);
   return {
     userId: row.user_id,
     startedAt: row.started_at,
@@ -62,18 +64,39 @@ export function evaluateOrphanAttempt(row: FinalAttemptPayload | null, now = Dat
   );
 }
 
+const FINAL_ATTEMPT_SELECT =
+  "user_id,started_at,question_index,answers,question_ids,recovery_used,interrupted_at,updated_at";
+const FINAL_ATTEMPT_LEGACY_SELECT = "user_id,started_at,question_index,answers";
+
+function isMissingColumnError(message: string | undefined) {
+  const m = (message || "").toLowerCase();
+  return m.includes("column") && m.includes("does not exist");
+}
+
 export async function loadFinalAttemptRow(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<FinalAttemptPayload | null> {
-  const res = await supabase
-    .from("final_attempts")
-    .select("user_id,started_at,question_index,answers,question_ids,recovery_used,interrupted_at,updated_at")
-    .eq("user_id", userId)
-    .maybeSingle();
-
+  let res = await supabase.from("final_attempts").select(FINAL_ATTEMPT_SELECT).eq("user_id", userId).maybeSingle();
+  if (res.error && isMissingColumnError(res.error.message)) {
+    res = await supabase.from("final_attempts").select(FINAL_ATTEMPT_LEGACY_SELECT).eq("user_id", userId).maybeSingle();
+  }
   if (res.error || !res.data) return null;
   return mapFinalAttemptRow(res.data as FinalAttemptDbRow);
+}
+
+/** Пометить обрыв (если ещё нет) и вернуть актуальную строку попытки. */
+export async function prepareOrphanForRecovery(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<FinalAttemptPayload | null> {
+  let row = await loadFinalAttemptRow(supabase, userId);
+  if (!row || !row.questionIds.length || row.recoveryUsed) return row;
+  if (!row.interruptedAt) {
+    await markFinalAttemptInterrupted(supabase, userId);
+    row = await loadFinalAttemptRow(supabase, userId);
+  }
+  return row;
 }
 
 export async function abandonFinalAttempt(supabase: SupabaseClient, userId: string) {
@@ -98,13 +121,15 @@ export async function recoverFinalAttempt(
   | { ok: true; attempt: FinalAttemptPayload; replacedQuestion: TestQuestion }
   | { ok: false; error: string }
 > {
-  const row = await loadFinalAttemptRow(supabase, userId);
+  const row = await prepareOrphanForRecovery(supabase, userId);
   if (!row) return { ok: false, error: "not_found" };
+  if (!row.questionIds.length) return { ok: false, error: "missing_question_ids" };
 
   const summary = evaluateOrphanAttempt(row);
   if (!summary.canRecover) {
     if (summary.recoveryUsed) return { ok: false, error: "recovery_already_used" };
     if (summary.expired) return { ok: false, error: "recovery_window_expired" };
+    if (!row.interruptedAt) return { ok: false, error: "not_interrupted" };
     return { ok: false, error: "recovery_not_available" };
   }
 

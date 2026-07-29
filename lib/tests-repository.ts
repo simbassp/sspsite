@@ -22,6 +22,7 @@ import { normalizeTestConfig } from "@/lib/test-config";
 import { dedupeQuestionOptions } from "@/lib/answer-equivalence";
 import { withTimeoutAndRetry } from "@/lib/async-utils";
 import { normalizeManualTopic } from "@/lib/manual-topic";
+import { parseQuestionIds } from "@/lib/final-attempt-recovery";
 import { FinalAttemptState, TestConfig, TestQuestion, TestResult, TestType } from "@/lib/types";
 
 type TestResultRow = {
@@ -130,8 +131,7 @@ function mapResult(row: TestResultRow): TestResult {
 }
 
 function mapAttempt(row: FinalAttemptRow): FinalAttemptState {
-  const rawIds = row.question_ids;
-  const questionIds = Array.isArray(rawIds) ? rawIds.map(String).filter(Boolean) : [];
+  const questionIds = parseQuestionIds(row.question_ids);
   return {
     userId: row.user_id,
     startedAt: row.started_at,

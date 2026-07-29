@@ -1,7 +1,7 @@
 import { computeFinalTestSummary } from "@/lib/server-final-test-summary";
 import {
   evaluateOrphanAttempt,
-  loadFinalAttemptRow,
+  prepareOrphanForRecovery,
 } from "@/lib/final-attempt-server";
 import type { OrphanAttemptSummary } from "@/lib/types";
 import { getServerSession } from "@/lib/server-auth";
@@ -49,7 +49,6 @@ export async function GET() {
   try {
     const supabase = getServerSupabaseServiceClient();
     const t0 = Date.now();
-    const orphanPromise = loadFinalAttemptRow(supabase, session.id);
     const bankTimePromise = supabase
       .from("test_questions")
       .select("time_limit_sec")
@@ -134,7 +133,8 @@ export async function GET() {
     }
     const t1 = Date.now();
 
-    const [orphanRow, bankTimeQ, finalTestSummary] = await Promise.all([orphanPromise, bankTimePromise, finalSummaryPromise]);
+    const [bankTimeQ, finalTestSummary] = await Promise.all([bankTimePromise, finalSummaryPromise]);
+    const orphanRow = await prepareOrphanForRecovery(supabase, session.id);
     const orphanAttempt: OrphanAttemptSummary = evaluateOrphanAttempt(orphanRow);
     const t2 = Date.now();
     if (configQ.error) {

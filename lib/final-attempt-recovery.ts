@@ -11,8 +11,19 @@ export type FinalAttemptRecoveryInput = {
   startedAt: string;
 };
 
-function effectiveInterruptedAt(row: FinalAttemptRecoveryInput): string {
-  return row.interruptedAt || row.updatedAt || row.startedAt;
+export function parseQuestionIds(raw: unknown): string[] {
+  if (Array.isArray(raw)) return raw.map(String).filter(Boolean);
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (!trimmed) return [];
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean);
+    } catch {
+      return [];
+    }
+  }
+  return [];
 }
 
 export function evaluateOrphanAttempt(row: FinalAttemptRecoveryInput | null, now = Date.now()): OrphanAttemptSummary {
@@ -29,11 +40,50 @@ export function evaluateOrphanAttempt(row: FinalAttemptRecoveryInput | null, now
     };
   }
 
-  const interruptedMs = new Date(effectiveInterruptedAt(row)).getTime();
+  if (row.recoveryUsed) {
+    return {
+      hasOrphan: true,
+      canRecover: false,
+      recoveryUsed: true,
+      expired: false,
+      secondsRemaining: 0,
+      questionIndex: row.questionIndex,
+      questionCount: row.questionIds.length,
+      answeredCount: Object.keys(row.answers).length,
+    };
+  }
+
+  if (!row.interruptedAt) {
+    return {
+      hasOrphan: true,
+      canRecover: false,
+      recoveryUsed: false,
+      expired: false,
+      secondsRemaining: 0,
+      questionIndex: row.questionIndex,
+      questionCount: row.questionIds.length,
+      answeredCount: Object.keys(row.answers).length,
+    };
+  }
+
+  const interruptedMs = new Date(row.interruptedAt).getTime();
+  if (!Number.isFinite(interruptedMs)) {
+    return {
+      hasOrphan: true,
+      canRecover: false,
+      recoveryUsed: false,
+      expired: true,
+      secondsRemaining: 0,
+      questionIndex: row.questionIndex,
+      questionCount: row.questionIds.length,
+      answeredCount: Object.keys(row.answers).length,
+    };
+  }
+
   const elapsed = now - interruptedMs;
   const withinWindow = elapsed <= FINAL_ATTEMPT_RECOVERY_WINDOW_MS;
   const secondsRemaining = withinWindow ? Math.max(0, Math.ceil((FINAL_ATTEMPT_RECOVERY_WINDOW_MS - elapsed) / 1000)) : 0;
-  const canRecover = withinWindow && !row.recoveryUsed;
+  const canRecover = withinWindow;
 
   return {
     hasOrphan: true,
