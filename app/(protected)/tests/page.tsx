@@ -1208,17 +1208,13 @@ export default function TestsPage() {
     finalTest?.nextAutoResetAt
       ? formatDateTime(finalTest.nextAutoResetAt)
       : `${FINAL_AUTO_RESET_DAY_UTC} числа следующего месяца`;
-  const finalClosureStatus = useMemo(
-    () =>
-      finalTest
-        ? evaluateFinalTestClosure({
-            closedFrom: finalTest.finalTestClosedFrom ?? null,
-            closedUntil: finalTest.finalTestClosedUntil ?? null,
-            message: finalTest.finalTestClosureMessage ?? null,
-          })
-        : null,
-    [finalTest],
-  );
+  const finalClosureStatus = finalTest
+    ? evaluateFinalTestClosure({
+        closedFrom: finalTest.finalTestClosedFrom ?? null,
+        closedUntil: finalTest.finalTestClosedUntil ?? null,
+        message: finalTest.finalTestClosureMessage ?? null,
+      })
+    : null;
   const finalClosureDisplayMessage =
     finalClosureStatus != null ? formatFinalTestClosureMessage(finalClosureStatus, formatDateTime) : "";
   const finalStatusText =
