@@ -1,3 +1,4 @@
+import { loadFinalTestClosureStatus } from "@/lib/final-test-closure-server";
 import { computeFinalTestSummary } from "@/lib/server-final-test-summary";
 import { mapFinalAttemptRow, type FinalAttemptDbRow } from "@/lib/final-attempt-server";
 import { getServerSession } from "@/lib/server-auth";
@@ -57,9 +58,15 @@ export async function POST(request: Request) {
     questionIndex > 0 ||
     Object.keys(answers).length > 0;
   if (!isPersist) {
-    const summary = await computeFinalTestSummary(supabase, session.id);
-    if (!summary.canStartFinal) {
-      return Response.json({ ok: false, error: "final_attempts_exhausted" }, { status: 403 });
+    const closureStatus = await loadFinalTestClosureStatus(supabase);
+    if (closureStatus.isClosed) {
+      return Response.json({ ok: false, error: "final_test_closed" }, { status: 403 });
+    }
+    if (!inProgress.data) {
+      const summary = await computeFinalTestSummary(supabase, session.id);
+      if (!summary.canStartFinal) {
+        return Response.json({ ok: false, error: "final_attempts_exhausted" }, { status: 403 });
+      }
     }
   }
 

@@ -385,8 +385,11 @@ export async function beginFinalAttempt(userId: string, questionIds: string[] = 
         questionIds,
       }),
     });
-    const result = (await response.json()) as { ok?: boolean; attempt?: FinalAttemptRow };
+    const result = (await response.json()) as { ok?: boolean; attempt?: FinalAttemptRow; error?: string };
     if (!response.ok || !result.ok) {
+      if (result.error === "final_test_closed" || result.error === "final_attempts_exhausted") {
+        throw new Error(result.error);
+      }
       return { ...startFinalAttempt(userId), questionIds };
     }
     return mapAttempt(

@@ -1,3 +1,4 @@
+import { applyFinalTestClosureToSummary, loadFinalTestClosureStatus } from "@/lib/final-test-closure-server";
 import { computeFinalTestSummary } from "@/lib/server-final-test-summary";
 import {
   evaluateOrphanAttempt,
@@ -55,6 +56,7 @@ export async function GET() {
       .eq("is_active", true)
       .limit(2000);
     const finalSummaryPromise = computeFinalTestSummary(supabase, session.id).catch(() => null);
+    const closurePromise = loadFinalTestClosureStatus(supabase);
 
     let configQ = await supabase
       .from("test_settings")
@@ -133,7 +135,14 @@ export async function GET() {
     }
     const t1 = Date.now();
 
-    const [bankTimeQ, finalTestSummary] = await Promise.all([bankTimePromise, finalSummaryPromise]);
+    const [bankTimeQ, finalTestSummaryRaw, closureStatus] = await Promise.all([
+      bankTimePromise,
+      finalSummaryPromise,
+      closurePromise,
+    ]);
+    const finalTestSummary = finalTestSummaryRaw
+      ? applyFinalTestClosureToSummary(finalTestSummaryRaw, closureStatus)
+      : null;
     const orphanRow = await prepareOrphanForRecovery(supabase, session.id);
     const orphanAttempt: OrphanAttemptSummary = evaluateOrphanAttempt(orphanRow);
     const t2 = Date.now();

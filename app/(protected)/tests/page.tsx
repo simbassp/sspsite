@@ -5,6 +5,7 @@ import { readClientSession } from "@/lib/client-auth";
 import { FINAL_TEST_MAX_ATTEMPTS } from "@/lib/final-test-constants";
 import { FINAL_AUTO_RESET_DAY_UTC } from "@/lib/final-effective-counting";
 import { formatDateTime } from "@/lib/format";
+import { evaluateFinalTestClosure, formatFinalTestClosureMessage } from "@/lib/final-test-closure";
 import {
   abandonFinalAttempt,
   beginFinalAttempt,
@@ -171,6 +172,11 @@ type FinalTestSummary = {
   canStartFinal: boolean;
   attemptsExhausted: boolean;
   nextAutoResetAt?: string;
+  finalTestClosed?: boolean;
+  finalTestClosureScheduled?: boolean;
+  finalTestClosedFrom?: string | null;
+  finalTestClosedUntil?: string | null;
+  finalTestClosureMessage?: string | null;
 };
 
 export default function TestsPage() {
@@ -1091,6 +1097,18 @@ export default function TestsPage() {
       document.activeElement.blur();
     }
     if (finalTest && !finalTest.canStartFinal) {
+      if (finalTest.finalTestClosed) {
+        const closureText = formatFinalTestClosureMessage(
+          evaluateFinalTestClosure({
+            closedFrom: finalTest.finalTestClosedFrom ?? null,
+            closedUntil: finalTest.finalTestClosedUntil ?? null,
+            message: finalTest.finalTestClosureMessage ?? null,
+          }),
+          formatDateTime,
+        );
+        setMessage(closureText);
+        return;
+      }
       setMessage(
         `Итоговый тест недоступен: попытки израсходованы. Сброс выполняет администратор или автосброс ${FINAL_AUTO_RESET_DAY_UTC}-го числа.`,
       );
@@ -1125,7 +1143,33 @@ export default function TestsPage() {
       if (session) rememberQuestionIds(session.id, randomQuestions.map((q) => q.id));
       const first = randomQuestions[0];
       const questionIds = randomQuestions.map((q) => q.id);
-      const attemptState = await beginFinalAttempt(session.id, questionIds);
+      let attemptState;
+      try {
+        attemptState = await beginFinalAttempt(session.id, questionIds);
+      } catch (error) {
+        const code = error instanceof Error ? error.message : "";
+        if (code === "final_test_closed") {
+          const closureText = finalTest
+            ? formatFinalTestClosureMessage(
+                evaluateFinalTestClosure({
+                  closedFrom: finalTest.finalTestClosedFrom ?? null,
+                  closedUntil: finalTest.finalTestClosedUntil ?? null,
+                  message: finalTest.finalTestClosureMessage ?? null,
+                }),
+                formatDateTime,
+              )
+            : "Доступ к итоговому тесту временно закрыт.";
+          setMessage(closureText);
+          return;
+        }
+        if (code === "final_attempts_exhausted") {
+          setMessage(
+            `Итоговый тест недоступен: попытки израсходованы. Сброс выполняет администратор или автосброс ${FINAL_AUTO_RESET_DAY_UTC}-го числа.`,
+          );
+          return;
+        }
+        throw error;
+      }
       expireHandledForQuestionIdRef.current = null;
       setTrialFeedback(null);
       setFinalTransition(null);
@@ -1164,16 +1208,33 @@ export default function TestsPage() {
     finalTest?.nextAutoResetAt
       ? formatDateTime(finalTest.nextAutoResetAt)
       : `${FINAL_AUTO_RESET_DAY_UTC} числа следующего месяца`;
+  const finalClosureStatus = useMemo(
+    () =>
+      finalTest
+        ? evaluateFinalTestClosure({
+            closedFrom: finalTest.finalTestClosedFrom ?? null,
+            closedUntil: finalTest.finalTestClosedUntil ?? null,
+            message: finalTest.finalTestClosureMessage ?? null,
+          })
+        : null,
+    [finalTest],
+  );
+  const finalClosureDisplayMessage =
+    finalClosureStatus != null ? formatFinalTestClosureMessage(finalClosureStatus, formatDateTime) : "";
   const finalStatusText =
     finalTest == null
       ? "—"
-      : finalTest.attemptsExhausted
-        ? finalTest.hasPassedFinal
-          ? "Сдан"
-          : "Ограничено"
-        : finalTest.hasPassedFinal
-          ? "Сдан · есть попытки"
-          : "Доступен";
+      : finalTest.finalTestClosed
+        ? "Закрыт"
+        : finalTest.finalTestClosureScheduled
+          ? "Закрытие запланировано"
+          : finalTest.attemptsExhausted
+            ? finalTest.hasPassedFinal
+              ? "Сдан"
+              : "Ограничено"
+            : finalTest.hasPassedFinal
+              ? "Сдан · есть попытки"
+              : "Доступен";
   const isStartingTest = startingTest != null;
   const historyPageSize = 10;
   const historyVisible = historyExpanded ? results : results.slice(0, 5);
@@ -1223,6 +1284,30 @@ export default function TestsPage() {
 
       <section className="card tests-ref-shell" style={{ marginTop: 12 }}>
         <div className="card-body">
+          {(finalTest?.finalTestClosed || finalTest?.finalTestClosureScheduled) && finalClosureDisplayMessage ? (
+            <div
+              className="tests-ref-info"
+              style={{
+                marginBottom: 12,
+                borderColor: finalTest.finalTestClosed ? "var(--danger, #c0392b)" : undefined,
+              }}
+            >
+              <div className="tests-ref-info__left">
+                <span className="tests-ref-info__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="5" y="10" width="14" height="10" rx="2" />
+                    <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+                  </svg>
+                </span>
+                <div>
+                  <p>
+                    <strong>{finalTest.finalTestClosed ? "Итоговый тест закрыт" : "Запланировано закрытие итогового теста"}</strong>
+                  </p>
+                  <p>{finalClosureDisplayMessage}</p>
+                </div>
+              </div>
+            </div>
+          ) : null}
           <h3 style={{ marginBottom: 12 }}>Выберите тест</h3>
           <div className="tests-ref-grid">
             <article className="tests-ref-test-card">
@@ -1318,11 +1403,13 @@ export default function TestsPage() {
                     !finalTest.canStartFinal
                   }
                   title={
-                    finalTest != null && finalTest.attemptsExhausted
-                      ? `Попытки итогового теста израсходованы. Нужен ручной или автоматический сброс (${FINAL_AUTO_RESET_DAY_UTC}-е число).`
-                      : finalTest != null && !finalTest.canStartFinal
-                        ? "Сейчас нельзя начать итоговый тест."
-                        : undefined
+                    finalTest != null && finalTest.finalTestClosed
+                      ? finalClosureDisplayMessage || "Итоговый тест закрыт администратором."
+                      : finalTest != null && finalTest.attemptsExhausted
+                        ? `Попытки итогового теста израсходованы. Нужен ручной или автоматический сброс (${FINAL_AUTO_RESET_DAY_UTC}-е число).`
+                        : finalTest != null && !finalTest.canStartFinal
+                          ? "Сейчас нельзя начать итоговый тест."
+                          : undefined
                   }
                 >
                   {startingTest === "final" ? "Загружаю…" : "Начать итоговый тест"}

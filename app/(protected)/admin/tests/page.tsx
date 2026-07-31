@@ -9,6 +9,7 @@ import {
 import { normalizeManualTopic } from "@/lib/manual-topic";
 import { DEFAULT_TEST_CONFIG, normalizeTestConfig } from "@/lib/test-config";
 import { ManualQuestionTopic, TestConfig, TestQuestion, TestType } from "@/lib/types";
+import { FinalTestClosurePanel } from "@/components/admin/FinalTestClosurePanel";
 
 type DraftQuestion = {
   id?: string;
@@ -424,6 +425,7 @@ export default function AdminTestsPage() {
   return (
     <section>
       <h1 className="page-title">Админ / Тесты</h1>
+      <FinalTestClosurePanel onMessage={setMessage} />
       {isLoading && <p className="page-subtitle">Загружаем данные...</p>}
       {!isLoading && !!loadError && (
         <div className="form" style={{ marginBottom: 12 }}>
