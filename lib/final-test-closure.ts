@@ -88,7 +88,9 @@ export function evaluateFinalTestClosure(
 }
 
 export function formatFinalTestClosureMessage(status: FinalTestClosureStatus, formatDateTime: (iso: string) => string) {
-  if (status.message) return status.message;
+  if (status.isClosed || status.isScheduled) {
+    if (status.message) return status.message;
+  }
   if (status.isScheduled && status.closedFrom) {
     const untilHint = status.closedUntil ? ` до ${formatDateTime(status.closedUntil)}` : "";
     return `Итоговый тест будет закрыт с ${formatDateTime(status.closedFrom)}${untilHint}.`;
@@ -102,7 +104,26 @@ export function formatFinalTestClosureMessage(status: FinalTestClosureStatus, fo
     }
     return DEFAULT_FINAL_TEST_CLOSURE_MESSAGE;
   }
-  return DEFAULT_FINAL_TEST_CLOSURE_MESSAGE;
+  return "";
+}
+
+export function describeFinalClosureApiError(error: string | undefined) {
+  switch (error) {
+    case "invalid_closure_range":
+      return "Дата «Закрыть до» не может быть раньше даты «Закрыть с».";
+    case "invalid_closed_from":
+      return "Некорректная дата в поле «Закрыть с».";
+    case "invalid_closed_until":
+      return "Некорректная дата в поле «Закрыть до».";
+    case "closure_columns_missing":
+      return "В базе нет колонок закрытия. Примените SQL-миграцию в Supabase.";
+    case "forbidden":
+      return "Закрытие итогового теста доступно только администратору.";
+    case "unauthorized":
+      return "Сессия истекла. Войдите снова.";
+    default:
+      return error?.trim() || "Не удалось сохранить закрытие итогового теста.";
+  }
 }
 
 /** Значение для input[type=datetime-local] в локальной TZ браузера. */

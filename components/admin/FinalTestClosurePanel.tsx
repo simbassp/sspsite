@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { readClientSession } from "@/lib/client-auth";
 import {
+  describeFinalClosureApiError,
   fromDatetimeLocalInputValue,
   toDatetimeLocalInputValue,
   type FinalTestClosureSettings,
@@ -66,6 +67,28 @@ export function FinalTestClosurePanel({ onMessage }: Props) {
 
   const save = async (options?: { clear?: boolean }) => {
     if (isSaving) return;
+
+    if (!options?.clear) {
+      if (!closedFromLocal.trim()) {
+        onMessage?.("Укажите дату и время в поле «Закрыть с».");
+        return;
+      }
+      const fromMs = new Date(closedFromLocal).getTime();
+      const untilMs = closedUntilLocal.trim() ? new Date(closedUntilLocal).getTime() : Number.NaN;
+      if (!Number.isFinite(fromMs)) {
+        onMessage?.("Некорректная дата в поле «Закрыть с».");
+        return;
+      }
+      if (closedUntilLocal.trim() && !Number.isFinite(untilMs)) {
+        onMessage?.("Некорректная дата в поле «Закрыть до».");
+        return;
+      }
+      if (Number.isFinite(untilMs) && untilMs < fromMs) {
+        onMessage?.("Дата «Закрыть до» не может быть раньше даты «Закрыть с». Проверьте месяц и год.");
+        return;
+      }
+    }
+
     setIsSaving(true);
     try {
       const closedFrom = options?.clear ? null : fromDatetimeLocalInputValue(closedFromLocal);
@@ -91,7 +114,7 @@ export function FinalTestClosurePanel({ onMessage }: Props) {
         notified?: number;
       };
       if (!res.ok || !payload.ok) {
-        onMessage?.(payload.error || "Не удалось сохранить закрытие итогового теста.");
+        onMessage?.(describeFinalClosureApiError(payload.error));
         return;
       }
       if (payload.settings) {
@@ -146,7 +169,7 @@ export function FinalTestClosurePanel({ onMessage }: Props) {
                 />
               </label>
               <label style={{ display: "grid", gap: 4 }}>
-                <span>Закрыть до (необязательно)</span>
+                <span>Закрыть до (необязательно, можно оставить пустым)</span>
                 <input
                   className="input"
                   type="datetime-local"
@@ -154,6 +177,9 @@ export function FinalTestClosurePanel({ onMessage }: Props) {
                   onChange={(e) => setClosedUntilLocal(e.target.value)}
                 />
               </label>
+              <p className="page-subtitle" style={{ margin: 0, fontSize: 12 }}>
+                Пример на сегодня: «Закрыть с» — 01.08.2026 00:00, «Закрыть до» — пусто (или дата позже «с»).
+              </p>
               <label style={{ display: "grid", gap: 4 }}>
                 <span>Сообщение пользователям</span>
                 <textarea
