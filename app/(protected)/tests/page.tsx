@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { readClientSession } from "@/lib/client-auth";
-import { FINAL_TEST_MAX_ATTEMPTS } from "@/lib/final-test-constants";
 import { FINAL_AUTO_RESET_DAY_UTC } from "@/lib/final-effective-counting";
 import { formatDateTime } from "@/lib/format";
 import { evaluateFinalTestClosure, formatFinalTestClosureMessage } from "@/lib/final-test-closure";
@@ -1114,11 +1113,8 @@ export default function TestsPage() {
       );
       return;
     }
-    const remainingAttempts = finalTest
-      ? Math.max(0, finalTest.maxAttempts - finalTest.usedAttempts)
-      : FINAL_TEST_MAX_ATTEMPTS;
     const confirmed = window.confirm(
-      `Запустить итоговый тест?\n\nСтрогий режим: время на каждый вопрос ограничено, подсказок нет.\nДоступна только 1 попытка (осталось ${remainingAttempts} из ${finalTest?.maxAttempts ?? FINAL_TEST_MAX_ATTEMPTS}).\n\nСлучайное нажатие тоже засчитывается как попытка.`,
+      "Запустить итоговый тест?\n\nСтрогий режим: время на каждый вопрос ограничено, подсказок нет.\nДоступна только одна попытка.\n\nСлучайное нажатие тоже засчитывается как попытка.",
     );
     if (!confirmed) return;
     setStartingTest("final");
@@ -1422,9 +1418,9 @@ export default function TestsPage() {
                 </svg>
               </span>
               <div>
-                <p>Попытки (итоговый тест)</p>
+                <p>Попытка (итоговый тест)</p>
                 <strong>
-                  {finalTest?.usedAttempts ?? 0} / {FINAL_TEST_MAX_ATTEMPTS}
+                  {(finalTest?.usedAttempts ?? 0) >= 1 ? "Использована" : "Доступна"}
                 </strong>
               </div>
             </div>
@@ -1719,8 +1715,6 @@ export default function TestsPage() {
               rawCorr != null && Number.isFinite(rawCorr)
                 ? rawCorr
                 : Math.round((result.score / 100) * Math.max(total, 1));
-            const attemptMax = FINAL_TEST_MAX_ATTEMPTS;
-            const attemptIdx = result.finalAttemptIndex;
             const passed = result.status === "passed";
             return (
               <article
@@ -1757,10 +1751,10 @@ export default function TestsPage() {
                       scorePercent: result.score,
                     })}
                   </p>
-                  {result.type === "final" && attemptIdx != null && (
+                  {result.type === "final" && (
                     <p className="page-subtitle" style={{ marginTop: 6, marginBottom: 0 }}>
                       <span className={`pill ${passed ? "pill-green" : "pill-red"}`} style={{ fontSize: 11 }}>
-                        Попытка {attemptIdx} / {attemptMax}
+                        Одна попытка
                       </span>
                     </p>
                   )}
