@@ -1,2 +1,2 @@
 /** Максимум завершённых итоговых попыток в текущем окне (после сброса счётчик обнуляется). */
-export const FINAL_TEST_MAX_ATTEMPTS = 3;
+export const FINAL_TEST_MAX_ATTEMPTS = 1;

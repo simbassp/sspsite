@@ -1117,9 +1117,8 @@ export default function TestsPage() {
     const remainingAttempts = finalTest
       ? Math.max(0, finalTest.maxAttempts - finalTest.usedAttempts)
       : FINAL_TEST_MAX_ATTEMPTS;
-    const passedHint = finalTest?.hasPassedFinal ? "\n\nИтоговый тест уже сдан в этом месяце, но оставшиеся попытки можно использовать для тренировки." : "";
     const confirmed = window.confirm(
-      `Запустить итоговый тест?\n\nСтрогий режим: время на каждый вопрос ограничено, подсказок нет.\nБудет использована 1 попытка (осталось ${remainingAttempts} из ${finalTest?.maxAttempts ?? FINAL_TEST_MAX_ATTEMPTS}).\n\nСлучайное нажатие тоже засчитывается как попытка.${passedHint}`,
+      `Запустить итоговый тест?\n\nСтрогий режим: время на каждый вопрос ограничено, подсказок нет.\nДоступна только 1 попытка (осталось ${remainingAttempts} из ${finalTest?.maxAttempts ?? FINAL_TEST_MAX_ATTEMPTS}).\n\nСлучайное нажатие тоже засчитывается как попытка.`,
     );
     if (!confirmed) return;
     setStartingTest("final");
@@ -1229,7 +1228,7 @@ export default function TestsPage() {
               ? "Сдан"
               : "Ограничено"
             : finalTest.hasPassedFinal
-              ? "Сдан · есть попытки"
+              ? "Сдан"
               : "Доступен";
   const isStartingTest = startingTest != null;
   const historyPageSize = 10;
@@ -1260,7 +1259,7 @@ export default function TestsPage() {
           </span>
           <div>
             <p>При запуске итогового теста вопросы всегда разные, время ответа ограничено.</p>
-            <p>При исчерпании попыток доступ будет заблокирован до ручного или автоматического сброса.</p>
+            <p>Итоговый тест можно сдать один раз. После попытки доступ блокируется до ручного или автоматического сброса.</p>
           </div>
         </div>
         <div className="tests-ref-info__right">
@@ -1382,7 +1381,7 @@ export default function TestsPage() {
                 </div>
               </div>
               <p>
-                {testConfig.finalQuestionCount} вопросов. Ограничение по времени и количеству попыток. Результат
+                {testConfig.finalQuestionCount} вопросов. Одна попытка, ограничение по времени. Результат
                 засчитывается в систему.
               </p>
               {activeTest !== "final" && (
