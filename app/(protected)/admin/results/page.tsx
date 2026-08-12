@@ -733,7 +733,7 @@ export default function AdminResultsPage() {
                         <button
                           className="btn"
                           type="button"
-                          disabled={resetBusyId === row.userId}
+                          disabled={resetAllBusy || resetBusyId === row.userId}
                           onClick={() => void onResetAttempts(row.userId)}
                         >
                           {resetBusyId === row.userId ? "Сброс…" : "Сбросить попытки итога"}
