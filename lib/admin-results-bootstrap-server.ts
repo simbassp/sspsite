@@ -372,11 +372,13 @@ async function loadLastResetAudit(ctx: BootstrapContext) {
 
   const ev = auditQ.data as {
     created_at: string;
-    target_user_id: string;
+    target_user_id: string | null;
     admin_user_id: string | null;
   };
   const [targetU, adminU] = await Promise.all([
-    ctx.supabase.from("app_users").select("name,callsign").eq("id", ev.target_user_id).maybeSingle(),
+    ev.target_user_id
+      ? ctx.supabase.from("app_users").select("name,callsign").eq("id", ev.target_user_id).maybeSingle()
+      : Promise.resolve({ data: null as { name?: string; callsign?: string } | null }),
     ev.admin_user_id
       ? ctx.supabase.from("app_users").select("name,callsign").eq("id", ev.admin_user_id).maybeSingle()
       : Promise.resolve({ data: null as { name?: string; callsign?: string } | null }),
@@ -386,8 +388,12 @@ async function loadLastResetAudit(ctx: BootstrapContext) {
   return {
     created_at: ev.created_at,
     admin_name: an ? `${an.name ?? ""} ${an.callsign ?? ""}`.trim() : "—",
-    target_name: tn ? `${tn.name ?? ""} (${tn.callsign ?? ""})`.trim() : "—",
-    target_callsign: tn?.callsign ?? "",
+    target_name: ev.target_user_id
+      ? tn
+        ? `${tn.name ?? ""} (${tn.callsign ?? ""})`.trim()
+        : "—"
+      : "всем пользователям",
+    target_callsign: ev.target_user_id ? tn?.callsign ?? "" : "",
   };
 }
 

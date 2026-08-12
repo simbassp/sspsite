@@ -188,6 +188,7 @@ export default function AdminResultsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [resetBusyId, setResetBusyId] = useState<string | null>(null);
+  const [resetAllBusy, setResetAllBusy] = useState(false);
   const [deleteBusyId, setDeleteBusyId] = useState<string | null>(null);
   const [resetMessage, setResetMessage] = useState("");
   const [nextAutoResetAt, setNextAutoResetAt] = useState<string | null>(null);
@@ -386,6 +387,40 @@ export default function AdminResultsPage() {
     }
   };
 
+  const onResetAllAttempts = async () => {
+    if (!viewerCanReset || resetAllBusy || resetBusyId) return;
+    const confirmed = window.confirm(
+      "Сбросить попытки итогового теста ВСЕМ пользователям?\n\nКаждый сможет снова пройти итоговый тест один раз. История результатов не удаляется.",
+    );
+    if (!confirmed) return;
+    setResetAllBusy(true);
+    setResetMessage("");
+    try {
+      const response = await fetch("/api/admin/results/reset-final-all", { method: "POST" });
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        error?: string;
+        resetCount?: number;
+        audit?: NonNullable<BootstrapPayload["lastResetAudit"]>;
+      };
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error || "reset_all_failed");
+      }
+      if (payload.audit) setLastResetAudit(payload.audit);
+      const count = payload.resetCount ?? 0;
+      setResetMessage(
+        count > 0
+          ? `Попытки итогового теста сброшены для всех (${count} чел.).`
+          : "Попытки итогового теста сброшены для всех.",
+      );
+      await refreshResults();
+    } catch {
+      setResetMessage("Не удалось сбросить попытки всем.");
+    } finally {
+      setResetAllBusy(false);
+    }
+  };
+
   const autoResetText = nextAutoResetAt
     ? formatDateTime(nextAutoResetAt)
     : `${FINAL_AUTO_RESET_DAY_UTC}-го числа следующего месяца`;
@@ -432,6 +467,16 @@ export default function AdminResultsPage() {
           <h1 className="page-title">Админ / Результаты тестов</h1>
         </div>
         <div className="personnel-page__header-actions">
+          {viewerCanReset ? (
+            <button
+              className="btn"
+              type="button"
+              disabled={resetAllBusy || resetBusyId != null}
+              onClick={() => void onResetAllAttempts()}
+            >
+              {resetAllBusy ? "Сбрасываю всем…" : "Сбросить попытки всем"}
+            </button>
+          ) : null}
           <ResultsExportExcelButton busy={exportExcelLoading} onClick={() => void onExportExcel()} />
         </div>
       </div>
