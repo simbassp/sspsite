@@ -370,8 +370,15 @@ export default function AdminTacticalMedicinePage() {
       setCategoryModeOther(false);
       setCategoryHint("");
       await refresh();
-    } catch {
-      setMessage("Не удалось сохранить карточку. Проверьте права/подключение и повторите.");
+    } catch (error) {
+      const text = error instanceof Error ? error.message : "";
+      if (text.includes("migration_required_tactical_medicine_kind")) {
+        setMessage("Нужна миграция в Supabase (catalog_kind «tactical_medicine»). См. инструкцию в чате или у разработчика.");
+      } else if (text === "forbidden") {
+        setMessage("Нет прав на раздел «Тактическая медицина».");
+      } else {
+        setMessage(text || "Не удалось сохранить карточку. Проверьте права/подключение и повторите.");
+      }
     }
   };
 

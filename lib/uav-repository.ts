@@ -456,27 +456,39 @@ export async function fetchTacticalMedicineItems(forceRefresh = false) {
 }
 
 export async function saveTacticalMedicineItem(input: Omit<CatalogItem, "id"> & { id?: string }) {
-  const payload: Omit<CatalogItem, "id"> & { id?: string } = {
-    ...input,
-    specs: [],
-    details: { overview: input.summary, tth: "", usage: "", materials: "" },
+  const response = await fetch("/api/admin/tactical-medicine/items", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      id: input.id,
+      title: input.title,
+      category: input.category,
+      summary: input.summary,
+      image: input.image,
+      sortOrder: input.sortOrder,
+    }),
+  });
+  const payload = (await response.json()) as {
+    ok?: boolean;
+    item?: CatalogItem;
+    error?: string;
+    message?: string;
   };
-  const saved = await saveCatalogItem("tactical_medicine", payload, (row) => ({
-    id: row.id || `local-${Date.now()}`,
-    title: row.title,
-    category: row.category,
-    summary: row.summary,
-    image: row.image,
-    specs: [],
-    details: payload.details,
-    sortOrder: row.sortOrder,
-  }), false);
+  if (!response.ok || !payload.ok || !payload.item) {
+    throw new Error(payload.message || payload.error || "tactical_medicine_save_failed");
+  }
   invalidateCatalogCache("tactical_medicine");
-  return saved;
+  return payload.item;
 }
 
 export async function deleteTacticalMedicineItem(itemId: string) {
-  await deleteCatalogItem("tactical_medicine", itemId, () => {}, false);
+  const response = await fetch(`/api/admin/tactical-medicine/items?id=${encodeURIComponent(itemId)}`, {
+    method: "DELETE",
+  });
+  const payload = (await response.json()) as { ok?: boolean; error?: string; message?: string };
+  if (!response.ok || !payload.ok) {
+    throw new Error(payload.message || payload.error || "tactical_medicine_delete_failed");
+  }
   invalidateCatalogCache("tactical_medicine");
 }
 

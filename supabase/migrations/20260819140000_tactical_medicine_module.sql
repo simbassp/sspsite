@@ -17,6 +17,21 @@ create index if not exists idx_tactical_medicine_category_presets_created_at
 
 alter table public.tactical_medicine_category_presets enable row level security;
 
+drop policy if exists "tactical_medicine_categories_read" on public.tactical_medicine_category_presets;
+create policy "tactical_medicine_categories_read"
+on public.tactical_medicine_category_presets
+for select
+to authenticated
+using (true);
+
+drop policy if exists "tactical_medicine_categories_admin_write" on public.tactical_medicine_category_presets;
+create policy "tactical_medicine_categories_admin_write"
+on public.tactical_medicine_category_presets
+for all
+to authenticated
+using (public.can_manage_content())
+with check (public.can_manage_content());
+
 create or replace function public.can_manage_content()
 returns boolean
 language sql
