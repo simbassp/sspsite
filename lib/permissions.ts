@@ -48,6 +48,10 @@ export function resolvePermissions(session: SessionLike): UserPermissions {
       tacticalMedicine: true,
     };
   }
+  // Cookie до раздела «Тактическая медицина»: granular-права есть, ключа tacticalMedicine ещё нет.
+  if (session.permissions && session.permissions.tacticalMedicine === undefined && session.canManageContent) {
+    next.tacticalMedicine = true;
+  }
   return next;
 }
 

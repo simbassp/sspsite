@@ -1,4 +1,5 @@
 import type { SessionUser } from "@/lib/types";
+import { resolvePermissions } from "@/lib/permissions";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 import { readCachedSessionValidation, writeCachedSessionValidation } from "@/lib/session-validation-cache";
 
@@ -42,20 +43,32 @@ function normalizeDbPermissions(row: Record<string, unknown>, fallbackContent: b
   };
 }
 
-function samePermissions(a: SessionUser["permissions"], b: SessionUser["permissions"]) {
+function samePermissions(session: SessionUser, dbSession: SessionUser) {
+  const left = resolvePermissions(session);
+  const right = resolvePermissions(dbSession);
   return (
-    a.news === b.news &&
-    a.tests === b.tests &&
-    a.results === b.results &&
-    a.resetResults === b.resetResults &&
-    a.uav === b.uav &&
-    a.counteraction === b.counteraction &&
-    a.tacticalMedicine === b.tacticalMedicine &&
-    a.userList === b.userList &&
-    a.users === b.users &&
-    a.online === b.online &&
-    a.personnelModeration === b.personnelModeration
+    left.news === right.news &&
+    left.tests === right.tests &&
+    left.results === right.results &&
+    left.resetResults === right.resetResults &&
+    left.uav === right.uav &&
+    left.counteraction === right.counteraction &&
+    left.tacticalMedicine === right.tacticalMedicine &&
+    left.userList === right.userList &&
+    left.users === right.users &&
+    left.online === right.online &&
+    left.personnelModeration === right.personnelModeration
   );
+}
+
+function sameCanManageContent(session: SessionUser, dbSession: SessionUser) {
+  const left = resolvePermissions(session);
+  const right = resolvePermissions(dbSession);
+  const leftFlag =
+    left.news || left.tests || left.uav || left.counteraction || left.tacticalMedicine;
+  const rightFlag =
+    right.news || right.tests || right.uav || right.counteraction || right.tacticalMedicine;
+  return leftFlag === rightFlag;
 }
 
 /** Returns true when session is still valid; false when user must re-login. */
@@ -103,12 +116,24 @@ async function validateSessionFromDb(session: SessionUser): Promise<boolean> {
     const role: "admin" | "employee" = row.role === "admin" ? "admin" : "employee";
     const fallbackContent = row.can_manage_content === true;
     const currentPermissions = normalizeDbPermissions(row, fallbackContent, role);
-    const currentCanManageContent =
-      currentPermissions.news || currentPermissions.tests || currentPermissions.uav || currentPermissions.counteraction || currentPermissions.tacticalMedicine;
+    const dbSession: SessionUser = {
+      id: session.id,
+      role,
+      name: session.name,
+      callsign: session.callsign,
+      position: session.position,
+      canManageContent:
+        currentPermissions.news ||
+        currentPermissions.tests ||
+        currentPermissions.uav ||
+        currentPermissions.counteraction ||
+        currentPermissions.tacticalMedicine,
+      permissions: currentPermissions,
+    };
 
     if (session.role !== role) return false;
-    if (session.canManageContent !== currentCanManageContent) return false;
-    if (!samePermissions(session.permissions, currentPermissions)) return false;
+    if (!sameCanManageContent(session, dbSession)) return false;
+    if (!samePermissions(session, dbSession)) return false;
     return true;
   } catch {
     return true;
