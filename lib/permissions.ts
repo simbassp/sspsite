@@ -9,6 +9,7 @@ const emptyPermissions: UserPermissions = {
   resetResults: false,
   uav: false,
   counteraction: false,
+  tacticalMedicine: false,
   userList: false,
   users: false,
   online: false,
@@ -23,6 +24,7 @@ function allPermissions(): UserPermissions {
     resetResults: true,
     uav: true,
     counteraction: true,
+    tacticalMedicine: true,
     userList: true,
     users: true,
     online: true,
@@ -43,6 +45,7 @@ export function resolvePermissions(session: SessionLike): UserPermissions {
       results: true,
       uav: true,
       counteraction: true,
+      tacticalMedicine: true,
     };
   }
   return next;
@@ -95,9 +98,19 @@ export function canManageCounteraction(session: SessionLike) {
   return resolvePermissions(session).counteraction;
 }
 
+export function canManageTacticalMedicine(session: SessionLike) {
+  return resolvePermissions(session).tacticalMedicine;
+}
+
 export function canManageContent(session: SessionLike) {
   const permissions = resolvePermissions(session);
-  return permissions.news || permissions.tests || permissions.uav || permissions.counteraction;
+  return (
+    permissions.news ||
+    permissions.tests ||
+    permissions.uav ||
+    permissions.counteraction ||
+    permissions.tacticalMedicine
+  );
 }
 
 export function canModeratePersonnel(session: SessionLike) {

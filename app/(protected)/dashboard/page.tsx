@@ -155,6 +155,18 @@ export default function DashboardPage() {
         ),
       },
       {
+        href: "/tactical-medicine",
+        title: "Тактическая медицина",
+        description: "Материалы и описания по тактической медицине.",
+        color: "green",
+        icon: (
+          <svg viewBox="0 0 24 24" aria-hidden="true" className="home-icon-svg">
+            <rect x="6" y="6" width="12" height="12" rx="2" />
+            <path d="M12 8v8M8 12h8" />
+          </svg>
+        ),
+      },
+      {
         href: "/uav",
         title: "ТТХ БПЛА",
         description: "Отдельные карточки и детальные страницы.",

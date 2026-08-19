@@ -12,6 +12,7 @@ type PermissionsPayload = {
   resetResults: boolean;
   uav: boolean;
   counteraction: boolean;
+  tacticalMedicine: boolean;
   userList: boolean;
   users: boolean;
   online: boolean;
@@ -44,6 +45,7 @@ function getAdminGrant() {
     can_manage_results: true,
     can_manage_uav: true,
     can_manage_counteraction: true,
+    can_manage_tactical_medicine: true,
     can_manage_users: true,
     can_view_user_list: true,
     can_reset_test_results: true,
@@ -116,6 +118,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ userI
     ...(nextPermissions !== undefined ? { can_manage_results: nextPermissions.results } : {}),
     ...(nextPermissions !== undefined ? { can_manage_uav: nextPermissions.uav } : {}),
     ...(nextPermissions !== undefined ? { can_manage_counteraction: nextPermissions.counteraction } : {}),
+    ...(nextPermissions !== undefined ? { can_manage_tactical_medicine: nextPermissions.tacticalMedicine } : {}),
     ...(nextPermissions !== undefined ? { can_manage_users: nextPermissions.users } : {}),
     ...(nextPermissions !== undefined ? { can_view_user_list: nextPermissions.userList } : {}),
     ...(nextPermissions !== undefined ? { can_reset_test_results: nextPermissions.resetResults } : {}),

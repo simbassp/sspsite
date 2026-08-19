@@ -251,6 +251,27 @@ export function counteractionBadgeStyle(label: string): SoftBadgeStyle {
 }
 
 /** Несколько плашек из поля category, если задано через « / » или «|». */
+/** Плашки категорий тактической медицины. */
+export function tacticalMedicineBadgeStyle(label: string): SoftBadgeStyle {
+  const n = label.trim().toLowerCase();
+  if (!n) return gray;
+  if (includesAny(n, ["первая", "первая помощь", "санитар"])) {
+    return {
+      background: "rgba(34, 197, 94, 0.14)",
+      color: "#16a34a",
+      border: "1px solid rgba(34, 197, 94, 0.28)",
+    };
+  }
+  if (includesAny(n, ["кров", "ранен", "травм"])) {
+    return {
+      background: "rgba(239, 68, 68, 0.14)",
+      color: "#dc2626",
+      border: "1px solid rgba(239, 68, 68, 0.28)",
+    };
+  }
+  return hashPaletteStyle(n);
+}
+
 export function splitCategoryLabels(category: string): string[] {
   return category
     .split(/\s*[/|]\s*/)

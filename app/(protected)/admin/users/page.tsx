@@ -29,6 +29,7 @@ const fullAdminPermissions = {
   resetResults: true,
   uav: true,
   counteraction: true,
+  tacticalMedicine: true,
   userList: true,
   users: true,
   online: false,

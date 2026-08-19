@@ -34,6 +34,7 @@ type UserRow = {
   can_manage_results?: boolean;
   can_manage_uav?: boolean;
   can_manage_counteraction?: boolean;
+  can_manage_tactical_medicine?: boolean;
   can_manage_users?: boolean;
   can_view_user_list?: boolean;
   can_reset_test_results?: boolean;
@@ -131,6 +132,7 @@ function defaultPermissionsFromLegacy(row: {
     resetResults: isAdmin,
     uav: isAdmin || legacyContent,
     counteraction: isAdmin || legacyContent,
+    tacticalMedicine: isAdmin || legacyContent,
     userList: false,
     users: isAdmin,
     online: isAdmin,
@@ -146,6 +148,7 @@ function normalizePermissions(input: {
   can_manage_results?: boolean;
   can_manage_uav?: boolean;
   can_manage_counteraction?: boolean;
+  can_manage_tactical_medicine?: boolean;
   can_manage_users?: boolean;
   can_view_user_list?: boolean;
   can_reset_test_results?: boolean;
@@ -163,6 +166,9 @@ function normalizePermissions(input: {
     ...(input.can_reset_test_results !== undefined ? { resetResults: input.can_reset_test_results === true } : {}),
     ...(input.can_manage_uav !== undefined ? { uav: input.can_manage_uav === true } : {}),
     ...(input.can_manage_counteraction !== undefined ? { counteraction: input.can_manage_counteraction === true } : {}),
+    ...(input.can_manage_tactical_medicine !== undefined
+      ? { tacticalMedicine: input.can_manage_tactical_medicine === true }
+      : {}),
     ...(input.can_manage_users !== undefined ? { users: input.can_manage_users === true } : {}),
     ...(input.can_view_user_list !== undefined ? { userList: input.can_view_user_list === true } : {}),
     ...(input.can_view_online !== undefined ? { online: input.can_view_online === true } : {}),
@@ -178,6 +184,7 @@ function normalizePermissions(input: {
       resetResults: true,
       uav: true,
       counteraction: true,
+      tacticalMedicine: true,
       userList: true,
       users: true,
       online: true,
@@ -195,7 +202,12 @@ function toSessionUser(row: UserRow): SessionUser {
     name: row.name,
     callsign: row.callsign,
     position: row.position as Position,
-    canManageContent: permissions.news || permissions.tests || permissions.uav || permissions.counteraction,
+    canManageContent:
+      permissions.news ||
+      permissions.tests ||
+      permissions.uav ||
+      permissions.counteraction ||
+      permissions.tacticalMedicine,
     permissions,
     unitAssignment: normalizeUnitAssignment(row.unit_assignment),
     avatarUrl: normalizeAvatarStoragePath(typeof row.avatar_url === "string" ? row.avatar_url : null),
@@ -541,7 +553,12 @@ function normalizeSessionUser(session: SessionUser): SessionUser {
   return {
     ...session,
     permissions,
-    canManageContent: permissions.news || permissions.tests || permissions.uav || permissions.counteraction,
+    canManageContent:
+      permissions.news ||
+      permissions.tests ||
+      permissions.uav ||
+      permissions.counteraction ||
+      permissions.tacticalMedicine,
   };
 }
 
@@ -1481,6 +1498,7 @@ export async function patchUser(
             resetResults: true,
             uav: true,
             counteraction: true,
+            tacticalMedicine: true,
             userList: true,
             users: true,
             online: true,

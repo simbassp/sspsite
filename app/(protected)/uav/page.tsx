@@ -12,6 +12,13 @@ import { deleteUavItem, fetchUavItems, peekCatalogCache, saveUavItem } from "@/l
 import { CatalogItem } from "@/lib/types";
 import { CatalogChipTrack } from "@/components/CatalogChipTrack";
 
+function parseImages(value: string) {
+  return value
+    .split(/\r?\n|,/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
 function specsToText(specs: CatalogItem["specs"]) {
   const lines = specs
     .filter((item) => item.key.trim().toLowerCase() !== "тип двигателя")
@@ -67,6 +74,7 @@ type InlineDraft = {
 
 export default function UavPage() {
   const [items, setItems] = useState<CatalogItem[]>([]);
+  const [imageIndexes, setImageIndexes] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [zoomedSrc, setZoomedSrc] = useState<string | null>(null);
@@ -280,7 +288,7 @@ export default function UavPage() {
   const onSave = async () => {
     if (!draft) return;
     if (!draft.title.trim()) return setMessage("Введите название.");
-    if (!draft.image.trim()) return setMessage("Добавьте изображение.");
+    if (!parseImages(draft.image).length) return setMessage("Добавьте изображение.");
     const specs = normalizeSpecs(draft.specsText);
     if (specs.length < 6) return setMessage("Заполните 6 строк ТТХ.");
 
@@ -479,7 +487,9 @@ export default function UavPage() {
 
       <div className="grid grid-two">
         {(selectedCategory ? filteredItems : items).map((item) => {
-          const imageSrc = publicUploadDisplayUrl(item.image);
+          const images = parseImages(item.image).map(publicUploadDisplayUrl).filter(Boolean);
+          const activeIndex = Math.min(imageIndexes[item.id] ?? 0, Math.max(images.length - 1, 0));
+          const imageSrc = images[activeIndex] ?? "";
           const badges = splitCategoryLabels(item.category);
           const displaySpecs = item.specs.slice(0, 7);
           return (
@@ -546,6 +556,41 @@ export default function UavPage() {
                         pointerEvents: "none",
                       }}
                     />
+                    {images.length > 1 && (
+                      <>
+                        <button
+                          type="button"
+                          className="btn"
+                          style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", padding: "6px 8px", zIndex: 2 }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setImageIndexes((prev) => ({
+                              ...prev,
+                              [item.id]: (activeIndex - 1 + images.length) % images.length,
+                            }));
+                          }}
+                        >
+                          ‹
+                        </button>
+                        <button
+                          type="button"
+                          className="btn"
+                          style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", padding: "6px 8px", zIndex: 2 }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setImageIndexes((prev) => ({
+                              ...prev,
+                              [item.id]: (activeIndex + 1) % images.length,
+                            }));
+                          }}
+                        >
+                          ›
+                        </button>
+                        <div style={{ position: "absolute", right: 10, bottom: 8, fontSize: 11, color: "#fff", zIndex: 2 }}>
+                          {activeIndex + 1}/{images.length}
+                        </div>
+                      </>
+                    )}
                   </>
                 )}
               </div>
@@ -618,8 +663,10 @@ export default function UavPage() {
                       value={draft.summary}
                       onChange={(e) => setDraft((prev) => (prev ? { ...prev, summary: e.target.value } : prev))}
                     />
-                    <input
+                    <textarea
                       className="input"
+                      rows={3}
+                      placeholder="URL изображений (каждая строка — отдельная картинка)"
                       value={draft.image}
                       onChange={(e) => setDraft((prev) => (prev ? { ...prev, image: e.target.value } : prev))}
                     />

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
-import { canManageUav } from "@/lib/permissions";
+import { canManageCounteraction, canManageTacticalMedicine, canManageUav } from "@/lib/permissions";
 import { getServerSession } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
@@ -11,7 +11,7 @@ const maxUploadBytes = 8 * 1024 * 1024;
 
 export async function POST(request: Request) {
   const session = await getServerSession();
-  if (!canManageUav(session)) {
+  if (!canManageUav(session) && !canManageCounteraction(session) && !canManageTacticalMedicine(session)) {
     return Response.json({ ok: false, error: "Недостаточно прав." }, { status: 403 });
   }
 

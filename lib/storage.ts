@@ -37,6 +37,7 @@ function defaultPermissions(user: Partial<UserRecord>): UserPermissions {
     resetResults: isAdmin,
     uav: isAdmin || legacyContent,
     counteraction: isAdmin || legacyContent,
+    tacticalMedicine: isAdmin || legacyContent,
     userList: false,
     users: isAdmin,
     online: isAdmin,
@@ -56,7 +57,8 @@ function withNormalizedPermissions(user: UserRecord): UserRecord {
     dutyLocation,
     unitAssignment,
     permissions: normalized,
-    canManageContent: normalized.news || normalized.tests || normalized.uav || normalized.counteraction,
+    canManageContent:
+      normalized.news || normalized.tests || normalized.uav || normalized.counteraction || normalized.tacticalMedicine,
   };
 }
 
@@ -149,6 +151,7 @@ export function registerEmployee(payload: {
       resetResults: false,
       uav: false,
       counteraction: false,
+      tacticalMedicine: false,
       userList: false,
       users: false,
       online: false,

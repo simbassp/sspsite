@@ -3,6 +3,7 @@ import {
   canManageCounteraction,
   canManageNews,
   canManageResults,
+  canManageTacticalMedicine,
   canManageTests,
   canManageUav,
   canManageUsers,
@@ -34,6 +35,13 @@ const contentLinks: AdminLinkDef[] = [
     text: "Добавление и редактирование карточек противодействия.",
     color: "green",
     access: canManageCounteraction,
+  },
+  {
+    href: "/admin/tactical-medicine",
+    title: "Тактическая медицина",
+    text: "Материалы и описания по тактической медицине.",
+    color: "green",
+    access: canManageTacticalMedicine,
   },
   {
     href: "/admin/uav",
@@ -93,6 +101,13 @@ function AdminSectionIcon({ href }: { href: string }) {
         <svg viewBox="0 0 24 24" aria-hidden="true" className="home-icon-svg">
           <path d="M12 3l8 3v6c0 5-3.5 8.5-8 9.8C7.5 20.5 4 17 4 12V6l8-3z" />
           <path d="M9 12.5l2 2 4-4" />
+        </svg>
+      );
+    case "/admin/tactical-medicine":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true" className="home-icon-svg">
+          <rect x="6" y="6" width="12" height="12" rx="2" />
+          <path d="M12 8v8M8 12h8" />
         </svg>
       );
     case "/admin/uav":

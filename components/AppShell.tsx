@@ -8,6 +8,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   canAccessAdminPanel,
   canManageCounteraction,
+  canManageTacticalMedicine,
   canManageNews,
   canManageResults,
   canResetTestResults,
@@ -79,6 +80,7 @@ type NavIconId =
   | "home"
   | "news"
   | "shield"
+  | "medicine"
   | "uav"
   | "clipboard"
   | "user"
@@ -91,6 +93,7 @@ const mainLinks: { href: string; label: string; icon: NavIconId }[] = [
   { href: "/dashboard", label: "Главная", icon: "home" },
   { href: "/news", label: "Новости", icon: "news" },
   { href: "/counteraction", label: "Противодействие", icon: "shield" },
+  { href: "/tactical-medicine", label: "Такт. медицина", icon: "medicine" },
   { href: "/uav", label: "БПЛА", icon: "uav" },
   { href: "/tests", label: "Тесты", icon: "clipboard" },
   { href: "/profile", label: "Профиль", icon: "user" },
@@ -423,6 +426,9 @@ export function AppShell({ session, children }: AppShellProps) {
     ...(canManageCounteraction(session)
       ? [{ href: "/admin/counteraction", label: "Противодействие", icon: "shield" as const }]
       : []),
+    ...(canManageTacticalMedicine(session)
+      ? [{ href: "/admin/tactical-medicine", label: "Такт. мед.", icon: "medicine" as const }]
+      : []),
     ...(canManageUav(session) ? [{ href: "/admin/uav", label: "БПЛА", icon: "uav" as const }] : []),
     ...(canSeeGameSection ? [{ href: "/game", label: "Полигон", icon: "game" as const }] : []),
   ];
@@ -485,6 +491,13 @@ export function AppShell({ session, children }: AppShellProps) {
           <svg viewBox="0 0 24 24" aria-hidden="true" style={iconStyle}>
             <path d="M12 3l8 3v6c0 5-3.5 8.5-8 9.8C7.5 20.5 4 17 4 12V6l8-3z" />
             <path d="M9 12.5l2 2 4-4" />
+          </svg>
+        );
+      case "medicine":
+        return (
+          <svg viewBox="0 0 24 24" aria-hidden="true" style={iconStyle}>
+            <rect x="6" y="6" width="12" height="12" rx="2" />
+            <path d="M12 8v8M8 12h8" />
           </svg>
         );
       case "uav":

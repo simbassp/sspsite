@@ -2,40 +2,40 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GripVertical } from "lucide-react";
-import { splitCategoryLabels, uavBadgeStyle } from "@/lib/catalog-badges";
+import { splitCategoryLabels, tacticalMedicineBadgeStyle } from "@/lib/catalog-badges";
 import { publicUploadDisplayUrl } from "@/lib/public-asset-url";
 import {
-  buildUavCategoryOptions,
-  findCanonicalUavCategory,
-  isBuiltinUavCategory,
-  itemMatchesUavCategory,
-} from "@/lib/uav-categories";
-import { UAV_ENGINE_TYPES, UavEngineType, appendEngineSpec, detectEngineType } from "@/lib/uav-engine";
-import { deleteUavItem, fetchUavItems, reorderUavItems, saveUavItem } from "@/lib/uav-repository";
+  buildTacticalMedicineCategoryOptions,
+  findCanonicalTacticalMedicineCategory,
+  isBuiltinTacticalMedicineCategory,
+  itemMatchesTacticalMedicineCategory,
+} from "@/lib/tactical-medicine-categories";
+import {
+  deleteTacticalMedicineItem,
+  fetchTacticalMedicineItems,
+  reorderTacticalMedicineItems,
+  saveTacticalMedicineItem,
+} from "@/lib/uav-repository";
 import { CatalogItem } from "@/lib/types";
 
-type DraftUav = {
+type DraftTacticalMedicine = {
   id?: string;
   title: string;
   category: string;
   image: string;
   summary: string;
-  specsText: string[];
-  engineType: UavEngineType;
 };
 
-const emptyDraft: DraftUav = {
+const emptyDraft: DraftTacticalMedicine = {
   title: "",
   category: "",
   image: "",
   summary: "",
-  specsText: ["", "", "", "", "", ""],
-  engineType: "",
 };
 
 const otherCategoryValue = "__other__";
 const maxUploadSizeMb = 8;
-const customCategoriesLsKey = "ssp:uav_custom_categories";
+const customCategoriesLsKey = "ssp:tactical_medicine_custom_categories";
 
 function readLocalCustomCategories(): string[] {
   if (typeof window === "undefined") return [];
@@ -53,37 +53,6 @@ function readLocalCustomCategories(): string[] {
 function writeLocalCustomCategories(list: string[]) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(customCategoriesLsKey, JSON.stringify(list));
-}
-
-function parseImages(input: string) {
-  return input
-    .split(/\r?\n|,/)
-    .map((part) => part.trim())
-    .filter(Boolean);
-}
-
-function normalizeSpecs(lines: string[]) {
-  return lines
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line, index) => {
-      if (line.includes(":")) {
-        const [left, ...rest] = line.split(":");
-        const key = left.trim() || `Параметр ${index + 1}`;
-        const value = rest.join(":").trim();
-        return { key, value };
-      }
-      return { key: `Параметр ${index + 1}`, value: line };
-    });
-}
-
-function specsToText(specs: CatalogItem["specs"]) {
-  const lines = specs
-    .filter((item) => item.key.trim().toLowerCase() !== "тип двигателя")
-    .slice(0, 6)
-    .map((item) => `${item.key}: ${item.value}`);
-  while (lines.length < 6) lines.push("");
-  return lines;
 }
 
 function sortCatalogItems(list: CatalogItem[]) {
@@ -105,7 +74,6 @@ function moveIdInList(ids: string[], fromIndex: number, toIndex: number) {
   return next;
 }
 
-/** Переставляет видимые id внутри полного порядка (невидимые остаются на местах). */
 function applyVisibleReorder(allOrderedIds: string[], visibleIds: string[], from: number, to: number) {
   const nextVisible = moveIdInList(visibleIds, from, to);
   const visibleSet = new Set(visibleIds);
@@ -113,9 +81,9 @@ function applyVisibleReorder(allOrderedIds: string[], visibleIds: string[], from
   return allOrderedIds.map((id) => (visibleSet.has(id) ? nextVisible[cursor++]! : id));
 }
 
-export default function AdminUavPage() {
+export default function AdminTacticalMedicinePage() {
   const [items, setItems] = useState<CatalogItem[]>([]);
-  const [draft, setDraft] = useState<DraftUav>(emptyDraft);
+  const [draft, setDraft] = useState<DraftTacticalMedicine>(emptyDraft);
   const [message, setMessage] = useState("");
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -137,32 +105,34 @@ export default function AdminUavPage() {
   const orderBeforeDragRef = useRef<CatalogItem[] | null>(null);
   const dirtyDuringDragRef = useRef(false);
 
+  const categoryOptions = useMemo(() => buildTacticalMedicineCategoryOptions(customCategories), [customCategories]);
+  const isKnownCategory = Boolean(findCanonicalTacticalMedicineCategory(draft.category, categoryOptions));
+  const categorySelectValue = isKnownCategory
+    ? (findCanonicalTacticalMedicineCategory(draft.category, categoryOptions) ?? "")
+    : draft.category.trim() || categoryModeOther
+      ? otherCategoryValue
+      : "";
+
   const orderedItems = useMemo(() => sortCatalogItems(items), [items]);
   itemsRef.current = orderedItems;
 
   const visibleItems = useMemo(() => {
     if (categoryFilter === "all") return orderedItems;
-    return orderedItems.filter((item) => itemMatchesUavCategory(item.category, categoryFilter));
+    return orderedItems.filter((item) => itemMatchesTacticalMedicineCategory(item.category, categoryFilter));
   }, [orderedItems, categoryFilter]);
   visibleIdsRef.current = visibleItems.map((item) => item.id);
 
-  const categoryOptions = useMemo(() => buildUavCategoryOptions(customCategories), [customCategories]);
-  const isKnownCategory = Boolean(findCanonicalUavCategory(draft.category, categoryOptions));
-  const categorySelectValue = isKnownCategory
-    ? (findCanonicalUavCategory(draft.category, categoryOptions) ?? "")
-    : draft.category.trim() || categoryModeOther
-      ? otherCategoryValue
-      : "";
-
   const refreshCustomCategories = useCallback(async () => {
     try {
-      const res = await fetch("/api/admin/uav/categories", { cache: "no-store" });
+      const res = await fetch("/api/admin/tactical-medicine/categories", { cache: "no-store" });
       const payload = (await res.json()) as { ok?: boolean; custom?: string[]; migrationRequired?: boolean };
       if (res.ok && payload.ok) {
         const fromApi = Array.isArray(payload.custom) ? payload.custom : [];
         if (payload.migrationRequired) {
           const local = readLocalCustomCategories();
-          setCustomCategories(buildUavCategoryOptions(local).filter((c) => !isBuiltinUavCategory(c)));
+          setCustomCategories(
+            buildTacticalMedicineCategoryOptions(local).filter((c) => !isBuiltinTacticalMedicineCategory(c)),
+          );
           setCategoryHint("Пользовательские категории пока в этом браузере (нужна миграция в Supabase).");
           return;
         }
@@ -172,10 +142,9 @@ export default function AdminUavPage() {
         return;
       }
     } catch {
-      /* fallback below */
+      /* fallback */
     }
-    const local = readLocalCustomCategories();
-    setCustomCategories(local.filter((c) => !isBuiltinUavCategory(c)));
+    setCustomCategories(readLocalCustomCategories().filter((c) => !isBuiltinTacticalMedicineCategory(c)));
   }, []);
 
   const saveCustomCategory = async (rawLabel: string) => {
@@ -184,8 +153,8 @@ export default function AdminUavPage() {
       setCategoryHint("Введите название категории.");
       return;
     }
-    if (isBuiltinUavCategory(label)) {
-      const canonical = findCanonicalUavCategory(label, categoryOptions) || label;
+    if (isBuiltinTacticalMedicineCategory(label)) {
+      const canonical = findCanonicalTacticalMedicineCategory(label, categoryOptions) || label;
       setDraft((prev) => ({ ...prev, category: canonical }));
       setCategoryModeOther(false);
       setCategoryHint("");
@@ -194,7 +163,7 @@ export default function AdminUavPage() {
     setCategoryBusy(true);
     setCategoryHint("");
     try {
-      const res = await fetch("/api/admin/uav/categories", {
+      const res = await fetch("/api/admin/tactical-medicine/categories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ label }),
@@ -207,27 +176,35 @@ export default function AdminUavPage() {
       };
       if (res.ok && payload.ok) {
         const saved = String(payload.label || label).trim();
-        setCustomCategories((prev) => buildUavCategoryOptions([...prev, saved]).filter((c) => !isBuiltinUavCategory(c)));
+        setCustomCategories((prev) =>
+          buildTacticalMedicineCategoryOptions([...prev, saved]).filter((c) => !isBuiltinTacticalMedicineCategory(c)),
+        );
         writeLocalCustomCategories(
-          buildUavCategoryOptions([...customCategories, saved]).filter((c) => !isBuiltinUavCategory(c)),
+          buildTacticalMedicineCategoryOptions([...customCategories, saved]).filter(
+            (c) => !isBuiltinTacticalMedicineCategory(c),
+          ),
         );
         setDraft((prev) => ({ ...prev, category: saved }));
         setCategoryModeOther(false);
         setCategoryHint("Категория сохранена в списке.");
         return;
       }
-      if (payload.error === "migration_required_uav_category_presets") {
-        const next = buildUavCategoryOptions([...customCategories, label]).filter((c) => !isBuiltinUavCategory(c));
+      if (payload.error === "migration_required_tactical_medicine_category_presets") {
+        const next = buildTacticalMedicineCategoryOptions([...customCategories, label]).filter(
+          (c) => !isBuiltinTacticalMedicineCategory(c),
+        );
         setCustomCategories(next);
         writeLocalCustomCategories(next);
         setDraft((prev) => ({ ...prev, category: label }));
         setCategoryModeOther(false);
-        setCategoryHint("Сохранено в этом браузере. Для общего списка выполните миграцию uav_category_presets.");
+        setCategoryHint("Сохранено в этом браузере. Для общего списка выполните миграцию.");
         return;
       }
       setCategoryHint(payload.message || payload.error || "Не удалось сохранить категорию.");
     } catch {
-      const next = buildUavCategoryOptions([...customCategories, label]).filter((c) => !isBuiltinUavCategory(c));
+      const next = buildTacticalMedicineCategoryOptions([...customCategories, label]).filter(
+        (c) => !isBuiltinTacticalMedicineCategory(c),
+      );
       setCustomCategories(next);
       writeLocalCustomCategories(next);
       setDraft((prev) => ({ ...prev, category: label }));
@@ -239,17 +216,21 @@ export default function AdminUavPage() {
   };
 
   const deleteCustomCategory = async (label: string) => {
-    if (isBuiltinUavCategory(label)) return;
+    if (isBuiltinTacticalMedicineCategory(label)) return;
     setCategoryBusy(true);
     try {
-      const res = await fetch(`/api/admin/uav/categories?label=${encodeURIComponent(label)}`, {
+      const res = await fetch(`/api/admin/tactical-medicine/categories?label=${encodeURIComponent(label)}`, {
         method: "DELETE",
       });
       const payload = (await res.json()) as { ok?: boolean; error?: string; message?: string };
       const next = customCategories.filter(
-        (c) => c.trim().toLowerCase() !== label.trim().toLowerCase() && !isBuiltinUavCategory(c),
+        (c) => c.trim().toLowerCase() !== label.trim().toLowerCase() && !isBuiltinTacticalMedicineCategory(c),
       );
-      if ((res.ok && payload.ok) || payload.error === "migration_required_uav_category_presets" || !res.ok) {
+      if (
+        (res.ok && payload.ok) ||
+        payload.error === "migration_required_tactical_medicine_category_presets" ||
+        !res.ok
+      ) {
         setCustomCategories(next);
         writeLocalCustomCategories(next);
         if (draft.category.trim().toLowerCase() === label.trim().toLowerCase()) {
@@ -257,7 +238,9 @@ export default function AdminUavPage() {
           setCategoryModeOther(false);
         }
         if (categoryFilter === label) setCategoryFilter("all");
-        setCategoryHint(payload.error === "migration_required_uav_category_presets" ? "Удалено в этом браузере." : "");
+        setCategoryHint(
+          payload.error === "migration_required_tactical_medicine_category_presets" ? "Удалено в этом браузере." : "",
+        );
         return;
       }
       setCategoryHint(payload.message || payload.error || "Не удалось удалить.");
@@ -278,11 +261,11 @@ export default function AdminUavPage() {
     setIsLoading(true);
     setLoadError("");
     try {
-      const list = await fetchUavItems();
+      const list = await fetchTacticalMedicineItems();
       setItems(sortCatalogItems(list));
       await refreshCustomCategories();
     } catch {
-      setLoadError("Не удалось загрузить карточки БПЛА. Попробуйте снова.");
+      setLoadError("Не удалось загрузить карточки. Попробуйте снова.");
       setItems([]);
     } finally {
       setIsLoading(false);
@@ -293,44 +276,40 @@ export default function AdminUavPage() {
     const prev = itemsRef.current;
     const withOrder = nextOrdered.map((item, index) => ({ ...item, sortOrder: index }));
     setItems(withOrder);
+    itemsRef.current = withOrder;
     setReorderSaving(true);
-    setReorderMessage("Сохраняем порядок…");
+    setReorderMessage("");
     try {
-      await reorderUavItems(withOrder.map((item) => item.id));
+      await reorderTacticalMedicineItems(withOrder.map((item) => item.id));
       setReorderMessage("Порядок сохранён.");
-    } catch (error) {
+    } catch {
       setItems(prev);
-      setReorderMessage(
-        error instanceof Error && error.message.includes("migration_required")
-          ? "Нужна миграция sort_order в Supabase. Порядок не сохранён."
-          : "Не удалось сохранить порядок. Попробуйте ещё раз.",
-      );
+      itemsRef.current = prev;
+      setReorderMessage("Не удалось сохранить порядок.");
     } finally {
       setReorderSaving(false);
+      window.setTimeout(() => setReorderMessage(""), 2500);
     }
   }, []);
 
-  const buildReordered = useCallback((fromIndex: number, toIndex: number) => {
+  const buildReordered = useCallback((fromVisible: number, toVisible: number) => {
     const allIds = itemsRef.current.map((item) => item.id);
-    const visibleIds = visibleIdsRef.current;
-    const nextAllIds = applyVisibleReorder(allIds, visibleIds, fromIndex, toIndex);
-    if (nextAllIds.every((id, i) => id === allIds[i])) return null;
+    const nextIds = applyVisibleReorder(allIds, visibleIdsRef.current, fromVisible, toVisible);
     const byId = new Map(itemsRef.current.map((item) => [item.id, item]));
-    return nextAllIds.map((id) => byId.get(id)!).filter(Boolean);
+    return nextIds.map((id) => byId.get(id)!).filter(Boolean);
   }, []);
 
   const moveVisibleItem = useCallback(
-    (fromIndex: number, toIndex: number, opts?: { persist?: boolean }) => {
-      const nextOrdered = buildReordered(fromIndex, toIndex);
-      if (!nextOrdered) return;
-      const withOrder = nextOrdered.map((item, index) => ({ ...item, sortOrder: index }));
+    (from: number, to: number, opts?: { persist?: boolean }) => {
+      const next = buildReordered(from, to);
+      const withOrder = next.map((item, index) => ({ ...item, sortOrder: index }));
       setItems(withOrder);
       itemsRef.current = withOrder;
       visibleIdsRef.current =
         categoryFilter === "all"
           ? withOrder.map((item) => item.id)
           : withOrder
-              .filter((item) => itemMatchesUavCategory(item.category, categoryFilter))
+              .filter((item) => itemMatchesTacticalMedicineCategory(item.category, categoryFilter))
               .map((item) => item.id);
       if (opts?.persist !== false) {
         void persistOrder(withOrder);
@@ -364,75 +343,62 @@ export default function AdminUavPage() {
 
   const onSave = async () => {
     setMessage("");
-    if (!draft.title.trim()) return setMessage("Введите название БПЛА.");
-    if (!draft.category.trim()) return setMessage("Выберите категорию БПЛА.");
-    if (!parseImages(draft.image).length) return setMessage("Добавьте изображение (ссылка или загрузка файла).");
-
-    const specs = normalizeSpecs(draft.specsText);
-    if (specs.length < 6) return setMessage("Заполните 6 строк ТТХ.");
+    if (!draft.title.trim()) return setMessage("Введите название карточки.");
+    if (!draft.category.trim()) return setMessage("Выберите категорию.");
+    if (!draft.image.trim()) return setMessage("Добавьте изображение.");
 
     const categoryLabel = draft.category.trim();
-    if (!findCanonicalUavCategory(categoryLabel, categoryOptions) && !isBuiltinUavCategory(categoryLabel)) {
+    if (
+      !findCanonicalTacticalMedicineCategory(categoryLabel, categoryOptions) &&
+      !isBuiltinTacticalMedicineCategory(categoryLabel)
+    ) {
       await saveCustomCategory(categoryLabel);
     }
 
     try {
-      await saveUavItem({
+      await saveTacticalMedicineItem({
         id: draft.id,
         title: draft.title.trim(),
         category: draft.category.trim() || "Без категории",
         image: draft.image.trim(),
         summary: draft.summary.trim(),
-        specs: appendEngineSpec(specs.slice(0, 6), draft.engineType),
-        details: {
-          overview: "",
-          tth: "",
-          usage: "",
-          materials: "",
-        },
+        specs: [],
+        details: { overview: "", tth: "", usage: "", materials: "" },
       });
-      setMessage(draft.id ? "Карточка БПЛА обновлена." : "Карточка БПЛА добавлена.");
+      setMessage(draft.id ? "Карточка обновлена." : "Карточка добавлена.");
       setDraft(emptyDraft);
       setCategoryModeOther(false);
       setCategoryHint("");
       await refresh();
     } catch {
-      setMessage("Не удалось сохранить карточку в основной базе. Проверьте права/подключение и повторите.");
+      setMessage("Не удалось сохранить карточку. Проверьте права/подключение и повторите.");
     }
   };
 
-  const onUploadImages = async (files: FileList | null) => {
-    if (!files?.length) return;
+  const onUploadImage = async (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file) return;
     setIsUploadingImage(true);
     setMessage("");
-    const uploadedUrls: string[] = [];
     try {
-      for (const file of Array.from(files)) {
-        if (!file.type.startsWith("image/")) {
-          setMessage("Можно загружать только изображения.");
-          continue;
-        }
-        if (file.size > maxUploadSizeMb * 1024 * 1024) {
-          setMessage(`Файл слишком большой. Максимум ${maxUploadSizeMb} МБ.`);
-          continue;
-        }
-        const body = new FormData();
-        body.append("file", file);
-        const response = await fetch("/api/upload-image", { method: "POST", body });
-        const payload = (await response.json()) as { ok?: boolean; url?: string; error?: string };
-        if (!response.ok || payload.ok !== true || !payload.url) {
-          setMessage(payload.error || "Не удалось загрузить изображение.");
-          continue;
-        }
-        uploadedUrls.push(payload.url);
+      if (!file.type.startsWith("image/")) {
+        setMessage("Можно загружать только изображения.");
+        return;
       }
-      if (uploadedUrls.length) {
-        setDraft((prev) => {
-          const existing = parseImages(prev.image);
-          return { ...prev, image: [...existing, ...uploadedUrls].join("\n") };
-        });
-        setMessage("Изображения загружены.");
+      if (file.size > maxUploadSizeMb * 1024 * 1024) {
+        setMessage(`Файл слишком большой. Максимум ${maxUploadSizeMb} МБ.`);
+        return;
       }
+      const body = new FormData();
+      body.append("file", file);
+      const response = await fetch("/api/upload-image", { method: "POST", body });
+      const payload = (await response.json()) as { ok?: boolean; url?: string; error?: string };
+      if (!response.ok || payload.ok !== true || !payload.url) {
+        setMessage(payload.error || "Не удалось загрузить изображение.");
+        return;
+      }
+      setDraft((prev) => ({ ...prev, image: payload.url! }));
+      setMessage("Изображение загружено.");
     } catch {
       setMessage("Ошибка загрузки изображения.");
     } finally {
@@ -443,17 +409,15 @@ export default function AdminUavPage() {
 
   const onEdit = (item: CatalogItem) => {
     setMessage("");
-    const known = Boolean(findCanonicalUavCategory(item.category, categoryOptions));
+    const known = Boolean(findCanonicalTacticalMedicineCategory(item.category, categoryOptions));
     setCategoryModeOther(!known && Boolean(item.category.trim()));
     setCategoryHint("");
     setDraft({
       id: item.id,
       title: item.title,
       category: item.category,
-      image: item.image,
+      image: item.image.trim(),
       summary: item.summary,
-      specsText: specsToText(item.specs),
-      engineType: detectEngineType(item.specs),
     });
     if (typeof window !== "undefined") {
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -463,22 +427,24 @@ export default function AdminUavPage() {
   const onDelete = async (itemId: string) => {
     setMessage("");
     try {
-      await deleteUavItem(itemId);
+      await deleteTacticalMedicineItem(itemId);
       setMessage("Карточка удалена.");
-      if (draft.id === itemId) setDraft(emptyDraft);
+      if (draft.id === itemId) {
+        setDraft(emptyDraft);
+        setCategoryModeOther(false);
+      }
       await refresh();
     } catch {
-      setMessage("Не удалось удалить карточку из основной базы. Проверьте подключение и права.");
+      setMessage("Не удалось удалить карточку.");
     }
   };
 
+  const previewImageSrc = draft.image.trim() ? publicUploadDisplayUrl(draft.image.trim()) : "";
+
   return (
     <section>
-      <h1 className="page-title">Админ / БПЛА</h1>
-      <p className="page-subtitle">
-        Добавление и редактирование БПЛА: изображение, 6 ТТХ, тип двигателя. Ниже — порядок карточек и фильтр по
-        категориям.
-      </p>
+      <h1 className="page-title">Админ / Тактическая медицина</h1>
+      <p className="page-subtitle">Добавление карточек, категории и порядок отображения.</p>
       {isLoading && <p className="page-subtitle">Загрузка...</p>}
       {!isLoading && !!loadError && (
         <div className="form" style={{ marginBottom: 12 }}>
@@ -491,7 +457,7 @@ export default function AdminUavPage() {
 
       <article className="card">
         <div className="card-body">
-          <h3>{draft.id ? "Редактирование карточки" : "Добавить карточку БПЛА"}</h3>
+          <h3>{draft.id ? "Редактирование карточки" : "Добавить карточку"}</h3>
           <div className="form" style={{ marginTop: 10 }}>
             <label className="label">Название</label>
             <input
@@ -502,14 +468,13 @@ export default function AdminUavPage() {
 
             <label className="label">Категория</label>
             <p className="page-subtitle" style={{ marginBottom: 8 }}>
-              Выберите из списка или «Другое» — введите название и сохраните. Крестик удаляет только свои категории.
+              Выберите из списка или «Другое» — введите и сохраните. Крестик удаляет только свои категории.
             </p>
             <div className="chips" style={{ marginBottom: 8 }}>
               {categoryOptions.map((option) => {
                 const selected =
-                  !categoryModeOther &&
-                  findCanonicalUavCategory(draft.category, [option]) === option;
-                const canDelete = !isBuiltinUavCategory(option);
+                  !categoryModeOther && findCanonicalTacticalMedicineCategory(draft.category, [option]) === option;
+                const canDelete = !isBuiltinTacticalMedicineCategory(option);
                 return (
                   <span
                     key={option}
@@ -557,7 +522,9 @@ export default function AdminUavPage() {
                   setCategoryModeOther(true);
                   setDraft((prev) => ({
                     ...prev,
-                    category: findCanonicalUavCategory(prev.category, categoryOptions) ? "" : prev.category,
+                    category: findCanonicalTacticalMedicineCategory(prev.category, categoryOptions)
+                      ? ""
+                      : prev.category,
                   }));
                 }}
               >
@@ -592,7 +559,7 @@ export default function AdminUavPage() {
             )}
             {categoryHint && <p className="page-subtitle">{categoryHint}</p>}
 
-            <label className="label">Изображения (можно несколько, каждая строка — отдельный URL)</label>
+            <label className="label">Изображение</label>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button
                 className="btn"
@@ -606,78 +573,52 @@ export default function AdminUavPage() {
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
-                multiple
                 style={{ display: "none" }}
-                onChange={(e) => void onUploadImages(e.target.files)}
+                onChange={(e) => void onUploadImage(e.target.files)}
               />
             </div>
-            <textarea
+            <input
               className="input"
-              rows={3}
               value={draft.image}
               onChange={(e) => setDraft((prev) => ({ ...prev, image: e.target.value }))}
-              placeholder="https://... или /uploads/uav/... (по одному URL на строку)"
+              placeholder="https://..."
             />
-            {parseImages(draft.image).length > 0 && (
-              <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {parseImages(draft.image)
-                  .slice(0, 6)
-                  .map((url) => (
-                    <img
-                      key={url}
-                      src={publicUploadDisplayUrl(url)}
-                      alt=""
-                      decoding="async"
-                      loading="lazy"
-                      style={{ width: 110, height: 72, objectFit: "cover", borderRadius: 10, border: "1px solid var(--line)" }}
-                    />
-                  ))}
+            {previewImageSrc && (
+              <img
+                src={previewImageSrc}
+                alt=""
+                decoding="async"
+                loading="lazy"
+                style={{
+                  width: 160,
+                  height: 100,
+                  borderRadius: 10,
+                  border: "1px solid var(--line)",
+                  objectFit: "cover",
+                  marginTop: 8,
+                }}
+              />
+            )}
+            {draft.category.trim() && (
+              <div className="catalog-badge-row" style={{ marginTop: 8 }}>
+                {splitCategoryLabels(draft.category).map((label, bi) => {
+                  const tone = tacticalMedicineBadgeStyle(label);
+                  return (
+                    <span key={`preview-cat-${bi}-${label}`} className="catalog-badge" style={tone} title={label}>
+                      {label}
+                    </span>
+                  );
+                })}
               </div>
             )}
 
-            <label className="label">Краткое описание</label>
+            <label className="label">Описание</label>
             <textarea
               className="input"
-              rows={2}
+              rows={3}
               value={draft.summary}
               onChange={(e) => setDraft((prev) => ({ ...prev, summary: e.target.value }))}
             />
-
-            <h3 style={{ marginTop: 4 }}>6 строк характеристик</h3>
-            {draft.specsText.map((line, index) => (
-              <div key={`spec-${index}`}>
-                <label className="label">ТТХ {index + 1}</label>
-                <input
-                  className="input"
-                  placeholder="например: Скорость: 120 км/ч"
-                  value={line}
-                  onChange={(e) =>
-                    setDraft((prev) => ({
-                      ...prev,
-                      specsText: prev.specsText.map((oldLine, idx) => (idx === index ? e.target.value : oldLine)),
-                    }))
-                  }
-                />
-              </div>
-            ))}
-            <label className="label">Тип двигателя</label>
-            <select
-              className="select"
-              value={draft.engineType}
-              onChange={(e) =>
-                setDraft((prev) => ({
-                  ...prev,
-                  engineType: e.target.value as UavEngineType,
-                }))
-              }
-            >
-              <option value="">Не указан</option>
-              {UAV_ENGINE_TYPES.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
 
             {message && <p className="page-subtitle">{message}</p>}
             <button className="btn btn-primary" type="button" onClick={() => void onSave()}>
@@ -703,8 +644,7 @@ export default function AdminUavPage() {
       <div style={{ marginTop: 16 }}>
         <h3 style={{ marginBottom: 8 }}>Карточки и порядок</h3>
         <p className="page-subtitle" style={{ marginBottom: 8 }}>
-          Перетащите за ⋮⋮ или кнопками ↑↓. Порядок сразу сохраняется и так же показывается на странице ТТХ БПЛА.
-          Фильтр — чтобы заранее увидеть набор категории.
+          Перетащите за ⋮⋮ или кнопками ↑↓. Порядок сразу сохраняется и отображается на публичной странице.
         </p>
 
         <div className="chips" style={{ marginBottom: 10 }}>
@@ -716,7 +656,9 @@ export default function AdminUavPage() {
             Все ({orderedItems.length})
           </button>
           {categoryOptions.map((category) => {
-            const count = orderedItems.filter((item) => itemMatchesUavCategory(item.category, category)).length;
+            const count = orderedItems.filter((item) =>
+              itemMatchesTacticalMedicineCategory(item.category, category),
+            ).length;
             return (
               <button
                 key={category}
@@ -789,9 +731,7 @@ export default function AdminUavPage() {
                     }
                     finishDrag();
                   }}
-                  onPointerCancel={() => {
-                    finishDrag();
-                  }}
+                  onPointerCancel={() => finishDrag()}
                 >
                   <GripVertical width={18} height={18} strokeWidth={2} aria-hidden />
                 </button>
@@ -801,7 +741,7 @@ export default function AdminUavPage() {
                   <div className="meta" style={{ marginTop: 0 }}>
                     {item.category.trim() ? (
                       splitCategoryLabels(item.category).map((label, bi) => {
-                        const tone = uavBadgeStyle(label);
+                        const tone = tacticalMedicineBadgeStyle(label);
                         return (
                           <span key={`${item.id}-cat-${bi}`} className="catalog-badge" style={tone} title={label}>
                             {label}
@@ -811,7 +751,6 @@ export default function AdminUavPage() {
                     ) : (
                       <span className="pill">Без категории</span>
                     )}
-                    <span>{item.specs.length} характеристик</span>
                   </div>
                 </div>
 
@@ -821,7 +760,6 @@ export default function AdminUavPage() {
                     style={{ width: 38, height: 34, padding: 0 }}
                     type="button"
                     title="Выше"
-                    aria-label={`Поднять ${item.title}`}
                     disabled={reorderSaving || index === 0}
                     onClick={() => moveVisibleItem(index, index - 1)}
                   >
@@ -832,7 +770,6 @@ export default function AdminUavPage() {
                     style={{ width: 38, height: 34, padding: 0 }}
                     type="button"
                     title="Ниже"
-                    aria-label={`Опустить ${item.title}`}
                     disabled={reorderSaving || index >= visibleItems.length - 1}
                     onClick={() => moveVisibleItem(index, index + 1)}
                   >
@@ -843,7 +780,6 @@ export default function AdminUavPage() {
                     style={{ width: 38, height: 34, padding: 0, fontSize: 16, lineHeight: 1 }}
                     type="button"
                     title="Редактировать"
-                    aria-label={`Редактировать ${item.title}`}
                     onClick={() => onEdit(item)}
                   >
                     ✏
@@ -853,7 +789,6 @@ export default function AdminUavPage() {
                     style={{ width: 38, height: 34, padding: 0, fontSize: 16, lineHeight: 1 }}
                     type="button"
                     title="Удалить"
-                    aria-label={`Удалить ${item.title}`}
                     onClick={() => void onDelete(item.id)}
                   >
                     🗑
@@ -867,7 +802,7 @@ export default function AdminUavPage() {
         {!isLoading && !loadError && !visibleItems.length && (
           <p className="page-subtitle">
             {categoryFilter === "all"
-              ? "Пока нет карточек БПЛА."
+              ? "Пока нет карточек тактической медицины."
               : `В категории «${categoryFilter}» пока нет карточек.`}
           </p>
         )}

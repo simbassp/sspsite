@@ -13,12 +13,13 @@ import {
 } from "@/lib/storage";
 import { CatalogItem } from "@/lib/types";
 
-type CatalogKind = "uav" | "counteraction";
+type CatalogKind = "uav" | "counteraction" | "tactical_medicine";
 
 const CATALOG_CACHE_TTL_MS = 5 * 60 * 1000;
 const CATALOG_CACHE_KEYS: Record<CatalogKind, string> = {
   uav: "ssp_catalog_cache_uav_v1",
   counteraction: "ssp_catalog_cache_counteraction_v1",
+  tactical_medicine: "ssp_catalog_cache_tactical_medicine_v1",
 };
 const catalogMemoryCache: Partial<Record<CatalogKind, { ts: number; items: CatalogItem[] }>> = {};
 
@@ -86,7 +87,12 @@ export function invalidateCatalogCache(kind: CatalogKind) {
 }
 
 async function fetchCatalogItemsFromApi(kind: CatalogKind): Promise<CatalogItem[]> {
-  const path = kind === "uav" ? "/api/uav" : "/api/counteraction";
+  const path =
+    kind === "uav"
+      ? "/api/uav"
+      : kind === "counteraction"
+        ? "/api/counteraction"
+        : "/api/tactical-medicine";
   const response = await withTimeoutAndRetry(
     () =>
       fetch(path, {
@@ -95,13 +101,17 @@ async function fetchCatalogItemsFromApi(kind: CatalogKind): Promise<CatalogItem[
       }),
     20_000,
     1,
-    kind === "uav" ? "fetch_uav_items_timeout" : "fetch_counteraction_items_timeout",
+    kind === "uav"
+      ? "fetch_uav_items_timeout"
+      : kind === "counteraction"
+        ? "fetch_counteraction_items_timeout"
+        : "fetch_tactical_medicine_items_timeout",
   );
   if (!response.ok) {
     throw new Error(`catalog_fetch_failed_${response.status}`);
   }
   const payload = (await response.json()) as { ok?: boolean; items?: CatalogItem[] };
-  if (kind === "counteraction" && (!payload.ok || !Array.isArray(payload.items))) {
+  if (kind !== "uav" && (!payload.ok || !Array.isArray(payload.items))) {
     throw new Error("catalog_fetch_invalid_response");
   }
   if (!Array.isArray(payload.items)) {
@@ -140,7 +150,7 @@ async function fetchCachedCatalogItems(
 type CatalogRow = {
   id: string;
   slug: string;
-  kind: "counteraction" | "uav";
+  kind: "counteraction" | "uav" | "tactical_medicine";
   title: string;
   category: string;
   summary: string;
@@ -213,7 +223,7 @@ function shouldUseLocalFallback(allowLocalFallback: boolean) {
 }
 
 async function fetchCatalogItems(
-  kind: "counteraction" | "uav",
+  kind: CatalogKind,
   fallback: () => CatalogItem[],
   allowLocalFallback = true,
 ) {
@@ -264,7 +274,7 @@ async function fetchCatalogItems(
 }
 
 async function fetchCatalogById(
-  kind: "counteraction" | "uav",
+  kind: CatalogKind,
   itemId: string,
   fallback: (id: string) => CatalogItem | null,
   allowLocalFallback = true,
@@ -294,7 +304,7 @@ async function fetchCatalogById(
 }
 
 async function saveCatalogItem(
-  kind: "counteraction" | "uav",
+  kind: CatalogKind,
   input: Omit<CatalogItem, "id"> & { id?: string },
   fallback: (row: Omit<CatalogItem, "id"> & { id?: string }) => CatalogItem,
   allowLocalFallback = true,
@@ -385,7 +395,7 @@ export async function reorderCounteractionItems(orderedIds: string[]) {
 }
 
 async function deleteCatalogItem(
-  kind: "counteraction" | "uav",
+  kind: CatalogKind,
   itemId: string,
   fallback: (id: string) => void,
   allowLocalFallback = true,
@@ -439,4 +449,46 @@ export async function saveCounteractionItem(input: Omit<CatalogItem, "id"> & { i
 export async function deleteCounteractionItem(itemId: string) {
   await deleteCatalogItem("counteraction", itemId, removeCounteractionItem);
   invalidateCatalogCache("counteraction");
+}
+
+export async function fetchTacticalMedicineItems(forceRefresh = false) {
+  return fetchCachedCatalogItems("tactical_medicine", forceRefresh);
+}
+
+export async function saveTacticalMedicineItem(input: Omit<CatalogItem, "id"> & { id?: string }) {
+  const payload: Omit<CatalogItem, "id"> & { id?: string } = {
+    ...input,
+    specs: [],
+    details: { overview: input.summary, tth: "", usage: "", materials: "" },
+  };
+  const saved = await saveCatalogItem("tactical_medicine", payload, (row) => ({
+    id: row.id || `local-${Date.now()}`,
+    title: row.title,
+    category: row.category,
+    summary: row.summary,
+    image: row.image,
+    specs: [],
+    details: payload.details,
+    sortOrder: row.sortOrder,
+  }), false);
+  invalidateCatalogCache("tactical_medicine");
+  return saved;
+}
+
+export async function deleteTacticalMedicineItem(itemId: string) {
+  await deleteCatalogItem("tactical_medicine", itemId, () => {}, false);
+  invalidateCatalogCache("tactical_medicine");
+}
+
+export async function reorderTacticalMedicineItems(orderedIds: string[]) {
+  const response = await fetch("/api/admin/tactical-medicine/reorder", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ orderedIds }),
+  });
+  const payload = (await response.json()) as { ok?: boolean; error?: string; message?: string };
+  if (!response.ok || !payload.ok) {
+    throw new Error(payload.message || payload.error || "reorder_failed");
+  }
+  invalidateCatalogCache("tactical_medicine");
 }

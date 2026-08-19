@@ -47,6 +47,12 @@ export const ADMIN_PERMISSION_OPTIONS: AdminPermissionOption[] = [
     tone: "rose",
   },
   {
+    key: "tacticalMedicine",
+    label: "Тактическая медицина",
+    description: "Управление материалами тактической медицины",
+    tone: "green",
+  },
+  {
     key: "userList",
     label: "Список пользователей",
     description: "Просмотр и управление пользователями",

@@ -10,7 +10,7 @@ import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 export const runtime = "nodejs";
 
 const USER_LIST_COLUMNS =
-  "id,auth_user_id,login,name,callsign,position,avatar_url,profile_name_color,profile_cosmetic_name_color,profile_cosmetic_avatar_frame,profile_cosmetic_bank_overlay,can_manage_content,can_manage_news,can_manage_tests,can_manage_results,can_manage_uav,can_manage_counteraction,can_manage_users,can_view_user_list,can_reset_test_results,can_view_online,can_moderate_personnel,is_online,last_seen_at,role,status,duty_location,unit_assignment";
+  "id,auth_user_id,login,name,callsign,position,avatar_url,profile_name_color,profile_cosmetic_name_color,profile_cosmetic_avatar_frame,profile_cosmetic_bank_overlay,can_manage_content,can_manage_news,can_manage_tests,can_manage_results,can_manage_uav,can_manage_counteraction,can_manage_tactical_medicine,can_manage_users,can_view_user_list,can_reset_test_results,can_view_online,can_moderate_personnel,is_online,last_seen_at,role,status,duty_location,unit_assignment";
 
 function effectiveOnlineStrict(isOnline: unknown, lastSeenAt: unknown): boolean {
   if (isOnline !== true) return false;
@@ -60,6 +60,7 @@ function normalizeUserRow(
     can_manage_results: r.can_manage_results ?? undefined,
     can_manage_uav: r.can_manage_uav ?? undefined,
     can_manage_counteraction: r.can_manage_counteraction ?? undefined,
+    can_manage_tactical_medicine: r.can_manage_tactical_medicine ?? undefined,
     can_manage_users: r.can_manage_users ?? false,
     can_view_user_list: r.can_view_user_list ?? false,
     can_reset_test_results: r.can_reset_test_results ?? undefined,

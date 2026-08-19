@@ -29,6 +29,7 @@ type ProfileRow = {
   can_manage_results?: boolean;
   can_manage_uav?: boolean;
   can_manage_counteraction?: boolean;
+  can_manage_tactical_medicine?: boolean;
   can_manage_users?: boolean;
   can_view_user_list?: boolean;
   can_reset_test_results?: boolean;
@@ -288,6 +289,7 @@ export async function POST(request: Request) {
     profile.can_manage_results,
     profile.can_manage_uav,
     profile.can_manage_counteraction,
+    profile.can_manage_tactical_medicine,
     profile.can_reset_test_results,
     profile.can_manage_users,
     profile.can_view_user_list,
@@ -303,6 +305,7 @@ export async function POST(request: Request) {
           resetResults: true,
           uav: true,
           counteraction: true,
+          tacticalMedicine: true,
           userList: true,
           users: true,
           online: true,
@@ -316,6 +319,7 @@ export async function POST(request: Request) {
             resetResults: profile.can_reset_test_results === true,
             uav: profile.can_manage_uav === true,
             counteraction: profile.can_manage_counteraction === true,
+            tacticalMedicine: profile.can_manage_tactical_medicine === true,
             userList: profile.can_view_user_list === true,
             users: profile.can_manage_users === true,
             online: profile.can_view_online === true,
@@ -328,6 +332,7 @@ export async function POST(request: Request) {
             resetResults: false,
             uav: profile.can_manage_content === true,
             counteraction: profile.can_manage_content === true,
+            tacticalMedicine: profile.can_manage_content === true,
             userList: profile.can_view_user_list === true,
             users: profile.can_manage_users === true,
             online: profile.can_view_online === true,
@@ -351,7 +356,12 @@ export async function POST(request: Request) {
     name: profile.name,
     callsign: profile.callsign,
     position: profile.position as SessionUser["position"],
-    canManageContent: permissions.news || permissions.tests || permissions.uav || permissions.counteraction,
+    canManageContent:
+      permissions.news ||
+      permissions.tests ||
+      permissions.uav ||
+      permissions.counteraction ||
+      permissions.tacticalMedicine,
     permissions,
     unitAssignment,
     avatarUrl: typeof profile.avatar_url === "string" && profile.avatar_url.trim() ? profile.avatar_url.trim() : null,

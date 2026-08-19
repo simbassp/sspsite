@@ -1,0 +1,656 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Pencil, Trash2 } from "lucide-react";
+import { useClientSession } from "@/hooks/useClientSession";
+import { splitCategoryLabels, tacticalMedicineBadgeStyle } from "@/lib/catalog-badges";
+import { canManageTacticalMedicine } from "@/lib/permissions";
+import { publicUploadDisplayUrl } from "@/lib/public-asset-url";
+import {
+  buildTacticalMedicineCategoryOptions,
+  findCanonicalTacticalMedicineCategory,
+  isBuiltinTacticalMedicineCategory,
+  itemMatchesTacticalMedicineCategory,
+} from "@/lib/tactical-medicine-categories";
+import {
+  deleteTacticalMedicineItem,
+  fetchTacticalMedicineItems,
+  peekCatalogCache,
+  saveTacticalMedicineItem,
+} from "@/lib/uav-repository";
+import { CatalogItem } from "@/lib/types";
+import { CatalogChipTrack } from "@/components/CatalogChipTrack";
+
+function firstImageUrl(value: string) {
+  return value
+    .split(/\r?\n|,/)
+    .map((part) => part.trim())
+    .find(Boolean) ?? "";
+}
+
+type InlineDraft = {
+  id: string;
+  title: string;
+  category: string;
+  image: string;
+  summary: string;
+};
+
+const otherCategoryValue = "__other__";
+const customCategoriesLsKey = "ssp:tactical_medicine_custom_categories";
+
+function readLocalCustomCategories(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(customCategoriesLsKey);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((x) => String(x || "").trim()).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+export default function TacticalMedicinePage() {
+  const [items, setItems] = useState<CatalogItem[]>([]);
+  const cardRefs = useRef<Record<string, HTMLElement | null>>({});
+  const [zoomedSrc, setZoomedSrc] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<InlineDraft | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [message, setMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [activeChipId, setActiveChipId] = useState<string | "all">("all");
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [highlightCategory, setHighlightCategory] = useState<string | null>(null);
+  const [customCategories, setCustomCategories] = useState<string[]>([]);
+  const { session, hydrated } = useClientSession();
+  const canInlineEdit = hydrated && canManageTacticalMedicine(session);
+
+  const categoryOptions = useMemo(
+    () => buildTacticalMedicineCategoryOptions(customCategories),
+    [customCategories],
+  );
+
+  const filteredItems = useMemo(() => {
+    if (!selectedCategory) return items;
+    return items.filter((item) => itemMatchesTacticalMedicineCategory(item.category, selectedCategory));
+  }, [items, selectedCategory]);
+
+  const showCategoryNav = categoryOptions.length > 0;
+
+  const refreshCustomCategories = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/tactical-medicine/categories", { cache: "no-store" });
+      const payload = (await res.json()) as { ok?: boolean; custom?: string[]; migrationRequired?: boolean };
+      if (res.ok && payload.ok) {
+        if (payload.migrationRequired) {
+          setCustomCategories(readLocalCustomCategories().filter((c) => !isBuiltinTacticalMedicineCategory(c)));
+          return;
+        }
+        setCustomCategories(Array.isArray(payload.custom) ? payload.custom : []);
+        return;
+      }
+    } catch {
+      /* local */
+    }
+    setCustomCategories(readLocalCustomCategories().filter((c) => !isBuiltinTacticalMedicineCategory(c)));
+  }, []);
+
+  const refresh = async (forceRefresh = false) => {
+    const cached = !forceRefresh ? peekCatalogCache("tactical_medicine") : null;
+    if (cached?.items.length) {
+      setItems(cached.items);
+      setIsLoading(false);
+      setMessage("");
+      if (cached.fresh && !forceRefresh) {
+        void refreshCustomCategories();
+        return;
+      }
+    } else {
+      setIsLoading(true);
+    }
+
+    try {
+      const rows = await fetchTacticalMedicineItems(forceRefresh);
+      setItems(rows);
+      await refreshCustomCategories();
+      if (!rows.length && !cached?.items.length) {
+        setMessage((prev) => prev || "Данные временно недоступны или ещё не добавлены.");
+      }
+    } catch {
+      if (!cached?.items.length) {
+        setMessage("Не удалось загрузить каталог. Проверьте интернет и повторите попытку.");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void refresh(false);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 819px)");
+    const apply = () => {
+      const header = document.getElementById("mobile-app-header");
+      if (!mq.matches || !header) {
+        document.documentElement.style.removeProperty("--uav-sticky-below-header");
+        return;
+      }
+      const h = Math.ceil(header.getBoundingClientRect().height);
+      document.documentElement.style.setProperty("--uav-sticky-below-header", `${h}px`);
+    };
+    apply();
+    const header = document.getElementById("mobile-app-header");
+    const ro = header ? new ResizeObserver(apply) : null;
+    if (header && ro) ro.observe(header);
+    mq.addEventListener("change", apply);
+    window.addEventListener("resize", apply);
+    return () => {
+      mq.removeEventListener("change", apply);
+      window.removeEventListener("resize", apply);
+      ro?.disconnect();
+      document.documentElement.style.removeProperty("--uav-sticky-below-header");
+    };
+  }, []);
+
+  const scrollToCard = (id: string) => {
+    cardRefs.current[id]?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const scrollToListTop = () => {
+    if (typeof window === "undefined") return;
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const onSelectCategory = (category: string) => {
+    setHighlightCategory(category);
+    setSelectedCategory(category);
+    setActiveChipId("all");
+    scrollToListTop();
+  };
+
+  const onBackToCategories = () => {
+    setSelectedCategory(null);
+    setActiveChipId("all");
+    scrollToListTop();
+  };
+
+  const onChipNavigate = (target: string | "all") => {
+    setActiveChipId(target);
+    if (target === "all") scrollToListTop();
+    else scrollToCard(target);
+  };
+
+  const computeActiveChipId = useCallback((): string | "all" => {
+    if (typeof window === "undefined") return "all";
+    if (window.scrollY < 40) return "all";
+    const yRef = window.innerHeight * 0.22;
+    let best: string | "all" = "all";
+    let bestDist = 1e9;
+    for (const item of filteredItems) {
+      const el = cardRefs.current[item.id];
+      if (!el) continue;
+      const r = el.getBoundingClientRect();
+      if (r.bottom < 72 || r.top > window.innerHeight * 0.94) continue;
+      const anchor = r.top + Math.min(r.height * 0.22, 64);
+      const d = Math.abs(anchor - yRef);
+      if (d < bestDist) {
+        bestDist = d;
+        best = item.id;
+      }
+    }
+    return best;
+  }, [filteredItems]);
+
+  useEffect(() => {
+    if (!filteredItems.length || !selectedCategory) return;
+    let t: ReturnType<typeof setTimeout> | undefined;
+    const onScroll = () => {
+      if (t) clearTimeout(t);
+      t = setTimeout(() => setActiveChipId(computeActiveChipId()), 48);
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      if (t) clearTimeout(t);
+    };
+  }, [filteredItems, selectedCategory, computeActiveChipId]);
+
+  useEffect(() => {
+    if (!zoomedSrc) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setZoomedSrc(null);
+    };
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [zoomedSrc]);
+
+  const onEdit = (item: CatalogItem) => {
+    setEditingId(item.id);
+    setMessage("");
+    setDraft({
+      id: item.id,
+      title: item.title,
+      category: item.category,
+      image: firstImageUrl(item.image),
+      summary: item.summary,
+    });
+  };
+
+  const onSave = async () => {
+    if (!draft) return;
+    if (!draft.title.trim()) return setMessage("Введите название.");
+    if (!draft.image.trim()) return setMessage("Добавьте URL изображения.");
+
+    setBusyId(draft.id);
+    setMessage("");
+    try {
+      const categoryLabel = draft.category.trim();
+      if (
+        categoryLabel &&
+        !findCanonicalTacticalMedicineCategory(categoryLabel, categoryOptions) &&
+        !isBuiltinTacticalMedicineCategory(categoryLabel) &&
+        canInlineEdit
+      ) {
+        try {
+          await fetch("/api/admin/tactical-medicine/categories", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ label: categoryLabel }),
+          });
+        } catch {
+          /* ignore */
+        }
+      }
+      await saveTacticalMedicineItem({
+        id: draft.id,
+        title: draft.title.trim(),
+        category: categoryLabel || "Без категории",
+        image: draft.image.trim(),
+        summary: draft.summary.trim(),
+        specs: [],
+        details: { overview: "", tth: "", usage: "", materials: "" },
+      });
+      setEditingId(null);
+      setDraft(null);
+      setMessage("Изменения сохранены.");
+      await refresh(true);
+    } catch {
+      setMessage("Не удалось сохранить изменения.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const onDelete = async (itemId: string) => {
+    const target = items.find((entry) => entry.id === itemId);
+    const title = target?.title ?? "карточку";
+    const approved =
+      typeof window === "undefined"
+        ? true
+        : window.confirm(`Удалить карточку?\n\nЭто действие нельзя отменить.\n\n«${title}»`);
+    if (!approved) return;
+    setBusyId(itemId);
+    setMessage("");
+    try {
+      await deleteTacticalMedicineItem(itemId);
+      if (editingId === itemId) {
+        setEditingId(null);
+        setDraft(null);
+      }
+      setMessage("Карточка удалена.");
+      await refresh(true);
+    } catch {
+      setMessage("Не удалось удалить карточку.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const chipTrackActiveId = useMemo(() => {
+    if (showCategoryNav && !selectedCategory) {
+      return highlightCategory ? `cat:${highlightCategory}` : null;
+    }
+    return activeChipId;
+  }, [showCategoryNav, selectedCategory, highlightCategory, activeChipId]);
+
+  const categoryChipId = (category: string) => `cat:${category}`;
+
+  const displayItems = showCategoryNav && selectedCategory ? filteredItems : items;
+
+  return (
+    <section style={{ minWidth: 0 }}>
+      <div className="uav-page__head">
+        <div className="uav-page__head-text">
+          <h1 className="page-title" style={{ marginBottom: 4 }}>
+            Тактическая медицина
+          </h1>
+          <p className="page-subtitle" style={{ marginBottom: 0 }}>
+            Справочник материалов и процедур тактической медицины.
+          </p>
+        </div>
+      </div>
+
+      {isLoading && <p className="page-subtitle">Загружаем каталог…</p>}
+      {message && <p className="page-subtitle">{message}</p>}
+
+      {!!items.length && (
+        <div className="uav-model-nav">
+          <CatalogChipTrack activeId={chipTrackActiveId}>
+            {!showCategoryNav ? (
+              <>
+                <button
+                  type="button"
+                  data-chip-id="all"
+                  className={`chip${activeChipId === "all" ? " active" : ""}`}
+                  onClick={() => onChipNavigate("all")}
+                >
+                  Все
+                </button>
+                {items.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    data-chip-id={item.id}
+                    className={`chip${activeChipId === item.id ? " active" : ""}`}
+                    onClick={() => onChipNavigate(item.id)}
+                  >
+                    {item.title}
+                  </button>
+                ))}
+              </>
+            ) : !selectedCategory ? (
+              <>
+                {categoryOptions.map((category) => {
+                  const count = items.filter((item) =>
+                    itemMatchesTacticalMedicineCategory(item.category, category),
+                  ).length;
+                  return (
+                    <button
+                      key={category}
+                      type="button"
+                      data-chip-id={categoryChipId(category)}
+                      className={`chip${highlightCategory === category ? " active" : ""}`}
+                      onClick={() => onSelectCategory(category)}
+                      disabled={count === 0}
+                      title={count === 0 ? "Пока нет карточек в этой категории" : undefined}
+                    >
+                      {category}
+                      {count > 0 ? ` (${count})` : ""}
+                    </button>
+                  );
+                })}
+              </>
+            ) : (
+              <>
+                <button type="button" className="chip chip-back" onClick={onBackToCategories}>
+                  ← Категории
+                </button>
+                <button
+                  type="button"
+                  data-chip-id="all"
+                  className={`chip${activeChipId === "all" ? " active" : ""}`}
+                  onClick={() => onChipNavigate("all")}
+                >
+                  Все · {selectedCategory}
+                </button>
+                {filteredItems.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    data-chip-id={item.id}
+                    className={`chip${activeChipId === item.id ? " active" : ""}`}
+                    onClick={() => onChipNavigate(item.id)}
+                  >
+                    {item.title}
+                  </button>
+                ))}
+              </>
+            )}
+          </CatalogChipTrack>
+        </div>
+      )}
+
+      <div className="grid grid-two">
+        {displayItems.map((item) => {
+          const imageSrc = publicUploadDisplayUrl(firstImageUrl(item.image));
+          const badges = splitCategoryLabels(item.category);
+          return (
+            <article
+              className="card catalog-card-anchor"
+              key={item.id}
+              ref={(el) => {
+                cardRefs.current[item.id] = el;
+              }}
+              data-catalog-card={item.id}
+            >
+              <div
+                style={{ position: "relative", overflow: "hidden", cursor: imageSrc ? "zoom-in" : "default" }}
+                onClick={() => imageSrc && setZoomedSrc(imageSrc)}
+              >
+                {imageSrc ? (
+                  <img
+                    src={imageSrc}
+                    alt={item.title}
+                    decoding="async"
+                    loading="lazy"
+                    style={{ width: "100%", height: 180, objectFit: "cover", objectPosition: "top center" }}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: "100%",
+                      height: 180,
+                      background: "var(--panel2)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "var(--muted)",
+                      fontSize: 13,
+                    }}
+                  >
+                    Нет изображения
+                  </div>
+                )}
+              </div>
+              <div className="card-body">
+                {editingId === item.id && draft ? (
+                  <div className="form">
+                    <input
+                      className="input"
+                      placeholder="Название"
+                      value={draft.title}
+                      onChange={(e) => setDraft((prev) => (prev ? { ...prev, title: e.target.value } : prev))}
+                    />
+                    <select
+                      className="select"
+                      value={
+                        findCanonicalTacticalMedicineCategory(draft.category, categoryOptions)
+                          ? findCanonicalTacticalMedicineCategory(draft.category, categoryOptions)!
+                          : draft.category.trim()
+                            ? otherCategoryValue
+                            : ""
+                      }
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        if (next === otherCategoryValue) {
+                          setDraft((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  category: findCanonicalTacticalMedicineCategory(prev.category, categoryOptions)
+                                    ? ""
+                                    : prev.category,
+                                }
+                              : prev,
+                          );
+                          return;
+                        }
+                        setDraft((prev) => (prev ? { ...prev, category: next } : prev));
+                      }}
+                    >
+                      <option value="" disabled>
+                        Категория
+                      </option>
+                      {categoryOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                      <option value={otherCategoryValue}>Другое</option>
+                    </select>
+                    {!findCanonicalTacticalMedicineCategory(draft.category, categoryOptions) && (
+                      <input
+                        className="input"
+                        placeholder="Своя категория"
+                        value={draft.category}
+                        onChange={(e) => setDraft((prev) => (prev ? { ...prev, category: e.target.value } : prev))}
+                      />
+                    )}
+                    <input
+                      className="input"
+                      placeholder="URL изображения"
+                      value={draft.image}
+                      onChange={(e) => setDraft((prev) => (prev ? { ...prev, image: e.target.value } : prev))}
+                    />
+                    <textarea
+                      className="input"
+                      rows={3}
+                      placeholder="Описание"
+                      value={draft.summary}
+                      onChange={(e) => setDraft((prev) => (prev ? { ...prev, summary: e.target.value } : prev))}
+                    />
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <button className="btn btn-primary" type="button" onClick={() => void onSave()} disabled={busyId === item.id}>
+                        Сохранить
+                      </button>
+                      <button
+                        className="btn"
+                        type="button"
+                        onClick={() => {
+                          setEditingId(null);
+                          setDraft(null);
+                        }}
+                      >
+                        Отмена
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="catalog-badge-row" style={{ marginTop: 4 }}>
+                      {(badges.length ? badges : [item.category].filter(Boolean)).map((label, bi) => {
+                        const tone = tacticalMedicineBadgeStyle(label);
+                        return (
+                          <span key={`${item.id}-b-${bi}-${label}`} className="catalog-badge" style={tone} title={label}>
+                            {label}
+                          </span>
+                        );
+                      })}
+                    </div>
+                    <h3 style={{ marginTop: 8 }}>{item.title}</h3>
+                    {item.summary && (
+                      <p className="page-subtitle" style={{ marginTop: 8, marginBottom: 8 }}>
+                        {item.summary}
+                      </p>
+                    )}
+                  </>
+                )}
+                {canInlineEdit && editingId !== item.id && (
+                  <div className="catalog-card-actions">
+                    <button
+                      className="btn"
+                      style={{ width: 38, height: 34, padding: 0 }}
+                      type="button"
+                      title="Редактировать"
+                      onClick={() => onEdit(item)}
+                    >
+                      <span className="sr-only">Редактировать</span>
+                      <Pencil width={18} height={18} strokeWidth={2} aria-hidden />
+                    </button>
+                    <button
+                      className="btn btn-danger"
+                      style={{ width: 38, height: 34, padding: 0 }}
+                      type="button"
+                      title="Удалить"
+                      onClick={() => void onDelete(item.id)}
+                      disabled={busyId === item.id}
+                    >
+                      <span className="sr-only">Удалить</span>
+                      <Trash2 width={18} height={18} strokeWidth={2} aria-hidden />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+
+      {zoomedSrc && (
+        <div
+          onClick={() => setZoomedSrc(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1000,
+            background: "rgba(0,0,0,0.92)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+            cursor: "zoom-out",
+          }}
+        >
+          <img
+            src={zoomedSrc}
+            alt=""
+            decoding="async"
+            loading="lazy"
+            style={{
+              maxWidth: "100%",
+              maxHeight: "90vh",
+              borderRadius: 16,
+              boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
+              objectFit: "contain",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            onClick={() => setZoomedSrc(null)}
+            style={{
+              position: "absolute",
+              top: 16,
+              right: 16,
+              background: "rgba(255,255,255,0.12)",
+              border: "none",
+              color: "#fff",
+              borderRadius: "50%",
+              width: 40,
+              height: 40,
+              fontSize: 20,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
