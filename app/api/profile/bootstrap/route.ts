@@ -1,3 +1,4 @@
+import { resolveProfileAuthEmail } from "@/lib/profile-auth-email-server";
 import { resolvePersonnelProfileViewAccess } from "@/lib/personnel-profile-access";
 import { loadProfilePersonnelMeta } from "@/lib/profile-personnel-meta";
 import { loadProfileTestResultsBundle } from "@/lib/profile-test-results-server";
@@ -24,7 +25,7 @@ export async function GET() {
 
     const profilePrimaryPromise = supabase
       .from("app_users")
-      .select("auth_user_id,duty_location,unit_assignment,rota_platoon,rota_section,avatar_url,profile_name_color,position")
+      .select("auth_user_id,login,duty_location,unit_assignment,rota_platoon,rota_section,avatar_url,profile_name_color,position")
       .eq("id", session.id)
       .maybeSingle();
 
@@ -49,7 +50,11 @@ export async function GET() {
     let position: string | null = null;
 
     if (profilePrimaryQ.error && isMissingColumnError(profilePrimaryQ.error.message)) {
-      const profileLegacyQ = await supabase.from("app_users").select("auth_user_id").eq("id", session.id).maybeSingle();
+      const profileLegacyQ = await supabase
+        .from("app_users")
+        .select("auth_user_id,login")
+        .eq("id", session.id)
+        .maybeSingle();
       profileRow = (profileLegacyQ.data || null) as Record<string, unknown> | null;
       profileError = profileLegacyQ.error?.message || null;
     } else if (profileRow) {
@@ -76,6 +81,7 @@ export async function GET() {
     }
 
     const authUserId = typeof profileRow?.auth_user_id === "string" ? profileRow.auth_user_id : null;
+    const login = typeof profileRow?.login === "string" ? profileRow.login : null;
     const invitesPromise =
       session.role === "admin"
         ? supabase
@@ -85,10 +91,12 @@ export async function GET() {
             .limit(100)
         : Promise.resolve({ data: [] as Array<Record<string, unknown>>, error: null });
     const personnelViewPromise = resolvePersonnelProfileViewAccess(session, session.id);
-    const authEmailPromise = authUserId
-      ? supabase.auth.admin.getUserById(authUserId).catch(() => ({ data: { user: null } }))
-      : Promise.resolve({ data: { user: null } });
-    const [authInfo, invitesQ, personnelView] = await Promise.all([
+    const authEmailPromise = resolveProfileAuthEmail(supabase, {
+      userId: session.id,
+      authUserId,
+      login,
+    });
+    const [email, invitesQ, personnelView] = await Promise.all([
       authEmailPromise,
       invitesPromise,
       personnelViewPromise,
@@ -99,7 +107,7 @@ export async function GET() {
         ? await loadProfilePersonnelMeta(session.id)
         : { licenseCategories: [] as string[], bloodGroup: null };
 
-    const email = authInfo.data.user?.email || "";
+    const emailResolved = email;
     let inviteCodes: Array<Record<string, unknown>> = [];
     if (session.role === "admin" && !invitesQ.error) {
       inviteCodes = invitesQ.data || [];
@@ -107,7 +115,7 @@ export async function GET() {
 
     return Response.json({
       ok: true,
-      email,
+      email: emailResolved,
       dutyLocation,
       unitAssignment,
       rotaPlatoon,

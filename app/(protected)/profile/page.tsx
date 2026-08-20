@@ -30,7 +30,6 @@ import {
   createInviteCode,
   disableInviteCode,
   enableInviteCode,
-  fetchCurrentAuthEmail,
   InviteCodeRecord,
   persistSession,
   removeInviteCode,
@@ -272,8 +271,11 @@ export default function ProfilePage() {
         if (typeof payload.email === "string" && payload.email) {
           setEmailInput(payload.email);
         } else {
-          const emailResult = await fetchCurrentAuthEmail();
-          if (!cancelled && emailResult.ok) setEmailInput(emailResult.email);
+          const emailResponse = await fetch("/api/profile/email", { cache: "no-store" });
+          const emailPayload = (await emailResponse.json()) as { ok?: boolean; email?: string };
+          if (!cancelled && emailResponse.ok && emailPayload.ok && typeof emailPayload.email === "string") {
+            setEmailInput(emailPayload.email);
+          }
         }
         if (canManageInvites) {
           setIsInviteLoading(true);
