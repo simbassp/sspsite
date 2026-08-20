@@ -132,7 +132,7 @@ export async function resolveUserUnlockedAchievementIds(
 export async function loadUserAchievementsState(
   userId: string,
   employmentDate: string | null,
-  options: { sync?: boolean } = {},
+  options: { sync?: boolean; includeTopRank?: boolean } = {},
 ): Promise<UserAchievementsPayload> {
   const supabase = getServerSupabaseServiceClient();
   if (options.sync === true) {
@@ -142,6 +142,7 @@ export async function loadUserAchievementsState(
   const progress = await loadUserAchievementProgress(userId, employmentDate);
   const unlockedIds = computeUnlockedAchievementIds(progress);
 
+  const includeTopRank = options.includeTopRank === true;
   const [notifyQ, userRow, topRankMap] = await Promise.all([
     supabase
       .from("app_notifications")
@@ -152,7 +153,9 @@ export async function loadUserAchievementsState(
       .order("created_at", { ascending: false })
       .limit(5),
     fetchUserCosmeticRow(supabase, userId),
-    loadTopRankBadgeMap().catch(() => new Map<string, TopRankBadgeId>()),
+    includeTopRank
+      ? loadTopRankBadgeMap().catch(() => new Map<string, TopRankBadgeId>())
+      : Promise.resolve(new Map<string, TopRankBadgeId>()),
   ]);
 
   let avatarFrame = normalizeTrialAvatarFrame(userRow.profile_cosmetic_avatar_frame);
@@ -260,15 +263,9 @@ export async function markAchievementNotificationsRead(userId: string, notificat
 }
 
 export async function syncUserAchievementsByUserId(userId: string) {
-  const supabase = getServerSupabaseServiceClient();
-  const userQ = await supabase.from("app_users").select("employment_date").eq("id", userId).maybeSingle();
-  const employmentDate = userQ.data?.employment_date ? String(userQ.data.employment_date).slice(0, 10) : null;
-  return syncUserAchievements(userId, employmentDate);
+  return syncUserAchievements(userId, null);
 }
 
 export async function loadUserUnlockedAchievementIds(userId: string): Promise<string[]> {
-  const supabase = getServerSupabaseServiceClient();
-  const userQ = await supabase.from("app_users").select("employment_date").eq("id", userId).maybeSingle();
-  const employmentDate = userQ.data?.employment_date ? String(userQ.data.employment_date).slice(0, 10) : null;
-  return resolveUserUnlockedAchievementIds(userId, employmentDate);
+  return resolveUserUnlockedAchievementIds(userId, null);
 }

@@ -7,13 +7,8 @@ import {
 } from "@/lib/achievements-server";
 import { loadAchievementNotifications } from "@/lib/user-identity-cosmetics-server";
 import { getServerSession } from "@/lib/server-auth";
-import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 
 export const runtime = "nodejs";
-
-async function readEmploymentDate(_userId: string) {
-  return null;
-}
 
 export async function GET(request: Request) {
   const session = await getServerSession();
@@ -25,9 +20,9 @@ export async function GET(request: Request) {
     return Response.json({ ok: true, pendingNotifications });
   }
 
-  const employmentDate = await readEmploymentDate(session.id);
   const sync = url.searchParams.get("sync") === "1";
-  const state = await loadUserAchievementsState(session.id, employmentDate, { sync });
+  const includeTopRank = url.searchParams.get("includeTopRank") === "1";
+  const state = await loadUserAchievementsState(session.id, null, { sync, includeTopRank });
   return Response.json({ ok: true, ...state });
 }
 
@@ -47,9 +42,8 @@ export async function PATCH(request: Request) {
     return Response.json({ ok: false, error: "invalid_json" }, { status: 400 });
   }
 
-  const employmentDate = await readEmploymentDate(session.id);
-  await syncUserAchievements(session.id, employmentDate);
-  const unlockedIds = await resolveUserUnlockedAchievementIds(session.id, employmentDate);
+  await syncUserAchievements(session.id, null);
+  const unlockedIds = await resolveUserUnlockedAchievementIds(session.id, null);
 
   const result = await updateUserAchievementCosmetics(session.id, unlockedIds, {
     avatarFrame: body.avatarFrame,
@@ -62,6 +56,6 @@ export async function PATCH(request: Request) {
     await markAchievementNotificationsRead(session.id, body.dismissNotificationIds);
   }
 
-  const state = await loadUserAchievementsState(session.id, employmentDate, { sync: true });
+  const state = await loadUserAchievementsState(session.id, null, { sync: true, includeTopRank: true });
   return Response.json({ ok: true, ...state });
 }

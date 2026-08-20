@@ -193,32 +193,6 @@ export function AppShell({ session, children }: AppShellProps) {
   }, [session.id]);
 
   useEffect(() => {
-    let cancelled = false;
-    void fetch("/api/profile/achievements", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((payload: {
-        ok?: boolean;
-        cosmetics?: {
-          nameColor?: UserIdentityCosmetics["achievementNameColor"];
-          avatarFrame?: UserIdentityCosmetics["avatarFrame"];
-          bankOverlay?: UserIdentityCosmetics["bankOverlay"];
-        };
-      }) => {
-        if (!payload.ok || cancelled) return;
-        setHeaderCosmetics((prev) => ({
-          ...prev,
-          achievementNameColor: payload.cosmetics?.nameColor ?? null,
-          avatarFrame: payload.cosmetics?.avatarFrame ?? prev.avatarFrame ?? null,
-          bankOverlay: payload.cosmetics?.bankOverlay ?? prev.bankOverlay ?? null,
-        }));
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [session.id]);
-
-  useEffect(() => {
     const onCosmeticsUpdated = (event: Event) => {
       const detail = (event as CustomEvent<Partial<UserIdentityCosmetics>>).detail;
       if (!detail) return;

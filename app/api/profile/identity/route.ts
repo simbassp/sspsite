@@ -30,6 +30,10 @@ export async function GET() {
         .eq("id", session.id)
         .maybeSingle();
       row = fallback.data as Record<string, unknown> | null;
+      if (fallback.error && isMissingColumnError(fallback.error.message)) {
+        const legacy = await supabase.from("app_users").select("profile_name_color").eq("id", session.id).maybeSingle();
+        row = legacy.data as Record<string, unknown> | null;
+      }
     } else if (primary.error) {
       return Response.json({ ok: false, error: primary.error.message }, { status: 500 });
     }
