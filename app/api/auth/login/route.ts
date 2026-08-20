@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { resolveActiveUserAuthEmail } from "@/lib/auth-login-email-server";
 import { serializeSessionCookie } from "@/lib/auth";
 import { normalizeProfileNameColor } from "@/lib/profile-name-color";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
@@ -41,9 +42,22 @@ type ProfileRow = {
   status: "active" | "inactive";
 };
 
-const SUPABASE_REQUEST_TIMEOUT_MS = 10000;
-/** RPC resolve_login_email часто отвечает быстрее 2–3 с; не держим общий шаг дольше без необходимости. */
-const RESOLVE_LOGIN_RPC_TIMEOUT_MS = 7000;
+const SUPABASE_REQUEST_TIMEOUT_MS = 12_000;
+const AUTH_SIGN_IN_RETRIES = 1;
+
+function uniqueEmails(values: string[]) {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of values) {
+    const email = raw.trim();
+    if (!email) continue;
+    const key = email.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(email);
+  }
+  return out;
+}
 
 function normalizeSupabaseUrl(url: string) {
   return url.endsWith("/") ? url.slice(0, -1) : url;
@@ -67,55 +81,36 @@ async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit, tim
   }
 }
 
-async function resolveEmail(baseUrl: string, anonKey: string, login: string) {
-  try {
-    const response = await fetchWithTimeout(
-      `${baseUrl}/rest/v1/rpc/resolve_login_email`,
-      {
+async function signInWithEmail(baseUrl: string, anonKey: string, email: string, password: string) {
+  let lastError = "Сервер авторизации временно недоступен. Повторите попытку.";
+  for (let attempt = 0; attempt <= AUTH_SIGN_IN_RETRIES; attempt++) {
+    try {
+      const response = await fetchWithTimeout(`${baseUrl}/auth/v1/token?grant_type=password`, {
         method: "POST",
         headers: {
           apikey: anonKey,
-          authorization: `Bearer ${anonKey}`,
           "content-type": "application/json",
         },
-        body: JSON.stringify({ p_login: login }),
+        body: JSON.stringify({ email, password }),
         cache: "no-store",
-      },
-      RESOLVE_LOGIN_RPC_TIMEOUT_MS,
-    );
-    if (!response.ok) return "";
-    const data = (await response.json()) as string | null;
-    return typeof data === "string" ? data : "";
-  } catch {
-    return "";
-  }
-}
-
-async function signInWithEmail(baseUrl: string, anonKey: string, email: string, password: string) {
-  try {
-    const response = await fetchWithTimeout(`${baseUrl}/auth/v1/token?grant_type=password`, {
-      method: "POST",
-      headers: {
-        apikey: anonKey,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({ email, password }),
-      cache: "no-store",
-    });
-    const data = (await response.json()) as SupabaseTokenResponse;
-    if (!response.ok || !data.access_token || !data.refresh_token) {
+      });
+      const data = (await response.json()) as SupabaseTokenResponse;
+      if (response.ok && data.access_token && data.refresh_token) {
+        return { ok: true as const, data };
+      }
       return {
         ok: false as const,
         error: authError(data.error_description ?? data.msg ?? "auth_failed"),
       };
+    } catch {
+      if (attempt < AUTH_SIGN_IN_RETRIES) continue;
+      lastError = "Сервер авторизации временно недоступен. Повторите попытку.";
     }
-    return { ok: true as const, data };
-  } catch {
-    return {
-      ok: false as const,
-      error: "Сервер авторизации временно недоступен. Повторите попытку.",
-    };
   }
+  return {
+    ok: false as const,
+    error: lastError,
+  };
 }
 
 function canLinkProfileToAuthUser(profile: ProfileRow, authUserId: string) {
@@ -124,22 +119,19 @@ function canLinkProfileToAuthUser(profile: ProfileRow, authUserId: string) {
 }
 
 async function signInWithLogin(baseUrl: string, anonKey: string, login: string, password: string) {
-  const fakeEmail = `${login}@ssp.local`.toLowerCase();
-  const resolvedTrim = (await resolveEmail(baseUrl, anonKey, login)).trim();
-  const emailsToTry: string[] = [];
-
-  if (resolvedTrim) emailsToTry.push(resolvedTrim);
-  if (!emailsToTry.some((email) => email.toLowerCase() === fakeEmail)) {
-    emailsToTry.push(`${login}@ssp.local`);
-  }
+  const resolved = (
+    await resolveActiveUserAuthEmail(login, {
+      url: baseUrl,
+      anonKey,
+    })
+  )?.trim();
+  const emailsToTry = uniqueEmails([resolved ?? "", `${login.trim().toLowerCase()}@ssp.local`]);
 
   let lastError = "Неверный логин/пароль.";
   for (const email of emailsToTry) {
     const signIn = await signInWithEmail(baseUrl, anonKey, email, password);
     if (signIn.ok) return signIn;
     lastError = signIn.error;
-    // Real email resolved but password wrong — @ssp.local won't help.
-    if (resolvedTrim && email.toLowerCase() === resolvedTrim.toLowerCase()) break;
   }
 
   return { ok: false as const, error: lastError };
@@ -171,13 +163,11 @@ async function fetchProfileViaServiceRole(authUserId: string, loginHint: string)
       if (byLogin.error) return null;
       if (byLogin.data) {
         const profile = byLogin.data as ProfileRow;
-        if (canLinkProfileToAuthUser(profile, authUserId)) {
-          if (profile.auth_user_id !== authUserId) {
-            await supabase.from("app_users").update({ auth_user_id: authUserId }).eq("id", profile.id);
-            profile.auth_user_id = authUserId;
-          }
-          return profile;
+        if (profile.auth_user_id !== authUserId) {
+          await supabase.from("app_users").update({ auth_user_id: authUserId }).eq("id", profile.id);
+          profile.auth_user_id = authUserId;
         }
+        return profile;
       }
     }
 

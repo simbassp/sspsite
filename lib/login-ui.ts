@@ -35,6 +35,9 @@ export function mapLoginErrorForDisplay(raw: string, kind: LoginFailureKind): st
   if (e.includes("слишком много попыток") || e.includes("too many")) {
     return "Слишком много попыток входа. Подождите и попробуйте снова.";
   }
+  if (e.includes("временно недоступен") || e.includes("auth_timeout") || e.includes("request_timeout")) {
+    return "Сервер авторизации временно недоступен. Подождите пару секунд и попробуйте снова.";
+  }
   if (e.includes("нет доступа") || e.includes("forbidden")) {
     return "У пользователя нет доступа к системе.";
   }
