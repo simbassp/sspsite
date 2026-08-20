@@ -48,14 +48,16 @@ export default function AdminUsersPage() {
   const [usersTotal, setUsersTotal] = useState(0);
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [positionFilter, setPositionFilter] = useState<"all" | Position>("all");
   const [dutyFilter, setDutyFilter] = useState<"all" | DutyLocation>("all");
   const [unitFilter, setUnitFilter] = useState<"all" | "unset" | UnitAssignment>("all");
   const [pageSize, setPageSize] = useState(10);
   const [page, setPage] = useState(1);
+  const usersLoadSeqRef = useRef(0);
   const usersFilterKey = useMemo(
-    () => `${pageSize}|${query}|${positionFilter}|${dutyFilter}|${unitFilter}`,
-    [pageSize, query, positionFilter, dutyFilter, unitFilter],
+    () => `${pageSize}|${debouncedQuery}|${positionFilter}|${dutyFilter}|${unitFilter}`,
+    [pageSize, debouncedQuery, positionFilter, dutyFilter, unitFilter],
   );
   const usersCacheKey = useCallback((targetPage: number) => `admin-users:${usersFilterKey}:p=${targetPage}`, [usersFilterKey]);
   const [info, setInfo] = useState("");
@@ -74,6 +76,11 @@ export default function AdminUsersPage() {
     setIsHydrated(true);
   }, []);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), 400);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
   type UsersPagePayload = { rows: UserRecord[]; total: number; page: number; pageSize: number };
 
   const fetchUsersPagePayload = useCallback(
@@ -82,7 +89,7 @@ export default function AdminUsersPage() {
         return await fetchUsersPage({
           page: targetPage,
           pageSize,
-          search: query,
+          search: debouncedQuery,
           position: positionFilter,
           duty: dutyFilter,
           unit: unitFilter,
@@ -91,7 +98,7 @@ export default function AdminUsersPage() {
         return null;
       }
     },
-    [pageSize, query, positionFilter, dutyFilter, unitFilter],
+    [pageSize, debouncedQuery, positionFilter, dutyFilter, unitFilter],
   );
 
   const prefetchUsersPage = useCallback(
@@ -105,9 +112,11 @@ export default function AdminUsersPage() {
   );
 
   const loadUsers = useCallback(async (targetPage = page) => {
+    const seq = ++usersLoadSeqRef.current;
     const cacheKey = usersCacheKey(targetPage);
     const cached = readPagePrefetchCache<UsersPagePayload>(cacheKey);
     if (cached) {
+      if (seq !== usersLoadSeqRef.current) return;
       setUsers(cached.rows);
       setUsersTotal(cached.total);
       setPage(cached.page);
@@ -119,14 +128,23 @@ export default function AdminUsersPage() {
     setIsLoadingUsers(true);
     try {
       const result = await fetchUsersPagePayload(targetPage);
-      if (!result) return;
+      if (seq !== usersLoadSeqRef.current) return;
+      if (!result) {
+        setUsers([]);
+        setUsersTotal(0);
+        setInfo("Не удалось загрузить список пользователей. Обновите страницу или повторите позже.");
+        return;
+      }
+      setInfo("");
       setUsers(result.rows);
       setUsersTotal(result.total);
       setPage(result.page);
       writePagePrefetchCache(cacheKey, result);
       if (result.page * result.pageSize < result.total) void prefetchUsersPage(result.page + 1);
     } finally {
-      setIsLoadingUsers(false);
+      if (seq === usersLoadSeqRef.current) {
+        setIsLoadingUsers(false);
+      }
     }
   }, [fetchUsersPagePayload, page, prefetchUsersPage, usersCacheKey]);
 

@@ -10,7 +10,6 @@ import {
   deleteUser,
   listUsers,
   registerEmployee,
-  replaceAllUsersInLocalCache,
   updateUser,
 } from "@/lib/storage";
 import { normalizeDutyLocation } from "@/lib/duty-location";
@@ -1431,8 +1430,10 @@ export async function fetchUsersPage(params: FetchUsersPageParams = {}) {
       "fetch_users_page_timeout",
     );
     if (!api.ok) {
-      const fallback = await fetchUsersPageLocalFallback(params);
-      return fallback;
+      if (canUseLocalFallback()) {
+        return fetchUsersPageLocalFallback(params);
+      }
+      throw new Error(`fetch_users_page_failed_${api.status}`);
     }
     const payload = (await api.json()) as {
       ok?: boolean;
@@ -1442,18 +1443,23 @@ export async function fetchUsersPage(params: FetchUsersPageParams = {}) {
       pageSize?: number;
     };
     if (!payload.ok || !Array.isArray(payload.rows)) {
-      return fetchUsersPageLocalFallback(params);
+      if (canUseLocalFallback()) {
+        return fetchUsersPageLocalFallback(params);
+      }
+      throw new Error("fetch_users_page_invalid_response");
     }
     const rows = payload.rows.map(toUserRecord);
-    replaceAllUsersInLocalCache(rows);
     return {
       rows,
       total: typeof payload.total === "number" ? payload.total : rows.length,
       page: typeof payload.page === "number" ? payload.page : (params.page ?? 1),
       pageSize: typeof payload.pageSize === "number" ? payload.pageSize : (params.pageSize ?? 10),
     };
-  } catch {
-    return fetchUsersPageLocalFallback(params);
+  } catch (error) {
+    if (canUseLocalFallback()) {
+      return fetchUsersPageLocalFallback(params);
+    }
+    throw error instanceof Error ? error : new Error("fetch_users_page_failed");
   }
 }
 

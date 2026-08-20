@@ -3,7 +3,7 @@ import { resolvePermissions } from "@/lib/permissions";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 import { readCachedSessionValidation, writeCachedSessionValidation } from "@/lib/session-validation-cache";
 
-const SESSION_VALIDATION_TIMEOUT_MS = 12_000;
+const SESSION_VALIDATION_TIMEOUT_MS = 5_000;
 
 function isMissingColumnError(message: string | undefined) {
   const m = (message || "").toLowerCase();
@@ -92,7 +92,7 @@ async function validateSessionFromDb(session: SessionUser): Promise<boolean> {
     const primary = await supabase
       .from("app_users")
       .select(
-        "id,role,status,can_manage_content,can_manage_news,can_manage_tests,can_manage_results,can_manage_uav,can_manage_counteraction,can_manage_tactical_medicine,can_manage_users,can_view_user_list,can_view_online,can_reset_test_results,can_moderate_personnel",
+        "id,role,status,can_manage_content,can_manage_news,can_manage_tests,can_manage_results,can_manage_uav,can_manage_counteraction,can_manage_users,can_view_user_list,can_view_online,can_reset_test_results,can_moderate_personnel",
       )
       .eq("id", session.id)
       .maybeSingle();
