@@ -54,7 +54,15 @@ function Sync-ArchiveToRemote {
 }
 
 $remoteDeployCommand = "set -e; cd $RemoteDir; chmod +x deploy-remote.sh; SKIP_GIT_PULL=1 bash deploy-remote.sh $Branch"
-$remoteGitPullCommand = "set -e; cd $RemoteDir; git pull origin $Branch; chmod +x deploy-remote.sh; bash deploy-remote.sh $Branch"
+$remoteGitPullCommand = @"
+set -e
+cd $RemoteDir
+git fetch origin $Branch
+git checkout -- deploy-remote.sh deploy.ps1 2>/dev/null || true
+git pull origin $Branch
+chmod +x deploy-remote.sh
+bash deploy-remote.sh $Branch
+"@
 
 Write-Host "==> Deploying on $Server..." -ForegroundColor Cyan
 if ($LocalSync) {
@@ -63,7 +71,7 @@ if ($LocalSync) {
 } else {
   ssh $Server $remoteGitPullCommand
   if ($LASTEXITCODE -ne 0) {
-    Write-Host "==> Remote git pull failed (often DNS/github.com on the server). Retrying with local archive sync..." -ForegroundColor Yellow
+    Write-Host "==> Remote git pull failed. Retrying with local archive sync..." -ForegroundColor Yellow
     Sync-ArchiveToRemote
     Invoke-RemoteDeploy $remoteDeployCommand
   }
