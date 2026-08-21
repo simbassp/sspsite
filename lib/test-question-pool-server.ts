@@ -1,6 +1,7 @@
 import { dedupeQuestionOptions } from "@/lib/answer-equivalence";
 import { filterDbPoolByManualTopicSettings, normalizeManualTopic } from "@/lib/manual-topic";
 import { normalizeTestConfig } from "@/lib/test-config";
+import { buildTestQuestionPool } from "@/lib/test-question-pool-merge";
 import { generateUavTtxQuestionBank } from "@/lib/uav-test-generator";
 import type { TestQuestion } from "@/lib/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -72,7 +73,7 @@ export async function loadServerTestQuestionPool(supabase: SupabaseClient): Prom
   );
   const dbFiltered = filterDbPoolByManualTopicSettings(dbPool, testConfig);
 
-  if (!testConfig.uavAutoGeneration) return dbFiltered;
+  if (!testConfig.uavAutoGeneration) return buildTestQuestionPool(dbFiltered, [], false);
 
   const uavWithSort = await supabase
     .from("catalog_items")
@@ -98,10 +99,9 @@ export async function loadServerTestQuestionPool(supabase: SupabaseClient): Prom
       ? []
       : generateUavTtxQuestionBank(uavRows as never[], testConfig.timePerQuestionSec);
 
-  if (!fromUav.length) return dbFiltered;
+  if (!fromUav.length) return buildTestQuestionPool(dbFiltered, [], false);
 
-  const ids = new Set(fromUav.map((q) => q.id));
-  return [...fromUav, ...dbFiltered.filter((q) => !ids.has(q.id))];
+  return buildTestQuestionPool(dbFiltered, fromUav, true);
 }
 
 function mapQuestionRow(q: Record<string, unknown>, index: number): TestQuestion {

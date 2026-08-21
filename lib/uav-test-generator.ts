@@ -316,6 +316,7 @@ export function generateUavTtxQuestionBank(items: CatalogItem[], timeLimitSec = 
   const out: TestQuestion[] = [];
   let order = 0;
   const createdAt = new Date().toISOString();
+  const seenSpecKeys = new Set<string>();
 
   for (const item of list) {
     item.specs.forEach((spec, specIndex) => {
@@ -324,6 +325,9 @@ export function generateUavTtxQuestionBank(items: CatalogItem[], timeLimitSec = 
       if (!key || !value) return;
 
       const keyNorm = normKey(key);
+      const specDedupeKey = `${item.id}:${keyNorm}`;
+      if (seenSpecKeys.has(specDedupeKey)) return;
+      seenSpecKeys.add(specDedupeKey);
 
       let options: string[];
       let correctIndex: number;

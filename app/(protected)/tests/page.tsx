@@ -32,6 +32,7 @@ import {
   isFinalPassed,
 } from "@/lib/test-pass-rules";
 import { loadRecentQuestionIds, pickTestQuestions, rememberQuestionIds, shuffleQuestions } from "@/lib/test-question-selection";
+import { buildTestQuestionPool } from "@/lib/test-question-pool-merge";
 import { generateUavTtxQuestionBank } from "@/lib/uav-test-generator";
 import { fetchUavItems } from "@/lib/uav-repository";
 import { TestConfig, TestQuestion, TestResult, type OrphanAttemptSummary } from "@/lib/types";
@@ -374,6 +375,13 @@ export default function TestsPage() {
 
   const loadQuestionPool = async (): Promise<TestQuestion[] | null> => {
     setIsPoolLoading(true);
+    const assemblePool = (dbPool: TestQuestion[], uavItems: unknown[]) => {
+      const dbPoolFiltered = filterDbPoolByManualTopicSettings(dbPool, testConfig);
+      const fromUav = testConfig.uavAutoGeneration
+        ? generateUavTtxQuestionBank(uavItems as never[], testConfig.timePerQuestionSec)
+        : [];
+      return buildTestQuestionPool(dbPoolFiltered, fromUav, testConfig.uavAutoGeneration);
+    };
     try {
       const response = await fetch("/api/tests/pool", { cache: "no-store" });
       const payload = (await response.json()) as {
@@ -393,49 +401,24 @@ export default function TestsPage() {
       }
       if (!response.ok || !payload.ok) {
         const [uavItems, dbPool] = await Promise.all([fetchUavItems(), fetchActiveQuestionPool()]);
-        const dbPoolFiltered = filterDbPoolByManualTopicSettings(dbPool, testConfig);
-        const fromUav = testConfig.uavAutoGeneration
-          ? generateUavTtxQuestionBank(uavItems, testConfig.timePerQuestionSec)
-          : [];
-        if (fromUav.length > 0) {
-          const ids = new Set(fromUav.map((q) => q.id));
-          const merged = [...fromUav, ...dbPoolFiltered.filter((q) => !ids.has(q.id))];
-          setQuestionPool(merged);
-          return merged;
-        }
-        setQuestionPool(dbPoolFiltered);
-        return dbPoolFiltered;
+        const pool = assemblePool(dbPool, uavItems);
+        setQuestionPool(pool);
+        return pool;
       }
       const dbPool = Array.isArray(payload.questionPool) ? payload.questionPool : [];
       const uavItems = Array.isArray(payload.uavItems) ? payload.uavItems : [];
-      const fromUav = testConfig.uavAutoGeneration ? generateUavTtxQuestionBank(uavItems as never[], testConfig.timePerQuestionSec) : [];
-      if (fromUav.length > 0) {
-        const ids = new Set(fromUav.map((q) => q.id));
-        const merged = [...fromUav, ...dbPool.filter((q) => !ids.has(q.id))];
-        setQuestionPool(merged);
-        return merged;
-      } else {
-        setQuestionPool(dbPool);
-        return dbPool;
-      }
+      const pool = assemblePool(dbPool, uavItems);
+      setQuestionPool(pool);
+      return pool;
     } catch {
       if (process.env.NODE_ENV !== "production") {
         console.debug("[tests] pool request failed");
       }
       try {
         const [uavItems, dbPool] = await Promise.all([fetchUavItems(), fetchActiveQuestionPool()]);
-        const dbPoolFiltered = filterDbPoolByManualTopicSettings(dbPool, testConfig);
-        const fromUav = testConfig.uavAutoGeneration
-          ? generateUavTtxQuestionBank(uavItems, testConfig.timePerQuestionSec)
-          : [];
-        if (fromUav.length > 0) {
-          const ids = new Set(fromUav.map((q) => q.id));
-          const merged = [...fromUav, ...dbPoolFiltered.filter((q) => !ids.has(q.id))];
-          setQuestionPool(merged);
-          return merged;
-        }
-        setQuestionPool(dbPoolFiltered);
-        return dbPoolFiltered;
+        const pool = assemblePool(dbPool, uavItems);
+        setQuestionPool(pool);
+        return pool;
       } catch {
         return null;
       }
@@ -638,12 +621,7 @@ export default function TestsPage() {
           const fromUav = config.uavAutoGeneration
             ? generateUavTtxQuestionBank(uavItems, config.timePerQuestionSec)
             : [];
-          if (fromUav.length > 0) {
-            const ids = new Set(fromUav.map((q) => q.id));
-            setQuestionPool([...fromUav, ...dbPoolFiltered.filter((q) => !ids.has(q.id))]);
-          } else {
-            setQuestionPool(dbPoolFiltered);
-          }
+          setQuestionPool(buildTestQuestionPool(dbPoolFiltered, fromUav, config.uavAutoGeneration));
           setTestConfig(config);
           setIsConfigLoaded(true);
 
