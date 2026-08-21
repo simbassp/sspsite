@@ -28,9 +28,28 @@ function Invoke-RemoteDeploy {
 
 function Sync-ArchiveToRemote {
   Write-Host "==> Syncing branch '$Branch' to $Server via git archive (server git pull skipped)..." -ForegroundColor Yellow
-  git archive $Branch | ssh $Server "set -e; cd $RemoteDir; tar xf -"
-  if ($LASTEXITCODE -ne 0) {
-    throw "git archive sync failed."
+  $archivePath = Join-Path ([System.IO.Path]::GetTempPath()) "ssp-deploy-$Branch.tar"
+  $remoteArchive = "$RemoteDir/.deploy-archive.tar"
+  try {
+    if (Test-Path $archivePath) {
+      Remove-Item -Force $archivePath
+    }
+    git archive --format=tar -o $archivePath $Branch
+    if ($LASTEXITCODE -ne 0) {
+      throw "git archive failed."
+    }
+    scp $archivePath "${Server}:${remoteArchive}"
+    if ($LASTEXITCODE -ne 0) {
+      throw "scp archive failed."
+    }
+    ssh $Server "set -e; cd $RemoteDir; tar xf .deploy-archive.tar; rm -f .deploy-archive.tar"
+    if ($LASTEXITCODE -ne 0) {
+      throw "remote tar extract failed."
+    }
+  } finally {
+    if (Test-Path $archivePath) {
+      Remove-Item -Force $archivePath
+    }
   }
 }
 
