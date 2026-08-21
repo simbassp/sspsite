@@ -128,25 +128,42 @@ export function AppShell({ session, children }: AppShellProps) {
   }, []);
 
   useEffect(() => {
-    void fetch("/api/personnel/nav", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((p: { showPersonnel?: boolean } | null) => setShowPersonnelNav(p?.showPersonnel === true))
-      .catch(() => undefined);
-  }, []);
-
-  useEffect(() => {
     let cancelled = false;
-    const loadAchievements = () => {
-      void fetch("/api/profile/achievements?notificationsOnly=1", { cache: "no-store" })
+    const loadShell = () => {
+      void fetch("/api/app-shell/bootstrap", { cache: "no-store" })
         .then((r) => r.json())
-        .then((payload: { ok?: boolean; pendingNotifications?: Array<{ id: string; title: string; body: string }> }) => {
-          if (!payload.ok || cancelled) return;
-          setAchievementNotifications(Array.isArray(payload.pendingNotifications) ? payload.pendingNotifications : []);
-        })
+        .then(
+          (payload: {
+            ok?: boolean;
+            showPersonnel?: boolean;
+            nameColor?: ProfileNameColorId | null;
+            cosmetics?: Partial<UserIdentityCosmetics>;
+            pendingNotifications?: Array<{ id: string; title: string; body: string }>;
+          }) => {
+            if (!payload.ok || cancelled) return;
+            setShowPersonnelNav(payload.showPersonnel === true);
+            const adminNameColor = payload.nameColor ?? payload.cosmetics?.adminNameColor ?? null;
+            setHeaderCosmetics((prev) => ({
+              ...prev,
+              adminNameColor,
+              achievementNameColor:
+                payload.cosmetics?.achievementNameColor ?? prev.achievementNameColor ?? null,
+              avatarFrame: payload.cosmetics?.avatarFrame ?? prev.avatarFrame ?? null,
+              bankOverlay: payload.cosmetics?.bankOverlay ?? prev.bankOverlay ?? null,
+            }));
+            setAchievementNotifications(
+              Array.isArray(payload.pendingNotifications) ? payload.pendingNotifications : [],
+            );
+            const current = readClientSession();
+            if (current && current.nameColor !== adminNameColor) {
+              writeClientSession({ ...current, nameColor: adminNameColor });
+            }
+          },
+        )
         .catch(() => undefined);
     };
-    loadAchievements();
-    const timer = setInterval(loadAchievements, 120_000);
+    loadShell();
+    const timer = setInterval(loadShell, 120_000);
     return () => {
       cancelled = true;
       clearInterval(timer);
@@ -159,38 +176,6 @@ export function AppShell({ session, children }: AppShellProps) {
       achievementNameColor: session.cosmetics?.achievementNameColor ?? prev.achievementNameColor ?? null,
     }));
   }, [session.cosmetics?.achievementNameColor]);
-
-  useEffect(() => {
-    let cancelled = false;
-    void fetch("/api/profile/identity", { cache: "no-store" })
-      .then((r) => r.json())
-      .then(
-        (payload: {
-          ok?: boolean;
-          nameColor?: ProfileNameColorId | null;
-          cosmetics?: Partial<UserIdentityCosmetics>;
-        }) => {
-          if (!payload.ok || cancelled) return;
-          const adminNameColor = payload.nameColor ?? payload.cosmetics?.adminNameColor ?? null;
-          setHeaderCosmetics((prev) => ({
-            ...prev,
-            adminNameColor,
-            achievementNameColor:
-              payload.cosmetics?.achievementNameColor ?? prev.achievementNameColor ?? null,
-            avatarFrame: payload.cosmetics?.avatarFrame ?? prev.avatarFrame ?? null,
-            bankOverlay: payload.cosmetics?.bankOverlay ?? prev.bankOverlay ?? null,
-          }));
-          const current = readClientSession();
-          if (current && current.nameColor !== adminNameColor) {
-            writeClientSession({ ...current, nameColor: adminNameColor });
-          }
-        },
-      )
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [session.id]);
 
   useEffect(() => {
     const onCosmeticsUpdated = (event: Event) => {

@@ -17,6 +17,7 @@ import {
   normalizePersonnelLicenseCategories,
 } from "@/lib/personnel-catalog";
 import { resolveBulkLinkedUserIds, resolveFinalUserContext } from "@/lib/server-final-user-context";
+import { createRouteCache } from "@/lib/server-route-cache";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 import {
   emptyTestRosterStats,
@@ -121,10 +122,12 @@ function isMissingTableError(message: string | undefined) {
   return m.includes("relation") && m.includes("does not exist");
 }
 
-export async function loadPersonnelModuleSettings(): Promise<PersonnelModuleSettings> {
+const personnelSettingsCache = createRouteCache<PersonnelModuleSettings>(60_000);
+
+async function fetchPersonnelModuleSettings(): Promise<PersonnelModuleSettings> {
   const defaults: PersonnelModuleSettings = { moduleEnabled: false, moderationEnabled: true };
   try {
-    const supabase = getServerSupabaseServiceClient();
+    const supabase = getServerSupabaseServiceClient({ fetchTimeoutMs: 10_000 });
     const res = await supabase.from("site_settings").select("key,value").in("key", [
       "personnel_module_enabled",
       "personnel_moderation_enabled",
@@ -143,6 +146,10 @@ export async function loadPersonnelModuleSettings(): Promise<PersonnelModuleSett
   }
 }
 
+export async function loadPersonnelModuleSettings(): Promise<PersonnelModuleSettings> {
+  return personnelSettingsCache.getOrLoad(fetchPersonnelModuleSettings);
+}
+
 export async function savePersonnelModuleSettings(input: Partial<PersonnelModuleSettings>) {
   const supabase = getServerSupabaseServiceClient();
   if (input.moduleEnabled !== undefined) {
@@ -159,6 +166,7 @@ export async function savePersonnelModuleSettings(input: Partial<PersonnelModule
       updated_at: new Date().toISOString(),
     });
   }
+  personnelSettingsCache.invalidate();
 }
 
 export async function loadPersonnelUserBasics(userId: string) {

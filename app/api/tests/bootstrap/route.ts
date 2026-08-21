@@ -4,6 +4,7 @@ import {
   evaluateOrphanAttempt,
   prepareOrphanForRecovery,
 } from "@/lib/final-attempt-server";
+import { loadTestsHistoryRows } from "@/lib/tests-history-server";
 import type { OrphanAttemptSummary } from "@/lib/types";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
@@ -48,7 +49,7 @@ export async function GET() {
   if (!session) return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
 
   try {
-    const supabase = getServerSupabaseServiceClient();
+    const supabase = getServerSupabaseServiceClient({ fetchTimeoutMs: 12_000 });
     const t0 = Date.now();
     const bankTimePromise = supabase
       .from("test_questions")
@@ -57,6 +58,7 @@ export async function GET() {
       .limit(2000);
     const finalSummaryPromise = computeFinalTestSummary(supabase, session.id).catch(() => null);
     const closurePromise = loadFinalTestClosureStatus(supabase);
+    const historyPromise = loadTestsHistoryRows(supabase, session.id).catch(() => ({ ok: false as const, error: "history_failed", rows: [] }));
 
     let configQ = await supabase
       .from("test_settings")
@@ -135,10 +137,11 @@ export async function GET() {
     }
     const t1 = Date.now();
 
-    const [bankTimeQ, finalTestSummaryRaw, closureStatus] = await Promise.all([
+    const [bankTimeQ, finalTestSummaryRaw, closureStatus, historyResult] = await Promise.all([
       bankTimePromise,
       finalSummaryPromise,
       closurePromise,
+      historyPromise,
     ]);
     const finalTestSummary = finalTestSummaryRaw
       ? applyFinalTestClosureToSummary(finalTestSummaryRaw, closureStatus)
@@ -200,6 +203,8 @@ export async function GET() {
         total: t3 - t0,
       },
       finalTest: finalTestSummary,
+      historyRows: historyResult.ok ? historyResult.rows : [],
+      historyError: historyResult.ok ? null : historyResult.error,
     });
   } catch (error) {
     return Response.json(

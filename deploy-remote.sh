@@ -27,7 +27,11 @@ if [ -n "$SUPABASE_URL" ]; then
 fi
 
 echo "==> git pull ($BRANCH)"
-git pull origin "$BRANCH"
+if [ "${SKIP_GIT_PULL:-}" != "1" ]; then
+  git pull origin "$BRANCH"
+else
+  echo "SKIP_GIT_PULL=1 — using files already synced to $APP_DIR"
+fi
 
 echo "==> npm ci"
 npm ci

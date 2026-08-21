@@ -542,12 +542,8 @@ export default function TestsPage() {
       setIsConfigLoaded(false);
       setIsHistoryLoading(true);
       try {
-        const [response, historyResponse] = await Promise.all([
-          fetch("/api/tests/bootstrap", { cache: "no-store" }),
-          fetch("/api/tests/history", { cache: "no-store" }),
-        ]);
-        const [payload, historyPayload] = await Promise.all([
-          response.json() as Promise<{
+        const response = await fetch("/api/tests/bootstrap", { cache: "no-store" });
+        const payload = (await response.json()) as {
             ok?: boolean;
             error?: string;
             config?: TestConfig;
@@ -556,9 +552,8 @@ export default function TestsPage() {
             bankQuestionTimeSec?: number | null;
             timingsMs?: Record<string, number>;
             finalTest?: FinalTestSummary | null;
-          }>,
-          historyResponse.json() as Promise<{ ok?: boolean; rows?: Array<Record<string, unknown>> }>,
-        ]);
+            historyRows?: Array<Record<string, unknown>>;
+          };
         if (!response.ok || !payload.ok) {
           throw new Error(payload.error || "tests_bootstrap_failed");
         }
@@ -600,9 +595,11 @@ export default function TestsPage() {
             }
           }
         }
-        await applyHistoryResponse(historyResponse, historyPayload, {
-          reloadFinalSummaryAfter: !payload.finalTest,
-        });
+        await applyHistoryResponse(
+          new Response(null, { status: Array.isArray(payload.historyRows) ? 200 : 500 }),
+          { ok: Array.isArray(payload.historyRows), rows: payload.historyRows },
+          { reloadFinalSummaryAfter: !payload.finalTest },
+        );
       } catch (error) {
         if (cancelled) return;
         if (process.env.NODE_ENV !== "production") {

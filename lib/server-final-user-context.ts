@@ -6,7 +6,15 @@ export function isMissingColumnError(message: string | undefined) {
 }
 
 /** Все user_id в test_results, относящиеся к одному человеку, и окно подсчёта попыток (после сброса админом). */
-export async function resolveFinalUserContext(supabase: SupabaseClient, sessionUserId: string) {
+type FinalUserContext = {
+  linkedUserIds: string[];
+  final_test_counting_from: string | null;
+};
+
+const FINAL_USER_CONTEXT_TTL_MS = 60_000;
+const finalUserContextCache = new Map<string, { expiresAt: number; value: FinalUserContext }>();
+
+async function resolveFinalUserContextUncached(supabase: SupabaseClient, sessionUserId: string): Promise<FinalUserContext> {
   const linked = new Set<string>([sessionUserId]);
   const authLinked = new Set<string>();
   let countingFrom: string | null = null;
@@ -82,6 +90,23 @@ export async function resolveFinalUserContext(supabase: SupabaseClient, sessionU
     linkedUserIds: Array.from(linked),
     final_test_counting_from: countingFrom,
   };
+}
+
+export async function resolveFinalUserContext(supabase: SupabaseClient, sessionUserId: string) {
+  const now = Date.now();
+  const cached = finalUserContextCache.get(sessionUserId);
+  if (cached && cached.expiresAt > now) return cached.value;
+  const value = await resolveFinalUserContextUncached(supabase, sessionUserId);
+  finalUserContextCache.set(sessionUserId, { value, expiresAt: now + FINAL_USER_CONTEXT_TTL_MS });
+  return value;
+}
+
+export function invalidateFinalUserContextCache(userId?: string) {
+  if (userId) {
+    finalUserContextCache.delete(userId);
+    return;
+  }
+  finalUserContextCache.clear();
 }
 
 function chunkIds(ids: string[], size = 80) {
