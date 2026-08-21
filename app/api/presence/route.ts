@@ -56,7 +56,7 @@ export async function POST(request: Request) {
 
     let supabase;
     try {
-      supabase = getServerSupabaseServiceClient();
+      supabase = getServerSupabaseServiceClient({ fetchTimeoutMs: 8_000 });
     } catch (error) {
       return Response.json(
         { ok: false, error: error instanceof Error ? error.message : "backend_unavailable" },

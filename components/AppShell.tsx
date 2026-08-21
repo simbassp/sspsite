@@ -23,6 +23,7 @@ import { UserIdentityDisplay } from "@/components/profile/UserIdentityDisplay";
 import { canAccessGameSection } from "@/lib/game-feature";
 import { HomeStatsBar } from "@/components/HomeStatsBar";
 import {
+  APP_SHELL_BOOTSTRAP_POLL_MS,
   PRESENCE_ANALYTICS_FLUSH_MS,
   PRESENCE_HIDDEN_OFFLINE_DELAY_MS,
 } from "@/lib/presence-constants";
@@ -129,44 +130,55 @@ export function AppShell({ session, children }: AppShellProps) {
 
   useEffect(() => {
     let cancelled = false;
+    let inflight = false;
+    const applyShellPayload = (payload: {
+      ok?: boolean;
+      showPersonnel?: boolean;
+      nameColor?: ProfileNameColorId | null;
+      cosmetics?: Partial<UserIdentityCosmetics>;
+      pendingNotifications?: Array<{ id: string; title: string; body: string }>;
+    }) => {
+      if (!payload.ok || cancelled) return;
+      setShowPersonnelNav(payload.showPersonnel === true);
+      const adminNameColor = payload.nameColor ?? payload.cosmetics?.adminNameColor ?? null;
+      setHeaderCosmetics((prev) => ({
+        ...prev,
+        adminNameColor,
+        achievementNameColor:
+          payload.cosmetics?.achievementNameColor ?? prev.achievementNameColor ?? null,
+        avatarFrame: payload.cosmetics?.avatarFrame ?? prev.avatarFrame ?? null,
+        bankOverlay: payload.cosmetics?.bankOverlay ?? prev.bankOverlay ?? null,
+      }));
+      setAchievementNotifications(
+        Array.isArray(payload.pendingNotifications) ? payload.pendingNotifications : [],
+      );
+      const current = readClientSession();
+      if (current && current.nameColor !== adminNameColor) {
+        writeClientSession({ ...current, nameColor: adminNameColor });
+      }
+    };
     const loadShell = () => {
+      if (cancelled || inflight) return;
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      inflight = true;
       void fetch("/api/app-shell/bootstrap", { cache: "no-store" })
         .then((r) => r.json())
-        .then(
-          (payload: {
-            ok?: boolean;
-            showPersonnel?: boolean;
-            nameColor?: ProfileNameColorId | null;
-            cosmetics?: Partial<UserIdentityCosmetics>;
-            pendingNotifications?: Array<{ id: string; title: string; body: string }>;
-          }) => {
-            if (!payload.ok || cancelled) return;
-            setShowPersonnelNav(payload.showPersonnel === true);
-            const adminNameColor = payload.nameColor ?? payload.cosmetics?.adminNameColor ?? null;
-            setHeaderCosmetics((prev) => ({
-              ...prev,
-              adminNameColor,
-              achievementNameColor:
-                payload.cosmetics?.achievementNameColor ?? prev.achievementNameColor ?? null,
-              avatarFrame: payload.cosmetics?.avatarFrame ?? prev.avatarFrame ?? null,
-              bankOverlay: payload.cosmetics?.bankOverlay ?? prev.bankOverlay ?? null,
-            }));
-            setAchievementNotifications(
-              Array.isArray(payload.pendingNotifications) ? payload.pendingNotifications : [],
-            );
-            const current = readClientSession();
-            if (current && current.nameColor !== adminNameColor) {
-              writeClientSession({ ...current, nameColor: adminNameColor });
-            }
-          },
-        )
-        .catch(() => undefined);
+        .then(applyShellPayload)
+        .catch(() => undefined)
+        .finally(() => {
+          inflight = false;
+        });
     };
     loadShell();
-    const timer = setInterval(loadShell, 120_000);
+    const timer = window.setInterval(loadShell, APP_SHELL_BOOTSTRAP_POLL_MS);
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") loadShell();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
       cancelled = true;
-      clearInterval(timer);
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [session.id]);
 
