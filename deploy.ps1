@@ -16,20 +16,9 @@ if ($LASTEXITCODE -ne 0) {
   throw "git push failed."
 }
 
-function Invoke-RemoteDeploy {
-  param(
-    [string]$RemoteCommand
-  )
-  ssh $Server $RemoteCommand
-  if ($LASTEXITCODE -ne 0) {
-    throw "Remote deploy failed."
-  }
-}
-
 function Sync-ArchiveToRemote {
-  Write-Host "==> Syncing branch '$Branch' to $Server via git archive (server git pull skipped)..." -ForegroundColor Yellow
+  Write-Host "==> Uploading branch '$Branch' to $Server (git pull on server skipped)..." -ForegroundColor Yellow
   $archivePath = Join-Path ([System.IO.Path]::GetTempPath()) "ssp-deploy-$Branch.tar"
-  $remoteArchive = "$RemoteDir/.deploy-archive.tar"
   try {
     if (Test-Path $archivePath) {
       Remove-Item -Force $archivePath
@@ -38,13 +27,13 @@ function Sync-ArchiveToRemote {
     if ($LASTEXITCODE -ne 0) {
       throw "git archive failed."
     }
-    scp $archivePath "${Server}:${remoteArchive}"
+    scp $archivePath "${Server}:${RemoteDir}/.deploy-archive.tar"
     if ($LASTEXITCODE -ne 0) {
       throw "scp archive failed."
     }
-    ssh $Server "set -e; cd $RemoteDir; tar xf .deploy-archive.tar; rm -f .deploy-archive.tar"
+    ssh $Server "set -e; cd $RemoteDir; tar xf .deploy-archive.tar; rm -f .deploy-archive.tar; chmod +x deploy-remote.sh; SKIP_GIT_PULL=1 bash deploy-remote.sh $Branch"
     if ($LASTEXITCODE -ne 0) {
-      throw "remote tar extract failed."
+      throw "remote deploy failed."
     }
   } finally {
     if (Test-Path $archivePath) {
@@ -53,27 +42,22 @@ function Sync-ArchiveToRemote {
   }
 }
 
-$remoteDeployCommand = "set -e; cd $RemoteDir; chmod +x deploy-remote.sh; SKIP_GIT_PULL=1 bash deploy-remote.sh $Branch"
-$remoteGitPullCommand = @"
-set -e
-cd $RemoteDir
-git fetch origin $Branch
-git checkout -- deploy-remote.sh deploy.ps1 2>/dev/null || true
-git pull origin $Branch
-chmod +x deploy-remote.sh
-bash deploy-remote.sh $Branch
-"@
+$remoteGitPullCommand = "set -e; cd $RemoteDir; git checkout -- deploy-remote.sh deploy.ps1 2>/dev/null || true; git pull origin $Branch; chmod +x deploy-remote.sh; bash deploy-remote.sh $Branch"
 
 Write-Host "==> Deploying on $Server..." -ForegroundColor Cyan
 if ($LocalSync) {
   Sync-ArchiveToRemote
-  Invoke-RemoteDeploy $remoteDeployCommand
 } else {
   ssh $Server $remoteGitPullCommand
   if ($LASTEXITCODE -ne 0) {
-    Write-Host "==> Remote git pull failed. Retrying with local archive sync..." -ForegroundColor Yellow
-    Sync-ArchiveToRemote
-    Invoke-RemoteDeploy $remoteDeployCommand
+    throw @"
+Remote deploy failed.
+
+If the server cannot reach github.com, run:
+  .\deploy.ps1 -LocalSync
+
+That uploads code from your PC and skips git pull on the server.
+"@
   }
 }
 
