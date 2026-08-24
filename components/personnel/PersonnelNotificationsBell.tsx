@@ -181,8 +181,12 @@ export function PersonnelNotificationsBell({ compact = false }: PersonnelNotific
 
   useEffect(() => {
     setPortalReady(true);
-    void loadNav();
-    const t = setInterval(() => void loadNav(), 90_000);
+    const poll = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      void loadNav();
+    };
+    poll();
+    const t = setInterval(poll, 180_000);
     return () => clearInterval(t);
   }, []);
 

@@ -118,7 +118,7 @@ export function AppShell({ session, children }: AppShellProps) {
   const isLoggingOutRef = useRef(false);
   const sessionCountedRef = useRef(false);
   const lastAnalyticsPingRef = useRef(Date.now());
-  const [notifyBellPlacement, setNotifyBellPlacement] = useState<"both" | "desktop" | "mobile">("both");
+  const [notifyBellPlacement, setNotifyBellPlacement] = useState<"both" | "desktop" | "mobile">("desktop");
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 819px)");

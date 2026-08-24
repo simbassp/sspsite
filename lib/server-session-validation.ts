@@ -88,7 +88,7 @@ export async function isSessionStillValid(session: SessionUser): Promise<boolean
 
 async function validateSessionFromDb(session: SessionUser): Promise<boolean> {
   try {
-    const supabase = getServerSupabaseServiceClient();
+    const supabase = getServerSupabaseServiceClient({ fetchTimeoutMs: SESSION_VALIDATION_TIMEOUT_MS });
     const primary = await supabase
       .from("app_users")
       .select(

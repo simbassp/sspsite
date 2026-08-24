@@ -77,7 +77,7 @@ type HomeStatsBody = {
 const homeStatsCache = createRouteCache<HomeStatsBody>(HOME_STATS_CACHE_MS);
 
 async function buildHomeStats(): Promise<HomeStatsBody> {
-  const supabase = getServerSupabaseServiceClient();
+  const supabase = getServerSupabaseServiceClient({ fetchTimeoutMs: 8_000 });
     const [newestQ, leftQ] = await Promise.all([
       supabase
         .from("app_users")
@@ -259,10 +259,15 @@ export async function GET() {
   try {
     const body = await homeStatsCache.getOrLoad(buildHomeStats);
     return Response.json(body);
-  } catch (error) {
-    return Response.json(
-      { ok: false, error: error instanceof Error ? error.message : "home_stats_exception" },
-      { status: 500 },
-    );
+  } catch {
+    const cached = homeStatsCache.read();
+    if (cached) return Response.json(cached);
+    return Response.json({
+      ok: true,
+      events: [],
+      usersSummary: null,
+      siteAnalytics: null,
+      degraded: true,
+    });
   }
 }

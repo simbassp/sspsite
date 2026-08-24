@@ -66,16 +66,18 @@ export async function GET() {
   if (!session) return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
 
   try {
-    const supabase = getServerSupabaseServiceClient();
+    const supabase = getServerSupabaseServiceClient({ fetchTimeoutMs: 8_000 });
     const t0 = Date.now();
     const testConfig = await loadTestConfigForPool(supabase);
-    const uavQ = supabase
-      .from("catalog_items")
-      .select("id,title,category,summary,image,specs,details,sort_order")
-      .eq("kind", "uav")
-      .order("sort_order", { ascending: true })
-      .order("created_at", { ascending: true })
-      .limit(200);
+    const uavQ = testConfig.uavAutoGeneration
+      ? supabase
+          .from("catalog_items")
+          .select("id,title,category,summary,image,specs,details,sort_order")
+          .eq("kind", "uav")
+          .order("sort_order", { ascending: true })
+          .order("created_at", { ascending: true })
+          .limit(200)
+      : Promise.resolve({ data: [] as unknown[], error: null });
 
     let questionsData: unknown[] = [];
     let questionsError: string | null = null;
@@ -125,7 +127,7 @@ export async function GET() {
       questionsError = questionsMinimalQ.error?.message || null;
     }
     let uavRes: { data: unknown; error: { message?: string } | null } = await uavQ;
-    if (uavRes.error && isMissingColumnError(uavRes.error.message)) {
+    if (testConfig.uavAutoGeneration && uavRes.error && isMissingColumnError(uavRes.error.message)) {
       uavRes = await supabase
         .from("catalog_items")
         .select("id,title,category,summary,image,specs,details")
@@ -134,12 +136,8 @@ export async function GET() {
         .limit(200);
     }
     const t1 = Date.now();
-
     if (uavRes.error) {
-      return Response.json(
-        { ok: false, error: uavRes.error?.message || "tests_pool_failed" },
-        { status: 500 },
-      );
+      uavRes = { data: [], error: null };
     }
 
     let mappedQuestions: TestQuestion[] = [];

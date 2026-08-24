@@ -47,8 +47,14 @@ if [ -d .next ]; then
 fi
 mv .next-build .next
 
-echo "==> pm2 restart"
-pm2 restart "$PM2_APP" --update-env
+echo "==> pm2 start with memory cap"
+if [ -f ecosystem.config.cjs ]; then
+  pm2 delete "$PM2_APP" >/dev/null 2>&1 || true
+  pm2 start ecosystem.config.cjs
+  pm2 save
+else
+  pm2 restart "$PM2_APP" --update-env
+fi
 
 rm -rf .next-old .next-build
 
