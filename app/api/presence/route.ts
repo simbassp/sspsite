@@ -1,4 +1,3 @@
-import { isMissingColumnError } from "@/lib/server-final-user-context";
 import { getServerSession } from "@/lib/server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
 import { scheduleStaleOnlineCleanup } from "@/lib/presence-stale-cleanup";
@@ -10,19 +9,6 @@ type PresenceBody = {
   newSession?: unknown;
   elapsedSeconds?: unknown;
 };
-
-function isTransientSupabaseError(message: string | undefined) {
-  const m = (message || "").toLowerCase();
-  return (
-    m.includes("fetch failed") ||
-    m.includes("network") ||
-    m.includes("timeout") ||
-    m.includes("econnreset") ||
-    m.includes("enotfound") ||
-    m.includes("abort") ||
-    m.includes("socket")
-  );
-}
 
 async function readPresenceBody(request: Request): Promise<PresenceBody> {
   try {
@@ -72,17 +58,13 @@ export async function POST(request: Request) {
     scheduleStaleOnlineCleanup(supabase);
 
     if (newSession || elapsedSeconds > 0) {
-      void supabase
-        .rpc("record_site_analytics", {
+      void Promise.resolve(
+        supabase.rpc("record_site_analytics", {
           p_user_id: session.id,
           p_new_session: newSession,
           p_elapsed_seconds: elapsedSeconds,
-        })
-        .then(({ error }) => {
-          if (!error) return;
-          if (isMissingColumnError(error.message) || isTransientSupabaseError(error.message)) return;
-        })
-        .catch(() => undefined);
+        }),
+      ).catch(() => undefined);
     }
 
     return Response.json({ ok: true });
