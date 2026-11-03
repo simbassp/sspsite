@@ -1,75 +1,70 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseSessionCookie, clearSessionCookie } from "@/lib/auth";
+import type { CookieOptions } from "@supabase/ssr";
+import { serializeSessionCookie, clearSessionCookie } from "@/lib/auth";
 import { canAccessAdminPanel } from "@/lib/permissions";
 import { canAccessGameSection } from "@/lib/game-feature";
-import { SESSION_COOKIE } from "@/lib/seed";
-import { isSessionStillValid } from "@/lib/server-session-validation";
-import {
-  isRecoveryRequest,
-  needsServerRecoveryExchange,
-} from "@/lib/auth-recovery-server";
+import { createSupabaseAuthClient } from "@/lib/supabase-server-auth";
+import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
+import { resolveVerifiedSession } from "@/lib/verified-session";
+import type { SessionUser } from "@/lib/types";
+import { isRecoveryRequest, needsServerRecoveryExchange } from "@/lib/auth-recovery-server";
 
 const publicPaths = ["/", "/login", "/register", "/reset-password", "/auth/recovery"];
 
 function redirectRecoveryTarget(request: NextRequest, targetPath: "/auth/recovery" | "/reset-password") {
   const url = new URL(targetPath, request.url);
-  request.nextUrl.searchParams.forEach((value, key) => {
-    url.searchParams.set(key, value);
-  });
+  request.nextUrl.searchParams.forEach((value, key) => url.searchParams.set(key, value));
   return NextResponse.redirect(url);
 }
 
 export async function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-  if (pathname.startsWith("/api/")) {
-    return NextResponse.next();
-  }
-
-  const searchParams = request.nextUrl.searchParams;
-  const recoveryFlow = isRecoveryRequest(pathname, searchParams);
-
-  if (recoveryFlow) {
-    if (
-      (pathname === "/login" || pathname === "/" || pathname === "/reset-password") &&
-      needsServerRecoveryExchange(searchParams)
-    ) {
+  if (request.nextUrl.pathname.startsWith("/api/")) return NextResponse.next();
+  const { pathname, searchParams } = request.nextUrl;
+  if (isRecoveryRequest(pathname, searchParams)) {
+    if ((pathname === "/login" || pathname === "/" || pathname === "/reset-password") && needsServerRecoveryExchange(searchParams)) {
       return redirectRecoveryTarget(request, "/auth/recovery");
     }
     return NextResponse.next();
   }
 
-  const isPublic = publicPaths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
-  const raw = request.cookies.get(SESSION_COOKIE)?.value;
-  let session = parseSessionCookie(raw);
-  if (session) {
-    const valid = await isSessionStillValid(session);
-    if (!valid) {
-      session = null;
-      const res = NextResponse.redirect(new URL("/login", request.url));
-      res.headers.append("Set-Cookie", clearSessionCookie());
-      return res;
-    }
+  const refreshed = new Map<string, { name: string; value: string; options: CookieOptions }>();
+  let session: SessionUser | null = null;
+  try {
+    const auth = createSupabaseAuthClient({
+      getAll: () => request.cookies.getAll(),
+      setAll(cookiesToSet) {
+        for (const cookie of cookiesToSet) {
+          request.cookies.set(cookie.name, cookie.value);
+          refreshed.set(cookie.name, cookie);
+        }
+      },
+    });
+    session = await resolveVerifiedSession(auth, getServerSupabaseServiceClient());
+  } catch {
+    session = null;
   }
 
-  if (!session && !isPublic) {
-    return NextResponse.redirect(new URL("/login", request.url));
+  // Every return path must preserve refreshed tokens, including redirects.
+  function finish(response: NextResponse) {
+    refreshed.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
+    // This legacy cookie is a display cache only. Repair it from the verified profile.
+    response.headers.append("Set-Cookie", session ? serializeSessionCookie(session) : clearSessionCookie());
+    response.headers.set("Cache-Control", "private, no-store");
+    return response;
   }
 
+  const isPublic = publicPaths.some(path => pathname === path || pathname.startsWith(`${path}/`));
+  if (!session && !isPublic) return finish(NextResponse.redirect(new URL("/login", request.url)));
   if (session && isPublic && pathname !== "/reset-password" && pathname !== "/auth/recovery") {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    return finish(NextResponse.redirect(new URL("/dashboard", request.url)));
   }
-
-  const hasAdminAccess = session ? canAccessAdminPanel(session) : false;
-
-  if (session && pathname.startsWith("/admin") && !hasAdminAccess) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+  if (session && pathname.startsWith("/admin") && !canAccessAdminPanel(session)) {
+    return finish(NextResponse.redirect(new URL("/dashboard", request.url)));
   }
-
   if (session && pathname.startsWith("/game") && !canAccessGameSection(session)) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    return finish(NextResponse.redirect(new URL("/dashboard", request.url)));
   }
-
-  return NextResponse.next();
+  return finish(NextResponse.next({ request: { headers: request.headers } }));
 }
 
 export const config = {

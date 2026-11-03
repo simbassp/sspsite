@@ -579,12 +579,15 @@ export async function loginUser(login: string, password: string) {
   const loginTrim = login.trim();
   const serverResult = await loginViaServer(loginTrim, password);
   if (serverResult?.ok) {
-    void getSupabaseBrowserClient()
-      .auth.setSession({
+    try {
+      const { error } = await getSupabaseBrowserClient().auth.setSession({
         access_token: serverResult.auth.accessToken,
         refresh_token: serverResult.auth.refreshToken,
-      })
-      .catch(() => undefined);
+      });
+      if (error) return { ok: false as const, error: "Не удалось сохранить сессию входа. Повторите вход." };
+    } catch {
+      return { ok: false as const, error: "Не удалось сохранить сессию входа. Повторите вход." };
+    }
     return { ok: true as const, session: normalizeSessionUser(serverResult.session) };
   }
 
@@ -1621,7 +1624,7 @@ export async function logoutUser() {
   }
   if (!isSupabaseConfigured) return;
   const supabase = getSupabaseBrowserClient();
-  void supabase.auth.signOut().catch(() => undefined);
+  await supabase.auth.signOut().catch(() => undefined);
 }
 
 export function persistSession(session: SessionUser) {

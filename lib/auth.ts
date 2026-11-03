@@ -45,6 +45,7 @@ function decode(value: string): SessionUser | null {
   }
 }
 
+/** UI display cache only. This cookie MUST NOT authorize server requests. */
 export function serializeSessionCookie(user: SessionUser, options?: { secure?: boolean }) {
   const secure =
     options?.secure ??
@@ -57,6 +58,7 @@ export function clearSessionCookie() {
   return `${SESSION_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax`;
 }
 
+/** Decode UI display data only; never use this to establish an authenticated identity. */
 export function parseSessionCookie(raw: string | undefined) {
   if (!raw) return null;
   return decode(raw);
