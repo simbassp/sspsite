@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { resolveActiveUserAuthEmail } from "@/lib/auth-login-email-server";
 import { serializeSessionCookie } from "@/lib/auth";
-import { normalizeProfileNameColor } from "@/lib/profile-name-color";
+import { sessionFromProfile } from "@/lib/verified-session";
+import { getSupabaseServerAuthClient } from "@/lib/supabase-server-auth";
 import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
-import type { SessionUser } from "@/lib/types";
 
 export const runtime = "nodejs";
 
@@ -137,7 +137,7 @@ async function signInWithLogin(baseUrl: string, anonKey: string, login: string, 
   return { ok: false as const, error: lastError };
 }
 
-async function fetchProfileViaServiceRole(authUserId: string, loginHint: string) {
+async function fetchProfileViaServiceRole(authUserId: string) {
   try {
     const supabase = getServerSupabaseServiceClient();
     const select = "*";
@@ -150,25 +150,13 @@ async function fetchProfileViaServiceRole(authUserId: string, loginHint: string)
     if (byId.error) return null;
     if (byId.data) {
       const profile = byId.data as ProfileRow;
-      if (canLinkProfileToAuthUser(profile, authUserId) && profile.auth_user_id !== authUserId) {
-        await supabase.from("app_users").update({ auth_user_id: authUserId }).eq("id", profile.id);
+      if (!canLinkProfileToAuthUser(profile, authUserId)) return null;
+      if (profile.auth_user_id !== authUserId) {
+        const linked = await supabase.from("app_users").update({ auth_user_id: authUserId }).eq("id", profile.id);
+        if (linked.error) return null;
         profile.auth_user_id = authUserId;
       }
       return profile;
-    }
-
-    const login = loginHint.trim();
-    if (login && !login.includes("@")) {
-      const byLogin = await supabase.from("app_users").select(select).ilike("login", login).maybeSingle();
-      if (byLogin.error) return null;
-      if (byLogin.data) {
-        const profile = byLogin.data as ProfileRow;
-        if (profile.auth_user_id !== authUserId) {
-          await supabase.from("app_users").update({ auth_user_id: authUserId }).eq("id", profile.id);
-          profile.auth_user_id = authUserId;
-        }
-        return profile;
-      }
     }
 
     return null;
@@ -258,7 +246,7 @@ export async function POST(request: Request) {
   }
 
   const profile =
-    (await fetchProfileViaServiceRole(authUserId, login)) ??
+    (await fetchProfileViaServiceRole(authUserId)) ??
     (await fetchProfileViaUserToken(baseUrl, supabaseAnonKey, accessToken, authUserId));
   if (!profile) {
     return NextResponse.json(
@@ -273,90 +261,21 @@ export async function POST(request: Request) {
     );
   }
 
-  const hasGranularContentPermissions = [
-    profile.can_manage_news,
-    profile.can_manage_tests,
-    profile.can_manage_results,
-    profile.can_manage_uav,
-    profile.can_manage_counteraction,
-    profile.can_manage_tactical_medicine,
-    profile.can_reset_test_results,
-    profile.can_manage_users,
-    profile.can_view_user_list,
-    profile.can_moderate_personnel,
-  ].some((value) => typeof value === "boolean");
+  const session = sessionFromProfile(profile as unknown as Record<string, unknown>);
+  if (!session || profile.auth_user_id !== authUserId) {
+    return NextResponse.json({ ok: false, error: "Профиль не связан с подтверждённым аккаунтом." }, { status: 403 });
+  }
 
-  const permissions =
-    profile.role === "admin"
-      ? {
-          news: true,
-          tests: true,
-          results: true,
-          resetResults: true,
-          uav: true,
-          counteraction: true,
-          tacticalMedicine: true,
-          userList: true,
-          users: true,
-          online: true,
-          personnelModeration: true,
-        }
-      : hasGranularContentPermissions
-        ? {
-            news: profile.can_manage_news === true,
-            tests: profile.can_manage_tests === true,
-            results: profile.can_manage_results === true,
-            resetResults: profile.can_reset_test_results === true,
-            uav: profile.can_manage_uav === true,
-            counteraction: profile.can_manage_counteraction === true,
-            tacticalMedicine: profile.can_manage_tactical_medicine === true,
-            userList: profile.can_view_user_list === true,
-            users: profile.can_manage_users === true,
-            online: profile.can_view_online === true,
-            personnelModeration: profile.can_moderate_personnel === true,
-          }
-        : {
-            news: profile.can_manage_content === true,
-            tests: profile.can_manage_content === true,
-            results: profile.can_manage_content === true,
-            resetResults: false,
-            uav: profile.can_manage_content === true,
-            counteraction: profile.can_manage_content === true,
-            tacticalMedicine: profile.can_manage_content === true,
-            userList: profile.can_view_user_list === true,
-            users: profile.can_manage_users === true,
-            online: profile.can_view_online === true,
-            personnelModeration: profile.can_moderate_personnel === true,
-          };
-
-  const unitRaw = profile.unit_assignment;
-  const unitAssignment =
-    unitRaw === "platoon_1" ||
-    unitRaw === "platoon_2" ||
-    unitRaw === "platoon_3" ||
-    unitRaw === "company_4" ||
-    unitRaw === "staff" ||
-    unitRaw === "office"
-      ? unitRaw
-      : null;
-
-  const session: SessionUser = {
-    id: profile.id,
-    role: profile.role,
-    name: profile.name,
-    callsign: profile.callsign,
-    position: profile.position as SessionUser["position"],
-    canManageContent:
-      permissions.news ||
-      permissions.tests ||
-      permissions.uav ||
-      permissions.counteraction ||
-      permissions.tacticalMedicine,
-    permissions,
-    unitAssignment,
-    avatarUrl: typeof profile.avatar_url === "string" && profile.avatar_url.trim() ? profile.avatar_url.trim() : null,
-    nameColor: normalizeProfileNameColor(profile.profile_name_color),
-  };
+  // Persist real Supabase tokens for server-side verification and refresh.
+  try {
+    const authClient = await getSupabaseServerAuthClient();
+    const saved = await authClient.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+    if (saved.error || saved.data.user?.id !== authUserId) {
+      return NextResponse.json({ ok: false, error: "Не удалось подтвердить сессию." }, { status: 401 });
+    }
+  } catch {
+    return NextResponse.json({ ok: false, error: "Сервис авторизации временно недоступен." }, { status: 503 });
+  }
 
   const response = NextResponse.json({
     ok: true,
@@ -367,5 +286,6 @@ export async function POST(request: Request) {
     },
   });
   response.headers.append("Set-Cookie", serializeSessionCookie(session));
+  response.headers.set("Cache-Control", "private, no-store");
   return response;
 }

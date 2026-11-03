@@ -1,14 +1,14 @@
-import { cookies } from "next/headers";
-import { SESSION_COOKIE } from "@/lib/seed";
-import { parseSessionCookie } from "@/lib/auth";
-import { isSessionStillValid } from "@/lib/server-session-validation";
+import { getSupabaseServerAuthClient } from "@/lib/supabase-server-auth";
+import { getServerSupabaseServiceClient } from "@/lib/server-supabase";
+import { resolveVerifiedSession } from "@/lib/verified-session";
 
-export async function getServerSession(options?: { skipDbValidation?: boolean }) {
-  const store = await cookies();
-  const raw = store.get(SESSION_COOKIE)?.value;
-  const session = parseSessionCookie(raw);
-  if (!session) return null;
-  if (options?.skipDbValidation) return session;
-  const valid = await isSessionStillValid(session);
-  return valid ? session : null;
+export async function getServerSession() {
+  try {
+    return await resolveVerifiedSession(
+      await getSupabaseServerAuthClient(),
+      getServerSupabaseServiceClient(),
+    );
+  } catch {
+    return null;
+  }
 }

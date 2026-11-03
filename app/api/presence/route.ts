@@ -23,7 +23,7 @@ async function readPresenceBody(request: Request): Promise<PresenceBody> {
 export async function POST(request: Request) {
   let session;
   try {
-    session = await getServerSession({ skipDbValidation: true });
+    session = await getServerSession();
   } catch {
     return Response.json({ ok: true, skipped: true });
   }
