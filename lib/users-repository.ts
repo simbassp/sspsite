@@ -579,14 +579,15 @@ export async function loginUser(login: string, password: string) {
   const loginTrim = login.trim();
   const serverResult = await loginViaServer(loginTrim, password);
   if (serverResult?.ok) {
+    // The server has already verified the identity and saved the SSR session cookies.
+    // Browser token synchronization must not block login on restricted networks.
     try {
-      const { error } = await getSupabaseBrowserClient().auth.setSession({
+      void getSupabaseBrowserClient().auth.setSession({
         access_token: serverResult.auth.accessToken,
         refresh_token: serverResult.auth.refreshToken,
-      });
-      if (error) return { ok: false as const, error: "Не удалось сохранить сессию входа. Повторите вход." };
+      }).catch(() => undefined);
     } catch {
-      return { ok: false as const, error: "Не удалось сохранить сессию входа. Повторите вход." };
+      // Browser storage can be unavailable; server cookies remain authoritative.
     }
     return { ok: true as const, session: normalizeSessionUser(serverResult.session) };
   }

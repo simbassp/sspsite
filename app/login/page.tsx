@@ -140,7 +140,7 @@ export default function LoginPage() {
     startProgress();
 
     try {
-      const { loginUser, persistSession } = await loadUsersRepo();
+      const { loginUser, persistSession } = await withTimeout(loadUsersRepo(), 15000, "request_timeout");
       const result = await withTimeout(loginUser(login.trim(), password), AUTH_REQUEST_TIMEOUT_MS, "request_timeout");
       if (!result.ok) {
         clearProgressTimer();
@@ -156,7 +156,7 @@ export default function LoginPage() {
       }
 
       clearProgressTimer();
-      persistSession(result.session);
+      try { persistSession(result.session); } catch { /* Server SSR cookies are already saved. */ }
       setInfo("Переходим в приложение...");
       // Полная перезагрузка: cookie из Set-Cookie и document.cookie гарантированно попадут на сервер.
       window.location.assign("/dashboard");

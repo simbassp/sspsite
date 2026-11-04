@@ -3,7 +3,7 @@ export type LoginFailureKind = "timeout" | "network" | "api";
 /** Сообщения для пользователя; технические строки API приводим к понятному виду. */
 export function mapLoginErrorForDisplay(raw: string, kind: LoginFailureKind): string {
   if (kind === "timeout") {
-    return "Не удалось подключиться к серверу. Проверьте интернет и попробуйте ещё раз.";
+    return "Сервер не ответил вовремя. Повторите вход через минуту. Если ошибка повторяется, сообщите администратору.";
   }
   if (kind === "network") {
     return "Не удалось подключиться к серверу. Проверьте интернет, отключите VPN/прокси и попробуйте снова.";
